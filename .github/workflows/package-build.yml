@@ -109,7 +109,12 @@ jobs:
               filename = fields["Filename"]
               if filename.startswith("/") or ".." in pathlib.PurePosixPath(filename).parts:
                   raise SystemExit("Unsafe Filename in package index; refusing download.")
-              url = base + filename
+              feed_name = base.rstrip("/").rsplit("/", 1)[-1]
+              parts = pathlib.PurePosixPath(filename).parts
+              if parts and parts[0] == feed_name:
+                  url = base.rsplit(feed_name + "/", 1)[0] + filename
+              else:
+                  url = base + filename
               destination = root / pathlib.Path(filename).name
               print("DECISION=REUSE_OFFICIAL")
               print("Version:", fields.get("Version", "unknown"))
@@ -229,6 +234,8 @@ jobs:
                       directory = makefile.parent.as_posix()
                       if directory.startswith("./"):
                           directory = directory[2:]
+                      if directory.startswith("feeds/"):
+                          directory = "package/feeds/" + directory[len("feeds/"):]
                       if directory not in matches:
                           matches.append(directory)
           if not matches:
