@@ -1,15 +1,15 @@
-name: N60 Pro - Single Package (Auto Reuse or Build)
+name: N60 Pro - Single Package (APK Reuse Candidate or Build)
 
 on:
   workflow_dispatch:
     inputs:
       package_name:
-        description: "OpenWrt package name, e.g. htop, ksmbd-server, kmod-fs-exfat"
+        description: "APK package name, e.g. htop, ksmbd-server, kmod-fs-exfat"
         required: true
         type: string
         default: "ksmbd-server"
       force_compile:
-        description: "Force source build even if an official user-space package is available"
+        description: "Force source build even if an ImmortalWrt candidate exists"
         required: false
         type: boolean
         default: false
@@ -23,14 +23,14 @@ concurrency:
 
 jobs:
   inspect:
-    name: Check official ImmortalWrt package repository
+    name: Search ImmortalWrt and OpenWrt APK feeds
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     outputs:
       needs_build: ${{ steps.check.outputs.needs_build }}
       package_name: ${{ steps.check.outputs.package_name }}
     steps:
-      - name: Validate input
+      - name: Search official APK package directories
         id: check
         env:
           PACKAGE_NAME: ${{ inputs.package_name }}
@@ -44,115 +44,152 @@ jobs:
           fi
           echo "package_name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
           mkdir -p artifacts/package
-
           python3 - <<'PY'
-          import gzip, os, pathlib, re, urllib.request
-          from urllib.error import HTTPError, URLError
+          import hashlib, os, pathlib, re, tarfile, urllib.request
+          from html.parser import HTMLParser
+          from urllib.parse import urljoin
 
           package = os.environ["PACKAGE_NAME"]
           force = os.environ.get("FORCE_COMPILE", "false").lower() == "true"
-          root = pathlib.Path("artifacts/package")
-          base_urls = [
-              "https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/targets/mediatek/filogic/packages/",
-              "https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/packages/aarch64_cortex-a53/base/",
-              "https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/packages/aarch64_cortex-a53/packages/",
-              "https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/packages/aarch64_cortex-a53/luci/",
-              "https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/packages/aarch64_cortex-a53/routing/",
-              "https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/packages/aarch64_cortex-a53/telephony/",
-              "https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/packages/aarch64_cortex-a53/video/",
-          ]
-          allowed_arch = {"all", "noarch", "aarch64_cortex-a53", "mediatek_filogic"}
-          found = None
-          print("Official feed family: ImmortalWrt releases/25.12-SNAPSHOT (not rolling snapshots/)")
+          out = pathlib.Path("artifacts/package")
+          arch_ok = {"aarch64_cortex-a53", "all", "noarch", "mediatek_filogic"}
 
-          print("Package:", package)
-          print("Policy: kmod packages are always source-built to avoid kernel ABI mismatches.")
-          for base in base_urls:
-              index_url = base + "Packages.gz"
+          # Search target packages and all standard architecture feeds for both projects.
+          roots = []
+          for distro, host in [
+              ("ImmortalWrt", "https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/"),
+              ("OpenWrt", "https://downloads.openwrt.org/releases/25.12-SNAPSHOT/"),
+          ]:
+              roots += [
+                  (distro, host + "targets/mediatek/filogic/packages/"),
+                  *[(distro, host + f"packages/aarch64_cortex-a53/{feed}/")
+                    for feed in ("base", "packages", "luci", "routing", "telephony", "video")],
+              ]
+
+          class Links(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.hrefs = []
+              def handle_starttag(self, tag, attrs):
+                  if tag == "a":
+                      href = dict(attrs).get("href")
+                      if href:
+                          self.hrefs.append(href)
+
+          def get(url):
+              req = urllib.request.Request(url, headers={"User-Agent": "N60Pro-APK-Package-Checker/2.0"})
+              with urllib.request.urlopen(req, timeout=20) as r:
+                  return r.read()
+
+          def pkginfo(data):
+              # APK files are tar/gzip archives; .PKGINFO contains package metadata.
+              import io
+              with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as tf:
+                  member = next((m for m in tf.getmembers() if m.name.lstrip("./") == ".PKGINFO"), None)
+                  if member is None:
+                      raise ValueError("APK archive has no .PKGINFO")
+                  text = tf.extractfile(member).read().decode("utf-8", "replace")
+              fields = {}
+              for line in text.splitlines():
+                  m = re.match(r"^(pkgname|pkgver|arch|depend)\s*=\s*(.*)$", line)
+                  if m:
+                      fields.setdefault(m.group(1), []).append(m.group(2).strip())
+              return {k: (v if k == "depend" else (v[0] if v else "")) for k, v in fields.items()}
+
+          candidates = []
+          for distro, root in roots:
               try:
-                  req = urllib.request.Request(index_url, headers={"User-Agent": "N60Pro-Package-Workflow/1.0"})
-                  with urllib.request.urlopen(req, timeout=12) as response:
-                      raw = gzip.decompress(response.read()).decode("utf-8", "replace")
+                  parser = Links()
+                  parser.feed(get(root).decode("utf-8", "replace"))
               except Exception as exc:
-                  print(f"INDEX unavailable: {index_url} ({exc})")
+                  print(f"FEED_UNAVAILABLE {distro} {root}: {exc}")
                   continue
-              for block in re.split(r"\n\s*\n", raw):
-                  fields = {}
-                  for line in block.splitlines():
-                      if ": " in line:
-                          key, value = line.split(": ", 1)
-                          fields.setdefault(key, value)
-                  if fields.get("Package") != package:
-                      continue
-                  arch = fields.get("Architecture", "")
-                  filename = fields.get("Filename", "")
-                  if arch not in allowed_arch or not filename:
-                      print(f"FOUND but not reusable: arch={arch!r}, filename={filename!r}")
-                      continue
-                  found = (base, fields)
-                  break
-              if found:
-                  break
+              names = sorted({h for h in parser.hrefs
+                              if h.endswith(".apk") and h.startswith(package + "-")})
+              for name in names:
+                  url = urljoin(root, name)
+                  try:
+                      data = get(url)
+                      meta = pkginfo(data)
+                      if meta.get("pkgname") != package:
+                          continue
+                      arch = meta.get("arch", "")
+                      if arch not in arch_ok:
+                          print(f"REJECT_ARCH {distro} {name}: {arch}")
+                          continue
+                      deps = meta.get("depend", [])
+                      has_kmod = any(re.search(r"(^|[^A-Za-z0-9_])kmod-[A-Za-z0-9+_.-]+", d) for d in deps)
+                      candidates.append({
+                          "distro": distro, "url": url, "name": name, "data": data,
+                          "version": meta.get("pkgver", "unknown"), "arch": arch,
+                          "deps": deps, "has_kmod": has_kmod
+                      })
+                      print(f"CANDIDATE {distro}: {name}; version={meta.get('pkgver')}; arch={arch}; kmod_dependency={has_kmod}")
+                  except Exception as exc:
+                      print(f"CANDIDATE_CHECK_FAILED {url}: {exc}")
 
-          depends_on_kmod = bool(found and re.search(r"(^|[, ])kmod-[A-Za-z0-9+_.-]+", found[1].get("Depends", "")))
-          must_build = force or package.startswith("kmod-") or depends_on_kmod or found is None
-          if must_build:
-              reason = ("force_compile selected" if force else
-                        "kernel module: ABI-safe policy requires a local build" if package.startswith("kmod-") else
-                        "official package depends on a kernel module; build locally to avoid ABI mismatch" if depends_on_kmod else
-                        "not found in checked official snapshot indexes")
-              print("DECISION=BUILD_REQUIRED:", reason)
-              pathlib.Path(os.environ["GITHUB_OUTPUT"]).open("a").write("needs_build=true\n")
-              (root / "DECISION.txt").write_text(
-                  f"Package: {package}\nDecision: BUILD_REQUIRED\nReason: {reason}\n"
-                  "Kernel modules are built from this repository's source to avoid ABI mismatch.\n",
-                  encoding="utf-8")
-          else:
-              base, fields = found
-              filename = fields["Filename"]
-              if filename.startswith("/") or ".." in pathlib.PurePosixPath(filename).parts:
-                  raise SystemExit("Unsafe Filename in package index; refusing download.")
-              feed_name = base.rstrip("/").rsplit("/", 1)[-1]
-              parts = pathlib.PurePosixPath(filename).parts
-              if parts and parts[0] == feed_name:
-                  url = base.rsplit(feed_name + "/", 1)[0] + filename
+          # Prefer same-distribution ImmortalWrt packages. OpenWrt packages are
+          # reported as fallback candidates only; distro mismatch means source build.
+          imm = next((c for c in candidates if c["distro"] == "ImmortalWrt"), None)
+          owrt = next((c for c in candidates if c["distro"] == "OpenWrt"), None)
+          chosen = imm or owrt
+          build = force or package.startswith("kmod-") or chosen is None or chosen["distro"] != "ImmortalWrt" or chosen["has_kmod"]
+
+          if build:
+              if force:
+                  reason = "force_compile selected"
+              elif package.startswith("kmod-"):
+                  reason = "kernel module: build from this repository to avoid kernel ABI mismatch"
+              elif chosen is None:
+                  reason = "package not found in checked official APK directories"
+              elif chosen["distro"] != "ImmortalWrt":
+                  reason = "only an OpenWrt candidate was found; build from the ImmortalWrt-based source tree"
               else:
-                  url = base + filename
-              destination = root / pathlib.Path(filename).name
-              print("DECISION=REUSE_OFFICIAL")
-              print("Version:", fields.get("Version", "unknown"))
-              print("Architecture:", fields.get("Architecture", "unknown"))
-              print("Depends:", fields.get("Depends", "(none listed)"))
-              print("Source:", url)
-              req = urllib.request.Request(url, headers={"User-Agent": "N60Pro-Package-Workflow/1.0"})
-              with urllib.request.urlopen(req, timeout=30) as response, destination.open("wb") as output:
-                  output.write(response.read())
-              if destination.stat().st_size < 100:
-                  raise SystemExit("Downloaded package is unexpectedly small; refusing artifact.")
-              import hashlib
-              digest = hashlib.sha256(destination.read_bytes()).hexdigest()
-              (root / "PACKAGE-INFO.txt").write_text(
-                  f"Package: {package}\nDecision: REUSE_OFFICIAL\n"
-                  f"Version: {fields.get('Version', 'unknown')}\n"
-                  f"Architecture: {fields.get('Architecture', 'unknown')}\n"
-                  f"Depends: {fields.get('Depends', '(none listed)')}\n"
-                  f"Source: {url}\nSHA256: {digest}\n"
-                  "Note: package dependencies and compatibility with the installed firmware must be checked before installation.\n",
+                  reason = "ImmortalWrt candidate depends on a kmod; local build is required"
+              print("DECISION=BUILD_REQUIRED:", reason)
+              (out / "DECISION.txt").write_text(
+                  f"Package: {package}\nDecision: BUILD_REQUIRED\nReason: {reason}\n"
+                  f"ImmortalWrt candidate: {imm['url'] if imm else 'not found'}\n"
+                  f"OpenWrt candidate: {owrt['url'] if owrt else 'not found'}\n"
+                  "OpenWrt/ImmortalWrt candidates are not proof of compatibility with the installed Chasey-derived firmware.\n",
                   encoding="utf-8")
+              pathlib.Path(os.environ["GITHUB_OUTPUT"]).open("a").write("needs_build=true\n")
+          else:
+              filename = pathlib.Path(chosen["url"]).name
+              dest = out / filename
+              dest.write_bytes(chosen["data"])
+              digest = hashlib.sha256(chosen["data"]).hexdigest()
+              (out / "PACKAGE-INFO.txt").write_text(
+                  f"Package: {package}\nDecision: IMMORTALWRT_APK_CANDIDATE\n"
+                  f"Version: {chosen['version']}\nArchitecture: {chosen['arch']}\n"
+                  f"Dependencies: {', '.join(chosen['deps']) or '(none listed)'}\n"
+                  f"Source: {chosen['url']}\nSHA256: {digest}\n"
+                  "IMPORTANT: candidate only, not certified compatible. Compare firmware revision, installed library versions, APK architecture and dependency constraints before installing.\n",
+                  encoding="utf-8")
+              print("DECISION=IMMORTALWRT_APK_CANDIDATE")
               pathlib.Path(os.environ["GITHUB_OUTPUT"]).open("a").write("needs_build=false\n")
           PY
 
-      - name: Upload reused official package
+      - name: Upload ImmortalWrt APK candidate
         if: steps.check.outputs.needs_build == 'false'
         uses: actions/upload-artifact@v4
         with:
-          name: N60-Pro-Package-${{ inputs.package_name }}-Official
+          name: N60-Pro-Package-${{ inputs.package_name }}-ImmortalWrt-APK-Candidate
           path: artifacts/package/
           if-no-files-found: error
           retention-days: 14
 
+      - name: Upload search report
+        if: steps.check.outputs.needs_build == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: N60-Pro-Package-${{ inputs.package_name }}-Search-Report
+          path: artifacts/package/
+          if-no-files-found: warn
+          retention-days: 14
+
   build:
-    name: Build package from matching source
+    name: Build package from repository source
     needs: inspect
     if: needs.inspect.outputs.needs_build == 'true'
     runs-on: ubuntu-24.04
@@ -197,9 +234,13 @@ jobs:
           CONFIG_TARGET_mediatek_filogic_DEVICE_netcore_n60-pro=y
           CONFIG_CCACHE=y
           EOF
-          printf 'CONFIG_PACKAGE_%s=y\n' "$PACKAGE_NAME" >> .config
+          if [[ "$PACKAGE_NAME" == kmod-* ]]; then
+            printf 'CONFIG_PACKAGE_%s=m\n' "$PACKAGE_NAME" >> .config
+          else
+            printf 'CONFIG_PACKAGE_%s=y\n' "$PACKAGE_NAME" >> .config
+          fi
           make defconfig
-          if ! grep -Fqx "CONFIG_PACKAGE_${PACKAGE_NAME}=y" .config; then
+          if ! grep -Eq "^CONFIG_PACKAGE_${PACKAGE_NAME}=(y|m)$" .config; then
             echo "::error::Package is not selectable by this source tree: $PACKAGE_NAME"
             echo "Check the exact package name and whether its feed/source is available."
             exit 1
@@ -219,9 +260,8 @@ jobs:
           import os, pathlib, re
           pkg = os.environ["PACKAGE_NAME"]
           kernel_name = pkg[5:] if pkg.startswith("kmod-") else None
-          roots = [pathlib.Path("package"), pathlib.Path("feeds")]
           matches = []
-          for root in roots:
+          for root in (pathlib.Path("package"), pathlib.Path("feeds")):
               if not root.exists():
                   continue
               for makefile in root.rglob("Makefile"):
@@ -234,22 +274,19 @@ jobs:
                   direct = re.search(r"^\s*define\s+Package/" + re.escape(pkg) + r"\s*$", text, re.M)
                   kernel = kernel_name and re.search(r"^\s*define\s+KernelPackage/" + re.escape(kernel_name) + r"\s*$", text, re.M)
                   if direct or kernel:
-                      directory = makefile.parent.as_posix()
-                      if directory.startswith("./"):
-                          directory = directory[2:]
+                      directory = makefile.parent.as_posix().removeprefix("./")
                       if directory.startswith("feeds/"):
                           directory = "package/feeds/" + directory[len("feeds/"):]
                       if directory not in matches:
                           matches.append(directory)
           if not matches:
-              raise SystemExit(f"Could not map package '{pkg}' to a source Makefile. Check feeds and package name.")
-          chosen = matches[0]
-          print("Matched source directory:", chosen)
-          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-              out.write("directory=" + chosen + "\n")
+              raise SystemExit(f"Could not map package '{pkg}' to a source Makefile.")
+          print("Matched source directory:", matches[0])
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write("directory=" + matches[0] + "\n")
           PY
 
-      - name: Compile selected package and its build dependencies
+      - name: Compile selected package
         env:
           PACKAGE_NAME: ${{ inputs.package_name }}
           PACKAGE_DIR: ${{ steps.source.outputs.directory }}
@@ -259,44 +296,41 @@ jobs:
           echo "Compiling $PACKAGE_NAME from $PACKAGE_DIR"
           make "$PACKAGE_DIR/compile" -j2 V=s
 
-      - name: Collect package and checksums
+      - name: Collect APK output and checksums
         env:
           PACKAGE_NAME: ${{ inputs.package_name }}
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p artifacts/package/ipk
-          find bin/packages bin/targets/mediatek/filogic/packages -type f -name "${PACKAGE_NAME}_*.ipk" -exec cp -t artifacts/package/ipk {} + 2>/dev/null || true
-          # Include locally built kmod IPKs too, because an app may require a kernel module
-          # whose ABI must match this exact source tree. The fresh runner has no old IPKs.
-          find bin/packages bin/targets/mediatek/filogic/packages -type f -name 'kmod-*.ipk' -exec cp -n -t artifacts/package/ipk {} + 2>/dev/null || true
-          if ! find artifacts/package/ipk -maxdepth 1 -type f -name '*.ipk' | grep -q .; then
-            echo "::error::Build finished but no IPK for '$PACKAGE_NAME' was found."
-            echo "Recent package outputs:"
-            find bin/packages bin/targets/mediatek/filogic/packages -type f -name '*.ipk' 2>/dev/null | tail -n 80 || true
+          mkdir -p artifacts/package/apk
+          find bin/packages bin/targets/mediatek/filogic/packages -type f -name "${PACKAGE_NAME}-*.apk" -exec cp -t artifacts/package/apk {} + 2>/dev/null || true
+          if ! find artifacts/package/apk -maxdepth 1 -type f -name '*.apk' | grep -q .; then
+            echo "::error::Build finished but no APK for '$PACKAGE_NAME' was found."
+            echo "Recent APK outputs:"
+            find bin/packages bin/targets/mediatek/filogic/packages -type f -name '*.apk' 2>/dev/null | tail -n 80 || true
             exit 1
           fi
           {
             echo "Package: $PACKAGE_NAME"
-            echo "Decision: BUILD_REQUIRED"
+            echo "Decision: SOURCE_BUILD"
             echo "Repository: laodadelaoda/immortalwrt-mt798x-rebase"
             echo "Branch: 25.12"
             echo "Source revision: $(git log -1 --format='%H %s')"
             echo "Target: mediatek/filogic, netcore_n60-pro"
             echo "Build command: make <matched-package-directory>/compile -j2 V=s"
-            echo "Review dependency and kernel ABI compatibility before installing."
+            echo "Review dependencies and kernel ABI compatibility before installing."
             echo
-            echo "Generated IPKs:"
-            find artifacts/package/ipk -maxdepth 1 -type f -printf '%f (%s bytes)\n' | sort
+            echo "Generated APKs:"
+            find artifacts/package/apk -maxdepth 1 -type f -printf '%f (%s bytes)\n' | sort
           } > artifacts/package/PACKAGE-INFO.txt
           (cd artifacts/package && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt)
           cat artifacts/package/PACKAGE-INFO.txt
           cat artifacts/package/SHA256SUMS.txt
 
-      - name: Upload compiled package
+      - name: Upload compiled APK
         uses: actions/upload-artifact@v4
         with:
-          name: N60-Pro-Package-${{ inputs.package_name }}-Built
+          name: N60-Pro-Package-${{ inputs.package_name }}-Built-APK
           path: artifacts/package/
           if-no-files-found: error
           retention-days: 14
