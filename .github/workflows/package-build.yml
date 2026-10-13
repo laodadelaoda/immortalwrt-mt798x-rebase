@@ -53,16 +53,17 @@ jobs:
           force = os.environ.get("FORCE_COMPILE", "false").lower() == "true"
           root = pathlib.Path("artifacts/package")
           base_urls = [
-              "https://downloads.immortalwrt.org/snapshots/targets/mediatek/filogic/packages/",
-              "https://downloads.immortalwrt.org/snapshots/packages/aarch64_cortex-a53/base/",
-              "https://downloads.immortalwrt.org/snapshots/packages/aarch64_cortex-a53/packages/",
-              "https://downloads.immortalwrt.org/snapshots/packages/aarch64_cortex-a53/luci/",
-              "https://downloads.immortalwrt.org/snapshots/packages/aarch64_cortex-a53/routing/",
-              "https://downloads.immortalwrt.org/snapshots/packages/aarch64_cortex-a53/telephony/",
-              "https://downloads.immortalwrt.org/snapshots/packages/aarch64_cortex-a53/video/",
+              "https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/targets/mediatek/filogic/packages/",
+              "https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/packages/aarch64_cortex-a53/base/",
+              "https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/packages/aarch64_cortex-a53/packages/",
+              "https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/packages/aarch64_cortex-a53/luci/",
+              "https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/packages/aarch64_cortex-a53/routing/",
+              "https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/packages/aarch64_cortex-a53/telephony/",
+              "https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/packages/aarch64_cortex-a53/video/",
           ]
           allowed_arch = {"all", "noarch", "aarch64_cortex-a53", "mediatek_filogic"}
           found = None
+          print("Official feed family: ImmortalWrt releases/25.12-SNAPSHOT (not rolling snapshots/)")
 
           print("Package:", package)
           print("Policy: kmod packages are always source-built to avoid kernel ABI mismatches.")
