@@ -1,0 +1,293 @@
+name: N60 Pro - Single Package (Auto Reuse or Build)
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: "OpenWrt package name, e.g. htop, ksmbd-server, kmod-fs-exfat"
+        required: true
+        type: string
+        default: "ksmbd-server"
+      force_compile:
+        description: "Force source build even if an official user-space package is available"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: n60-pro-package-${{ inputs.package_name }}
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    name: Check official ImmortalWrt package repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      needs_build: ${{ steps.check.outputs.needs_build }}
+      package_name: ${{ steps.check.outputs.package_name }}
+    steps:
+      - name: Validate input
+        id: check
+        env:
+          PACKAGE_NAME: ${{ inputs.package_name }}
+          FORCE_COMPILE: ${{ inputs.force_compile }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$PACKAGE_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9+_.-]*$ ]]; then
+            echo "::error::Invalid package name: $PACKAGE_NAME"
+            exit 1
+          fi
+          echo "package_name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
+          mkdir -p artifacts/package
+
+          python3 - <<'PY'
+          import gzip, os, pathlib, re, urllib.request
+          from urllib.error import HTTPError, URLError
+
+          package = os.environ["PACKAGE_NAME"]
+          force = os.environ.get("FORCE_COMPILE", "false").lower() == "true"
+          root = pathlib.Path("artifacts/package")
+          base_urls = [
+              "https://downloads.immortalwrt.org/snapshots/targets/mediatek/filogic/packages/",
+              "https://downloads.immortalwrt.org/snapshots/packages/aarch64_cortex-a53/base/",
+              "https://downloads.immortalwrt.org/snapshots/packages/aarch64_cortex-a53/packages/",
+              "https://downloads.immortalwrt.org/snapshots/packages/aarch64_cortex-a53/luci/",
+              "https://downloads.immortalwrt.org/snapshots/packages/aarch64_cortex-a53/routing/",
+              "https://downloads.immortalwrt.org/snapshots/packages/aarch64_cortex-a53/telephony/",
+              "https://downloads.immortalwrt.org/snapshots/packages/aarch64_cortex-a53/video/",
+          ]
+          allowed_arch = {"all", "noarch", "aarch64_cortex-a53", "mediatek_filogic"}
+          found = None
+
+          print("Package:", package)
+          print("Policy: kmod packages are always source-built to avoid kernel ABI mismatches.")
+          for base in base_urls:
+              index_url = base + "Packages.gz"
+              try:
+                  req = urllib.request.Request(index_url, headers={"User-Agent": "N60Pro-Package-Workflow/1.0"})
+                  with urllib.request.urlopen(req, timeout=12) as response:
+                      raw = gzip.decompress(response.read()).decode("utf-8", "replace")
+              except Exception as exc:
+                  print(f"INDEX unavailable: {index_url} ({exc})")
+                  continue
+              for block in re.split(r"\n\s*\n", raw):
+                  fields = {}
+                  for line in block.splitlines():
+                      if ": " in line:
+                          key, value = line.split(": ", 1)
+                          fields.setdefault(key, value)
+                  if fields.get("Package") != package:
+                      continue
+                  arch = fields.get("Architecture", "")
+                  filename = fields.get("Filename", "")
+                  if arch not in allowed_arch or not filename:
+                      print(f"FOUND but not reusable: arch={arch!r}, filename={filename!r}")
+                      continue
+                  found = (base, fields)
+                  break
+              if found:
+                  break
+
+          must_build = force or package.startswith("kmod-") or found is None
+          if must_build:
+              reason = ("force_compile selected" if force else
+                        "kernel module: ABI-safe policy requires a local build" if package.startswith("kmod-") else
+                        "not found in checked official snapshot indexes")
+              print("DECISION=BUILD_REQUIRED:", reason)
+              pathlib.Path(os.environ["GITHUB_OUTPUT"]).open("a").write("needs_build=true\n")
+              (root / "DECISION.txt").write_text(
+                  f"Package: {package}\nDecision: BUILD_REQUIRED\nReason: {reason}\n"
+                  "Kernel modules are built from this repository's source to avoid ABI mismatch.\n",
+                  encoding="utf-8")
+          else:
+              base, fields = found
+              filename = fields["Filename"]
+              if filename.startswith("/") or ".." in pathlib.PurePosixPath(filename).parts:
+                  raise SystemExit("Unsafe Filename in package index; refusing download.")
+              url = base + filename
+              destination = root / pathlib.Path(filename).name
+              print("DECISION=REUSE_OFFICIAL")
+              print("Version:", fields.get("Version", "unknown"))
+              print("Architecture:", fields.get("Architecture", "unknown"))
+              print("Depends:", fields.get("Depends", "(none listed)"))
+              print("Source:", url)
+              req = urllib.request.Request(url, headers={"User-Agent": "N60Pro-Package-Workflow/1.0"})
+              with urllib.request.urlopen(req, timeout=30) as response, destination.open("wb") as output:
+                  output.write(response.read())
+              if destination.stat().st_size < 100:
+                  raise SystemExit("Downloaded package is unexpectedly small; refusing artifact.")
+              import hashlib
+              digest = hashlib.sha256(destination.read_bytes()).hexdigest()
+              (root / "PACKAGE-INFO.txt").write_text(
+                  f"Package: {package}\nDecision: REUSE_OFFICIAL\n"
+                  f"Version: {fields.get('Version', 'unknown')}\n"
+                  f"Architecture: {fields.get('Architecture', 'unknown')}\n"
+                  f"Depends: {fields.get('Depends', '(none listed)')}\n"
+                  f"Source: {url}\nSHA256: {digest}\n"
+                  "Note: package dependencies and compatibility with the installed firmware must be checked before installation.\n",
+                  encoding="utf-8")
+              pathlib.Path(os.environ["GITHUB_OUTPUT"]).open("a").write("needs_build=false\n")
+          PY
+
+      - name: Upload reused official package
+        if: steps.check.outputs.needs_build == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: N60-Pro-Package-${{ inputs.package_name }}-Official
+          path: artifacts/package/
+          if-no-files-found: error
+          retention-days: 14
+
+  build:
+    name: Build package from matching source
+    needs: inspect
+    if: needs.inspect.outputs.needs_build == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Checkout N60 Pro source
+        uses: actions/checkout@v4
+        with:
+          ref: 25.12
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev python3-dev rsync unzip zlib1g-dev file wget time xsltproc libelf-dev device-tree-compiler qemu-utils python3-setuptools python3-pyelftools swig ccache
+
+      - name: Restore shared compiler cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ${{ runner.os }}-openwrt-n60pro-ccache-25.12-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-openwrt-n60pro-ccache-25.12-
+            ${{ runner.os }}-openwrt-n60pro-ccache-
+
+      - name: Update feeds and configure N60 Pro target
+        env:
+          PACKAGE_NAME: ${{ inputs.package_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          mkdir -p "$HOME/.cache/ccache" artifacts/package
+          ccache --max-size=5G
+          ccache --set-config=compiler_check=content
+          cat > .config <<'EOF'
+          CONFIG_TARGET_mediatek=y
+          CONFIG_TARGET_mediatek_filogic=y
+          CONFIG_TARGET_mediatek_filogic_DEVICE_netcore_n60-pro=y
+          CONFIG_CCACHE=y
+          EOF
+          printf 'CONFIG_PACKAGE_%s=y\n' "$PACKAGE_NAME" >> .config
+          make defconfig
+          if ! grep -Fqx "CONFIG_PACKAGE_${PACKAGE_NAME}=y" .config; then
+            echo "::error::Package is not selectable by this source tree: $PACKAGE_NAME"
+            echo "Check the exact package name and whether its feed/source is available."
+            exit 1
+          fi
+          cp .config artifacts/package/config.buildinfo
+          echo "Configured package: $PACKAGE_NAME"
+          echo "Source revision: $(git log -1 --format='%H %s')"
+
+      - name: Find package source directory
+        id: source
+        env:
+          PACKAGE_NAME: ${{ inputs.package_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, pathlib, re
+          pkg = os.environ["PACKAGE_NAME"]
+          kernel_name = pkg[5:] if pkg.startswith("kmod-") else None
+          roots = [pathlib.Path("package"), pathlib.Path("feeds")]
+          matches = []
+          for root in roots:
+              if not root.exists():
+                  continue
+              for makefile in root.rglob("Makefile"):
+                  if ".git" in makefile.parts:
+                      continue
+                  try:
+                      text = makefile.read_text(errors="ignore")
+                  except OSError:
+                      continue
+                  direct = re.search(r"^\s*define\s+Package/" + re.escape(pkg) + r"\s*$", text, re.M)
+                  kernel = kernel_name and re.search(r"^\s*define\s+KernelPackage/" + re.escape(kernel_name) + r"\s*$", text, re.M)
+                  if direct or kernel:
+                      directory = makefile.parent.as_posix()
+                      if directory.startswith("./"):
+                          directory = directory[2:]
+                      if directory not in matches:
+                          matches.append(directory)
+          if not matches:
+              raise SystemExit(f"Could not map package '{pkg}' to a source Makefile. Check feeds and package name.")
+          chosen = matches[0]
+          print("Matched source directory:", chosen)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write("directory=" + chosen + "\n")
+          PY
+
+      - name: Compile selected package and its build dependencies
+        env:
+          PACKAGE_NAME: ${{ inputs.package_name }}
+          PACKAGE_DIR: ${{ steps.source.outputs.directory }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Compiling $PACKAGE_NAME from $PACKAGE_DIR"
+          make "$PACKAGE_DIR/compile" -j2 V=s
+
+      - name: Collect package and checksums
+        env:
+          PACKAGE_NAME: ${{ inputs.package_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/package/ipk
+          find bin/packages bin/targets/mediatek/filogic/packages -type f -name "${PACKAGE_NAME}_*.ipk" -exec cp -t artifacts/package/ipk {} + 2>/dev/null || true
+          if ! find artifacts/package/ipk -maxdepth 1 -type f -name '*.ipk' | grep -q .; then
+            echo "::error::Build finished but no IPK for '$PACKAGE_NAME' was found."
+            echo "Recent package outputs:"
+            find bin/packages bin/targets/mediatek/filogic/packages -type f -name '*.ipk' 2>/dev/null | tail -n 80 || true
+            exit 1
+          fi
+          {
+            echo "Package: $PACKAGE_NAME"
+            echo "Decision: BUILD_REQUIRED"
+            echo "Repository: laodadelaoda/immortalwrt-mt798x-rebase"
+            echo "Branch: 25.12"
+            echo "Source revision: $(git log -1 --format='%H %s')"
+            echo "Target: mediatek/filogic, netcore_n60-pro"
+            echo "Build command: make <matched-package-directory>/compile -j2 V=s"
+            echo "Review dependency and kernel ABI compatibility before installing."
+            echo
+            echo "Generated IPKs:"
+            find artifacts/package/ipk -maxdepth 1 -type f -printf '%f (%s bytes)\n' | sort
+          } > artifacts/package/PACKAGE-INFO.txt
+          (cd artifacts/package && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt)
+          cat artifacts/package/PACKAGE-INFO.txt
+          cat artifacts/package/SHA256SUMS.txt
+
+      - name: Upload compiled package
+        uses: actions/upload-artifact@v4
+        with:
+          name: N60-Pro-Package-${{ inputs.package_name }}-Built
+          path: artifacts/package/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Report compiler cache
+        if: always()
+        run: ccache -s
