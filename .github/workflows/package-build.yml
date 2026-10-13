@@ -93,10 +93,12 @@ jobs:
               if found:
                   break
 
-          must_build = force or package.startswith("kmod-") or found is None
+          depends_on_kmod = bool(found and re.search(r"(^|[, ])kmod-[A-Za-z0-9+_.-]+", found[1].get("Depends", "")))
+          must_build = force or package.startswith("kmod-") or depends_on_kmod or found is None
           if must_build:
               reason = ("force_compile selected" if force else
                         "kernel module: ABI-safe policy requires a local build" if package.startswith("kmod-") else
+                        "official package depends on a kernel module; build locally to avoid ABI mismatch" if depends_on_kmod else
                         "not found in checked official snapshot indexes")
               print("DECISION=BUILD_REQUIRED:", reason)
               pathlib.Path(os.environ["GITHUB_OUTPUT"]).open("a").write("needs_build=true\n")
@@ -264,6 +266,11 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/package/ipk
           find bin/packages bin/targets/mediatek/filogic/packages -type f -name "${PACKAGE_NAME}_*.ipk" -exec cp -t artifacts/package/ipk {} + 2>/dev/null || true
+          # Include locally built kmod IPKs too, because an app may require a kernel module
+          # whose ABI must match this exact source tree.
+          if grep -RqsE 'Depends:.*kmod-' bin/packages bin/targets/mediatek/filogic/packages 2>/dev/null; then
+            find bin/packages bin/targets/mediatek/filogic/packages -type f -name 'kmod-*.ipk' -exec cp -n -t artifacts/package/ipk {} + 2>/dev/null || true
+          fi
           if ! find artifacts/package/ipk -maxdepth 1 -type f -name '*.ipk' | grep -q .; then
             echo "::error::Build finished but no IPK for '$PACKAGE_NAME' was found."
             echo "Recent package outputs:"
