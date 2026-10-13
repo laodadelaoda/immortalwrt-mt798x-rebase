@@ -267,10 +267,8 @@ jobs:
           mkdir -p artifacts/package/ipk
           find bin/packages bin/targets/mediatek/filogic/packages -type f -name "${PACKAGE_NAME}_*.ipk" -exec cp -t artifacts/package/ipk {} + 2>/dev/null || true
           # Include locally built kmod IPKs too, because an app may require a kernel module
-          # whose ABI must match this exact source tree.
-          if grep -RqsE 'Depends:.*kmod-' bin/packages bin/targets/mediatek/filogic/packages 2>/dev/null; then
-            find bin/packages bin/targets/mediatek/filogic/packages -type f -name 'kmod-*.ipk' -exec cp -n -t artifacts/package/ipk {} + 2>/dev/null || true
-          fi
+          # whose ABI must match this exact source tree. The fresh runner has no old IPKs.
+          find bin/packages bin/targets/mediatek/filogic/packages -type f -name 'kmod-*.ipk' -exec cp -n -t artifacts/package/ipk {} + 2>/dev/null || true
           if ! find artifacts/package/ipk -maxdepth 1 -type f -name '*.ipk' | grep -q .; then
             echo "::error::Build finished but no IPK for '$PACKAGE_NAME' was found."
             echo "Recent package outputs:"
