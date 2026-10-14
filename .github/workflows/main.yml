@@ -157,11 +157,13 @@ jobs:
           require_config 'CONFIG_PACKAGE_iw=y'
           require_config 'CONFIG_PACKAGE_iwinfo=y'
           require_config 'CONFIG_PACKAGE_iwinfo-ucode=y'
-          require_config 'CONFIG_MAXLINEAR_GPHY=y'
-          require_config 'CONFIG_MTK_NET_PHYLIB=y'
-          require_config 'CONFIG_PHYLIB=y'
-          require_config 'CONFIG_HWMON=y'
-          require_config 'CONFIG_POLYNOMIAL=y'
+          KERNEL_CFG="target/linux/mediatek/filogic/config-6.12"
+          for opt in CONFIG_MAXLINEAR_GPHY=y CONFIG_MTK_NET_PHYLIB=y CONFIG_PHYLIB=y CONFIG_HWMON=y CONFIG_POLYNOMIAL=y; do
+            grep -Fqx "$opt" "$KERNEL_CFG" || {
+              echo "::error::Required GPY211C/PHY kernel option missing from $KERNEL_CFG: $opt"
+              exit 1
+            }
+          done
           require_config 'CONFIG_MTK_MT_WIFI=m'
           require_config 'CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y'
           require_config 'CONFIG_MTK_MT_WIFI_PATH="mt_wifi"'
