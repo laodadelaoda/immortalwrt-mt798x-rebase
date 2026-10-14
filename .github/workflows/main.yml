@@ -226,10 +226,10 @@ jobs:
           mkdir -p "$EXTRACT"
 
           # OpenWrt 25.12 uses APK v3; keep IPK support only for older-compatible source variants.
-          DRIVER_PKG="$(find "$OUT/packages" bin/packages -type f \\( -name 'kmod-mt_wifi-*.apk' -o -name 'kmod-mt_wifi_*.ipk' \\) -print -quit 2>/dev/null || true)"
+          DRIVER_PKG="$(find "$OUT/packages" bin/packages -type f \( -name 'kmod-mt_wifi-*.apk' -o -name 'kmod-mt_wifi_*.ipk' \) -print -quit 2>/dev/null || true)"
           test -n "$DRIVER_PKG" || {
             echo "::error::kmod-mt_wifi package (.apk or .ipk) was not produced."
-            find "$OUT" bin/packages -type f \\( -name '*mt_wifi*' -o -name '*.apk' -o -name '*.ipk' \\) -printf '%p\\n' 2>/dev/null | sort | head -200
+            find "$OUT" bin/packages -type f \( -name '*mt_wifi*' -o -name '*.apk' -o -name '*.ipk' \) -printf '%p\n' 2>/dev/null | sort | head -200
             exit 1
           }
 
@@ -240,17 +240,17 @@ jobs:
               exit 1
             }
             "$APK_BIN" extract --allow-untrusted --destination "$EXTRACT" "$DRIVER_PKG"
-            find "$EXTRACT" -type f -printf '%p\\n' | sed "s#^$EXTRACT/##" > /tmp/mt-wifi-package-files.txt
+            find "$EXTRACT" -type f -printf '%p\n' | sed "s#^$EXTRACT/##" > /tmp/mt-wifi-package-files.txt
           else
             ar p "$DRIVER_PKG" data.tar.gz | tar -tzf - > /tmp/mt-wifi-package-files.txt
           fi
 
-          grep -Eq '(^|/)mt_wifi\\.ko$' /tmp/mt-wifi-package-files.txt || {
+          grep -Eq '(^|/)mt_wifi\.ko$' /tmp/mt-wifi-package-files.txt || {
             echo "::error::kmod-mt_wifi package does not contain mt_wifi.ko."
             cat /tmp/mt-wifi-package-files.txt
             exit 1
           }
-          grep -Eq '(^|/)mtk_warp_proxy\\.ko$' /tmp/mt-wifi-package-files.txt || {
+          grep -Eq '(^|/)mtk_warp_proxy\.ko$' /tmp/mt-wifi-package-files.txt || {
             echo "::error::kmod-mt_wifi package does not contain mtk_warp_proxy.ko."
             cat /tmp/mt-wifi-package-files.txt
             exit 1
@@ -267,7 +267,7 @@ jobs:
           fi
           test -n "$MANIFEST" || {
             echo "::error::No image package manifest found; cannot verify driver inclusion in the image."
-            find "$OUT" -maxdepth 1 -type f -printf '%f\\n' | sort
+            find "$OUT" -maxdepth 1 -type f -printf '%f\n' | sort
             exit 1
           }
           # mt_wifi and WARP declare the MediaTek HNAT module as a package dependency.
@@ -283,7 +283,7 @@ jobs:
           echo "PASS: MTK Wi-Fi kernel modules and MT7986 firmware are in the driver package."
           echo "PASS: driver, conninfra, WARP, HNAT, USB3, Wi-Fi data, and LuCI configuration stack are in image manifest."
           echo "===== Driver package files ====="
-          grep -E 'mt_wifi\\.ko|mtk_warp_proxy\\.ko|lib/firmware/MT7986_' /tmp/mt-wifi-package-files.txt
+          grep -E 'mt_wifi\.ko|mtk_warp_proxy\.ko|lib/firmware/MT7986_' /tmp/mt-wifi-package-files.txt
 
       - name: Collect only standard-profile firmware and verify checksums
         shell: bash
