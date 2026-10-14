@@ -290,9 +290,227 @@ jobs:
             exit 1
           }
           list_package_files "$WARP_PKG" /tmp/n60pro-warp-package > /tmp/warp-package-files.txt
-          grep -Eq '(^|/)mtk_warp\.ko$' /tmp/warp-package-files.txt || {
+          grep -Eq '(^|/)mtk_warp\.ko          MANIFEST="$(find "$OUT" -maxdepth 1 -type f -name '*netcore_n60-pro*.manifest' -print -quit)"
+          if [ -z "$MANIFEST" ]; then
+            MANIFEST="$(find "$OUT" -maxdepth 1 -type f -name '*.manifest' -print -quit)"
+          fi
+          test -n "$MANIFEST" || {
+            echo "::error::No image package manifest found; cannot verify driver inclusion in the image."
+            find "$OUT" -maxdepth 1 -type f -printf '%f\n' | sort
+            exit 1
+          }
+          # Manifest checks prove inclusion only; throughput and offload behavior require runtime tests.
+          for pkg in kmod-mt_wifi kmod-conninfra kmod-warp kmod-mediatek_hnat kmod-usb3 wifi-dats mtwifi-cfg-ucode luci-app-mtwifi-cfg; do
+            grep -Eq "^$pkg([[:space:]]|$)" "$MANIFEST" || {
+              echo "::error::$pkg is not listed in image manifest $MANIFEST."
+              cat "$MANIFEST"
+              exit 1
+            }
+          done
+
+          echo "PASS: mt_wifi, mtk_warp_proxy, conninfra, mtk_warp, mtkhnat and MT7986 firmware package contents verified."
+          echo "PASS: driver, conninfra, WARP, HNAT, USB3, Wi-Fi data, and LuCI configuration stack are in image manifest."
+          echo "===== Wi-Fi package files ====="
+          grep -E 'mt_wifi\.ko|mtk_warp_proxy\.ko|lib/firmware/MT7986_' /tmp/mt-wifi-package-files.txt
+          echo "===== WARP package files ====="
+          grep -E 'mtk_warp\.ko' /tmp/warp-package-files.txt
+          echo "===== HNAT package files ====="
+          grep -E 'mtkhnat\.ko' /tmp/hnat-package-files.txt
+          echo "===== Conninfra package files ====="
+          grep -E 'conninfra\.ko' /tmp/conninfra-package-files.txt
+
+      - name: Collect only standard-profile firmware and verify checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="bin/targets/mediatek/filogic"
+          DEST="artifacts/N60-Pro/standard"
+          SYSUPGRADE="$OUT/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
+          RECOVERY="$OUT/immortalwrt-mediatek-filogic-netcore_n60-pro-initramfs-recovery.itb"
+
+          if [ ! -s "$SYSUPGRADE" ]; then
+            echo "::error::Expected standard N60 Pro sysupgrade ITB not found."
+            find "$OUT" -maxdepth 1 -type f -printf '%f\n' | sort
+            exit 1
+          fi
+          cp "$SYSUPGRADE" "$DEST/"
+          if [ -s "$RECOVERY" ]; then
+            cp "$RECOVERY" "$DEST/"
+          else
+            echo "::warning::Recovery ITB not produced; sysupgrade image is still required."
+          fi
+
+          if find "$DEST" -maxdepth 1 -type f -iname '*mtkuboot*' | grep -q .; then
+            echo "::error::MTK U-Boot artifact detected in output; refusing to package."
+            exit 1
+          fi
+
+          {
+            echo "Build policy: STANDARD PROFILE ONLY; MTK U-Boot profile excluded"
+            echo "Profile: netcore_n60-pro"
+            echo "Expected DTS: mt7986a-netcore-n60-pro"
+            echo "Expected sysupgrade format: sysupgrade.itb"
+            echo "Source revision:"
+            git log -1 --format='%H %s'
+            echo "Files:"
+            find "$DEST" -maxdepth 1 -type f -printf '%f\n' | sort
+          } > "$DEST/BUILD-INFO.txt"
+          (
+            cd "$DEST"
+            sha256sum *.itb config.buildinfo BUILD-INFO.txt > SHA256SUMS.txt
+          )
+          echo "===== STANDARD-ONLY firmware artifacts ====="
+          ls -lh "$DEST"
+          cat "$DEST/SHA256SUMS.txt"
+
+      - name: Create build summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "Repository: laodadelaoda/immortalwrt-mt798x-rebase"
+            echo "Build policy: standard netcore_n60-pro profile only"
+            echo "MTK U-Boot profile: disabled and not packaged"
+            echo "Source revision:"
+            git log -1 --format='%H %s'
+            echo "Only the standard sysupgrade ITB is emitted as the primary firmware."
+            echo "HNAT package dependency and MaxLinear PHY kernel support were checked for build inclusion only."
+            echo "Runtime HNAT throughput/QoS, 2.5G link stability, and Wi-Fi operation still require device-side tests."
+            echo "DTS, flash layout, and checksum review are still required before any flashing."
+          } > artifacts/N60-Pro/BUILD-INFO.txt
+          echo "===== Final artifact tree ====="
+          find artifacts/N60-Pro -maxdepth 2 -type f -printf '%p (%s bytes)\n' | sort
+          echo "===== ccache statistics ====="
+          ccache -s
+
+      - name: Upload standard-only firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: N60-Pro-ImmortalWrt-25.12-Standard-Only
+          path: artifacts/N60-Pro/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Report compiler cache statistics
+        if: always()
+        run: ccache -s
+ /tmp/warp-package-files.txt || {
             echo "::error::kmod-warp package does not contain mtk_warp.ko."
             cat /tmp/warp-package-files.txt
+            exit 1
+          }
+
+          CONNINFRA_PKG="$(find_package 'kmod-conninfra-*.apk' 'kmod-conninfra_*.ipk')"
+          test -n "$CONNINFRA_PKG" || {
+            echo "::error::kmod-conninfra package was not produced."
+            exit 1
+          }
+          list_package_files "$CONNINFRA_PKG" /tmp/n60pro-conninfra-package > /tmp/conninfra-package-files.txt
+          grep -Eq '(^|/)conninfra\.ko          MANIFEST="$(find "$OUT" -maxdepth 1 -type f -name '*netcore_n60-pro*.manifest' -print -quit)"
+          if [ -z "$MANIFEST" ]; then
+            MANIFEST="$(find "$OUT" -maxdepth 1 -type f -name '*.manifest' -print -quit)"
+          fi
+          test -n "$MANIFEST" || {
+            echo "::error::No image package manifest found; cannot verify driver inclusion in the image."
+            find "$OUT" -maxdepth 1 -type f -printf '%f\n' | sort
+            exit 1
+          }
+          # Manifest checks prove inclusion only; throughput and offload behavior require runtime tests.
+          for pkg in kmod-mt_wifi kmod-conninfra kmod-warp kmod-mediatek_hnat kmod-usb3 wifi-dats mtwifi-cfg-ucode luci-app-mtwifi-cfg; do
+            grep -Eq "^$pkg([[:space:]]|$)" "$MANIFEST" || {
+              echo "::error::$pkg is not listed in image manifest $MANIFEST."
+              cat "$MANIFEST"
+              exit 1
+            }
+          done
+
+          echo "PASS: mt_wifi, mtk_warp_proxy, mtk_warp, mtkhnat and MT7986 firmware package contents verified."
+          echo "PASS: driver, conninfra, WARP, HNAT, USB3, Wi-Fi data, and LuCI configuration stack are in image manifest."
+          echo "===== Wi-Fi package files ====="
+          grep -E 'mt_wifi\.ko|mtk_warp_proxy\.ko|lib/firmware/MT7986_' /tmp/mt-wifi-package-files.txt
+          echo "===== WARP package files ====="
+          grep -E 'mtk_warp\.ko' /tmp/warp-package-files.txt
+          echo "===== HNAT package files ====="
+          grep -E 'mtkhnat\.ko' /tmp/hnat-package-files.txt
+
+      - name: Collect only standard-profile firmware and verify checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="bin/targets/mediatek/filogic"
+          DEST="artifacts/N60-Pro/standard"
+          SYSUPGRADE="$OUT/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
+          RECOVERY="$OUT/immortalwrt-mediatek-filogic-netcore_n60-pro-initramfs-recovery.itb"
+
+          if [ ! -s "$SYSUPGRADE" ]; then
+            echo "::error::Expected standard N60 Pro sysupgrade ITB not found."
+            find "$OUT" -maxdepth 1 -type f -printf '%f\n' | sort
+            exit 1
+          fi
+          cp "$SYSUPGRADE" "$DEST/"
+          if [ -s "$RECOVERY" ]; then
+            cp "$RECOVERY" "$DEST/"
+          else
+            echo "::warning::Recovery ITB not produced; sysupgrade image is still required."
+          fi
+
+          if find "$DEST" -maxdepth 1 -type f -iname '*mtkuboot*' | grep -q .; then
+            echo "::error::MTK U-Boot artifact detected in output; refusing to package."
+            exit 1
+          fi
+
+          {
+            echo "Build policy: STANDARD PROFILE ONLY; MTK U-Boot profile excluded"
+            echo "Profile: netcore_n60-pro"
+            echo "Expected DTS: mt7986a-netcore-n60-pro"
+            echo "Expected sysupgrade format: sysupgrade.itb"
+            echo "Source revision:"
+            git log -1 --format='%H %s'
+            echo "Files:"
+            find "$DEST" -maxdepth 1 -type f -printf '%f\n' | sort
+          } > "$DEST/BUILD-INFO.txt"
+          (
+            cd "$DEST"
+            sha256sum *.itb config.buildinfo BUILD-INFO.txt > SHA256SUMS.txt
+          )
+          echo "===== STANDARD-ONLY firmware artifacts ====="
+          ls -lh "$DEST"
+          cat "$DEST/SHA256SUMS.txt"
+
+      - name: Create build summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "Repository: laodadelaoda/immortalwrt-mt798x-rebase"
+            echo "Build policy: standard netcore_n60-pro profile only"
+            echo "MTK U-Boot profile: disabled and not packaged"
+            echo "Source revision:"
+            git log -1 --format='%H %s'
+            echo "Only the standard sysupgrade ITB is emitted as the primary firmware."
+            echo "HNAT package dependency and MaxLinear PHY kernel support were checked for build inclusion only."
+            echo "Runtime HNAT throughput/QoS, 2.5G link stability, and Wi-Fi operation still require device-side tests."
+            echo "DTS, flash layout, and checksum review are still required before any flashing."
+          } > artifacts/N60-Pro/BUILD-INFO.txt
+          echo "===== Final artifact tree ====="
+          find artifacts/N60-Pro -maxdepth 2 -type f -printf '%p (%s bytes)\n' | sort
+          echo "===== ccache statistics ====="
+          ccache -s
+
+      - name: Upload standard-only firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: N60-Pro-ImmortalWrt-25.12-Standard-Only
+          path: artifacts/N60-Pro/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Report compiler cache statistics
+        if: always()
+        run: ccache -s
+ /tmp/conninfra-package-files.txt || {
+            echo "::error::kmod-conninfra package does not contain conninfra.ko."
+            cat /tmp/conninfra-package-files.txt
             exit 1
           }
 
