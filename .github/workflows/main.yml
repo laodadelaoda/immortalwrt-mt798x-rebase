@@ -31,6 +31,22 @@ jobs:
           grep -Rni --include='*.mk' --include='*.dts' --include='*.dtsi' 'netcore.n60.pro' target/linux/mediatek || true
           grep -Rni --include='*.mk' 'DEVICE_DTS.*mt7986a-netcore-n60-pro' target/linux/mediatek
 
+          DTS="target/linux/mediatek/dts/mt7986a-netcore-n60-pro.dts"
+          test -s "$DTS" || { echo "::error::Standard N60 Pro DTS missing."; exit 1; }
+          grep -Fq 'compatible = "netcore,n60-pro", "mediatek,mt7986a";' "$DTS" || {
+            echo "::error::Unexpected standard N60 Pro DTS compatible string."
+            exit 1
+          }
+          test -s package/mtk/drivers/mt_wifi/patches-7673/034-since-v6.12-fix-unaligned_h-not-found-error.patch || {
+            echo "::error::MTK Wi-Fi driver lacks the expected Linux 6.12 compatibility patch."
+            exit 1
+          }
+          test -s package/mtk/drivers/mt_wifi/patches-7673/035-since-v6.8-change-strlcpy-to-strscpy.patch || {
+            echo "::error::MTK Wi-Fi driver compatibility patch set is incomplete."
+            exit 1
+          }
+          echo "PASS: standard DTS and Linux 6.12 MTK driver compatibility patches found."
+
       - name: Install build dependencies
         shell: bash
         run: |
@@ -67,29 +83,288 @@ jobs:
           CONFIG_TARGET_mediatek_filogic_DEVICE_netcore_n60-pro=y
           CONFIG_PACKAGE_luci=y
           CONFIG_CCACHE=y
+
+          # MTK MT7986 vendor Wi-Fi driver and its kernel dependencies
+          CONFIG_PACKAGE_kmod-mt_wifi=y
+          CONFIG_PACKAGE_kmod-conninfra=y
+          CONFIG_PACKAGE_kmod-warp=y
+          CONFIG_PACKAGE_wifi-dats=y
+          CONFIG_PACKAGE_mtwifi-cfg-ucode=y
+          CONFIG_PACKAGE_luci-app-mtwifi-cfg=y
+          CONFIG_PACKAGE_iw=y
+          CONFIG_PACKAGE_iwinfo=y
+          CONFIG_PACKAGE_iwinfo-ucode=y
+
+          # MT7986 driver profile: dual-band AX6000 board, calibration from factory
+          CONFIG_MTK_MT_WIFI=m
+          CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y
+          CONFIG_MTK_MT_WIFI_PATH="mt_wifi"
+          CONFIG_MTK_FIRST_IF_MT7986=y
+          CONFIG_MTK_SECOND_IF_NONE=y
+          CONFIG_MTK_FIRST_IF_EEPROM_FLASH=y
+          CONFIG_MTK_FIRST_IF_IPAILNA=y
+          CONFIG_MTK_MT_WIFI_MT7986_DEFAULT_FIRMWARE=y
+          CONFIG_MTK_WIFI_FW_BIN_LOAD=y
+          CONFIG_MTK_WIFI_SKU_TYPE="AX6000"
+          CONFIG_MTK_WIFI_ADIE_TYPE="mt7976"
+
+          # Conninfra must target MT7986, not another Filogic SoC
+          CONFIG_MTK_CONNINFRA_APSOC=y
+          CONFIG_MTK_CONNINFRA_APSOC_MT7986=y
+
+          # Wi-Fi data package must install MT7986 calibration/profile files
+          CONFIG_first_card=y
+          CONFIG_first_card_name="MT7986"
           EOF
 
           make defconfig
-          grep -qx 'CONFIG_TARGET_mediatek_filogic_DEVICE_netcore_n60-pro=y' .config || {
-            echo "::error::Standard N60 Pro profile missing after defconfig."
-            exit 1
+
+          require_config() {
+            if ! grep -Fqx "$1" .config; then
+              echo "::error::Required configuration missing after make defconfig: $1"
+              exit 1
+            fi
           }
+          require_config 'CONFIG_TARGET_mediatek_filogic_DEVICE_netcore_n60-pro=y'
+          require_config 'CONFIG_PACKAGE_luci=y'
+          require_config 'CONFIG_PACKAGE_kmod-mt_wifi=y'
+          require_config 'CONFIG_PACKAGE_kmod-conninfra=y'
+          require_config 'CONFIG_PACKAGE_kmod-warp=y'
+          require_config 'CONFIG_PACKAGE_wifi-dats=y'
+          require_config 'CONFIG_PACKAGE_mtwifi-cfg-ucode=y'
+          require_config 'CONFIG_PACKAGE_luci-app-mtwifi-cfg=y'
+          require_config 'CONFIG_PACKAGE_iw=y'
+          require_config 'CONFIG_PACKAGE_iwinfo=y'
+          require_config 'CONFIG_PACKAGE_iwinfo-ucode=y'
+          require_config 'CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y'
+          require_config 'CONFIG_MTK_FIRST_IF_MT7986=y'
+          require_config 'CONFIG_MTK_SECOND_IF_NONE=y'
+          require_config 'CONFIG_MTK_FIRST_IF_EEPROM_FLASH=y'
+          require_config 'CONFIG_MTK_MT_WIFI_MT7986_DEFAULT_FIRMWARE=y'
+          require_config 'CONFIG_MTK_WIFI_FW_BIN_LOAD=y'
+          require_config 'CONFIG_MTK_CONNINFRA_APSOC_MT7986=y'
+          require_config 'CONFIG_first_card_name="MT7986"'
+
           if grep -qx 'CONFIG_TARGET_mediatek_filogic_DEVICE_netcore_n60-pro-mtkuboot=y' .config; then
             echo "::error::MTK U-Boot profile must not be selected."
             exit 1
           fi
-          grep -qx 'CONFIG_PACKAGE_luci=y' .config || {
-            echo "::error::LuCI was not enabled."
+          if grep -qx 'CONFIG_PACKAGE_mtwifi-cfg=y' .config; then
+            echo "::error::Legacy mtwifi-cfg conflicts with the selected ucode configuration stack."
             exit 1
-          }
+          fi
+          if grep -qx 'CONFIG_PACKAGE_wifi-profile=y' .config; then
+            echo "::error::Legacy wifi-profile must not be mixed with the selected ucode configuration stack."
+            exit 1
+          fi
+
+          echo "===== Required MTK Wi-Fi configuration ====="
+          grep -E '^(CONFIG_PACKAGE_(kmod-mt_wifi|kmod-conninfra|kmod-warp|wifi-dats|mtwifi-cfg-ucode|luci-app-mtwifi-cfg|iw|iwinfo|iwinfo-ucode)=|CONFIG_MTK_(MT_WIFI_DRIVER_VERSION_7673|FIRST_IF_MT7986|SECOND_IF_NONE|FIRST_IF_EEPROM_FLASH|MT_WIFI_MT7986_DEFAULT_FIRMWARE|WIFI_FW_BIN_LOAD|CONNINFRA_APSOC_MT7986)=|CONFIG_first_card_name=)' .config
           cp .config artifacts/N60-Pro/standard/config.buildinfo
-          echo "PASS: standard profile selected; MTK U-Boot profile excluded."
+          echo "PASS: standard profile, MT7986 vendor Wi-Fi stack, and no MTK U-Boot profile."
 
       - name: Download sources
         run: make download -j2
 
       - name: Build standard profile
         run: make -j2 V=s
+
+      - name: Verify MTK Wi-Fi driver and runtime packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="bin/targets/mediatek/filogic"
+          PKGDIR="$OUT/packages"
+
+          DRIVER_IPK="$(find "$PKGDIR" -maxdepth 1 -type f -name 'kmod-mt_wifi_*.ipk' -print -quit)"
+          test -n "$DRIVER_IPK" || {
+            echo "::error::kmod-mt_wifi package was not produced."
+            find "$PKGDIR" -maxdepth 1 -type f -name '*.ipk' -printf '%f\n' | sort
+            exit 1
+          }
+
+          ar p "$DRIVER_IPK" data.tar.gz | tar -tzf - > /tmp/mt-wifi-package-files.txt
+          grep -Eq '(^|/)mt_wifi\.ko        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="bin/targets/mediatek/filogic"
+          DEST="artifacts/N60-Pro/standard"
+          SYSUPGRADE="$OUT/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
+          RECOVERY="$OUT/immortalwrt-mediatek-filogic-netcore_n60-pro-initramfs-recovery.itb"
+
+          if [ ! -s "$SYSUPGRADE" ]; then
+            echo "::error::Expected standard N60 Pro sysupgrade ITB not found."
+            find "$OUT" -maxdepth 1 -type f -printf '%f\n' | sort
+            exit 1
+          fi
+          cp "$SYSUPGRADE" "$DEST/"
+          if [ -s "$RECOVERY" ]; then
+            cp "$RECOVERY" "$DEST/"
+          else
+            echo "::warning::Recovery ITB not produced; sysupgrade image is still required."
+          fi
+
+          if find "$DEST" -maxdepth 1 -type f -iname '*mtkuboot*' | grep -q .; then
+            echo "::error::MTK U-Boot artifact detected in output; refusing to package."
+            exit 1
+          fi
+
+          {
+            echo "Build policy: STANDARD PROFILE ONLY; MTK U-Boot profile excluded"
+            echo "Profile: netcore_n60-pro"
+            echo "Expected DTS: mt7986a-netcore-n60-pro"
+            echo "Expected sysupgrade format: sysupgrade.itb"
+            echo "Source revision:"
+            git log -1 --format='%H %s'
+            echo "Files:"
+            find "$DEST" -maxdepth 1 -type f -printf '%f\n' | sort
+          } > "$DEST/BUILD-INFO.txt"
+          (
+            cd "$DEST"
+            sha256sum *.itb config.buildinfo BUILD-INFO.txt > SHA256SUMS.txt
+          )
+          echo "===== STANDARD-ONLY firmware artifacts ====="
+          ls -lh "$DEST"
+          cat "$DEST/SHA256SUMS.txt"
+
+      - name: Create build summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "Repository: laodadelaoda/immortalwrt-mt798x-rebase"
+            echo "Build policy: standard netcore_n60-pro profile only"
+            echo "MTK U-Boot profile: disabled and not packaged"
+            echo "Source revision:"
+            git log -1 --format='%H %s'
+            echo "Only the standard sysupgrade ITB is emitted as the primary firmware."
+            echo "DTS, flash layout, and checksum review are still required before any flashing."
+          } > artifacts/N60-Pro/BUILD-INFO.txt
+          echo "===== Final artifact tree ====="
+          find artifacts/N60-Pro -maxdepth 2 -type f -printf '%p (%s bytes)\n' | sort
+          echo "===== ccache statistics ====="
+          ccache -s
+
+      - name: Upload standard-only firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: N60-Pro-ImmortalWrt-25.12-Standard-Only
+          path: artifacts/N60-Pro/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Report compiler cache statistics
+        if: always()
+        run: ccache -s
+ /tmp/mt-wifi-package-files.txt || {
+            echo "::error::kmod-mt_wifi package does not contain mt_wifi.ko."
+            cat /tmp/mt-wifi-package-files.txt
+            exit 1
+          }
+          grep -Eq '(^|/)mtk_warp_proxy\.ko        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="bin/targets/mediatek/filogic"
+          DEST="artifacts/N60-Pro/standard"
+          SYSUPGRADE="$OUT/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
+          RECOVERY="$OUT/immortalwrt-mediatek-filogic-netcore_n60-pro-initramfs-recovery.itb"
+
+          if [ ! -s "$SYSUPGRADE" ]; then
+            echo "::error::Expected standard N60 Pro sysupgrade ITB not found."
+            find "$OUT" -maxdepth 1 -type f -printf '%f\n' | sort
+            exit 1
+          fi
+          cp "$SYSUPGRADE" "$DEST/"
+          if [ -s "$RECOVERY" ]; then
+            cp "$RECOVERY" "$DEST/"
+          else
+            echo "::warning::Recovery ITB not produced; sysupgrade image is still required."
+          fi
+
+          if find "$DEST" -maxdepth 1 -type f -iname '*mtkuboot*' | grep -q .; then
+            echo "::error::MTK U-Boot artifact detected in output; refusing to package."
+            exit 1
+          fi
+
+          {
+            echo "Build policy: STANDARD PROFILE ONLY; MTK U-Boot profile excluded"
+            echo "Profile: netcore_n60-pro"
+            echo "Expected DTS: mt7986a-netcore-n60-pro"
+            echo "Expected sysupgrade format: sysupgrade.itb"
+            echo "Source revision:"
+            git log -1 --format='%H %s'
+            echo "Files:"
+            find "$DEST" -maxdepth 1 -type f -printf '%f\n' | sort
+          } > "$DEST/BUILD-INFO.txt"
+          (
+            cd "$DEST"
+            sha256sum *.itb config.buildinfo BUILD-INFO.txt > SHA256SUMS.txt
+          )
+          echo "===== STANDARD-ONLY firmware artifacts ====="
+          ls -lh "$DEST"
+          cat "$DEST/SHA256SUMS.txt"
+
+      - name: Create build summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "Repository: laodadelaoda/immortalwrt-mt798x-rebase"
+            echo "Build policy: standard netcore_n60-pro profile only"
+            echo "MTK U-Boot profile: disabled and not packaged"
+            echo "Source revision:"
+            git log -1 --format='%H %s'
+            echo "Only the standard sysupgrade ITB is emitted as the primary firmware."
+            echo "DTS, flash layout, and checksum review are still required before any flashing."
+          } > artifacts/N60-Pro/BUILD-INFO.txt
+          echo "===== Final artifact tree ====="
+          find artifacts/N60-Pro -maxdepth 2 -type f -printf '%p (%s bytes)\n' | sort
+          echo "===== ccache statistics ====="
+          ccache -s
+
+      - name: Upload standard-only firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: N60-Pro-ImmortalWrt-25.12-Standard-Only
+          path: artifacts/N60-Pro/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Report compiler cache statistics
+        if: always()
+        run: ccache -s
+ /tmp/mt-wifi-package-files.txt || {
+            echo "::error::kmod-mt_wifi package does not contain mtk_warp_proxy.ko."
+            cat /tmp/mt-wifi-package-files.txt
+            exit 1
+          }
+          grep -Eq '(^|/)lib/firmware/MT7986_' /tmp/mt-wifi-package-files.txt || {
+            echo "::error::MT7986 firmware blobs are missing from kmod-mt_wifi."
+            cat /tmp/mt-wifi-package-files.txt
+            exit 1
+          }
+
+          MANIFEST="$(find "$OUT" -maxdepth 1 -type f -name '*netcore_n60-pro*.manifest' -print -quit)"
+          if [ -z "$MANIFEST" ]; then
+            MANIFEST="$(find "$OUT" -maxdepth 1 -type f -name '*.manifest' -print -quit)"
+          fi
+          test -n "$MANIFEST" || {
+            echo "::error::No image package manifest found; cannot verify driver inclusion in the image."
+            find "$OUT" -maxdepth 1 -type f -printf '%f\n' | sort
+            exit 1
+          }
+          for pkg in kmod-mt_wifi kmod-conninfra kmod-warp wifi-dats mtwifi-cfg-ucode luci-app-mtwifi-cfg; do
+            grep -Eq "^$pkg([[:space:]]|$)" "$MANIFEST" || {
+              echo "::error::$pkg is not listed in image manifest $MANIFEST."
+              cat "$MANIFEST"
+              exit 1
+            }
+          done
+
+          echo "PASS: MTK Wi-Fi kernel modules and MT7986 firmware are in the driver package."
+          echo "PASS: driver, conninfra, WARP, Wi-Fi data, and LuCI configuration stack are in image manifest."
+          echo "===== Driver package files ====="
+          grep -E 'mt_wifi\.ko|mtk_warp_proxy\.ko|lib/firmware/MT7986_' /tmp/mt-wifi-package-files.txt
 
       - name: Collect only standard-profile firmware and verify checksums
         shell: bash
