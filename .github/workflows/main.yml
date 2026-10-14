@@ -102,7 +102,13 @@ jobs:
           CONFIG_MTK_FIRST_IF_MT7986=y
           CONFIG_MTK_SECOND_IF_NONE=y
           CONFIG_MTK_FIRST_IF_EEPROM_FLASH=y
+          CONFIG_MTK_RT_FIRST_CARD_EEPROM="flash"
+          CONFIG_MTK_RT_FIRST_IF_RF_OFFSET=0xc0000
           CONFIG_MTK_FIRST_IF_IPAILNA=y
+          CONFIG_MTK_SECOND_IF_NONE=y
+          CONFIG_MTK_THIRD_IF_NONE=y
+          CONFIG_MTK_DBDC_MODE=y
+          CONFIG_MTK_WIFI_MODE_AP=m
           CONFIG_MTK_MT_WIFI_MT7986_DEFAULT_FIRMWARE=y
           CONFIG_MTK_WIFI_FW_BIN_LOAD=y
           CONFIG_MTK_WIFI_SKU_TYPE="AX6000"
@@ -140,6 +146,11 @@ jobs:
           require_config 'CONFIG_MTK_FIRST_IF_MT7986=y'
           require_config 'CONFIG_MTK_SECOND_IF_NONE=y'
           require_config 'CONFIG_MTK_FIRST_IF_EEPROM_FLASH=y'
+          require_config 'CONFIG_MTK_RT_FIRST_CARD_EEPROM="flash"'
+          require_config 'CONFIG_MTK_RT_FIRST_IF_RF_OFFSET=0xc0000'
+          require_config 'CONFIG_MTK_THIRD_IF_NONE=y'
+          require_config 'CONFIG_MTK_DBDC_MODE=y'
+          require_config 'CONFIG_MTK_WIFI_MODE_AP=m'
           require_config 'CONFIG_MTK_MT_WIFI_MT7986_DEFAULT_FIRMWARE=y'
           require_config 'CONFIG_MTK_WIFI_FW_BIN_LOAD=y'
           require_config 'CONFIG_MTK_CONNINFRA_APSOC_MT7986=y'
