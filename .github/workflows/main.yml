@@ -37,6 +37,22 @@ jobs:
             echo "::error::Unexpected standard N60 Pro DTS compatible string."
             exit 1
           }
+          grep -Fq 'compatible = "mediatek,mt7531";' "$DTS" || {
+            echo "::error::N60 Pro DTS is missing the expected MT7531 switch."
+            exit 1
+          }
+          grep -Fq 'phy5: phy@5 {' "$DTS" && grep -Fq 'phy6: phy@6 {' "$DTS" || {
+            echo "::error::N60 Pro DTS must define both MaxLinear GPY211C PHY addresses."
+            exit 1
+          }
+          grep -Fq 'phy-handle = <&phy5>;' "$DTS" && grep -Fq 'phy-handle = <&phy6>;' "$DTS" || {
+            echo "::error::N60 Pro DTS does not connect both 2.5G PHY handles."
+            exit 1
+          }
+          grep -Fq 'phy-mode = "2500base-x";' "$DTS" || {
+            echo "::error::Expected 2.5G PHY interface mode not found in N60 Pro DTS."
+            exit 1
+          }
           test -s package/mtk/drivers/mt_wifi/patches-7673/034-since-v6.12-fix-unaligned_h-not-found-error.patch || {
             echo "::error::MTK Wi-Fi driver lacks the expected Linux 6.12 compatibility patch."
             exit 1
@@ -141,6 +157,11 @@ jobs:
           require_config 'CONFIG_PACKAGE_iw=y'
           require_config 'CONFIG_PACKAGE_iwinfo=y'
           require_config 'CONFIG_PACKAGE_iwinfo-ucode=y'
+          require_config 'CONFIG_MAXLINEAR_GPHY=y'
+          require_config 'CONFIG_MTK_NET_PHYLIB=y'
+          require_config 'CONFIG_PHYLIB=y'
+          require_config 'CONFIG_HWMON=y'
+          require_config 'CONFIG_POLYNOMIAL=y'
           require_config 'CONFIG_MTK_MT_WIFI=m'
           require_config 'CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y'
           require_config 'CONFIG_MTK_MT_WIFI_PATH="mt_wifi"'
@@ -226,7 +247,9 @@ jobs:
             find "$OUT" -maxdepth 1 -type f -printf '%f\n' | sort
             exit 1
           }
-          for pkg in kmod-mt_wifi kmod-conninfra kmod-warp wifi-dats mtwifi-cfg-ucode luci-app-mtwifi-cfg; do
+          # mt_wifi declares kmod-mediatek_hnat as a hard package dependency.
+          # The presence check proves packaging, not that HNAT performs correctly at runtime.
+          for pkg in kmod-mt_wifi kmod-conninfra kmod-warp kmod-mediatek_hnat wifi-dats mtwifi-cfg-ucode luci-app-mtwifi-cfg; do
             grep -Eq "^$pkg([[:space:]]|$)" "$MANIFEST" || {
               echo "::error::$pkg is not listed in image manifest $MANIFEST."
               cat "$MANIFEST"
@@ -294,6 +317,8 @@ jobs:
             echo "Source revision:"
             git log -1 --format='%H %s'
             echo "Only the standard sysupgrade ITB is emitted as the primary firmware."
+            echo "HNAT package dependency and MaxLinear PHY kernel support were checked for build inclusion only."
+            echo "Runtime HNAT throughput/QoS, 2.5G link stability, and Wi-Fi operation still require device-side tests."
             echo "DTS, flash layout, and checksum review are still required before any flashing."
           } > artifacts/N60-Pro/BUILD-INFO.txt
           echo "===== Final artifact tree ====="
