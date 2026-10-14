@@ -226,24 +226,35 @@ jobs:
           mkdir -p "$EXTRACT"
 
           # OpenWrt 25.12 uses APK v3; keep IPK support only for older-compatible source variants.
-          DRIVER_PKG="$(find "$OUT/packages" bin/packages -type f \( -name 'kmod-mt_wifi-*.apk' -o -name 'kmod-mt_wifi_*.ipk' \) -print -quit 2>/dev/null || true)"
+          find_package() {
+            local pattern_apk="$1"
+            local pattern_ipk="$2"
+            find "$OUT/packages" bin/packages -type f \( -name "$pattern_apk" -o -name "$pattern_ipk" \) -print -quit 2>/dev/null || true
+          }
+          list_package_files() {
+            local package="$1"
+            local destination="$2"
+            if [[ "$package" == *.apk ]]; then
+              local apk_bin="$PWD/staging_dir/host/bin/apk"
+              test -x "$apk_bin" || {
+                echo "::error::Host apk tool missing; cannot inspect APK v3 package."
+                exit 1
+              }
+              mkdir -p "$destination"
+              "$apk_bin" extract --allow-untrusted --destination "$destination" "$package"
+              find "$destination" -type f -printf '%p\n' | sed "s#^$destination/##"
+            else
+              ar p "$package" data.tar.gz | tar -tzf -
+            fi
+          }
+
+          DRIVER_PKG="$(find_package 'kmod-mt_wifi-*.apk' 'kmod-mt_wifi_*.ipk')"
           test -n "$DRIVER_PKG" || {
             echo "::error::kmod-mt_wifi package (.apk or .ipk) was not produced."
             find "$OUT" bin/packages -type f \( -name '*mt_wifi*' -o -name '*.apk' -o -name '*.ipk' \) -printf '%p\n' 2>/dev/null | sort | head -200
             exit 1
           }
-
-          if [[ "$DRIVER_PKG" == *.apk ]]; then
-            APK_BIN="$PWD/staging_dir/host/bin/apk"
-            test -x "$APK_BIN" || {
-              echo "::error::Host apk tool missing; cannot inspect APK v3 package."
-              exit 1
-            }
-            "$APK_BIN" extract --allow-untrusted --destination "$EXTRACT" "$DRIVER_PKG"
-            find "$EXTRACT" -type f -printf '%p\n' | sed "s#^$EXTRACT/##" > /tmp/mt-wifi-package-files.txt
-          else
-            ar p "$DRIVER_PKG" data.tar.gz | tar -tzf - > /tmp/mt-wifi-package-files.txt
-          fi
+          list_package_files "$DRIVER_PKG" "$EXTRACT" > /tmp/mt-wifi-package-files.txt
 
           grep -Eq '(^|/)mt_wifi\.ko$' /tmp/mt-wifi-package-files.txt || {
             echo "::error::kmod-mt_wifi package does not contain mt_wifi.ko."
@@ -261,6 +272,30 @@ jobs:
             exit 1
           }
 
+          HNAT_PKG="$(find_package 'kmod-mediatek_hnat-*.apk' 'kmod-mediatek_hnat_*.ipk')"
+          test -n "$HNAT_PKG" || {
+            echo "::error::kmod-mediatek_hnat package was not produced."
+            exit 1
+          }
+          list_package_files "$HNAT_PKG" /tmp/n60pro-hnat-package > /tmp/hnat-package-files.txt
+          grep -Eq '(^|/)mtkhnat\.ko$' /tmp/hnat-package-files.txt || {
+            echo "::error::kmod-mediatek_hnat package does not contain mtkhnat.ko."
+            cat /tmp/hnat-package-files.txt
+            exit 1
+          }
+
+          WARP_PKG="$(find_package 'kmod-warp-*.apk' 'kmod-warp_*.ipk')"
+          test -n "$WARP_PKG" || {
+            echo "::error::kmod-warp package was not produced."
+            exit 1
+          }
+          list_package_files "$WARP_PKG" /tmp/n60pro-warp-package > /tmp/warp-package-files.txt
+          grep -Eq '(^|/)mtk_warp\.ko$' /tmp/warp-package-files.txt || {
+            echo "::error::kmod-warp package does not contain mtk_warp.ko."
+            cat /tmp/warp-package-files.txt
+            exit 1
+          }
+
           MANIFEST="$(find "$OUT" -maxdepth 1 -type f -name '*netcore_n60-pro*.manifest' -print -quit)"
           if [ -z "$MANIFEST" ]; then
             MANIFEST="$(find "$OUT" -maxdepth 1 -type f -name '*.manifest' -print -quit)"
@@ -270,7 +305,6 @@ jobs:
             find "$OUT" -maxdepth 1 -type f -printf '%f\n' | sort
             exit 1
           }
-          # mt_wifi and WARP declare the MediaTek HNAT module as a package dependency.
           # Manifest checks prove inclusion only; throughput and offload behavior require runtime tests.
           for pkg in kmod-mt_wifi kmod-conninfra kmod-warp kmod-mediatek_hnat kmod-usb3 wifi-dats mtwifi-cfg-ucode luci-app-mtwifi-cfg; do
             grep -Eq "^$pkg([[:space:]]|$)" "$MANIFEST" || {
@@ -280,10 +314,14 @@ jobs:
             }
           done
 
-          echo "PASS: MTK Wi-Fi kernel modules and MT7986 firmware are in the driver package."
+          echo "PASS: mt_wifi, mtk_warp_proxy, mtk_warp, mtkhnat and MT7986 firmware package contents verified."
           echo "PASS: driver, conninfra, WARP, HNAT, USB3, Wi-Fi data, and LuCI configuration stack are in image manifest."
-          echo "===== Driver package files ====="
+          echo "===== Wi-Fi package files ====="
           grep -E 'mt_wifi\.ko|mtk_warp_proxy\.ko|lib/firmware/MT7986_' /tmp/mt-wifi-package-files.txt
+          echo "===== WARP package files ====="
+          grep -E 'mtk_warp\.ko' /tmp/warp-package-files.txt
+          echo "===== HNAT package files ====="
+          grep -E 'mtkhnat\.ko' /tmp/hnat-package-files.txt
 
       - name: Collect only standard-profile firmware and verify checksums
         shell: bash
