@@ -259,6 +259,25 @@ jobs:
             echo "::error::Resolved driver source root is invalid: $SRC"
             exit 1
           fi
+          # ---- Targeted SAE preprocessor fix: change only sec_cmm.h line 14 ----
+          if [ "$(sed -n '14p' "$SEC")" != "#ifdef SUPP_SAE_SUPPORT" ]; then
+            echo "::error::Unexpected sec_cmm.h line 14; refusing to patch the wrong source revision."
+            nl -ba "$SEC" | sed -n '10,18p'
+            exit 1
+          fi
+          awk 'NR==14 {
+            if ($0 == "#ifdef SUPP_SAE_SUPPORT")
+              $0 = "#if defined(DOT11_SAE_SUPPORT) || defined(SUPP_SAE_SUPPORT)"
+          } { print }' "$SEC" > "$SEC.tmp"
+          cat "$SEC.tmp" > "$SEC"
+          rm -f "$SEC.tmp"
+          if ! grep -Fxq '#if defined(DOT11_SAE_SUPPORT) || defined(SUPP_SAE_SUPPORT)' <(sed -n '14p' "$SEC"); then
+            echo "::error::SAE line-14 patch verification failed."
+            exit 1
+          fi
+          echo "PASS: patched only sec_cmm.h line 14 for consistent SAE guards."
+          sed -n '12,16p' "$SEC"
+
           echo "Prepared source root: $SRC"
           echo "Using header: $SEC"
 
