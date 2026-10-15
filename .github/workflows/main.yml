@@ -375,6 +375,84 @@ jobs:
           } | tee "$DIAG"
 
           echo "===== Diagnostics saved to $SAE_DIAG and $DIAG ====="
+          
+          echo "===== Step 4: VLAN diagnostics (read-only) ====="
+          VLAN_DIAG="artifacts/N60-Pro/standard/VLAN-DIAG.txt"
+          mkdir -p "$(dirname "$VLAN_DIAG")"
+          AP_DATA="$SRC/embedded/ap/ap_data.c"
+          {
+            echo "=== VLAN diagnostic metadata ==="
+            echo "Prepared source root: $SRC"
+            echo "Driver header: $SEC"
+            echo "Driver config: $CFG"
+            echo "AP source: $AP_DATA"
+            echo "VLAN_SOURCE_MODIFIED=no"
+            echo "VLAN_CONFIG_CHANGED=no"
+            echo
+
+            echo "=== All bDynamicVlanDisabled occurrences in .h and .c ==="
+            grep -RniE --include='*.h' --include='*.c' 'bDynamicVlanDisabled' "$SRC" || true
+            echo
+
+            echo "=== bDynamicVlanDisabled declaration context inside struct _COMMON_CONFIG (10 lines before, 3 after) ==="
+            COMMON_CONFIG_FOUND=no
+            while IFS= read -r -d '' header; do
+              awk '
+                { lines[NR] = $0 }
+                /struct[[:space:]]+_COMMON_CONFIG([[:space:]]|$)/ { in_struct = 1; struct_start = NR }
+                in_struct && /bDynamicVlanDisabled/ { field_line = NR }
+                in_struct && /^[[:space:]]*};/ {
+                  if (field_line) {
+                    first = field_line - 10
+                    if (first < 1) first = 1
+                    last = field_line + 3
+                    print "--- " FILENAME ":" field_line " (inside struct _COMMON_CONFIG) ---"
+                    for (i = first; i <= last; i++) {
+                      if (i in lines) printf "%6d  %s\n", i, lines[i]
+                    }
+                    found = 1
+                  }
+                  in_struct = 0
+                  field_line = 0
+                }
+                END {
+                  if (!found) exit 1
+                }
+              ' "$header" && COMMON_CONFIG_FOUND=yes || true
+            done < <(find "$SRC" -type f -name '*.h' -print0)
+            if [ "$COMMON_CONFIG_FOUND" = no ]; then
+              echo "No bDynamicVlanDisabled field declaration was found inside a struct _COMMON_CONFIG definition in .h files."
+              echo "Candidate struct definitions:"
+              grep -RniE --include='*.h' 'struct[[:space:]]+_COMMON_CONFIG' "$SRC" || true
+            fi
+            echo
+
+            echo "=== ap_data.c lines 335-370 (numbered) ==="
+            if [ -f "$AP_DATA" ]; then
+              nl -ba "$AP_DATA" | awk 'NR >= 335 && NR <= 370'
+              echo
+              echo "=== All preprocessor directives in ap_data.c lines 325-385 (30 lines around line 355) ==="
+              nl -ba "$AP_DATA" | awk 'NR >= 325 && NR <= 385 && $2 ~ /^#/ { print }'
+            else
+              echo "ERROR: expected ap_data.c not found at $AP_DATA"
+            fi
+            echo
+
+            echo "=== All VLAN or DYNAMIC-related lines in config.mk ==="
+            grep -niE 'VLAN|DYNAMIC' "$CFG" || true
+            echo
+
+            echo "=== Complete HAS_* switch inventory: ^HAS_[A-Z0-9_]+= ==="
+            grep -nE '^HAS_[A-Z0-9_]+=' "$CFG" || true
+            echo
+
+            echo "=== All DYNAMIC_VLAN / VLAN_SUPPORT macro references in driver .h and .c files ==="
+            grep -RniE --include='*.h' --include='*.c' 'DYNAMIC_VLAN|VLAN_SUPPORT' "$SRC" || true
+            echo
+            echo "=== End of read-only VLAN diagnostics ==="
+          } | tee "$VLAN_DIAG"
+
+          echo "VLAN diagnostics saved to $VLAN_DIAG"
 
       - name: Build standard profile
         id: build_step
