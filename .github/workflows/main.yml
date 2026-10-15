@@ -259,24 +259,49 @@ jobs:
             echo "::error::Resolved driver source root is invalid: $SRC"
             exit 1
           fi
-          # ---- Targeted SAE preprocessor fix: change only sec_cmm.h line 14 ----
-          if [ "$(sed -n '14p' "$SEC")" != "#ifdef SUPP_SAE_SUPPORT" ]; then
+          # ---- Targeted SAE preprocessor fix: line 14; accept already-patched source ----
+          SAE_LINE="$(awk 'NR==14 { print; exit }' "$SEC")"
+          if [ "$SAE_LINE" = "#ifdef SUPP_SAE_SUPPORT" ]; then
+            awk 'NR==14 {
+              if ($0 == "#ifdef SUPP_SAE_SUPPORT")
+                $0 = "#if defined(DOT11_SAE_SUPPORT) || defined(SUPP_SAE_SUPPORT)"
+            } { print }' "$SEC" > "$SEC.tmp"
+            cat "$SEC.tmp" > "$SEC"
+            rm -f "$SEC.tmp"
+          elif [ "$SAE_LINE" != "#if defined(DOT11_SAE_SUPPORT) || defined(SUPP_SAE_SUPPORT)" ]; then
             echo "::error::Unexpected sec_cmm.h line 14; refusing to patch the wrong source revision."
-            nl -ba "$SEC" | sed -n '10,18p'
+            nl -ba "$SEC" | awk 'NR>=10 && NR<=18'
             exit 1
           fi
-          awk 'NR==14 {
-            if ($0 == "#ifdef SUPP_SAE_SUPPORT")
-              $0 = "#if defined(DOT11_SAE_SUPPORT) || defined(SUPP_SAE_SUPPORT)"
-          } { print }' "$SEC" > "$SEC.tmp"
-          cat "$SEC.tmp" > "$SEC"
-          rm -f "$SEC.tmp"
-          if ! grep -Fxq '#if defined(DOT11_SAE_SUPPORT) || defined(SUPP_SAE_SUPPORT)' <(sed -n '14p' "$SEC"); then
+          if [ "$(awk 'NR==14 { print; exit }' "$SEC")" != "#if defined(DOT11_SAE_SUPPORT) || defined(SUPP_SAE_SUPPORT)" ]; then
             echo "::error::SAE line-14 patch verification failed."
             exit 1
           fi
-          echo "PASS: patched only sec_cmm.h line 14 for consistent SAE guards."
-          sed -n '12,16p' "$SEC"
+          echo "PASS: sec_cmm.h line 14 has consistent SAE guards."
+          awk 'NR>=12 && NR<=16' "$SEC"
+
+          # ---- Targeted RRM fix: change only config.mk line 73 ----
+          CFG="$SRC/os/linux/config.mk"
+          test -f "$CFG" || { echo "::error::config.mk not found: $CFG"; exit 1; }
+          RRM_LINE="$(awk 'NR==73 { print; exit }' "$CFG")"
+          if [ "$RRM_LINE" = "HAS_DOT11K_RRM_SUPPORT=n" ]; then
+            awk 'NR==73 {
+              if ($0 == "HAS_DOT11K_RRM_SUPPORT=n")
+                $0 = "HAS_DOT11K_RRM_SUPPORT=y"
+            } { print }' "$CFG" > "$CFG.tmp"
+            cat "$CFG.tmp" > "$CFG"
+            rm -f "$CFG.tmp"
+          elif [ "$RRM_LINE" != "HAS_DOT11K_RRM_SUPPORT=y" ]; then
+            echo "::error::Unexpected config.mk line 73; refusing to patch the wrong source revision."
+            nl -ba "$CFG" | awk 'NR>=70 && NR<=76'
+            exit 1
+          fi
+          if [ "$(awk 'NR==73 { print; exit }' "$CFG")" != "HAS_DOT11K_RRM_SUPPORT=y" ]; then
+            echo "::error::RRM line-73 patch verification failed."
+            exit 1
+          fi
+          echo "PASS: patched config.mk line 73 for RRM."
+          awk 'NR>=71 && NR<=75' "$CFG"
 
           echo "Prepared source root: $SRC"
           echo "Using header: $SEC"
