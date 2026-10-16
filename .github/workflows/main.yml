@@ -298,7 +298,7 @@ jobs:
 
           test -s "$SAE_CMM" || { echo "::error::sae_cmm.h not found: $SAE_CMM"; exit 1; }
           echo "--- sae_cmm.h first 40 lines ---"
-          nl -ba "$SAE_CMM" | head -40
+          nl -ba "$SAE_CMM" | sed -n '1,40p'
 
           python3 - "$SAE_CMM" <<'PY'
           import pathlib, re, sys
@@ -843,7 +843,6 @@ jobs:
           TMP_EVIDENCE="$(mktemp -d)"
           DRYRUN_LOG="$TMP_EVIDENCE/ap_ioctl-dryrun.log"
           INCLUDE_LOG="$TMP_EVIDENCE/ap_ioctl-gcc-H.log"
-          # 修复：Python 生成的是 ap_ioctl-gcc-command.i（out.with_suffix(".i")）
           PREPROCESSED="$TMP_EVIDENCE/ap_ioctl-gcc-command.i"
           COMMAND_FILE="$TMP_EVIDENCE/ap_ioctl-gcc-command.sh"
 
@@ -912,7 +911,7 @@ jobs:
             echo "--- key include-tree lines ---"
             set +o pipefail
             grep -nE 'ap_ioctl\.c|rtmp\.h|rtmp_comm\.h|sec_cmm\.h|sae_cmm\.h|wifi_dev|debug\.h' "$INCLUDE_LOG" \
-              | tee -a "$APIO_EVIDENCE" | head -200 || true
+              | tee -a "$APIO_EVIDENCE" | sed -n '1,200p' || true
             set -o pipefail
 
             echo "--- complete include-tree size ---"
