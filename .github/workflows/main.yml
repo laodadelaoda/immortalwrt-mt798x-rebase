@@ -236,6 +236,31 @@ jobs:
         run: |
           set -euo pipefail
           echo "===== Step 1: prepare MTK driver source ====="          make package/mtk/drivers/mt_wifi/prepare V=s
+          echo "===== READ-ONLY DIAGNOSTICS: prepare/source layout ====="
+          echo "=== 1. make prepare output (last 50 lines if a captured log exists) ==="
+          if [ -n "${PREPARE_LOG:-}" ] && [ -f "$PREPARE_LOG" ]; then
+            tail -n 50 "$PREPARE_LOG"
+          else
+            echo "No captured make-prepare log found. The existing Step 1 line is checked separately in the workflow source."
+          fi
+
+          echo
+          echo "=== 2. ls -la build_dir/ ==="
+          ls -la build_dir/ 2>&1 || true
+
+          echo
+          echo '=== 3. find build_dir -maxdepth 6 -iname "*mt_wifi*" ==='
+          find build_dir -maxdepth 6 -iname '*mt_wifi*' -print 2>&1 || true
+
+          echo
+          echo '=== 4. find build_dir -name "sec_cmm.h" ==='
+          find build_dir -name 'sec_cmm.h' -print 2>/dev/null || true
+
+          echo
+          echo '=== 5. ls -la dl/ | grep -i mt79xx ==='
+          ls -la dl/ 2>&1 | grep -i mt79xx || true
+          echo "===== END READ-ONLY DIAGNOSTICS ====="
+
 
           echo "===== Step 2: locate the actual driver header ====="
           mapfile -t SEC_FILES < <(
