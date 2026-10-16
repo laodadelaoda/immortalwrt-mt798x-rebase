@@ -117,8 +117,7 @@ jobs:
           # Dependencies required by mtwifi-cfg-ucode (verified in package Makefile)
           CONFIG_PACKAGE_mtwifi-cfg-ucode=y
           CONFIG_PACKAGE_datconf=y
-          CONFIG_PACKAGE_l1util=y
-          CONFIG_PACKAGE_ucode=y
+          CONFIG_PACKAGE_l1util=y          CONFIG_PACKAGE_ucode=y
           CONFIG_PACKAGE_ucode-mod-fs=y
           CONFIG_PACKAGE_ucode-mod-log=y
           CONFIG_PACKAGE_ucode-mod-ubus=y
@@ -238,7 +237,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           echo "===== Step 1: prepare MTK driver source ====="
           make package/mtk/drivers/mt_wifi/prepare V=s
 
@@ -358,7 +356,6 @@ jobs:
               \( -name 'Makefile' -o -name '*.mk' \) \
               -exec grep -nH -E 'HAS_DOT11K_RRM_SUPPORT|DOT11K_RRM_SUPPORT' {} + \
               || true
-
             echo
             echo "=== RRM header and type references ==="
             grep -RniE \
@@ -454,6 +451,237 @@ jobs:
 
           echo "VLAN diagnostics saved to $VLAN_DIAG"
 
+          echo "===== Step 5: patch bDynamicVlanDisabled guard in rtmp.h ====="
+          export SRC
+          VLAN_AUDIT="vlan_patch_audit.txt"
+          export VLAN_AUDIT
+
+          python3 - <<'PY' 2>&1 | tee "$VLAN_AUDIT"
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          OLD = "#ifdef DYNAMIC_VLAN_SUPPORT"
+          NEW = "#if defined(RT_CFG80211_SUPPORT) || defined(DYNAMIC_VLAN_SUPPORT)"
+
+          def fail(message):
+              print(f"ERROR: {message}")
+              sys.exit(1)
+
+          src = Path(os.environ["SRC"]).resolve()
+          if not src.is_dir():
+              fail(f"SRC directory does not exist: {src}")
+
+          header = src / "embedded/include/rtmp.h"
+          if not header.is_file():
+              fail(f"target rtmp.h not found: {header}")
+
+          original = header.read_text(encoding="utf-8")
+          lines = original.splitlines(keepends=True)
+
+          # Find the actual bDynamicVlanDisabled declaration, not a reference.
+          member_re = re.compile(
+              r"^[ \\t]*(?:[A-Za-z_][A-Za-z0-9_ \\t*]*\\s+)?bDynamicVlanDisabled\\b"
+          )
+          member_candidates = [
+              i for i, line in enumerate(lines)
+              if member_re.search(line)
+          ]
+
+          if len(member_candidates) != 1:
+              fail(
+                  "expected exactly one bDynamicVlanDisabled declaration "
+                  f"in rtmp.h, found {len(member_candidates)}"
+              )
+
+          member_idx = member_candidates[0]
+
+          # Locate the enclosing struct _COMMON_CONFIG using brace depth.
+          struct_re = re.compile(r"\\bstruct[ \\t]+_COMMON_CONFIG\\b")
+          struct_starts = [
+              i for i, line in enumerate(lines)
+              if struct_re.search(line)
+          ]
+
+          if len(struct_starts) != 1:
+              fail(
+                  "expected exactly one struct _COMMON_CONFIG definition/reference "
+                  f"in rtmp.h, found {len(struct_starts)}"
+              )
+
+          struct_idx = struct_starts[0]
+
+          # Basic C brace scanner from the struct declaration to its closing brace.
+          depth = 0
+          opened = False
+          struct_end = None
+          in_block_comment = False
+
+          def scan_braces(text):
+              nonlocal in_block_comment
+              delta = 0
+              i = 0
+              in_string = None
+              while i < len(text):
+                  ch = text[i]
+                  nxt = text[i + 1] if i + 1 < len(text) else ""
+                  if in_block_comment:
+                      if ch == "*" and nxt == "/":
+                          in_block_comment = False
+                          i += 2
+                          continue
+                      i += 1
+                      continue
+                  if in_string:
+                      if ch == "\\\\":
+                          i += 2
+                          continue
+                      if ch == in_string:
+                          in_string = None
+                      i += 1
+                      continue
+                  if ch == "/" and nxt == "*":
+                      in_block_comment = True
+                      i += 2
+                      continue
+                  if ch == "/" and nxt == "/":
+                      break
+                  if ch in ("\\\"", "'"):
+                      in_string = ch
+                      i += 1
+                      continue
+                  if ch == "{":
+                      delta += 1
+                  elif ch == "}":
+                      delta -= 1
+                  i += 1
+              return delta
+
+          for i in range(struct_idx, len(lines)):
+              depth += scan_braces(lines[i])
+              if depth > 0:
+                  opened = True
+              elif opened and depth == 0:
+                  struct_end = i
+                  break
+
+          if struct_end is None:
+              fail("could not determine the end of struct _COMMON_CONFIG")
+
+          if not (struct_idx <= member_idx <= struct_end):
+              fail(
+                  "bDynamicVlanDisabled declaration is not inside "
+                  "struct _COMMON_CONFIG"
+              )
+
+          # Track the enclosing preprocessor condition at the declaration.
+          conditional_stack = []
+          directive_re = re.compile(r"^[ \\t]*#")
+          for i in range(member_idx + 1):
+              stripped = lines[i].strip()
+              if not directive_re.match(stripped):
+                  continue
+
+              if re.match(r"^#[ \\t]*if[ \\t]+", stripped):
+                  conditional_stack.append((i, stripped))
+              elif re.match(r"^#[ \\t]*ifdef[ \\t]+", stripped):
+                  conditional_stack.append((i, stripped))
+              elif re.match(r"^#[ \\t]*ifndef[ \\t]+", stripped):
+                  conditional_stack.append((i, stripped))
+              elif re.match(r"^#[ \\t]*elif\\b", stripped):
+                  if not conditional_stack:
+                      fail(f"unbalanced #elif at line {i + 1}")
+                  # Keep the opening directive because it identifies the enclosing block.
+              elif re.match(r"^#[ \\t]*else\\b", stripped):
+                  if not conditional_stack:
+                      fail(f"unbalanced #else at line {i + 1}")
+              elif re.match(r"^#[ \\t]*endif\\b", stripped):
+                  if not conditional_stack:
+                      fail(f"unbalanced #endif at line {i + 1}")
+                  conditional_stack.pop()
+
+          if not conditional_stack:
+              fail("bDynamicVlanDisabled declaration is not under a preprocessor condition")
+
+          enclosing_idx, enclosing = conditional_stack[-1]
+          if enclosing != OLD:
+              fail(
+                  "unexpected enclosing condition for bDynamicVlanDisabled: "
+                  f"line {enclosing_idx + 1}: {enclosing!r}; expected {OLD!r}"
+              )
+
+          # The guard must be the actual declaration guard, and the approved
+          # replacement must be applied only to that exact directive.
+          if lines[enclosing_idx].strip() != OLD:
+              fail("internal guard-location validation failed")
+
+          if lines[member_idx].count("bDynamicVlanDisabled") != 1:
+              fail("member declaration contains an unexpected number of occurrences")
+
+          lines[enclosing_idx] = re.sub(
+              r"^([ \\t]*)#ifdef[ \\t]+DYNAMIC_VLAN_SUPPORT[ \\t]*(\\r?\\n)?$",
+              lambda m: m.group(1) + NEW + (m.group(2) or ""),
+              lines[enclosing_idx],
+              count=1,
+          )
+
+          updated = "".join(lines)
+          if updated == original:
+              fail("replacement produced no file change")
+
+          header.write_text(updated, encoding="utf-8")
+
+          # Mandatory post-write verification.
+          verified = header.read_text(encoding="utf-8")
+          verified_lines = verified.splitlines(keepends=True)
+
+          if verified_lines[enclosing_idx].strip() != NEW:
+              fail(
+                  "post-patch guard verification failed: "
+                  f"line {enclosing_idx + 1}: "
+                  f"{verified_lines[enclosing_idx].strip()!r}"
+              )
+
+          old_count = sum(1 for line in verified_lines if line.strip() == OLD)
+          new_count = sum(1 for line in verified_lines if line.strip() == NEW)
+
+          if new_count != 1:
+              fail(f"expected exactly one new VLAN guard, found {new_count}")
+          if old_count != 0:
+              fail(f"old VLAN guard still present in rtmp.h: {old_count} occurrence(s)")
+
+          if sum(
+              1 for line in verified_lines
+              if re.search(r"\\bbDynamicVlanDisabled\\b", line)
+          ) != 1:
+              fail("post-patch bDynamicVlanDisabled declaration count changed")
+
+          print("=== VLAN member-condition patch: PASS ===")
+          print(f"SRC: {src}")
+          print(f"Header: {header}")
+          print(f"struct _COMMON_CONFIG: line {struct_idx + 1}")
+          print(f"bDynamicVlanDisabled declaration: line {member_idx + 1}")
+          print(f"Original guard: line {enclosing_idx + 1}: {OLD}")
+          print(f"Applied guard: line {enclosing_idx + 1}: {NEW}")
+          print("Declaration scope validation: PASS")
+          print("Guard validation: PASS")
+          print("Post-patch verification: PASS")
+          print("Idempotency state: PATCHED")
+          print("=== End VLAN member-condition patch ===")
+          PY
+
+          echo "VLAN patch audit saved to $VLAN_AUDIT"
+
+      - name: Upload VLAN patch audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: n60pro-vlan-patch-audit
+          path: vlan_patch_audit.txt
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Build standard profile
         id: build_step
         run: make -j$(nproc) V=s
@@ -477,8 +705,7 @@ jobs:
             ls -lh "$OUT" 2>/dev/null || echo "(output dir missing)"
           fi
 
-          if [ "${{ steps.build_step.outcome }}" = "failure" ] && [ "$FIRMWARE_PRODUCED" = "no" ]; then
-            echo "::error::Build step failed and no firmware was produced. See build log above."
+          if [ "${{ steps.build_step.outcome }}" = "failure" ] && [ "$FIRMWARE_PRODUCED" = "no" ]; then            echo "::error::Build step failed and no firmware was produced. See build log above."
             exit 1
           fi
 
@@ -597,8 +824,7 @@ jobs:
           find artifacts/N60-Pro -maxdepth 2 -type f -printf '%p (%s bytes)\n' | sort
 
       - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
+        if: always()        uses: actions/upload-artifact@v4
         with:
           name: N60-Pro-Standard-${{ github.run_number }}
           path: artifacts/N60-Pro/
