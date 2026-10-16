@@ -1,0 +1,24 @@
+From: ChatGPT <noreply@openai.com>
+Subject: [PATCH] mtk: mt_wifi: enable DOT11K RRM in config.mk
+
+HAS_DOT11K_RRM_SUPPORT is set to "n" by default. RRM code paths
+are guarded by DOT11K_RRM_SUPPORT, so the driver fails to build
+when RRM features are referenced. Turn it on.
+
+---
+ mt_wifi/os/linux/config.mk | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/mt_wifi/os/linux/config.mk b/mt_wifi/os/linux/config.mk
+--- a/mt_wifi/os/linux/config.mk
++++ b/mt_wifi/os/linux/config.mk
+@@ -69,8 +69,8 @@
+ #Support for dot11r FT
+ HAS_DOT11R_FT_SUPPORT=n
+ 
+ #Support for dot11k RRM
+-HAS_DOT11K_RRM_SUPPORT=n
++HAS_DOT11K_RRM_SUPPORT=y
+ 
+ 
+ HAS_FW_LOG_DUMP_SUPPORT=y
