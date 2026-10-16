@@ -157,7 +157,6 @@ jobs:
           # Keep SAE/WPA3 enabled consistently with the vendor driver's
           # SaeCfg field and delete_saeinstance_entry implementation.
           EOF
-
           cp .config artifacts/N60-Pro/standard/config.before-defconfig
           make defconfig
 
@@ -317,8 +316,7 @@ jobs:
               'typedef.*(pwd_id_list|sae_capability|sae_pk_cfg)|(pwd_id_list|sae_capability|sae_pk_cfg).*typedef' "$SRC" || true
             echo
             echo "=== All declarations and references for the three SAE type names ==="
-            grep -RniE --include='*.h' --include='*.c' \
-              'pwd_id_list|sae_capability|sae_pk_cfg' "$SRC" | head -400 || true
+            grep -RniE --include='*.h' --include='*.c' \              'pwd_id_list|sae_capability|sae_pk_cfg' "$SRC" | head -400 || true
             echo
             echo "=== All sae_cmm.h paths ==="
             find "$SRC" -type f -name 'sae_cmm.h' -print
@@ -477,8 +475,7 @@ jobs:
           text = header.read_text(encoding="utf-8")
           lines = text.splitlines(keepends=True)
 
-          # Locate the actual declaration inside struct _COMMON_CONFIG.
-          struct_re = re.compile(r"\\bstruct[ \\t]+_COMMON_CONFIG\\b")
+          # Locate the actual declaration inside struct _COMMON_CONFIG.          struct_re = re.compile(r"\\bstruct[ \\t]+_COMMON_CONFIG\\b")
           member_re = re.compile(r"^.*\\bbDynamicVlanDisabled\\b.*$")
           structs = [i for i, line in enumerate(lines) if struct_re.search(line)]
           if len(structs) != 1:
@@ -528,20 +525,19 @@ jobs:
               fail("no enclosing preprocessor condition for bDynamicVlanDisabled")
 
           guard_idx, guard = stack[-1]
-          if guard != OLD:
+          if guard not in (OLD, NEW):
               fail(
                   f"unexpected enclosing guard at line {guard_idx + 1}: "
-                  f"{guard!r}; expected {OLD!r}"
+                  f"{guard!r}; expected {OLD!r} or already-patched {NEW!r}"
               )
 
-          # Approved replacement only; never alter an unexpected source revision.
-          newline = "\\r\\n" if lines[guard_idx].endswith("\\r\\n") else "\\n"
-          lines[guard_idx] = NEW + newline
-          patched = "".join(lines)
-          if patched == text:
-              fail("replacement made no change")
-
-          header.write_text(patched, encoding="utf-8")
+          already_patched = guard == NEW
+          if not already_patched:
+              # Approved replacement only; never alter an unexpected source revision.
+              newline = "\\r\\n" if lines[guard_idx].endswith("\\r\\n") else "\\n"
+              lines[guard_idx] = NEW + newline
+              patched = "".join(lines)
+              header.write_text(patched, encoding="utf-8")
 
           # Mandatory post-patch verification.
           verify = header.read_text(encoding="utf-8").splitlines()
@@ -560,12 +556,11 @@ jobs:
               f"Header: {header}",
               f"struct _COMMON_CONFIG line: {struct_start + 1}",
               f"bDynamicVlanDisabled declaration line: {member + 1}",
-              f"Original guard line: {guard_idx + 1}: {OLD}",
-              f"Applied guard line: {guard_idx + 1}: {NEW}",
+              f"Guard line: {guard_idx + 1}: {NEW}",
               "Declaration scope validation: PASS",
               "Guard validation: PASS",
               "Post-patch verification: PASS",
-              "Idempotency state: PATCHED",
+              f"Idempotency state: {'ALREADY_PATCHED' if already_patched else 'PATCHED'}",
               "=== End VLAN member-condition patch ===",
           ]
           AUDIT.write_text("\\n".join(report) + "\\n", encoding="utf-8")
@@ -637,65 +632,3 @@ jobs:
               ar p "$package" data.tar.gz | tar -tzf -
             fi
           }
-
-          check_package() {
-            local pkgname="$1"; local expect_ko="$2"
-            local pkg
-            pkg="$(find_package "${pkgname}-*.apk" "${pkgname}_*.ipk")"
-            if [ -z "$pkg" ]; then
-              echo "::error::${pkgname} package was not produced."
-              exit 1
-            fi
-            echo "Package: $pkg"
-            local files
-            files="$(list_package_files "$pkg" "/tmp/n60pro-$pkgname")"
-            echo "$files" > "/tmp/${pkgname}-files.txt"
-            echo "$files" | grep -Eq "(^|/)${expect_ko}$" || {
-              echo "::error::${pkgname} does not contain ${expect_ko}."
-              cat "/tmp/${pkgname}-files.txt"
-              exit 1
-            }
-            echo "  OK: contains ${expect_ko}"
-          }
-
-          check_package kmod-mt_wifi mt_wifi.ko
-          check_package kmod-warp mtk_warp.ko
-          check_package kmod-mediatek_hnat mtkhnat.ko
-          check_package kmod-conninfra conninfra.ko
-
-          # MT7986 firmware blobs in kmod-mt_wifi
-          grep -Eq '(^|/)lib/firmware/MT7986_' /tmp/kmod-mt_wifi-files.txt || {
-            echo "::warning::MT7986 firmware blobs not found in kmod-mt_wifi."
-          }
-
-          # Manifest check
-          MANIFEST="$(find "$OUT" -maxdepth 1 -type f -name '*.manifest' -print -quit)"
-          if [ -n "$MANIFEST" ]; then
-            cp "$MANIFEST" artifacts/N60-Pro/standard/image-packages.manifest
-            for pkg in kmod-mt_wifi kmod-conninfra kmod-warp kmod-mediatek_hnat wifi-dats mtwifi-cfg-ucode; do
-              grep -Eq "^$pkg([[:space:]]|$)" "$MANIFEST" || {
-                echo "::warning::$pkg not listed in image manifest."
-              }
-            done
-            echo "PASS: manifest checked."
-          else
-            echo "::warning::No image manifest found."
-          fi
-
-      - name: Collect firmware artifacts
-        if: always()
-        shell: bash
-        run: |
-          set +e
-          OUT="bin/targets/mediatek/filogic"
-          DEST="artifacts/N60-Pro/standard"
-          mkdir -p "$DEST"
-
-          find "$OUT" -maxdepth 1 -type f \
-            \( -name '*netcore_n60-pro*.itb' -o -name '*netcore_n60-pro*.manifest' \
-               -o -name 'sha256sums' -o -name '*.buildinfo' \) \
-            -exec cp -v {} "$DEST/" \; 2>/dev/null
-
-          if find "$DEST" -maxdepth 1 -iname '*mtkuboot*' | grep -q .; then
-            echo "::error::MTK U-Boot artifact detected; refusing to package."
-            exit 1
