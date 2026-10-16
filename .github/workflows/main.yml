@@ -239,6 +239,41 @@ jobs:
           echo "===== Step 2: standard MT Wi-Fi prepare ====="
           make package/mtk/drivers/mt_wifi/prepare V=s
 
+          echo "===== Step 3: locate prepared driver source ====="
+          mapfile -t RTMP_FILES < <(
+            find build_dir -type f \
+              -path '*/embedded/include/rtmp.h' -print
+          )
+
+          SOURCES=()
+          for rtmp in "${RTMP_FILES[@]}"; do
+            src="$(dirname "$(dirname "$(dirname "$rtmp")")")"
+            if [ -f "$src/os/linux/config.mk" ] &&
+               [ -f "$src/embedded/include/security/sec_cmm.h" ] &&
+               [ -f "$src/embedded/ap/ap_cfg.c" ]; then
+              SOURCES+=("$src")
+            fi
+          done
+
+          if [ "${#SOURCES[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one valid prepared MT Wi-Fi source root; found ${#SOURCES[@]}."
+            printf '%s\n' "${RTMP_FILES[@]}"
+            find build_dir -type f -path '*/embedded/ap/ap_cfg.c' -print || true
+            find build_dir -type f -path '*/os/linux/config.mk' -print || true
+            exit 1
+          fi
+
+          SRC="${SOURCES[0]}"
+          CFG="$SRC/os/linux/config.mk"
+          RTMP="$SRC/embedded/include/rtmp.h"
+          SEC="$SRC/embedded/include/security/sec_cmm.h"
+          AP_CFG="$SRC/embedded/ap/ap_cfg.c"
+
+          echo "Resolved driver source root: $SRC"
+          echo "RRM config: $CFG"
+          echo "VLAN header: $RTMP"
+          echo "SAE header: $SEC"
+          echo "AP source: $AP_CFG"
 
           echo "===== Step 2.5: audit 042 SAE include change and sae_cmm.h guard ====="
           SAE_CMM="$SRC/embedded/include/security/sae_cmm.h"
@@ -293,42 +328,6 @@ jobs:
           echo "--- direct SAE include relationships ---"
           grep -nE '^[[:space:]]*#include[[:space:]]+".*(sec_cmm|sae_cmm)\.h"' "$SEC" "$SAE_CMM" "$RTMP" || true
           echo "PASS: 042 and sae_cmm.h read-only audit completed."
-
-          echo "===== Step 3: locate prepared driver source ====="
-          mapfile -t RTMP_FILES < <(
-            find build_dir -type f \
-              -path '*/embedded/include/rtmp.h' -print
-          )
-
-          SOURCES=()
-          for rtmp in "${RTMP_FILES[@]}"; do
-            src="$(dirname "$(dirname "$(dirname "$rtmp")")")"
-            if [ -f "$src/os/linux/config.mk" ] &&
-               [ -f "$src/embedded/include/security/sec_cmm.h" ] &&
-               [ -f "$src/embedded/ap/ap_cfg.c" ]; then
-              SOURCES+=("$src")
-            fi
-          done
-
-          if [ "${#SOURCES[@]}" -ne 1 ]; then
-            echo "::error::Expected exactly one valid prepared MT Wi-Fi source root; found ${#SOURCES[@]}."
-            printf '%s\n' "${RTMP_FILES[@]}"
-            find build_dir -type f -path '*/embedded/ap/ap_cfg.c' -print || true
-            find build_dir -type f -path '*/os/linux/config.mk' -print || true
-            exit 1
-          fi
-
-          SRC="${SOURCES[0]}"
-          CFG="$SRC/os/linux/config.mk"
-          RTMP="$SRC/embedded/include/rtmp.h"
-          SEC="$SRC/embedded/include/security/sec_cmm.h"
-          AP_CFG="$SRC/embedded/ap/ap_cfg.c"
-
-          echo "Resolved driver source root: $SRC"
-          echo "RRM config: $CFG"
-          echo "VLAN header: $RTMP"
-          echo "SAE header: $SEC"
-          echo "AP source: $AP_CFG"
 
           DIAG="artifacts/N60-Pro/standard/DRIVER-PREPARE-DIAGNOSTICS.txt"
           mkdir -p "$(dirname "$DIAG")"
@@ -804,41 +803,76 @@ jobs:
 
           echo "PASS: SAE, RRM, VLAN and MGMT_TXPWR_CTRL source/configuration checks passed."
 
-
-          echo "===== Step 7.5: real GCC include-tree audit for ap_ioctl.c ====="
+          echo "===== Step 7.5: read-only ap_ioctl include-chain evidence ====="
           AP_IOCTL="$SRC/os/linux/ap_ioctl.c"
-          INCLUDE_DIR="$TMP"
-          DRYRUN_LOG="$INCLUDE_DIR/ap_ioctl-dryrun.log"
-          INCLUDE_LOG="$INCLUDE_DIR/ap_ioctl-gcc-H.log"
-          PREPROCESSED="$INCLUDE_DIR/ap_ioctl-preprocessed.i"
-          COMMAND_FILE="$INCLUDE_DIR/ap_ioctl-gcc-command.sh"
+          APIO_EVIDENCE="artifacts/N60-Pro/standard/AP_IOCTL-EVIDENCE.txt"
+          APIO_TREE="artifacts/N60-Pro/standard/AP_IOCTL-GCC-H-INCLUDE-TREE.txt"
+          APIO_PRE="artifacts/N60-Pro/standard/AP_IOCTL-PREPROCESSED.i"
+          APIO_CMD="artifacts/N60-Pro/standard/AP_IOCTL-GCC-COMMAND.sh"
+          mkdir -p "$(dirname "$APIO_EVIDENCE")"
 
           test -s "$AP_IOCTL" || { echo "::error::ap_ioctl.c not found: $AP_IOCTL"; exit 1; }
 
-          echo "--- obtain actual MT Wi-Fi compiler command (dry run only) ---"
+          {
+            echo "===== ap_ioctl.c 位置 ====="
+            echo "$AP_IOCTL"
+
+            echo
+            echo "===== ap_ioctl.c 前 35 行 ====="
+            sed -n '1,35p' "$AP_IOCTL"
+
+            echo
+            echo "===== ap_ioctl.c 所有 include ====="
+            grep -nE '^[[:space:]]*#[[:space:]]*include' "$AP_IOCTL"
+
+            echo
+            echo "===== rt_config.h 是否 include rtmp.h ====="
+            RT_CONFIG=$(find "$SRC" -name "rt_config.h" -print | head -1)
+            echo "rt_config.h: $RT_CONFIG"
+            grep -n 'rtmp.h' "$RT_CONFIG" | head -5 || true
+
+            echo
+            echo "===== 谁 include 了 rt_config.h（在 \$SRC 内）====="
+            grep -rln 'rt_config\.h' "$SRC" 2>/dev/null | head -20 || true
+
+            echo
+            echo "===== 谁 include 了 rtmp.h（在 \$SRC 内）====="
+            grep -rln 'rtmp\.h' "$SRC" 2>/dev/null | head -20 || true
+          } | tee "$APIO_EVIDENCE"
+
+          TMP_EVIDENCE="$(mktemp -d)"
+          DRYRUN_LOG="$TMP_EVIDENCE/ap_ioctl-dryrun.log"
+          INCLUDE_LOG="$TMP_EVIDENCE/ap_ioctl-gcc-H.log"
+          # 修复：Python 生成的是 ap_ioctl-gcc-command.i（out.with_suffix(".i")）
+          PREPROCESSED="$TMP_EVIDENCE/ap_ioctl-gcc-command.i"
+          COMMAND_FILE="$TMP_EVIDENCE/ap_ioctl-gcc-command.sh"
+
+          echo "--- dry-run to extract MT Wi-Fi compiler command ---"
           set +e
-          make package/mtk/drivers/mt_wifi/compile V=s -n 2>&1 | tee "$DRYRUN_LOG"
-          DRYRUN_RC=\${PIPESTATUS[0]}
+          make package/mtk/drivers/mt_wifi/compile V=s -n > "$DRYRUN_LOG" 2>&1
+          DRYRUN_RC=$?
           set -e
-          echo "Dry-run exit status: $DRYRUN_RC"
+          echo "dry-run exit status: $DRYRUN_RC"
 
           python3 - "$DRYRUN_LOG" "$AP_IOCTL" "$COMMAND_FILE" <<'PY'
           import pathlib, shlex, sys
           log = pathlib.Path(sys.argv[1]).read_text(errors="replace").splitlines()
           source = pathlib.Path(sys.argv[2]).resolve()
           out = pathlib.Path(sys.argv[3])
-          candidates = []
           needle = str(source)
+          candidates = []
           for line in log:
               if needle in line and (' -c ' in line or line.lstrip().startswith('aarch64-openwrt-linux-musl-gcc')):
                   candidates.append(line.strip())
           if not candidates:
-              raise SystemExit("ERROR: could not extract ap_ioctl.c compiler command from make -n V=s output")
+              print("WARN: no ap_ioctl.c compiler command found in dry-run; skipping gcc -H -E")
+              sys.exit(0)
           argv = shlex.split(candidates[-1])
           while argv and argv[0] == "ccache":
               argv.pop(0)
           if not argv or not argv[0].endswith("gcc"):
-              raise SystemExit(f"ERROR: extracted command is not GCC: {argv[:3]}")
+              print(f"WARN: extracted command is not GCC: {argv[:3]}")
+              sys.exit(0)
           new, skip = [], False
           for arg in argv:
               if skip:
@@ -850,158 +884,55 @@ jobs:
                   skip = True
                   continue
               new.append(arg)
-          matches = [i for i,x in enumerate(new) if x == str(source) or x.endswith("/ap_ioctl.c")]
+          matches = [i for i, x in enumerate(new) if x == str(source) or x.endswith("/ap_ioctl.c")]
           if not matches:
-              raise SystemExit("ERROR: extracted command has no ap_ioctl.c source argument")
+              print("WARN: extracted command has no ap_ioctl.c argument")
+              sys.exit(0)
           new[matches[-1]] = str(source)
           new += ["-H", "-E", "-o", str(out.with_suffix(".i"))]
           out.write_text("#!/bin/bash\nset -o pipefail\n" + shlex.join(new) + "\n")
           out.chmod(0o700)
-          print("PASS: extracted GCC command:")
-          print(shlex.join(new))
+          print("PASS: extracted GCC command for ap_ioctl.c")
           PY
 
-          set +e
-          "$COMMAND_FILE" 2>"$INCLUDE_LOG"
-          GCC_RC=$?
-          set -e
-          echo "GCC -H -E exit status: $GCC_RC"
+          if [ -x "$COMMAND_FILE" ]; then
+            echo "--- run gcc -H -E to capture real include tree ---"
+            set +e
+            "$COMMAND_FILE" 2>"$INCLUDE_LOG"
+            GCC_RC=$?
+            set -e
+            echo "gcc -H -E exit status: $GCC_RC"
 
-          cp "$INCLUDE_LOG" "artifacts/N60-Pro/standard/AP_IOCTL-GCC-H-INCLUDE-TREE.txt"
-          if [ -s "$PREPROCESSED" ]; then
-            cp "$PREPROCESSED" "artifacts/N60-Pro/standard/AP_IOCTL-PREPROCESSED.i"
-          fi
-          cp "$COMMAND_FILE" "artifacts/N60-Pro/standard/AP_IOCTL-GCC-COMMAND.sh"
-
-          echo "--- key include-tree lines ---"
-          grep -nE 'ap_ioctl\.c|rtmp\.h|rtmp_comm\.h|sec_cmm\.h|sae_cmm\.h|wifi_dev|debug\.h' "$INCLUDE_LOG" |
-            tee "artifacts/N60-Pro/standard/AP_IOCTL-INCLUDE-KEY-LINES.txt" || true
-
-          echo "--- possible SAE include cycle ---"
-          grep -nE '(rtmp\.h|rtmp_comm\.h|sec_cmm\.h|sae_cmm\.h)          BUILD_LOG="artifacts/N60-Pro/standard/FULL-BUILD-VS-LOG.txt"
-          mkdir -p "$(dirname "$BUILD_LOG")"
-
-          set -o pipefail
-          make -j"$(nproc)" V=s 2>&1 | tee "$BUILD_LOG"
-
-          echo "===== Step 9: audit actual compiler log for MGMT_TXPWR_CTRL ====="
-          if grep -Fq -- '-DMGMT_TXPWR_CTRL' "$BUILD_LOG"; then
-            echo "PASS: full build log contains -DMGMT_TXPWR_CTRL."
-            grep -n -m 10 -B 2 -A 2 -- '-DMGMT_TXPWR_CTRL' "$BUILD_LOG" || true
-          else
-            echo "::error::Full build log contains no -DMGMT_TXPWR_CTRL compiler flag."
-            grep -n -i -m 50 -E 'MGMT_TXPWR_CTRL|mt_wifi.*ap_cfg\.c|ap_cfg\.c:|WFLAGS' "$BUILD_LOG" || true
-            exit 1
-          fi
-
-          echo "===== Step 10: verify the exact standard N60 Pro sysupgrade image ====="
-          SYSUP="bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
-
-          if [ ! -s "$SYSUP" ]; then
-            echo "::error::Expected non-empty sysupgrade ITB not found: $SYSUP"
-            find bin/targets/mediatek/filogic -maxdepth 1 -type f \
-              -printf '%f (%s bytes)\n' 2>/dev/null || true
-            exit 1
-          fi
-
-          ls -lh "$SYSUP"
-          sha256sum "$SYSUP"
-          echo "PASS: standard N60 Pro sysupgrade ITB exists and is non-empty."
-
-      - name: Check whether firmware was actually produced
-        if: always()
-        shell: bash
-        run: |
-          set +e
-          OUT="bin/targets/mediatek/filogic"
-          SYSUP="$OUT/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
-          if [ -s "$SYSUP" ]; then
-            echo "FIRMWARE_PRODUCED=yes" >> $GITHUB_ENV
-            echo "Firmware produced: $SYSUP"
-            ls -lh "$SYSUP"
-          else
-            echo "FIRMWARE_PRODUCED=no" >> $GITHUB_ENV
-            echo "::warning::No sysupgrade ITB produced. Build failed or target output differs."
-            ls -lh "$OUT" 2>/dev/null || echo "(output dir missing)"
-          fi
-
-      - name: Collect firmware artifacts
-        if: always()
-        shell: bash
-        run: |
-          set +e
-          OUT="bin/targets/mediatek/filogic"
-          DEST="artifacts/N60-Pro/standard"
-          mkdir -p "$DEST"
-
-          find "$OUT" -maxdepth 1 -type f \
-            \( -name '*netcore_n60-pro*.itb' -o -name '*netcore_n60-pro*.manifest' \
-               -o -name 'sha256sums' -o -name '*.buildinfo' \) \
-            -exec cp -v {} "$DEST/" \; 2>/dev/null
-
-          if find "$DEST" -maxdepth 1 -iname '*mtkuboot*' | grep -q .; then
-            echo "::error::MTK U-Boot artifact detected; refusing to package."
-            exit 1
-          fi
-
-          {
-            echo "Build policy: STANDARD PROFILE ONLY; MTK U-Boot excluded"
-            echo "Profile: netcore_n60-pro"
-            echo "Source revision:"
-            git log -1 --format='%H %s'
-            echo "Build step outcome: ${{ steps.build_step.outcome }}"
-            echo "Firmware produced: ${FIRMWARE_PRODUCED:-unknown}"
-            echo "Files:"
-            find "$DEST" -maxdepth 1 -type f -printf '%f\n' | sort
-          } > "$DEST/BUILD-INFO.txt"
-
-          (
-            cd "$DEST"
-            shopt -s nullglob
-            if ls *.itb >/dev/null 2>&1; then
-              sha256sum *.itb > SHA256SUMS.txt
-              cat SHA256SUMS.txt
+            cp "$COMMAND_FILE" "$APIO_CMD" || true
+            cp "$INCLUDE_LOG" "$APIO_TREE" || true
+            if [ -s "$PREPROCESSED" ]; then
+              cp "$PREPROCESSED" "$APIO_PRE" || true
             fi
-          ) || true
 
-          echo "===== Artifact tree ====="
-          find artifacts/N60-Pro -maxdepth 2 -type f -printf '%p (%s bytes)\n' | sort
+            echo "--- key include-tree lines ---"
+            set +o pipefail
+            grep -nE 'ap_ioctl\.c|rtmp\.h|rtmp_comm\.h|sec_cmm\.h|sae_cmm\.h|wifi_dev|debug\.h' "$INCLUDE_LOG" \
+              | tee -a "$APIO_EVIDENCE" | head -200 || true
+            set -o pipefail
 
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: N60-Pro-Standard-${{ github.run_number }}
-          path: artifacts/N60-Pro/
-          if-no-files-found: warn
-          retention-days: 14
+            echo "--- complete include-tree size ---"
+            wc -l "$INCLUDE_LOG" | tee -a "$APIO_EVIDENCE" || true
 
-      - name: Report ccache statistics
-        if: always()
-        run: ccache -s || true
-
-      - name: Enforce build and firmware success
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Build step outcome: ${{ steps.build_step.outcome }}"
-          echo "Firmware produced: ${FIRMWARE_PRODUCED:-no}"
-          if [ "${{ steps.build_step.outcome }}" != "success" ]; then
-            echo "::error::Firmware build step did not succeed. This run must remain failed."
-            exit 1
+            if [ -s "$APIO_PRE" ]; then
+              echo "--- struct wifi_dev / PRTMP_ADAPTER / CHANNEL_CTRL / mtwf_dbg_prt 在预处理结果里的出现次数 ---"
+              for sym in 'struct wifi_dev {' 'PRTMP_ADAPTER' 'CHANNEL_CTRL' 'mtwf_dbg_prt'; do
+                count=$(grep -c "$sym" "$APIO_PRE" 2>/dev/null || echo 0)
+                echo "$sym : $count" | tee -a "$APIO_EVIDENCE"
+              done
+            else
+              echo "WARN: AP_IOCTL-PREPROCESSED.i was not produced" | tee -a "$APIO_EVIDENCE"
+            fi
+          else
+            echo "WARN: could not extract compiler command; skipping gcc -H -E" | tee -a "$APIO_EVIDENCE"
           fi
-          if [ "${FIRMWARE_PRODUCED:-no}" != "yes" ]; then
-            echo "::error::Expected standard netcore_n60-pro sysupgrade ITB is missing."
-            exit 1
-          fi
-          test -s "bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
-          echo "PASS: build succeeded and the expected sysupgrade ITB exists."
- "$INCLUDE_LOG" | head -200 || true
 
-          echo "--- complete GCC include-tree size ---"
-          wc -l "$INCLUDE_LOG"
-          echo "GCC -H -E completed; non-zero status is recorded and does not suppress the full firmware build."
+          rm -rf "$TMP_EVIDENCE" || true
+          echo "PASS: Step 7.5 include-chain evidence saved"
 
           echo "===== Step 8: full firmware build with complete log capture ====="
           BUILD_LOG="artifacts/N60-Pro/standard/FULL-BUILD-VS-LOG.txt"
