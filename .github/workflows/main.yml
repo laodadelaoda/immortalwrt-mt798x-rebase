@@ -1,326 +1,3 @@
-name: Build N60 Pro - ImmortalWrt 25.12 (Standard Only)
-
-on:
-  push:
-    branches: ["n60pro-mtk-closed-driver"]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-
-concurrency:
-  group: n60-pro-build
-  cancel-in-progress: true
-
-jobs:
-  build:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 360
-
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-            /opt/hostedtoolcache/CodeQL /usr/local/share/boost \
-            "$AGENT_TOOLSDIRECTORY" || true
-          df -h
-
-      - name: Verify source layout (warnings only)
-        shell: bash
-        run: |
-          set +e
-          echo "===== Source revision ====="
-          git log -1 --format='%H %s'
-
-          echo "===== Device definition ====="
-          grep -Rni --include='*.mk' 'netcore_n60-pro' target/linux/mediatek || true
-
-          echo "===== DTS presence (warning only, does not block build) ====="
-          DTS="target/linux/mediatek/dts/mt7986a-netcore-n60-pro.dts"
-          if [ -s "$DTS" ]; then
-            echo "DTS found: $DTS"
-            sha256sum "$DTS"
-          else
-            echo "::warning::DTS not found at expected path; build will use whatever the target defines."
-          fi
-
-          echo "===== MTK Wi-Fi compatibility patches ====="
-          ls -1 package/mtk/drivers/mt_wifi/patches-7673/ 2>/dev/null | head -50 || true
-
-      - name: Install build dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y build-essential clang flex bison g++ gawk \
-            gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
-            python3-dev rsync unzip zlib1g-dev file wget time xsltproc \
-            libelf-dev device-tree-compiler qemu-utils python3-setuptools \
-            python3-pyelftools swig ccache
-
-      - name: Set Go proxy
-        run: |
-          echo "GOPROXY=https://goproxy.cn,direct" >> $GITHUB_ENV
-          echo "GOSUMDB=off" >> $GITHUB_ENV
-
-      - name: Restore compiler cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ccache
-          key: ${{ runner.os }}-n60pro-standard-ccache-${{ github.ref_name }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-n60pro-standard-ccache-${{ github.ref_name }}-
-            ${{ runner.os }}-n60pro-standard-ccache-
-
-      - name: Update and install feeds
-        run: |
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-
-      - name: Configure standard profile only
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf artifacts/N60-Pro
-          mkdir -p "$HOME/.cache/ccache" artifacts/N60-Pro/standard
-          ccache --max-size=5G
-          ccache --set-config=compiler_check=content
-
-          cat > .config <<'EOF'
-          CONFIG_TARGET_mediatek=y
-          CONFIG_TARGET_mediatek_filogic=y
-          CONFIG_TARGET_mediatek_filogic_DEVICE_netcore_n60-pro=y
-          CONFIG_PACKAGE_luci=y
-          CONFIG_PACKAGE_luci-mod-network=y
-          CONFIG_CCACHE=y
-
-          CONFIG_PACKAGE_kmod-mt_wifi=y
-          CONFIG_PACKAGE_kmod-conninfra=y
-          CONFIG_PACKAGE_kmod-warp=y
-          CONFIG_WARP_VERSION=2
-          CONFIG_WARP_CHIPSET="mt7986"
-          CONFIG_PACKAGE_kmod-mediatek_hnat=y
-          CONFIG_PACKAGE_wifi-dats=y
-
-          # CONFIG_PACKAGE_mtwifi-cfg is not set
-          # CONFIG_PACKAGE_luci-app-mtk is not set
-          # CONFIG_PACKAGE_wifi-profile is not set
-
-          CONFIG_PACKAGE_mtwifi-cfg-ucode=y
-          CONFIG_PACKAGE_datconf=y
-          CONFIG_PACKAGE_l1util=y
-          CONFIG_PACKAGE_ucode=y
-          CONFIG_PACKAGE_ucode-mod-fs=y
-          CONFIG_PACKAGE_ucode-mod-log=y
-          CONFIG_PACKAGE_ucode-mod-ubus=y
-          CONFIG_PACKAGE_ucode-mod-uci=y
-          CONFIG_PACKAGE_ucode-mod-datconf=y
-          CONFIG_PACKAGE_ucode-mod-l1parser=y
-          CONFIG_PACKAGE_wifi-scripts=y
-
-          CONFIG_PACKAGE_iw=y
-          CONFIG_PACKAGE_iwinfo-ucode=y
-          CONFIG_PACKAGE_luci-app-mtwifi-cfg=y
-
-          CONFIG_MTK_MT_WIFI=m
-          CONFIG_MTK_MT_AP_SUPPORT=y
-          CONFIG_MTK_CFG80211_SUPPORT=y
-
-          CONFIG_MTK_WIFI_EAP_FEATURE=y
-          CONFIG_MTK_MGMT_TXPWR_CTRL=y
-
-          CONFIG_MTK_WPA3_SUPPORT=y
-          CONFIG_MTK_HOSTAPD_WPA3_SUPPORT=y
-          CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y
-          CONFIG_MTK_MT_WIFI_PATH="mt_wifi"
-          CONFIG_MTK_CHIP_MT7986=y
-          CONFIG_MTK_FIRST_IF_MT7986=y
-          CONFIG_MTK_SECOND_IF_NONE=y
-          CONFIG_MTK_THIRD_IF_NONE=y
-          CONFIG_MTK_FIRST_IF_EEPROM_FLASH=y
-          CONFIG_MTK_FIRST_IF_IPAILNA=y
-          CONFIG_MTK_DBDC_MODE=y
-          CONFIG_MTK_WIFI_MODE_AP=m
-          CONFIG_MTK_WIFI_SKU_TYPE="AX6000"
-          CONFIG_MTK_WIFI_ADIE_TYPE="mt7976"
-          CONFIG_MTK_CONNINFRA_APSOC=y
-          CONFIG_MTK_CONNINFRA_APSOC_MT7986=y
-          CONFIG_MTK_DOT11K_RRM_SUPPORT=y
-          CONFIG_first_card=y
-          CONFIG_first_card_name="MT7986"
-          EOF
-
-          cp .config artifacts/N60-Pro/standard/config.before-defconfig
-          make defconfig
-
-          echo "=== RRM Kconfig after defconfig ==="
-          grep -nE 'DOT11K_RRM_SUPPORT' .config | tee artifacts/N60-Pro/standard/RRM-KCONFIG-AFTER.txt || echo "(no RRM entries)"
-
-          require_config() {
-            if ! grep -Fqx "$1" .config; then
-              echo "::error::Required configuration missing after make defconfig: $1"
-              grep -E '^(CONFIG_MTK_|CONFIG_first_card|CONFIG_PACKAGE_(kmod-(mt_wifi|conninfra|warp|mediatek_hnat)|wifi-dats|mtwifi-cfg-ucode))' .config || true
-              exit 1
-            fi
-          }
-          require_config 'CONFIG_TARGET_mediatek_filogic_DEVICE_netcore_n60-pro=y'
-          require_config 'CONFIG_PACKAGE_luci=y'
-          require_config 'CONFIG_PACKAGE_kmod-mt_wifi=y'
-          require_config 'CONFIG_PACKAGE_kmod-conninfra=y'
-          require_config 'CONFIG_PACKAGE_kmod-warp=y'
-          require_config 'CONFIG_WARP_VERSION=2'
-          require_config 'CONFIG_WARP_CHIPSET="mt7986"'
-          require_config 'CONFIG_PACKAGE_kmod-mediatek_hnat=y'
-          require_config 'CONFIG_PACKAGE_wifi-dats=y'
-          require_config 'CONFIG_PACKAGE_iwinfo-ucode=y'
-          require_config 'CONFIG_PACKAGE_luci-app-mtwifi-cfg=y'
-          require_config 'CONFIG_PACKAGE_mtwifi-cfg-ucode=y'
-          require_config 'CONFIG_PACKAGE_datconf=y'
-          require_config 'CONFIG_PACKAGE_l1util=y'
-          require_config 'CONFIG_PACKAGE_ucode-mod-datconf=y'
-          require_config 'CONFIG_PACKAGE_ucode-mod-l1parser=y'
-          require_config 'CONFIG_MTK_WPA3_SUPPORT=y'
-          require_config 'CONFIG_MTK_HOSTAPD_WPA3_SUPPORT=y'
-          require_config 'CONFIG_MTK_WIFI_EAP_FEATURE=y'
-          require_config 'CONFIG_MTK_MGMT_TXPWR_CTRL=y'
-
-          if ! grep -Eq '^CONFIG_MTK_MT_AP_SUPPORT=(y|m)$' .config; then
-            echo "::error::MTK AP support is neither built-in nor modular after make defconfig."
-            grep -E '^CONFIG_MTK_MT_AP_SUPPORT=' .config || true
-            exit 1
-          fi
-          require_config 'CONFIG_MTK_CFG80211_SUPPORT=y'
-          require_config 'CONFIG_MTK_MT_WIFI=m'
-
-          if grep -qx 'CONFIG_TARGET_mediatek_filogic_DEVICE_netcore_n60-pro-mtkuboot=y' .config; then
-            echo "::error::MTK U-Boot profile must not be selected."
-            exit 1
-          fi
-
-          require_config 'CONFIG_PACKAGE_mtwifi-cfg-ucode=y'
-          if grep -qx 'CONFIG_PACKAGE_mtwifi-cfg=y' .config || grep -qx 'CONFIG_PACKAGE_luci-app-mtk=y' .config || grep -qx 'CONFIG_PACKAGE_iwinfo=y' .config; then
-            echo "::error::Legacy mtwifi-cfg / luci-app-mtk / iwinfo conflicts with the ucode wireless stack."
-            exit 1
-          fi
-
-          cp .config artifacts/N60-Pro/standard/config.buildinfo
-          echo "===== Effective MTK Wi-Fi configuration ====="
-          grep -E '^(CONFIG_WARP_VERSION=|CONFIG_WARP_CHIPSET=|CONFIG_PACKAGE_(kmod-mt_wifi|kmod-conninfra|kmod-warp|kmod-mediatek_hnat|wifi-dats|mtwifi-cfg-ucode|ucode-mod-datconf|ucode-mod-l1parser|iw|iwinfo|iwinfo-ucode)=|CONFIG_MTK_(MT_WIFI|MT_AP_SUPPORT|CFG80211_SUPPORT|WIFI_EAP_FEATURE|MGMT_TXPWR_CTRL|CHIP_MT7986|FIRST_IF_MT7986|WIFI_MODE|WIFI_SKU_TYPE|WIFI_ADIE_TYPE|CONNINFRA_APSOC|DBDC_MODE)|CONFIG_first_card)' .config
-          echo "PASS: standard profile and MT7986 vendor Wi-Fi stack selected."
-
-      - name: Download sources
-        run: make download -j$(nproc)
-
-      - name: Prepare driver source and run read-only diagnostics
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-
-          echo "===== Step 1: verify management TX power configuration ====="
-          require_config() {
-            if ! grep -Fqx "$1" .config; then
-              echo "::error::Required configuration missing: $1"
-              grep -E '^CONFIG_MTK_(MT_AP_SUPPORT|CFG80211_SUPPORT|WIFI_EAP_FEATURE|MGMT_TXPWR_CTRL)=' .config || true
-              exit 1
-            fi
-          }
-
-          require_config 'CONFIG_MTK_WIFI_EAP_FEATURE=y'
-          require_config 'CONFIG_MTK_MGMT_TXPWR_CTRL=y'
-
-          echo "===== Effective management TX power configuration ====="
-          grep -E '^CONFIG_MTK_(MT_AP_SUPPORT|CFG80211_SUPPORT|WIFI_EAP_FEATURE|MGMT_TXPWR_CTRL)=' .config
-
-          echo "===== Step 2: standard MT Wi-Fi prepare ====="
-          make package/mtk/drivers/mt_wifi/prepare V=s
-
-          echo "===== Step 3: locate prepared driver source ====="
-          mapfile -t RTMP_FILES < <(
-            find build_dir -type f \
-              -path '*/embedded/include/rtmp.h' -print
-          )
-
-          SOURCES=()
-          for rtmp in "${RTMP_FILES[@]}"; do
-            src="$(dirname "$(dirname "$(dirname "$rtmp")")")"
-            if [ -f "$src/os/linux/config.mk" ] &&
-               [ -f "$src/embedded/include/security/sec_cmm.h" ] &&
-               [ -f "$src/embedded/ap/ap_cfg.c" ]; then
-              SOURCES+=("$src")
-            fi
-          done
-
-          if [ "${#SOURCES[@]}" -ne 1 ]; then
-            echo "::error::Expected exactly one valid prepared MT Wi-Fi source root; found ${#SOURCES[@]}."
-            printf '%s\n' "${RTMP_FILES[@]}"
-            find build_dir -type f -path '*/embedded/ap/ap_cfg.c' -print || true
-            find build_dir -type f -path '*/os/linux/config.mk' -print || true
-            exit 1
-          fi
-
-          SRC="${SOURCES[0]}"
-          CFG="$SRC/os/linux/config.mk"
-          RTMP="$SRC/embedded/include/rtmp.h"
-          SEC="$SRC/embedded/include/security/sec_cmm.h"
-          AP_CFG="$SRC/embedded/ap/ap_cfg.c"
-
-          echo "Resolved driver source root: $SRC"
-          echo "RRM config: $CFG"
-          echo "VLAN header: $RTMP"
-          echo "SAE header: $SEC"
-          echo "AP source: $AP_CFG"
-
-          DIAG="artifacts/N60-Pro/standard/DRIVER-PREPARE-DIAGNOSTICS.txt"
-          mkdir -p "$(dirname "$DIAG")"
-
-          {
-            echo "=== MT Wi-Fi Prepare diagnostics ==="
-            echo "Source root: $SRC"
-            echo "Config: $CFG"
-            echo "RTMP header: $RTMP"
-            echo "SAE header: $SEC"
-            echo "AP source: $AP_CFG"
-            echo
-            echo "=== Effective management TX power configuration ==="
-            grep -E '^CONFIG_MTK_(MT_AP_SUPPORT|CFG80211_SUPPORT|WIFI_EAP_FEATURE|MGMT_TXPWR_CTRL)=' .config || true
-            echo
-            echo "=== SAE guard context ==="
-            nl -ba "$SEC" | awk 'NR >= 10 && NR <= 20'
-            echo
-            echo "=== RRM config context around line 73 ==="
-            nl -ba "$CFG" | awk 'NR >= 68 && NR <= 78'
-            echo
-            echo "=== bDynamicVlanDisabled references ==="
-            grep -RniE --include='*.h' --include='*.c' \
-              'bDynamicVlanDisabled' "$SRC" || true
-            echo
-            echo "=== VLAN guard context in rtmp.h ==="
-            grep -n -B 8 -A 8 -E \
-              'bDynamicVlanDisabled|DYNAMIC_VLAN_SUPPORT|RT_CFG80211_SUPPORT' \
-              "$RTMP" || true
-            echo
-            echo "=== Management TX power references ==="
-            grep -n -B 25 -A 25 -E \
-              'rtmp_get_mgmtpwr|MgmtTxPwr|EpaFeGain|TxPwrDelta' \
-              "$AP_CFG" || true
-            echo
-            echo "=== Management TX power member declarations ==="
-            grep -RniE --include='*.h' \
-              'MgmtTxPwr|EpaFeGain|TxPwrDelta' "$SRC" || true
-            echo
-            echo "=== Patch inventory ==="
-            ls -1 package/mtk/drivers/mt_wifi/patches-7673/
-            echo
-            echo "CUSTOM_SOURCE_MODIFIED=no"
-          } | tee "$DIAG"
-
-          echo "PASS: read-only diagnostics saved to $DIAG"
-
       - name: Build standard profile
         id: build_step
         shell: bash
@@ -352,8 +29,7 @@ jobs:
           echo "===== Step 1: remove only this run's dynamic patches ====="
           rm -f \
             "$PATCH_DIR/050-fix-rrm-config.patch" \
-            "$PATCH_DIR/051-fix-dynamic-vlan-guard.patch" \
-            "$PATCH_DIR/052-fix-mgmt-txpwr-config.patch"
+            "$PATCH_DIR/051-fix-dynamic-vlan-guard.patch"
 
           echo "===== Step 2: clean MT Wi-Fi package and prepare clean source ====="
           make package/mtk/drivers/mt_wifi/clean V=s
@@ -581,120 +257,18 @@ jobs:
 
           test -s "$PATCH_DIR/051-fix-dynamic-vlan-guard.patch"
 
-          echo "===== Step 5: generate management TX power patch from actual config.mk ====="
-          MGMT_ORIG="$TMP/config.mk.mgmt-txpwr.orig"
-          MGMT_WORK="$TMP/config.mk.mgmt-txpwr.modified"
-
-          cp "$CFG" "$MGMT_ORIG"
-          cp "$CFG" "$MGMT_WORK"
-
-          python3 - "$MGMT_WORK" <<'PY'
-          from pathlib import Path
-          import re
-          import sys
-
-          path = Path(sys.argv[1])
-          lines = path.read_text().splitlines()
-
-          if any(
-              re.match(r"^\s*HAS_MGMT_TXPWR_CTRL\s*=", line)
-              for line in lines
-          ):
-              raise SystemExit(
-                  "ERROR: HAS_MGMT_TXPWR_CTRL already exists in config.mk; "
-                  "refusing to generate a duplicate patch."
-              )
-
-          if any("MGMT_TXPWR_CTRL" in line for line in lines):
-              raise SystemExit(
-                  "ERROR: MGMT_TXPWR_CTRL already appears in config.mk; "
-                  "inspect the source before generating 052."
-              )
-
-          variable_matches = [
-              i for i, line in enumerate(lines)
-              if line.strip() == "HAS_WIFI_EAP_FEATURE=y"
-          ]
-
-          if len(variable_matches) != 1:
-              raise SystemExit(
-                  "ERROR: expected exactly one HAS_WIFI_EAP_FEATURE=y; "
-                  f"found {len(variable_matches)}"
-              )
-
-          lines.insert(variable_matches[0] + 1, "HAS_MGMT_TXPWR_CTRL=y")
-
-          target = [
-              "ifeq ($(HAS_WIFI_EAP_FEATURE),y)",
-              "WFLAGS += -DWIFI_EAP_FEATURE",
-              "endif",
-          ]
-
-          block_matches = []
-          for i in range(len(lines) - len(target) + 1):
-              candidate = [line.strip() for line in lines[i:i + len(target)]]
-              if candidate == target:
-                  block_matches.append(i)
-
-          if len(block_matches) != 1:
-              raise SystemExit(
-                  "ERROR: expected exactly one complete EAP WFLAGS block; "
-                  f"found {len(block_matches)}"
-              )
-
-          insertion = block_matches[0] + len(target)
-
-          new_block = [
-              "ifeq ($(HAS_MGMT_TXPWR_CTRL),y)",
-              "WFLAGS += -DMGMT_TXPWR_CTRL",
-              "endif",
-          ]
-
-          lines[insertion:insertion] = new_block
-
-          if lines.count("HAS_MGMT_TXPWR_CTRL=y") != 1:
-              raise SystemExit("ERROR: variable post-check failed")
-          if lines.count("WFLAGS += -DMGMT_TXPWR_CTRL") != 1:
-              raise SystemExit("ERROR: WFLAGS post-check failed")
-
-          path.write_text("\n".join(lines) + "\n")
-          print("PASS: inserted HAS_MGMT_TXPWR_CTRL=y")
-          print("PASS: inserted WFLAGS += -DMGMT_TXPWR_CTRL")
-          PY
-
-          if diff -u \
-            --label a/mt_wifi/os/linux/config.mk "$MGMT_ORIG" \
-            --label b/mt_wifi/os/linux/config.mk "$MGMT_WORK" \
-            > "$PATCH_DIR/052-fix-mgmt-txpwr-config.patch"
-          then
-            echo "::error::Management TX power diff is empty."
-            exit 1
-          else
-            rc=$?
-            if [ "$rc" -ne 1 ]; then
-              echo "::error::Management TX power diff failed with exit code $rc."
-              exit "$rc"
-            fi
-          fi
-
-          test -s "$PATCH_DIR/052-fix-mgmt-txpwr-config.patch"
-
-          echo "===== Step 6: audit all generated patch files ====="
+          echo "===== Step 5: audit generated 050/051 patch files ====="
           cat "$PATCH_DIR/050-fix-rrm-config.patch"
           cat "$PATCH_DIR/051-fix-dynamic-vlan-guard.patch"
-          cat "$PATCH_DIR/052-fix-mgmt-txpwr-config.patch"
 
           grep -Fq -- 'HAS_DOT11K_RRM_SUPPORT=n' "$PATCH_DIR/050-fix-rrm-config.patch"
           grep -Fq -- 'HAS_DOT11K_RRM_SUPPORT=y' "$PATCH_DIR/050-fix-rrm-config.patch"
           grep -Fq -- '#ifdef DYNAMIC_VLAN_SUPPORT' "$PATCH_DIR/051-fix-dynamic-vlan-guard.patch"
           grep -Fq -- '#if defined(RT_CFG80211_SUPPORT) || defined(DYNAMIC_VLAN_SUPPORT)' "$PATCH_DIR/051-fix-dynamic-vlan-guard.patch"
-          grep -Fqx '+++ b/mt_wifi/os/linux/config.mk' "$PATCH_DIR/052-fix-mgmt-txpwr-config.patch"
-          grep -Fqx '+HAS_MGMT_TXPWR_CTRL=y' "$PATCH_DIR/052-fix-mgmt-txpwr-config.patch"
-          grep -Fqx '+WFLAGS += -DMGMT_TXPWR_CTRL' "$PATCH_DIR/052-fix-mgmt-txpwr-config.patch"
 
-          echo "PASS: 050, 051 and 052 generated and audited."
+          echo "PASS: 050 and 051 generated and audited."
 
-          echo "===== Step 7: clean and prepare again to apply all patches ====="
+          echo "===== Step 6: clean and prepare again to apply 050/051 ====="
           make package/mtk/drivers/mt_wifi/clean V=s
 
           PREPARE_LOG="$TMP/mtwifi-prepare-second.log"
@@ -702,12 +276,11 @@ jobs:
 
           for patch in \
             050-fix-rrm-config.patch \
-            051-fix-dynamic-vlan-guard.patch \
-            052-fix-mgmt-txpwr-config.patch
+            051-fix-dynamic-vlan-guard.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Second prepare log does not show $patch being applied."
-              grep -n -E 'Applying|050-fix|051-fix|052-fix|Patch failed|Hunk FAILED' "$PREPARE_LOG" || true
+              grep -n -E 'Applying|050-fix|051-fix|Patch failed|Hunk FAILED' "$PREPARE_LOG" || true
               exit 1
             fi
           done
@@ -718,15 +291,90 @@ jobs:
             exit 1
           fi
 
-          echo "PASS: second prepare log contains all three patch names."
+          echo "PASS: second prepare log contains both patch names."
 
-          echo "===== Step 8: verify all four fixes in prepared source ====="
+          echo "===== Step 6.5: runtime repair of MGMT_TXPWR_CTRL in config.mk ====="
           SRC="$(locate_driver_source)"
           CFG="$SRC/os/linux/config.mk"
           RTMP="$SRC/embedded/include/rtmp.h"
           SEC="$SRC/embedded/include/security/sec_cmm.h"
           AP_CFG="$SRC/embedded/ap/ap_cfg.c"
 
+          python3 - "$CFG" <<'PY'
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          if not path.is_file():
+              raise SystemExit(f"FAIL: config.mk not found: {path}")
+
+          text = path.read_text()
+          lines = text.splitlines()
+
+          var_line = "HAS_MGMT_TXPWR_CTRL=y"
+          flag_line = "WFLAGS += -DMGMT_TXPWR_CTRL"
+
+          has_var = any(line.strip() == var_line for line in lines)
+          has_flag = any(line.strip() == flag_line for line in lines)
+
+          if has_var != has_flag:
+              raise SystemExit(
+                  "FAIL: partial MGMT_TXPWR_CTRL repair; refusing to guess"
+              )
+
+          if not has_var:
+              eap_var = "HAS_WIFI_EAP_FEATURE=y"
+              eap_block = [
+                  "ifeq ($(HAS_WIFI_EAP_FEATURE),y)",
+                  "WFLAGS += -DWIFI_EAP_FEATURE",
+                  "endif",
+              ]
+
+              var_hits = [
+                  i for i, line in enumerate(lines)
+                  if line.strip() == eap_var
+              ]
+              block_hits = [
+                  i for i in range(len(lines) - 2)
+                  if [line.strip() for line in lines[i:i + 3]] == eap_block
+              ]
+
+              if len(var_hits) != 1:
+                  raise SystemExit(
+                      f"FAIL: expected exactly one {eap_var}, found {len(var_hits)}"
+                  )
+              if len(block_hits) != 1:
+                  raise SystemExit(
+                      "FAIL: expected exactly one complete EAP WFLAGS block, "
+                      f"found {len(block_hits)}"
+                  )
+
+              block_end = block_hits[0] + 3
+              lines[block_end:block_end] = [
+                  "ifeq ($(HAS_MGMT_TXPWR_CTRL),y)",
+                  flag_line,
+                  "endif",
+              ]
+
+              var_index = var_hits[0]
+              lines[var_index + 1:var_index + 1] = [var_line]
+
+              path.write_text("\n".join(lines) + "\n")
+              print(f"PASS: runtime-modified {path}")
+          else:
+              print(f"PASS: MGMT_TXPWR_CTRL repair already present in {path}")
+
+          result = path.read_text().splitlines()
+          if sum(line.strip() == var_line for line in result) != 1:
+              raise SystemExit("FAIL: HAS_MGMT_TXPWR_CTRL=y verification failed")
+          if sum(line.strip() == flag_line for line in result) != 1:
+              raise SystemExit("FAIL: -DMGMT_TXPWR_CTRL verification failed")
+
+          print("PASS: HAS_MGMT_TXPWR_CTRL=y")
+          print("PASS: WFLAGS += -DMGMT_TXPWR_CTRL")
+          PY
+
+          echo "===== Step 7: verify all four fixes in prepared source ====="
           grep -Fqx \
             '#if defined(DOT11_SAE_SUPPORT) || defined(SUPP_SAE_SUPPORT)' \
             <(awk 'NR==14 { print; exit }' "$SEC") || {
@@ -778,14 +426,14 @@ jobs:
 
           echo "PASS: SAE, RRM, VLAN and MGMT_TXPWR_CTRL source/configuration checks passed."
 
-          echo "===== Step 9: full firmware build with complete log capture ====="
+          echo "===== Step 8: full firmware build with complete log capture ====="
           BUILD_LOG="artifacts/N60-Pro/standard/FULL-BUILD-VS-LOG.txt"
           mkdir -p "$(dirname "$BUILD_LOG")"
 
           set -o pipefail
           make -j"$(nproc)" V=s 2>&1 | tee "$BUILD_LOG"
 
-          echo "===== Step 10: audit actual compiler log for MGMT_TXPWR_CTRL ====="
+          echo "===== Step 9: audit actual compiler log for MGMT_TXPWR_CTRL ====="
           if grep -Fq -- '-DMGMT_TXPWR_CTRL' "$BUILD_LOG"; then
             echo "PASS: full build log contains -DMGMT_TXPWR_CTRL."
             grep -n -m 10 -B 2 -A 2 -- '-DMGMT_TXPWR_CTRL' "$BUILD_LOG" || true
@@ -795,7 +443,7 @@ jobs:
             exit 1
           fi
 
-          echo "===== Step 11: verify the exact standard N60 Pro sysupgrade image ====="
+          echo "===== Step 10: verify the exact standard N60 Pro sysupgrade image ====="
           SYSUP="bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
 
           if [ ! -s "$SYSUP" ]; then
@@ -808,93 +456,3 @@ jobs:
           ls -lh "$SYSUP"
           sha256sum "$SYSUP"
           echo "PASS: standard N60 Pro sysupgrade ITB exists and is non-empty."
-
-      - name: Check whether firmware was actually produced
-        if: always()
-        shell: bash
-        run: |
-          set +e
-          OUT="bin/targets/mediatek/filogic"
-          SYSUP="$OUT/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
-          if [ -s "$SYSUP" ]; then
-            echo "FIRMWARE_PRODUCED=yes" >> $GITHUB_ENV
-            echo "Firmware produced: $SYSUP"
-            ls -lh "$SYSUP"
-          else
-            echo "FIRMWARE_PRODUCED=no" >> $GITHUB_ENV
-            echo "::warning::No sysupgrade ITB produced. Build failed or target output differs."
-            ls -lh "$OUT" 2>/dev/null || echo "(output dir missing)"
-          fi
-
-      - name: Collect firmware artifacts
-        if: always()
-        shell: bash
-        run: |
-          set +e
-          OUT="bin/targets/mediatek/filogic"
-          DEST="artifacts/N60-Pro/standard"
-          mkdir -p "$DEST"
-
-          find "$OUT" -maxdepth 1 -type f \
-            \( -name '*netcore_n60-pro*.itb' -o -name '*netcore_n60-pro*.manifest' \
-               -o -name 'sha256sums' -o -name '*.buildinfo' \) \
-            -exec cp -v {} "$DEST/" \; 2>/dev/null
-
-          if find "$DEST" -maxdepth 1 -iname '*mtkuboot*' | grep -q .; then
-            echo "::error::MTK U-Boot artifact detected; refusing to package."
-            exit 1
-          fi
-
-          {
-            echo "Build policy: STANDARD PROFILE ONLY; MTK U-Boot excluded"
-            echo "Profile: netcore_n60-pro"
-            echo "Source revision:"
-            git log -1 --format='%H %s'
-            echo "Build step outcome: ${{ steps.build_step.outcome }}"
-            echo "Firmware produced: ${FIRMWARE_PRODUCED:-unknown}"
-            echo "Files:"
-            find "$DEST" -maxdepth 1 -type f -printf '%f\n' | sort
-          } > "$DEST/BUILD-INFO.txt"
-
-          (
-            cd "$DEST"
-            shopt -s nullglob
-            if ls *.itb >/dev/null 2>&1; then
-              sha256sum *.itb > SHA256SUMS.txt
-              cat SHA256SUMS.txt
-            fi
-          ) || true
-
-          echo "===== Artifact tree ====="
-          find artifacts/N60-Pro -maxdepth 2 -type f -printf '%p (%s bytes)\n' | sort
-
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: N60-Pro-Standard-${{ github.run_number }}
-          path: artifacts/N60-Pro/
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Report ccache statistics
-        if: always()
-        run: ccache -s || true
-
-      - name: Enforce build and firmware success
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Build step outcome: ${{ steps.build_step.outcome }}"
-          echo "Firmware produced: ${FIRMWARE_PRODUCED:-no}"
-          if [ "${{ steps.build_step.outcome }}" != "success" ]; then
-            echo "::error::Firmware build step did not succeed. This run must remain failed."
-            exit 1
-          fi
-          if [ "${FIRMWARE_PRODUCED:-no}" != "yes" ]; then
-            echo "::error::Expected standard netcore_n60-pro sysupgrade ITB is missing."
-            exit 1
-          fi
-          test -s "bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
-          echo "PASS: build succeeded and the expected sysupgrade ITB exists."
