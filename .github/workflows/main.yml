@@ -117,7 +117,9 @@ jobs:
           # Dependencies required by mtwifi-cfg-ucode (verified in package Makefile)
           CONFIG_PACKAGE_mtwifi-cfg-ucode=y
           CONFIG_PACKAGE_datconf=y
-          CONFIG_PACKAGE_l1util=y          CONFIG_PACKAGE_ucode=y          CONFIG_PACKAGE_ucode-mod-fs=y
+          CONFIG_PACKAGE_l1util=y
+          CONFIG_PACKAGE_ucode=y
+          CONFIG_PACKAGE_ucode-mod-fs=y
           CONFIG_PACKAGE_ucode-mod-log=y
           CONFIG_PACKAGE_ucode-mod-ubus=y
           CONFIG_PACKAGE_ucode-mod-uci=y
@@ -153,33 +155,17 @@ jobs:
           CONFIG_MTK_DOT11K_RRM_SUPPORT=y
           CONFIG_first_card=y
           CONFIG_first_card_name="MT7986"
-
-          # Keep SAE/WPA3 enabled consistently with the vendor driver's
-          # SaeCfg field and delete_saeinstance_entry implementation.
           EOF
+
           cp .config artifacts/N60-Pro/standard/config.before-defconfig
           make defconfig
 
           echo "=== RRM Kconfig after defconfig ==="
           grep -nE 'DOT11K_RRM_SUPPORT' .config | tee artifacts/N60-Pro/standard/RRM-KCONFIG-AFTER.txt || echo "(no RRM entries)"
 
-          # ---- Diagnostic: list any SAE-related Kconfig symbols present ----
-          {
-            echo "===== SAE-related Kconfig symbols in this tree ====="
-            grep -rniE 'config.*SAE' package/mtk/ target/linux/mediatek/ 2>/dev/null | head -40 || true
-            echo
-            echo "===== SAE-related options in effective .config ====="
-            grep -iE 'SAE' .config || echo "(none)"
-            echo
-            echo "===== SAE symbols in downloaded driver source (if present) ====="
-            grep -rniE 'SaeCfg|delete_saeinstance_entry' build_dir/target-*/linux-*/ 2>/dev/null | head -20 || true
-          } | tee artifacts/N60-Pro/standard/SAE-DIAGNOSTIC.txt
-
-          # ---- Required configuration (kept minimal; only what we're sure about) ----
           require_config() {
             if ! grep -Fqx "$1" .config; then
               echo "::error::Required configuration missing after make defconfig: $1"
-              echo "===== Effective MTK options ====="
               grep -E '^(CONFIG_MTK_|CONFIG_first_card|CONFIG_PACKAGE_(kmod-(mt_wifi|conninfra|warp|mediatek_hnat)|wifi-dats|mtwifi-cfg-ucode))' .config || true
               exit 1
             fi
@@ -202,6 +188,7 @@ jobs:
           require_config 'CONFIG_PACKAGE_ucode-mod-l1parser=y'
           require_config 'CONFIG_MTK_WPA3_SUPPORT=y'
           require_config 'CONFIG_MTK_HOSTAPD_WPA3_SUPPORT=y'
+
           if ! grep -Eq '^CONFIG_MTK_MT_AP_SUPPORT=(y|m)$' .config; then
             echo "::error::MTK AP support is neither built-in nor modular after make defconfig."
             grep -E '^CONFIG_MTK_MT_AP_SUPPORT=' .config || true
@@ -210,13 +197,11 @@ jobs:
           require_config 'CONFIG_MTK_CFG80211_SUPPORT=y'
           require_config 'CONFIG_MTK_MT_WIFI=m'
 
-          # ---- Forbidden profiles / conflicting packages ----
           if grep -qx 'CONFIG_TARGET_mediatek_filogic_DEVICE_netcore_n60-pro-mtkuboot=y' .config; then
             echo "::error::MTK U-Boot profile must not be selected."
             exit 1
           fi
-          # The ucode configurator must remain selected; its dependencies are
-          # explicitly listed above so make defconfig cannot silently drop it.
+
           require_config 'CONFIG_PACKAGE_mtwifi-cfg-ucode=y'
           if grep -qx 'CONFIG_PACKAGE_mtwifi-cfg=y' .config || grep -qx 'CONFIG_PACKAGE_luci-app-mtk=y' .config || grep -qx 'CONFIG_PACKAGE_iwinfo=y' .config; then
             echo "::error::Legacy mtwifi-cfg / luci-app-mtk / iwinfo conflicts with the ucode wireless stack."
@@ -231,386 +216,404 @@ jobs:
       - name: Download sources
         run: make download -j$(nproc)
 
-      - name: Prepare driver source, diagnose SAE structures and RRM
+      - name: Prepare driver source and run read-only diagnostics
         shell: bash
         run: |
-          set -euo pipefail
-          echo "===== Step 1: prepare MTK driver source ====="
+          set -Eeuo pipefail
+
+          echo "===== Step 1: standard MT Wi-Fi prepare ====="
           make package/mtk/drivers/mt_wifi/prepare V=s
-          echo "===== READ-ONLY DIAGNOSTICS: prepare/source layout ====="
-          echo "=== 1. make prepare output (last 50 lines if a captured log exists) ==="
-          if [ -n "${PREPARE_LOG:-}" ] && [ -f "$PREPARE_LOG" ]; then
-            tail -n 50 "$PREPARE_LOG"
-          else
-            echo "No captured make-prepare log found. The existing Step 1 line is checked separately in the workflow source."
-          fi
 
-          echo
-          echo "=== 2. ls -la build_dir/ ==="
-          ls -la build_dir/ 2>&1 || true
-
-          echo
-          echo '=== 3. find build_dir -maxdepth 6 -iname "*mt_wifi*" ==='
-          find build_dir -maxdepth 6 -iname '*mt_wifi*' -print 2>&1 || true
-
-          echo
-          echo '=== 4. find build_dir -name "sec_cmm.h" ==='
-          find build_dir -name 'sec_cmm.h' -print 2>/dev/null || true
-
-          echo
-          echo '=== 5. ls -la dl/ | grep -i mt79xx ==='
-          ls -la dl/ 2>&1 | grep -i mt79xx || true
-          echo "===== END READ-ONLY DIAGNOSTICS ====="
-
-
-          echo "===== Step 2: locate the actual driver header ====="
-          mapfile -t SEC_FILES < <(
-            find build_dir -type f -path '*/embedded/include/security/sec_cmm.h' -print
+          echo "===== Step 2: locate prepared driver source ====="
+          mapfile -t RTMP_FILES < <(
+            find build_dir -type f \
+              -path '*/embedded/include/rtmp.h' -print
           )
 
-          if [ "${#SEC_FILES[@]}" -ne 1 ]; then
-            echo "::error::Expected exactly one prepared security/sec_cmm.h; found ${#SEC_FILES[@]}."
-            printf '%s\n' "${SEC_FILES[@]}"
+          SOURCES=()
+          for rtmp in "${RTMP_FILES[@]}"; do
+            src="$(dirname "$(dirname "$(dirname "$rtmp")")")"
+            if [ -f "$src/os/linux/config.mk" ] &&
+               [ -f "$src/embedded/include/security/sec_cmm.h" ]; then
+              SOURCES+=("$src")
+            fi
+          done
+
+          if [ "${#SOURCES[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one valid prepared MT Wi-Fi source root; found ${#SOURCES[@]}."
+            echo "===== All candidate rtmp.h files ====="
+            printf '%s\n' "${RTMP_FILES[@]}"
+            echo "===== All candidate config.mk files ====="
+            find build_dir -type f -path '*/os/linux/config.mk' -print || true
+            echo "===== MT Wi-Fi-related directories ====="
+            find build_dir -maxdepth 8 -iname '*mt_wifi*' -print || true
             exit 1
           fi
 
-          SEC="${SEC_FILES[0]}"
-          SRC="${SEC%/embedded/include/security/sec_cmm.h}"
-          if [ ! -d "$SRC" ] || [ ! -f "$SRC/embedded/include/rtmp.h" ] || [ ! -d "$SRC/os/linux" ]; then
-            echo "::error::Resolved driver source root is invalid: $SRC"
-            exit 1
-          fi
-          # ---- Targeted SAE preprocessor fix: line 14; accept already-patched source ----
-          SAE_LINE="$(awk 'NR==14 { print; exit }' "$SEC")"
-          if [ "$SAE_LINE" = "#ifdef SUPP_SAE_SUPPORT" ]; then
-            awk 'NR==14 {
-              if ($0 == "#ifdef SUPP_SAE_SUPPORT")
-                $0 = "#if defined(DOT11_SAE_SUPPORT) || defined(SUPP_SAE_SUPPORT)"
-            } { print }' "$SEC" > "$SEC.tmp"
-            cat "$SEC.tmp" > "$SEC"
-            rm -f "$SEC.tmp"
-          elif [ "$SAE_LINE" != "#if defined(DOT11_SAE_SUPPORT) || defined(SUPP_SAE_SUPPORT)" ]; then
-            echo "::error::Unexpected sec_cmm.h line 14; refusing to patch the wrong source revision."
-            nl -ba "$SEC" | awk 'NR>=10 && NR<=18'
-            exit 1
-          fi
-          if [ "$(awk 'NR==14 { print; exit }' "$SEC")" != "#if defined(DOT11_SAE_SUPPORT) || defined(SUPP_SAE_SUPPORT)" ]; then
-            echo "::error::SAE line-14 patch verification failed."
-            exit 1
-          fi
-          echo "PASS: sec_cmm.h line 14 has consistent SAE guards."
-          awk 'NR>=12 && NR<=16' "$SEC"
-
-          # ---- Targeted RRM fix: change only config.mk line 73 ----
+          SRC="${SOURCES[0]}"
           CFG="$SRC/os/linux/config.mk"
-          test -f "$CFG" || { echo "::error::config.mk not found: $CFG"; exit 1; }
-          RRM_LINE="$(awk 'NR==73 { print; exit }' "$CFG")"
-          if [ "$RRM_LINE" = "HAS_DOT11K_RRM_SUPPORT=n" ]; then
-            awk 'NR==73 {
-              if ($0 == "HAS_DOT11K_RRM_SUPPORT=n")
-                $0 = "HAS_DOT11K_RRM_SUPPORT=y"
-            } { print }' "$CFG" > "$CFG.tmp"
-            cat "$CFG.tmp" > "$CFG"
-            rm -f "$CFG.tmp"
-          elif [ "$RRM_LINE" != "HAS_DOT11K_RRM_SUPPORT=y" ]; then
-            echo "::error::Unexpected config.mk line 73; refusing to patch the wrong source revision."
-            nl -ba "$CFG" | awk 'NR>=70 && NR<=76'
-            exit 1
-          fi
-          if [ "$(awk 'NR==73 { print; exit }' "$CFG")" != "HAS_DOT11K_RRM_SUPPORT=y" ]; then
-            echo "::error::RRM line-73 patch verification failed."
-            exit 1
-          fi
-          echo "PASS: patched config.mk line 73 for RRM."
-          awk 'NR>=71 && NR<=75' "$CFG"
+          RTMP="$SRC/embedded/include/rtmp.h"
+          SEC="$SRC/embedded/include/security/sec_cmm.h"
 
-          echo "Prepared source root: $SRC"
-          echo "Using header: $SEC"
+          echo "Resolved driver source root: $SRC"
+          echo "RRM config: $CFG"
+          echo "VLAN header: $RTMP"
+          echo "SAE header: $SEC"
 
-          SAE_DIAG="artifacts/N60-Pro/standard/SAE-STRUCT-LOOKUP.txt"
-          mkdir -p "$(dirname "$SAE_DIAG")"
-          {
-            echo "=== Prepared source ==="
-            echo "$SRC"
-            echo
-            echo "=== Structure definitions and references ==="
-            grep -RniE --include='*.h' --include='*.c' \
-              'struct[[:space:]]+(pwd_id_list|sae_capability|sae_pk_cfg)\b' "$SRC" || true
-            echo
-            echo "=== typedef aliases mentioning the three SAE structure tags ==="
-            grep -RniE --include='*.h' --include='*.c' \
-              'typedef.*(pwd_id_list|sae_capability|sae_pk_cfg)|(pwd_id_list|sae_capability|sae_pk_cfg).*typedef' "$SRC" || true
-            echo
-            echo "=== All declarations and references for the three SAE type names ==="
-            grep -RniE --include='*.h' --include='*.c' \              'pwd_id_list|sae_capability|sae_pk_cfg' "$SRC" | head -400 || true
-            echo
-            echo "=== All sae_cmm.h paths ==="
-            find "$SRC" -type f -name 'sae_cmm.h' -print
-            echo
-            echo "=== sec_cmm.h lines 1-30 ==="
-            sed -n '1,30p' "$SEC"
-            echo
-            echo "=== sec_cmm.h lines 500-540 ==="
-            sed -n '500,540p' "$SEC"
-            echo
-            echo "=== SAE-related preprocessor directives in sec_cmm.h ==="
-            grep -nE '^[[:space:]]*#[[:space:]]*(if|ifdef|ifndef|elif|define|undef).*SAE|SAE.*(SUPPORT|CFG|ENABLE|PK)' "$SEC" || true
-            echo
-            echo "SAE_SOURCE_MODIFIED=no"
-          } | tee "$SAE_DIAG"
-
-          echo "===== Step 3: RRM diagnostics (read-only) ====="
-          DIAG="artifacts/N60-Pro/standard/DRIVER-PATCH-AND-RRM-DIAG.txt"
+          DIAG="artifacts/N60-Pro/standard/DRIVER-PREPARE-DIAGNOSTICS.txt"
           mkdir -p "$(dirname "$DIAG")"
+
           {
-            echo "=== Prepared source ==="
-            echo "$SRC"
+            echo "=== MT Wi-Fi Prepare diagnostics ==="
+            echo "Source root: $SRC"
+            echo "Config: $CFG"
+            echo "RTMP header: $RTMP"
+            echo "SAE header: $SEC"
             echo
-            echo "=== RRM config.mk files and matching lines ==="
-            while IFS= read -r cfg; do
-              echo "--- $cfg ---"
-              grep -nE -C 3 'HAS_DOT11K_RRM_SUPPORT|DOT11K_RRM_SUPPORT' "$cfg" || true
-            done < <(find "$SRC" -type f -path '*/os/linux/config.mk' -print)
-
+            echo "=== SAE guard context ==="
+            nl -ba "$SEC" | awk 'NR >= 10 && NR <= 20'
             echo
-            echo "=== Makefile and .mk references ==="
-            find "$SRC" -type f \
-              \( -name 'Makefile' -o -name '*.mk' \) \
-              -exec grep -nH -E 'HAS_DOT11K_RRM_SUPPORT|DOT11K_RRM_SUPPORT' {} + \
-              || true
+            echo "=== RRM config context around line 73 ==="
+            nl -ba "$CFG" | awk 'NR >= 68 && NR <= 78'
             echo
-            echo "=== RRM header and type references ==="            grep -RniE \
-              --include='*.h' --include='*.c' --include='Makefile' --include='*.mk' \
-              'RRM_BEACON_REQ_INFO|DOT11K_RRM_SUPPORT|HAS_DOT11K_RRM_SUPPORT' \
-              "$SRC" | head -250 || true
-
+            echo "=== RRM-related config entries ==="
+            grep -nE 'HAS_DOT11K_RRM_SUPPORT|DOT11K_RRM_SUPPORT' "$CFG" || true
             echo
-            echo "=== Effective RRM Kconfig ==="
-            grep -E '^CONFIG_MTK_DOT11K_RRM_SUPPORT=|^# CONFIG_MTK_DOT11K_RRM_SUPPORT is not set' .config || true
-
+            echo "=== bDynamicVlanDisabled references ==="
+            grep -RniE --include='*.h' --include='*.c' \
+              'bDynamicVlanDisabled' "$SRC" || true
             echo
-            echo "RRM_SOURCE_MODIFIED=no"
+            echo "=== COMMON_CONFIG declaration ==="
+            grep -RniE --include='*.h' \
+              'struct[[:space:]]+_COMMON_CONFIG' "$SRC" || true
+            echo
+            echo "=== VLAN guard context in rtmp.h ==="
+            grep -n -B 8 -A 8 -E \
+              'bDynamicVlanDisabled|DYNAMIC_VLAN_SUPPORT|RT_CFG80211_SUPPORT' \
+              "$RTMP" || true
+            echo
+            echo "=== Patch inventory ==="
+            ls -1 package/mtk/drivers/mt_wifi/patches-7673/
+            echo
+            echo "CUSTOM_SOURCE_MODIFIED=no"
           } | tee "$DIAG"
 
-          echo "===== Diagnostics saved to $SAE_DIAG and $DIAG ====="
-          
-          echo "===== Step 4: VLAN diagnostics (read-only) ====="
-          VLAN_DIAG="artifacts/N60-Pro/standard/VLAN-DIAG.txt"
-          mkdir -p "$(dirname "$VLAN_DIAG")"
-          AP_DATA="$SRC/embedded/ap/ap_data.c"
-          {
-            echo "=== VLAN diagnostic metadata ==="
-            echo "Prepared source root: $SRC"
-            echo "Driver header: $SEC"
-            echo "Driver config: $CFG"
-            echo "AP source: $AP_DATA"
-            echo "VLAN_SOURCE_MODIFIED=no"
-            echo "VLAN_CONFIG_CHANGED=no"
-            echo
-
-            echo "=== All bDynamicVlanDisabled occurrences in .h and .c ==="
-            grep -RniE --include='*.h' --include='*.c' 'bDynamicVlanDisabled' "$SRC" || true
-            echo
-
-            echo "=== bDynamicVlanDisabled declaration context inside struct _COMMON_CONFIG (10 lines before, 3 after) ==="
-            COMMON_CONFIG_FOUND=no
-            while IFS= read -r -d '' header; do
-              awk '
-                { lines[NR] = $0 }
-                /struct[[:space:]]+_COMMON_CONFIG([[:space:]]|$)/ { in_struct = 1; struct_start = NR }
-                in_struct && /bDynamicVlanDisabled/ { field_line = NR }
-                in_struct && /^[[:space:]]*};/ {
-                  if (field_line) {
-                    first = field_line - 10
-                    if (first < 1) first = 1
-                    last = field_line + 3
-                    print "--- " FILENAME ":" field_line " (inside struct _COMMON_CONFIG) ---"
-                    for (i = first; i <= last; i++) {
-                      if (i in lines) printf "%6d  %s\n", i, lines[i]
-                    }
-                    found = 1
-                  }
-                  in_struct = 0
-                  field_line = 0
-                }
-                END {
-                  if (!found) exit 1
-                }
-              ' "$header" && COMMON_CONFIG_FOUND=yes || true
-            done < <(find "$SRC" -type f -name '*.h' -print0)
-            if [ "$COMMON_CONFIG_FOUND" = no ]; then
-              echo "No bDynamicVlanDisabled field declaration was found inside a struct _COMMON_CONFIG definition in .h files."
-              echo "Candidate struct definitions:"
-              grep -RniE --include='*.h' 'struct[[:space:]]+_COMMON_CONFIG' "$SRC" || true
-            fi
-            echo
-
-            echo "=== ap_data.c lines 335-370 (numbered) ==="
-            if [ -f "$AP_DATA" ]; then
-              nl -ba "$AP_DATA" | awk 'NR >= 335 && NR <= 370'
-              echo
-              echo "=== All preprocessor directives in ap_data.c lines 325-385 (30 lines around line 355) ==="
-              nl -ba "$AP_DATA" | awk 'NR >= 325 && NR <= 385 && $2 ~ /^#/ { print }'
-            else
-              echo "ERROR: expected ap_data.c not found at $AP_DATA"
-            fi
-            echo
-
-            echo "=== All VLAN or DYNAMIC-related lines in config.mk ==="
-            grep -niE 'VLAN|DYNAMIC' "$CFG" || true
-            echo
-
-            echo "=== Complete HAS_* switch inventory: ^HAS_[A-Z0-9_]+= ==="
-            grep -nE '^HAS_[A-Z0-9_]+=' "$CFG" || true
-            echo
-
-            echo "=== All DYNAMIC_VLAN / VLAN_SUPPORT macro references in driver .h and .c files ==="
-            grep -RniE --include='*.h' --include='*.c' 'DYNAMIC_VLAN|VLAN_SUPPORT' "$SRC" || true
-            echo
-            echo "=== End of read-only VLAN diagnostics ==="
-          } | tee "$VLAN_DIAG"
-
-          echo "VLAN diagnostics saved to $VLAN_DIAG"
-
-          echo "===== Step 5: patch bDynamicVlanDisabled guard in rtmp.h ====="
-          RTMP_H="$SRC/embedded/include/rtmp.h"
-          VLAN_AUDIT="${GITHUB_WORKSPACE}/vlan_patch_audit.txt"
-          export SRC RTMP_H VLAN_AUDIT
-          : > "$VLAN_AUDIT"
-
-          python3 - <<'PY'
-          import os
-          import sys
-          from pathlib import Path
-
-          TARGET = "bDynamicVlanDisabled"
-          OLD_GUARD = "#ifdef DYNAMIC_VLAN_SUPPORT"
-          NEW_GUARD = "#if defined(RT_CFG80211_SUPPORT) || defined(DYNAMIC_VLAN_SUPPORT)"
-          header = Path(os.environ["RTMP_H"])
-          audit = Path(os.environ["VLAN_AUDIT"])
-
-          def fail(message):
-              with audit.open("a", encoding="utf-8") as out:
-                  out.write("VLAN PATCH FAILED: " + message + "\n")
-              print("::error::" + message, file=sys.stderr)
-              sys.exit(1)
-
-          if not header.is_file():
-              fail("rtmp.h not found: " + str(header))
-
-          lines = header.read_text(encoding="utf-8").splitlines(keepends=True)
-          declarations = [
-              i for i, line in enumerate(lines)
-              if TARGET in line and line.strip().endswith(";")
-          ]
-          if len(declarations) != 1:
-              fail(f"Expected exactly one declaration of {TARGET}; found {len(declarations)}")
-          member_i = declarations[0]
-
-          struct_starts = [
-              i for i, line in enumerate(lines[:member_i + 1])
-              if "struct _COMMON_CONFIG" in line
-          ]
-          if len(struct_starts) != 1:
-              fail(f"Expected exactly one struct _COMMON_CONFIG before the member; found {len(struct_starts)}")
-          struct_i = struct_starts[0]
-
-          depth = 0
-          opened = False
-          struct_end = None
-          for i in range(struct_i, len(lines)):
-              depth += lines[i].count("{") - lines[i].count("}")
-              if depth > 0:
-                  opened = True
-              elif opened:
-                  struct_end = i
-                  break
-          if struct_end is None or not (struct_i <= member_i < struct_end):
-              fail(f"{TARGET} at line {member_i + 1} is not inside struct _COMMON_CONFIG")
-
-          stack = []
-          for i in range(member_i + 1):
-              directive = lines[i].strip()
-              if directive.startswith(("#if ", "#ifdef ", "#ifndef ")):
-                  stack.append((i, directive))
-              elif directive.startswith(("#elif ", "#else")):
-                  if not stack:
-                      fail(f"Unbalanced conditional branch at line {i + 1}")
-              elif directive.startswith("#endif"):
-                  if not stack:
-                      fail(f"Unbalanced #endif at line {i + 1}")
-                  stack.pop()
-
-          if not stack:
-              fail(f"No active preprocessor condition controls {TARGET}")
-          guard_i, guard = stack[-1]
-          if guard not in (OLD_GUARD, NEW_GUARD):
-              fail(
-                  f"Unexpected direct declaration guard at line {guard_i + 1}: {guard!r}; "
-                  f"expected {OLD_GUARD!r} or already-patched {NEW_GUARD!r}"
-              )
-
-          already_patched = guard == NEW_GUARD
-          if not already_patched:
-              original = lines[guard_i]
-              newline = "\r\n" if original.endswith("\r\n") else "\n"
-              lines[guard_i] = NEW_GUARD + newline
-              header.write_text("".join(lines), encoding="utf-8")
-
-          verify_lines = header.read_text(encoding="utf-8").splitlines(keepends=True)
-          verify_declarations = [
-              i for i, line in enumerate(verify_lines)
-              if TARGET in line and line.strip().endswith(";")
-          ]
-          if len(verify_declarations) != 1:
-              fail(f"Post-check failed: expected one {TARGET} declaration")
-          verify_member_i = verify_declarations[0]
-          verify_stack = []
-          for i in range(verify_member_i + 1):
-              directive = verify_lines[i].strip()
-              if directive.startswith(("#if ", "#ifdef ", "#ifndef ")):
-                  verify_stack.append((i, directive))
-              elif directive.startswith(("#elif ", "#else")):
-                  if not verify_stack:
-                      fail(f"Post-check found unbalanced branch at line {i + 1}")
-              elif directive.startswith("#endif"):
-                  if not verify_stack:
-                      fail(f"Post-check found unbalanced #endif at line {i + 1}")
-                  verify_stack.pop()
-          if not verify_stack or verify_stack[-1][1] != NEW_GUARD:
-              fail("Post-check failed: the member's direct active guard is not the approved combined condition")
-
-          result = "ALREADY_PATCHED" if already_patched else "PATCHED"
-          report = [
-              "=== VLAN member-condition patch: " + result + " ===",
-              "SRC: " + os.environ["SRC"],
-              "Header: " + str(header),
-              "struct _COMMON_CONFIG line: " + str(struct_i + 1),
-              "Declaration line: " + str(verify_member_i + 1) + ": " + verify_lines[verify_member_i].strip(),
-              "Guard line: " + str(guard_i + 1) + ": " + NEW_GUARD,
-              "Struct scope validation: PASS",
-              "Direct guard validation: PASS",
-              "Post-patch verification: PASS",
-          ]
-          audit.write_text("\n".join(report) + "\n", encoding="utf-8")
-          print(audit.read_text(encoding="utf-8"), end="")
-          PY
-
-          echo "VLAN patch audit saved to $VLAN_AUDIT"
-
-      - name: Upload VLAN patch audit
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: vlan-patch-audit
-          path: ${{ github.workspace }}/vlan_patch_audit.txt
-          if-no-files-found: warn
-          retention-days: 7
+          echo "PASS: read-only diagnostics saved to $DIAG"
 
       - name: Build standard profile
         id: build_step
-        run: make -j$(nproc) V=s
+        shell: bash
         continue-on-error: true
+        run: |
+          set -Eeuo pipefail
+
+          PATCH_DIR="package/mtk/drivers/mt_wifi/patches-7673"
+          mkdir -p "$PATCH_DIR"
+
+          echo "===== Step 1: remove only this run's dynamic patches ====="
+          rm -f \
+            "$PATCH_DIR/050-fix-rrm-config.patch" \
+            "$PATCH_DIR/051-fix-dynamic-vlan-guard.patch"
+
+          echo "===== Step 2: clean MT Wi-Fi package and prepare clean source ====="
+          make package/mtk/drivers/mt_wifi/clean V=s
+          make package/mtk/drivers/mt_wifi/prepare V=s
+
+          locate_driver_source() {
+            local rtmp src
+            local -a rtmp_files=()
+            local -a sources=()
+
+            mapfile -t rtmp_files < <(
+              find build_dir -type f \
+                -path '*/embedded/include/rtmp.h' -print
+            )
+
+            for rtmp in "${rtmp_files[@]}"; do
+              src="$(dirname "$(dirname "$(dirname "$rtmp")")")"
+              if [ -f "$src/os/linux/config.mk" ] &&
+                 [ -f "$src/embedded/include/security/sec_cmm.h" ]; then
+                sources+=("$src")
+              fi
+            done
+
+            if [ "${#sources[@]}" -ne 1 ]; then
+              echo "::error::Expected exactly one valid MT Wi-Fi source root; found ${#sources[@]}."
+              echo "===== rtmp.h candidates ====="
+              printf '%s\n' "${rtmp_files[@]}"
+              echo "===== config.mk candidates ====="
+              find build_dir -type f -path '*/os/linux/config.mk' -print || true
+              echo "===== mt_wifi directory candidates ====="
+              find build_dir -maxdepth 8 -iname '*mt_wifi*' -print || true
+              return 1
+            fi
+
+            printf '%s\n' "${sources[0]}"
+          }
+
+          SRC="$(locate_driver_source)"
+          CFG="$SRC/os/linux/config.mk"
+          RTMP="$SRC/embedded/include/rtmp.h"
+          SEC="$SRC/embedded/include/security/sec_cmm.h"
+
+          echo "Resolved source root: $SRC"
+          test -f "$CFG"
+          test -f "$RTMP"
+          test -f "$SEC"
+
+          TMP="$(mktemp -d)"
+          trap 'rm -rf "$TMP"' EXIT
+
+          echo "===== Step 3: generate RRM patch from actual source ====="
+          cp "$CFG" "$TMP/config.mk.orig"
+
+          python3 - "$TMP/config.mk.orig" "$TMP/config.mk.modified" <<'PY'
+          import pathlib
+          import sys
+
+          original = pathlib.Path(sys.argv[1]).read_text()
+          output = pathlib.Path(sys.argv[2])
+
+          old = "HAS_DOT11K_RRM_SUPPORT=n"
+          new = "HAS_DOT11K_RRM_SUPPORT=y"
+
+          count = original.splitlines().count(old)
+          if count != 1:
+              raise SystemExit(
+                  f"ERROR: expected exactly one {old!r}; found {count}. "
+                  "Refusing to generate an uncertain RRM patch."
+              )
+
+          output.write_text(original.replace(old, new, 1))
+          PY
+
+          if diff -u \
+            --label a/mt_wifi/os/linux/config.mk "$TMP/config.mk.orig" \
+            --label b/mt_wifi/os/linux/config.mk "$TMP/config.mk.modified" \
+            > "$PATCH_DIR/050-fix-rrm-config.patch"
+          then
+            echo "::error::RRM diff is empty; expected source change was not generated."
+            exit 1
+          else
+            rc=$?
+            if [ "$rc" -ne 1 ]; then
+              echo "::error::RRM diff failed with exit code $rc."
+              exit "$rc"
+            fi
+          fi
+
+          test -s "$PATCH_DIR/050-fix-rrm-config.patch"
+
+          echo "===== Step 4: generate VLAN patch with structural checks ====="
+          cp "$RTMP" "$TMP/rtmp.h.orig"
+
+          python3 - "$TMP/rtmp.h.orig" "$TMP/rtmp.h.modified" <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          source = pathlib.Path(sys.argv[1])
+          output = pathlib.Path(sys.argv[2])
+          lines = source.read_text().splitlines(keepends=True)
+
+          target = "bDynamicVlanDisabled"
+          old_guard = "#ifdef DYNAMIC_VLAN_SUPPORT"
+          new_guard = (
+              "#if defined(RT_CFG80211_SUPPORT) || defined(DYNAMIC_VLAN_SUPPORT)"
+          )
+
+          members = [
+              i for i, line in enumerate(lines)
+              if re.search(r"\b" + target + r"\b", line)
+              and line.strip().endswith(";")
+          ]
+          if len(members) != 1:
+              raise SystemExit(
+                  f"ERROR: expected exactly one {target} declaration; "
+                  f"found {len(members)}"
+              )
+          member = members[0]
+
+          starts = [
+              i for i, line in enumerate(lines[:member + 1])
+              if re.search(r"\bstruct\s+_COMMON_CONFIG\b", line)
+          ]
+          if not starts:
+              raise SystemExit("ERROR: struct _COMMON_CONFIG not found before VLAN member")
+
+          start = starts[-1]
+          depth = 0
+          opened = False
+          end = None
+
+          for i in range(start, len(lines)):
+              depth += lines[i].count("{") - lines[i].count("}")
+              if "{" in lines[i]:
+                  opened = True
+              if opened and depth == 0:
+                  end = i
+                  break
+
+          if end is None or not (start <= member <= end):
+              raise SystemExit(
+                  "ERROR: VLAN member is not inside a closed _COMMON_CONFIG structure"
+              )
+
+          stack = []
+          for i in range(member + 1):
+              directive = lines[i].strip()
+
+              if re.match(r"#\s*(if|ifdef|ifndef)\b", directive):
+                  stack.append((i, directive))
+              elif re.match(r"#\s*endif\b", directive):
+                  if not stack:
+                      raise SystemExit(
+                          f"ERROR: unmatched #endif at line {i + 1}"
+                      )
+                  stack.pop()
+
+          guards = [
+              (i, directive)
+              for i, directive in stack
+              if directive == old_guard
+          ]
+          if len(guards) != 1:
+              raise SystemExit(
+                  "ERROR: expected exactly one active "
+                  f"{old_guard!r} around the VLAN member; found {len(guards)}"
+              )
+
+          guard_line, _ = guards[0]
+          if not (start <= guard_line < member):
+              raise SystemExit("ERROR: VLAN guard is outside the target structure")
+
+          lines[guard_line] = new_guard + (
+              "\r\n" if lines[guard_line].endswith("\r\n") else "\n"
+          )
+          output.write_text("".join(lines))
+
+          verify = output.read_text().splitlines()
+          verify_members = [
+              i for i, line in enumerate(verify)
+              if re.search(r"\b" + target + r"\b", line)
+              and line.strip().endswith(";")
+          ]
+          if len(verify_members) != 1:
+              raise SystemExit("ERROR: VLAN member post-check failed")
+
+          stack = []
+          for i in range(verify_members[0] + 1):
+              directive = verify[i].strip()
+              if re.match(r"#\s*(if|ifdef|ifndef)\b", directive):
+                  stack.append(directive)
+              elif re.match(r"#\s*endif\b", directive):
+                  if not stack:
+                      raise SystemExit("ERROR: unbalanced #endif in modified header")
+                  stack.pop()
+
+          if not stack or stack[-1] != new_guard:
+              raise SystemExit("ERROR: combined VLAN guard post-check failed")
+
+          print(
+              f"PASS: member declaration line {verify_members[0] + 1}; "
+              f"combined guard: {new_guard}"
+          )
+          PY
+
+          if diff -u \
+            --label a/mt_wifi/embedded/include/rtmp.h "$TMP/rtmp.h.orig" \
+            --label b/mt_wifi/embedded/include/rtmp.h "$TMP/rtmp.h.modified" \
+            > "$PATCH_DIR/051-fix-dynamic-vlan-guard.patch"
+          then
+            echo "::error::VLAN diff is empty; expected source change was not generated."
+            exit 1
+          else
+            rc=$?
+            if [ "$rc" -ne 1 ]; then
+              echo "::error::VLAN diff failed with exit code $rc."
+              exit "$rc"
+            fi
+          fi
+
+          test -s "$PATCH_DIR/051-fix-dynamic-vlan-guard.patch"
+
+          echo "===== Step 5: audit the generated patch files ====="
+          cat "$PATCH_DIR/050-fix-rrm-config.patch"
+          cat "$PATCH_DIR/051-fix-dynamic-vlan-guard.patch"
+
+          grep -Fq -- 'HAS_DOT11K_RRM_SUPPORT=n' \
+            "$PATCH_DIR/050-fix-rrm-config.patch"
+          grep -Fq -- 'HAS_DOT11K_RRM_SUPPORT=y' \
+            "$PATCH_DIR/050-fix-rrm-config.patch"
+          grep -Fq -- '#ifdef DYNAMIC_VLAN_SUPPORT' \
+            "$PATCH_DIR/051-fix-dynamic-vlan-guard.patch"
+          grep -Fq -- \
+            '#if defined(RT_CFG80211_SUPPORT) || defined(DYNAMIC_VLAN_SUPPORT)' \
+            "$PATCH_DIR/051-fix-dynamic-vlan-guard.patch"
+
+          echo "===== Step 6: clean and prepare again to apply the new patches ====="
+          make package/mtk/drivers/mt_wifi/clean V=s
+
+          PREPARE_LOG="$TMP/mtwifi-prepare-second.log"
+          make package/mtk/drivers/mt_wifi/prepare V=s 2>&1 | tee "$PREPARE_LOG"
+
+          grep -Fq '050-fix-rrm-config.patch' "$PREPARE_LOG" || {
+            echo "::error::Second prepare log does not show the RRM patch being applied."
+            exit 1
+          }
+          grep -Fq '051-fix-dynamic-vlan-guard.patch' "$PREPARE_LOG" || {
+            echo "::error::Second prepare log does not show the VLAN patch being applied."
+            exit 1
+          }
+
+          echo "===== Step 7: verify all three fixes in the prepared source ====="
+          SRC="$(locate_driver_source)"
+          CFG="$SRC/os/linux/config.mk"
+          RTMP="$SRC/embedded/include/rtmp.h"
+          SEC="$SRC/embedded/include/security/sec_cmm.h"
+
+          grep -Fqx \
+            '#if defined(DOT11_SAE_SUPPORT) || defined(SUPP_SAE_SUPPORT)' \
+            <(awk 'NR==14 { print; exit }' "$SEC") || {
+              echo "::error::SAE line-14 fix missing after prepare."
+              nl -ba "$SEC" | awk 'NR >= 10 && NR <= 18'
+              exit 1
+            }
+
+          grep -Fxq 'HAS_DOT11K_RRM_SUPPORT=y' "$CFG" || {
+            echo "::error::RRM fix missing after prepare."
+            grep -n -C 3 'HAS_DOT11K_RRM_SUPPORT' "$CFG" || true
+            exit 1
+          }
+
+          grep -Fq \
+            '#if defined(RT_CFG80211_SUPPORT) || defined(DYNAMIC_VLAN_SUPPORT)' \
+            "$RTMP" || {
+              echo "::error::VLAN fix missing after prepare."
+              grep -n -B 8 -A 8 'bDynamicVlanDisabled' "$RTMP" || true
+              exit 1
+            }
+
+          echo "PASS: SAE, RRM and VLAN fixes are present after prepare."
+          echo "===== VLAN declaration context ====="
+          grep -n -B 8 -A 8 'bDynamicVlanDisabled' "$RTMP"
+
+          echo "===== Step 8: full firmware build ====="
+          make -j"$(nproc)" V=s
+
+          echo "===== Step 9: verify the exact standard N60 Pro sysupgrade image ====="
+          SYSUP="bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
+
+          if [ ! -s "$SYSUP" ]; then
+            echo "::error::Expected non-empty sysupgrade ITB not found: $SYSUP"
+            echo "===== Target output directory ====="
+            find bin/targets/mediatek/filogic -maxdepth 1 -type f -printf '%f (%s bytes)\n' 2>/dev/null || true
+            exit 1
+          fi
+
+          ls -lh "$SYSUP"
+          sha256sum "$SYSUP"
+          echo "PASS: standard N60 Pro sysupgrade ITB exists and is non-empty."
 
       - name: Check whether firmware was actually produced
         if: always()
@@ -628,10 +631,6 @@ jobs:
             echo "::warning::No sysupgrade ITB produced. Build failed or target output differs."
             echo "===== Contents of $OUT ====="
             ls -lh "$OUT" 2>/dev/null || echo "(output dir missing)"
-          fi
-
-          if [ "${{ steps.build_step.outcome }}" = "failure" ] && [ "$FIRMWARE_PRODUCED" = "no" ]; then            echo "::error::Build step failed and no firmware was produced. See build log above."
-            exit 1
           fi
 
       - name: Verify MTK Wi-Fi driver and runtime packages
@@ -661,3 +660,118 @@ jobs:
               ar p "$package" data.tar.gz | tar -tzf -
             fi
           }
+
+          check_package() {
+            local pkgname="$1"; local expect_ko="$2"
+            local pkg
+            pkg="$(find_package "${pkgname}-*.apk" "${pkgname}_*.ipk")"
+            if [ -z "$pkg" ]; then
+              echo "::error::${pkgname} package was not produced."
+              exit 1
+            fi
+            echo "Package: $pkg"
+            local files
+            files="$(list_package_files "$pkg" "/tmp/n60pro-$pkgname")"
+            echo "$files" > "/tmp/${pkgname}-files.txt"
+            echo "$files" | grep -Eq "(^|/)${expect_ko}$" || {
+              echo "::error::${pkgname} does not contain ${expect_ko}."
+              cat "/tmp/${pkgname}-files.txt"
+              exit 1
+            }
+            echo "  OK: contains ${expect_ko}"
+          }
+
+          check_package kmod-mt_wifi mt_wifi.ko
+          check_package kmod-warp mtk_warp.ko
+          check_package kmod-mediatek_hnat mtkhnat.ko
+          check_package kmod-conninfra conninfra.ko
+
+          grep -Eq '(^|/)lib/firmware/MT7986_' /tmp/kmod-mt_wifi-files.txt || {
+            echo "::warning::MT7986 firmware blobs not found in kmod-mt_wifi."
+          }
+
+          MANIFEST="$(find "$OUT" -maxdepth 1 -type f -name '*.manifest' -print -quit)"
+          if [ -n "$MANIFEST" ]; then
+            cp "$MANIFEST" artifacts/N60-Pro/standard/image-packages.manifest
+            for pkg in kmod-mt_wifi kmod-conninfra kmod-warp kmod-mediatek_hnat wifi-dats mtwifi-cfg-ucode; do
+              grep -Eq "^$pkg([[:space:]]|$)" "$MANIFEST" || {
+                echo "::warning::$pkg not listed in image manifest."
+              }
+            done
+            echo "PASS: manifest checked."
+          else
+            echo "::warning::No image manifest found."
+          fi
+
+      - name: Collect firmware artifacts
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          OUT="bin/targets/mediatek/filogic"
+          DEST="artifacts/N60-Pro/standard"
+          mkdir -p "$DEST"
+
+          find "$OUT" -maxdepth 1 -type f \
+            \( -name '*netcore_n60-pro*.itb' -o -name '*netcore_n60-pro*.manifest' \
+               -o -name 'sha256sums' -o -name '*.buildinfo' \) \
+            -exec cp -v {} "$DEST/" \; 2>/dev/null
+
+          if find "$DEST" -maxdepth 1 -iname '*mtkuboot*' | grep -q .; then
+            echo "::error::MTK U-Boot artifact detected; refusing to package."
+            exit 1
+          fi
+
+          {
+            echo "Build policy: STANDARD PROFILE ONLY; MTK U-Boot excluded"
+            echo "Profile: netcore_n60-pro"
+            echo "Source revision:"
+            git log -1 --format='%H %s'
+            echo "Build step outcome: ${{ steps.build_step.outcome }}"
+            echo "Firmware produced: ${FIRMWARE_PRODUCED:-unknown}"
+            echo "Files:"
+            find "$DEST" -maxdepth 1 -type f -printf '%f\n' | sort
+          } > "$DEST/BUILD-INFO.txt"
+
+          (
+            cd "$DEST"
+            shopt -s nullglob
+            if ls *.itb >/dev/null 2>&1; then
+              sha256sum *.itb > SHA256SUMS.txt
+              cat SHA256SUMS.txt
+            fi
+          ) || true
+
+          echo "===== Artifact tree ====="
+          find artifacts/N60-Pro -maxdepth 2 -type f -printf '%p (%s bytes)\n' | sort
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: N60-Pro-Standard-${{ github.run_number }}
+          path: artifacts/N60-Pro/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Report ccache statistics
+        if: always()
+        run: ccache -s || true
+
+      - name: Enforce build and firmware success
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Build step outcome: ${{ steps.build_step.outcome }}"
+          echo "Firmware produced: ${FIRMWARE_PRODUCED:-no}"
+          if [ "${{ steps.build_step.outcome }}" != "success" ]; then
+            echo "::error::Firmware build step did not succeed. This run must remain failed."
+            exit 1
+          fi
+          if [ "${FIRMWARE_PRODUCED:-no}" != "yes" ]; then
+            echo "::error::Expected standard netcore_n60-pro sysupgrade ITB is missing."
+            exit 1
+          fi
+          test -s "bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
+          echo "PASS: build succeeded and the expected sysupgrade ITB exists."
