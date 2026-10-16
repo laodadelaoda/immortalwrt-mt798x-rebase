@@ -1,0 +1,32 @@
+From: ChatGPT <noreply@openai.com>
+Subject: [PATCH] mtk: mt_wifi: add HAS_MGMT_TXPWR_CTRL mapping
+
+config.mk has no HAS_MGMT_TXPWR_CTRL variable or WFLAGS mapping,
+but rtmp.h wraps MgmtTxPwr members in #ifdef MGMT_TXPWR_CTRL.
+Add the missing mapping so the members are visible.
+
+---
+ mt_wifi/os/linux/config.mk | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/mt_wifi/os/linux/config.mk b/mt_wifi/os/linux/config.mk
+--- a/mt_wifi/os/linux/config.mk
++++ b/mt_wifi/os/linux/config.mk
+@@ -214,6 +214,7 @@
+ endif
+ 
+ HAS_WIFI_EAP_FEATURE=y
++HAS_MGMT_TXPWR_CTRL=y
+ 
+ HAS_WIFI_GPIO_CTRL=y
+ 
+@@ -430,6 +431,9 @@
+ ifeq ($(HAS_WIFI_EAP_FEATURE),y)
+ WFLAGS += -DWIFI_EAP_FEATURE
+ endif
++ifeq ($(HAS_MGMT_TXPWR_CTRL),y)
++WFLAGS += -DMGMT_TXPWR_CTRL
++endif
+ 
+ ifeq ($(HAS_KEEP_ALIVE_OFFLOAD),y)
+ 
