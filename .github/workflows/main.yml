@@ -400,17 +400,33 @@ jobs:
           echo "===== Effective management TX power configuration ====="
           grep -E '^CONFIG_MTK_(MT_AP_SUPPORT|CFG80211_SUPPORT|WIFI_EAP_FEATURE|MGMT_TXPWR_CTRL)=' .config
 
-          PATCH_DIR="package/mtk/drivers/mt_wifi/patches-7673"
-          mkdir -p "$PATCH_DIR"
-
-          echo "===== Step 1: remove only this run's dynamic patches ====="
-          rm -f \
-            "$PATCH_DIR/050-fix-rrm-config.patch" \
-            "$PATCH_DIR/051-fix-dynamic-vlan-guard.patch"
-
-          echo "===== Step 2: clean MT Wi-Fi package and prepare clean source ====="
+          echo "===== Step 1: clean MT Wi-Fi package and prepare with static patches ====="
           make package/mtk/drivers/mt_wifi/clean V=s
-          make package/mtk/drivers/mt_wifi/prepare V=s
+
+          PREPARE_LOG="artifacts/N60-Pro/standard/mtwifi-prepare.log"
+          mkdir -p "$(dirname "$PREPARE_LOG")"
+          make package/mtk/drivers/mt_wifi/prepare V=s 2>&1 | tee "$PREPARE_LOG"
+
+          for patch in \
+            042-fix-sae-structure-include-guard.patch \
+            050-fix-rrm-config.patch \
+            051-fix-dynamic-vlan-guard.patch \
+            052-fix-mgmt-txpwr-config.patch
+          do
+            if ! grep -Fq "$patch" "$PREPARE_LOG"; then
+              echo "::error::Prepare log does not show $patch being applied."
+              grep -n -E 'Applying|042-fix|050-fix|051-fix|052-fix|Patch failed|Hunk FAILED' "$PREPARE_LOG" || true
+              exit 1
+            fi
+          done
+
+          if grep -Eq 'Hunk FAILED|Patch failed|patch failed' "$PREPARE_LOG"; then
+            echo "::error::Patch failure text found in prepare log."
+            grep -n -B 3 -A 5 -E 'Hunk FAILED|Patch failed|patch failed' "$PREPARE_LOG" || true
+            exit 1
+          fi
+
+          echo "PASS: prepare log contains 042, 050, 051, 052 patches."
 
           locate_driver_source() {
             local rtmp src
@@ -454,304 +470,7 @@ jobs:
           test -f "$SEC"
           test -f "$AP_CFG"
 
-          TMP="$(mktemp -d)"
-          trap 'rm -rf "$TMP"' EXIT
-
-          echo "===== Step 3: generate RRM patch from actual source ====="
-          cp "$CFG" "$TMP/config.mk.rrm.orig"
-
-          python3 - "$TMP/config.mk.rrm.orig" "$TMP/config.mk.rrm.modified" <<'PY'
-          import pathlib
-          import sys
-
-          original = pathlib.Path(sys.argv[1]).read_text()
-          output = pathlib.Path(sys.argv[2])
-
-          old = "HAS_DOT11K_RRM_SUPPORT=n"
-          new = "HAS_DOT11K_RRM_SUPPORT=y"
-
-          count = original.splitlines().count(old)
-          if count != 1:
-              raise SystemExit(
-                  f"ERROR: expected exactly one {old!r}; found {count}. "
-                  "Refusing to generate an uncertain RRM patch."
-              )
-
-          output.write_text(original.replace(old, new, 1))
-          PY
-
-          if diff -u \
-            --label a/mt_wifi/os/linux/config.mk "$TMP/config.mk.rrm.orig" \
-            --label b/mt_wifi/os/linux/config.mk "$TMP/config.mk.rrm.modified" \
-            > "$PATCH_DIR/050-fix-rrm-config.patch"
-          then
-            echo "::error::RRM diff is empty."
-            exit 1
-          else
-            rc=$?
-            if [ "$rc" -ne 1 ]; then
-              echo "::error::RRM diff failed with exit code $rc."
-              exit "$rc"
-            fi
-          fi
-
-          test -s "$PATCH_DIR/050-fix-rrm-config.patch"
-
-          echo "===== Step 4: generate VLAN patch with structural checks ====="
-          cp "$RTMP" "$TMP/rtmp.h.orig"
-
-          python3 - "$TMP/rtmp.h.orig" "$TMP/rtmp.h.modified" <<'PY'
-          import pathlib
-          import re
-          import sys
-
-          source = pathlib.Path(sys.argv[1])
-          output = pathlib.Path(sys.argv[2])
-          lines = source.read_text().splitlines(keepends=True)
-
-          target = "bDynamicVlanDisabled"
-          old_guard = "#ifdef DYNAMIC_VLAN_SUPPORT"
-          new_guard = (
-              "#if defined(RT_CFG80211_SUPPORT) || defined(DYNAMIC_VLAN_SUPPORT)"
-          )
-
-          members = [
-              i for i, line in enumerate(lines)
-              if re.search(r"\b" + target + r"\b", line)
-              and line.strip().endswith(";")
-          ]
-          if len(members) != 1:
-              raise SystemExit(
-                  f"ERROR: expected exactly one {target} declaration; "
-                  f"found {len(members)}"
-              )
-          member = members[0]
-
-          starts = [
-              i for i, line in enumerate(lines[:member + 1])
-              if re.search(r"\bstruct\s+_COMMON_CONFIG\b", line)
-          ]
-          if not starts:
-              raise SystemExit(
-                  "ERROR: struct _COMMON_CONFIG not found before VLAN member"
-              )
-
-          start = starts[-1]
-          depth = 0
-          opened = False
-          end = None
-
-          for i in range(start, len(lines)):
-              depth += lines[i].count("{") - lines[i].count("}")
-              if "{" in lines[i]:
-                  opened = True
-              if opened and depth == 0:
-                  end = i
-                  break
-
-          if end is None or not (start <= member <= end):
-              raise SystemExit(
-                  "ERROR: VLAN member is not inside a closed _COMMON_CONFIG structure"
-              )
-
-          stack = []
-          for i, line in enumerate(lines[:member + 1]):
-              directive = line.strip()
-
-              if re.match(r"#\s*(if|ifdef|ifndef)\b", directive):
-                  stack.append((i, directive))
-              elif re.match(r"#\s*endif\b", directive):
-                  if not stack:
-                      raise SystemExit(
-                          f"ERROR: unmatched #endif at line {i + 1}"
-                      )
-                  stack.pop()
-
-          guards = [
-              (i, directive)
-              for i, directive in stack
-              if directive == old_guard
-          ]
-          if len(guards) != 1:
-              raise SystemExit(
-                  "ERROR: expected exactly one active "
-                  f"{old_guard!r} around the VLAN member; found {len(guards)}"
-              )
-
-          guard_line, _ = guards[0]
-          if not (start <= guard_line < member):
-              raise SystemExit("ERROR: VLAN guard is outside the target structure")
-
-          lines[guard_line] = new_guard + (
-              "\r\n" if lines[guard_line].endswith("\r\n") else "\n"
-          )
-          output.write_text("".join(lines))
-
-          verify = output.read_text().splitlines()
-          verify_members = [
-              i for i, line in enumerate(verify)
-              if re.search(r"\b" + target + r"\b", line)
-              and line.strip().endswith(";")
-          ]
-          if len(verify_members) != 1:
-              raise SystemExit("ERROR: VLAN member post-check failed")
-
-          stack = []
-          for i, line in enumerate(verify[:verify_members[0] + 1]):
-              directive = line.strip()
-              if re.match(r"#\s*(if|ifdef|ifndef)\b", directive):
-                  stack.append(directive)
-              elif re.match(r"#\s*endif\b", directive):
-                  if not stack:
-                      raise SystemExit(
-                          "ERROR: unbalanced #endif in modified header"
-                      )
-                  stack.pop()
-
-          if not stack or stack[-1] != new_guard:
-              raise SystemExit("ERROR: combined VLAN guard post-check failed")
-
-          print(
-              f"PASS: member declaration line {verify_members[0] + 1}; "
-              f"combined guard: {new_guard}"
-          )
-          PY
-
-          if diff -u \
-            --label a/mt_wifi/embedded/include/rtmp.h "$TMP/rtmp.h.orig" \
-            --label b/mt_wifi/embedded/include/rtmp.h "$TMP/rtmp.h.modified" \
-            > "$PATCH_DIR/051-fix-dynamic-vlan-guard.patch"
-          then
-            echo "::error::VLAN diff is empty."
-            exit 1
-          else
-            rc=$?
-            if [ "$rc" -ne 1 ]; then
-              echo "::error::VLAN diff failed with exit code $rc."
-              exit "$rc"
-            fi
-          fi
-
-          test -s "$PATCH_DIR/051-fix-dynamic-vlan-guard.patch"
-
-          echo "===== Step 5: audit generated 050/051 patch files ====="
-          cat "$PATCH_DIR/050-fix-rrm-config.patch"
-          cat "$PATCH_DIR/051-fix-dynamic-vlan-guard.patch"
-
-          grep -Fq -- 'HAS_DOT11K_RRM_SUPPORT=n' "$PATCH_DIR/050-fix-rrm-config.patch"
-          grep -Fq -- 'HAS_DOT11K_RRM_SUPPORT=y' "$PATCH_DIR/050-fix-rrm-config.patch"
-          grep -Fq -- '#ifdef DYNAMIC_VLAN_SUPPORT' "$PATCH_DIR/051-fix-dynamic-vlan-guard.patch"
-          grep -Fq -- '#if defined(RT_CFG80211_SUPPORT) || defined(DYNAMIC_VLAN_SUPPORT)' "$PATCH_DIR/051-fix-dynamic-vlan-guard.patch"
-
-          echo "PASS: 050 and 051 generated and audited."
-
-          echo "===== Step 6: clean and prepare again to apply 050/051 ====="
-          make package/mtk/drivers/mt_wifi/clean V=s
-
-          PREPARE_LOG="$TMP/mtwifi-prepare-second.log"
-          make package/mtk/drivers/mt_wifi/prepare V=s 2>&1 | tee "$PREPARE_LOG"
-
-          for patch in \
-            050-fix-rrm-config.patch \
-            051-fix-dynamic-vlan-guard.patch
-          do
-            if ! grep -Fq "$patch" "$PREPARE_LOG"; then
-              echo "::error::Second prepare log does not show $patch being applied."
-              grep -n -E 'Applying|050-fix|051-fix|Patch failed|Hunk FAILED' "$PREPARE_LOG" || true
-              exit 1
-            fi
-          done
-
-          if grep -Eq 'Hunk FAILED|Patch failed|patch failed' "$PREPARE_LOG"; then
-            echo "::error::Patch failure text found in second prepare log."
-            grep -n -B 3 -A 5 -E 'Hunk FAILED|Patch failed|patch failed' "$PREPARE_LOG" || true
-            exit 1
-          fi
-
-          echo "PASS: second prepare log contains both patch names."
-
-          echo "===== Step 6.5: runtime repair of MGMT_TXPWR_CTRL in config.mk ====="
-          SRC="$(locate_driver_source)"
-          CFG="$SRC/os/linux/config.mk"
-          RTMP="$SRC/embedded/include/rtmp.h"
-          SEC="$SRC/embedded/include/security/sec_cmm.h"
-          AP_CFG="$SRC/embedded/ap/ap_cfg.c"
-
-          python3 - "$CFG" <<'PY'
-          import sys
-          from pathlib import Path
-
-          path = Path(sys.argv[1])
-          if not path.is_file():
-              raise SystemExit(f"FAIL: config.mk not found: {path}")
-
-          text = path.read_text()
-          lines = text.splitlines()
-
-          var_line = "HAS_MGMT_TXPWR_CTRL=y"
-          flag_line = "WFLAGS += -DMGMT_TXPWR_CTRL"
-
-          has_var = any(line.strip() == var_line for line in lines)
-          has_flag = any(line.strip() == flag_line for line in lines)
-
-          if has_var != has_flag:
-              raise SystemExit(
-                  "FAIL: partial MGMT_TXPWR_CTRL repair; refusing to guess"
-              )
-
-          if not has_var:
-              eap_var = "HAS_WIFI_EAP_FEATURE=y"
-              eap_block = [
-                  "ifeq ($(HAS_WIFI_EAP_FEATURE),y)",
-                  "WFLAGS += -DWIFI_EAP_FEATURE",
-                  "endif",
-              ]
-
-              var_hits = [
-                  i for i, line in enumerate(lines)
-                  if line.strip() == eap_var
-              ]
-              block_hits = [
-                  i for i in range(len(lines) - 2)
-                  if [line.strip() for line in lines[i:i + 3]] == eap_block
-              ]
-
-              if len(var_hits) != 1:
-                  raise SystemExit(
-                      f"FAIL: expected exactly one {eap_var}, found {len(var_hits)}"
-                  )
-              if len(block_hits) != 1:
-                  raise SystemExit(
-                      "FAIL: expected exactly one complete EAP WFLAGS block, "
-                      f"found {len(block_hits)}"
-                  )
-
-              block_end = block_hits[0] + 3
-              lines[block_end:block_end] = [
-                  "ifeq ($(HAS_MGMT_TXPWR_CTRL),y)",
-                  flag_line,
-                  "endif",
-              ]
-
-              var_index = var_hits[0]
-              lines[var_index + 1:var_index + 1] = [var_line]
-
-              path.write_text("\n".join(lines) + "\n")
-              print(f"PASS: runtime-modified {path}")
-          else:
-              print(f"PASS: MGMT_TXPWR_CTRL repair already present in {path}")
-
-          result = path.read_text().splitlines()
-          if sum(line.strip() == var_line for line in result) != 1:
-              raise SystemExit("FAIL: HAS_MGMT_TXPWR_CTRL=y verification failed")
-          if sum(line.strip() == flag_line for line in result) != 1:
-              raise SystemExit("FAIL: -DMGMT_TXPWR_CTRL verification failed")
-
-          print("PASS: HAS_MGMT_TXPWR_CTRL=y")
-          print("PASS: WFLAGS += -DMGMT_TXPWR_CTRL")
-          PY
-
-          echo "===== Step 7: verify all four fixes in prepared source ====="
+          echo "===== Step 2: verify all fixes in prepared source ====="
           grep -Fqx \
             '#if defined(DOT11_SAE_SUPPORT) || defined(SUPP_SAE_SUPPORT)' \
             <(awk 'NR==14 { print; exit }' "$SEC") || {
@@ -803,7 +522,7 @@ jobs:
 
           echo "PASS: SAE, RRM, VLAN and MGMT_TXPWR_CTRL source/configuration checks passed."
 
-          echo "===== Step 7.5: read-only ap_ioctl include-chain evidence ====="
+          echo "===== Step 3: read-only ap_ioctl include-chain evidence ====="
           AP_IOCTL="$SRC/os/linux/ap_ioctl.c"
           APIO_EVIDENCE="artifacts/N60-Pro/standard/AP_IOCTL-EVIDENCE.txt"
           APIO_TREE="artifacts/N60-Pro/standard/AP_IOCTL-GCC-H-INCLUDE-TREE.txt"
@@ -931,16 +650,16 @@ jobs:
           fi
 
           rm -rf "$TMP_EVIDENCE" || true
-          echo "PASS: Step 7.5 include-chain evidence saved"
+          echo "PASS: Step 3 include-chain evidence saved"
 
-          echo "===== Step 8: full firmware build with complete log capture ====="
+          echo "===== Step 4: full firmware build with complete log capture ====="
           BUILD_LOG="artifacts/N60-Pro/standard/FULL-BUILD-VS-LOG.txt"
           mkdir -p "$(dirname "$BUILD_LOG")"
 
           set -o pipefail
           make -j"$(nproc)" V=s 2>&1 | tee "$BUILD_LOG"
 
-          echo "===== Step 9: audit actual compiler log for MGMT_TXPWR_CTRL ====="
+          echo "===== Step 5: audit actual compiler log for MGMT_TXPWR_CTRL ====="
           if grep -Fq -- '-DMGMT_TXPWR_CTRL' "$BUILD_LOG"; then
             echo "PASS: full build log contains -DMGMT_TXPWR_CTRL."
             grep -n -m 10 -B 2 -A 2 -- '-DMGMT_TXPWR_CTRL' "$BUILD_LOG" || true
@@ -950,7 +669,7 @@ jobs:
             exit 1
           fi
 
-          echo "===== Step 10: verify the exact standard N60 Pro sysupgrade image ====="
+          echo "===== Step 6: verify the exact standard N60 Pro sysupgrade image ====="
           SYSUP="bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
 
           if [ ! -s "$SYSUP" ]; then
