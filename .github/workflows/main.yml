@@ -235,7 +235,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "===== Step 1: prepare MTK driver source ====="          make package/mtk/drivers/mt_wifi/prepare V=s
+          echo "===== Step 1: prepare MTK driver source ====="
+          make package/mtk/drivers/mt_wifi/prepare V=s
           echo "===== READ-ONLY DIAGNOSTICS: prepare/source layout ====="
           echo "=== 1. make prepare output (last 50 lines if a captured log exists) ==="
           if [ -n "${PREPARE_LOG:-}" ] && [ -f "$PREPARE_LOG" ]; then
