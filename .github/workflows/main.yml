@@ -447,124 +447,127 @@ jobs:
           echo "VLAN diagnostics saved to $VLAN_DIAG"
 
           echo "===== Step 5: patch bDynamicVlanDisabled guard in rtmp.h ====="
-          export SRC
-          export VLAN_AUDIT="vlan_patch_audit.txt"
+          RTMP_H="$SRC/embedded/include/rtmp.h"
+          VLAN_AUDIT="${GITHUB_WORKSPACE}/vlan_patch_audit.txt"
+          export SRC RTMP_H VLAN_AUDIT
+          : > "$VLAN_AUDIT"
 
           python3 - <<'PY'
           import os
-          import re
           import sys
           from pathlib import Path
 
-          OLD = "#ifdef DYNAMIC_VLAN_SUPPORT"
-          NEW = "#if defined(RT_CFG80211_SUPPORT) || defined(DYNAMIC_VLAN_SUPPORT)"
-          AUDIT = Path(os.environ["VLAN_AUDIT"])
+          TARGET = "bDynamicVlanDisabled"
+          OLD_GUARD = "#ifdef DYNAMIC_VLAN_SUPPORT"
+          NEW_GUARD = "#if defined(RT_CFG80211_SUPPORT) || defined(DYNAMIC_VLAN_SUPPORT)"
+          header = Path(os.environ["RTMP_H"])
+          audit = Path(os.environ["VLAN_AUDIT"])
 
-          def fail(msg):
-              print("ERROR: " + msg)
+          def fail(message):
+              with audit.open("a", encoding="utf-8") as out:
+                  out.write("VLAN PATCH FAILED: " + message + "\n")
+              print("::error::" + message, file=sys.stderr)
               sys.exit(1)
 
-          src = Path(os.environ["SRC"]).resolve()
-          header = src / "embedded/include/rtmp.h"
-
-          if not src.is_dir():
-              fail(f"SRC directory not found: {src}")
           if not header.is_file():
-              fail(f"rtmp.h not found: {header}")
+              fail("rtmp.h not found: " + str(header))
 
-          text = header.read_text(encoding="utf-8")
-          lines = text.splitlines(keepends=True)
+          lines = header.read_text(encoding="utf-8").splitlines(keepends=True)
+          declarations = [
+              i for i, line in enumerate(lines)
+              if TARGET in line and line.strip().endswith(";")
+          ]
+          if len(declarations) != 1:
+              fail(f"Expected exactly one declaration of {TARGET}; found {len(declarations)}")
+          member_i = declarations[0]
 
-          # Locate the actual declaration inside struct _COMMON_CONFIG.          struct_re = re.compile(r"\\bstruct[ \\t]+_COMMON_CONFIG\\b")
-          member_re = re.compile(r"^.*\\bbDynamicVlanDisabled\\b.*$")
-          structs = [i for i, line in enumerate(lines) if struct_re.search(line)]
-          if len(structs) != 1:
-              fail(f"expected exactly one struct _COMMON_CONFIG, found {len(structs)}")
+          struct_starts = [
+              i for i, line in enumerate(lines[:member_i + 1])
+              if "struct _COMMON_CONFIG" in line
+          ]
+          if len(struct_starts) != 1:
+              fail(f"Expected exactly one struct _COMMON_CONFIG before the member; found {len(struct_starts)}")
+          struct_i = struct_starts[0]
 
-          struct_start = structs[0]
-          members = [i for i, line in enumerate(lines)
-                     if member_re.search(line) and i >= struct_start]
-          if len(members) != 1:
-              fail(f"expected exactly one bDynamicVlanDisabled declaration, found {len(members)}")
-          member = members[0]
-
-          # Confirm the member is before the end of the _COMMON_CONFIG definition.
           depth = 0
           opened = False
           struct_end = None
-          for i in range(struct_start, len(lines)):
+          for i in range(struct_i, len(lines)):
               depth += lines[i].count("{") - lines[i].count("}")
               if depth > 0:
                   opened = True
-              elif opened and depth == 0:
+              elif opened:
                   struct_end = i
                   break
-          if struct_end is None or not (struct_start <= member <= struct_end):
-              fail("bDynamicVlanDisabled is not inside struct _COMMON_CONFIG")
+          if struct_end is None or not (struct_i <= member_i < struct_end):
+              fail(f"{TARGET} at line {member_i + 1} is not inside struct _COMMON_CONFIG")
 
-          # Track conditional-compilation nesting up to the declaration.
           stack = []
-          directive = re.compile(r"^#[ \\t]*(if|ifdef|ifndef|elif|else|endif)\\b")
-          for i in range(member + 1):
-              s = lines[i].strip()
-              m = directive.match(s)
-              if not m:
-                  continue
-              kind = m.group(1)
-              if kind in ("if", "ifdef", "ifndef"):
-                  stack.append((i, s))
-              elif kind in ("elif", "else"):
+          for i in range(member_i + 1):
+              directive = lines[i].strip()
+              if directive.startswith(("#if ", "#ifdef ", "#ifndef ")):
+                  stack.append((i, directive))
+              elif directive.startswith(("#elif ", "#else")):
                   if not stack:
-                      fail(f"unbalanced #{kind} at line {i + 1}")
-              elif kind == "endif":
+                      fail(f"Unbalanced conditional branch at line {i + 1}")
+              elif directive.startswith("#endif"):
                   if not stack:
-                      fail(f"unbalanced #endif at line {i + 1}")
+                      fail(f"Unbalanced #endif at line {i + 1}")
                   stack.pop()
 
           if not stack:
-              fail("no enclosing preprocessor condition for bDynamicVlanDisabled")
-
-          guard_idx, guard = stack[-1]
-          if guard not in (OLD, NEW):
+              fail(f"No active preprocessor condition controls {TARGET}")
+          guard_i, guard = stack[-1]
+          if guard not in (OLD_GUARD, NEW_GUARD):
               fail(
-                  f"unexpected enclosing guard at line {guard_idx + 1}: "
-                  f"{guard!r}; expected {OLD!r} or already-patched {NEW!r}"
+                  f"Unexpected direct declaration guard at line {guard_i + 1}: {guard!r}; "
+                  f"expected {OLD_GUARD!r} or already-patched {NEW_GUARD!r}"
               )
 
-          already_patched = guard == NEW
+          already_patched = guard == NEW_GUARD
           if not already_patched:
-              # Approved replacement only; never alter an unexpected source revision.
-              newline = "\\r\\n" if lines[guard_idx].endswith("\\r\\n") else "\\n"
-              lines[guard_idx] = NEW + newline
-              patched = "".join(lines)
-              header.write_text(patched, encoding="utf-8")
+              original = lines[guard_i]
+              newline = "\r\n" if original.endswith("\r\n") else "\n"
+              lines[guard_i] = NEW_GUARD + newline
+              header.write_text("".join(lines), encoding="utf-8")
 
-          # Mandatory post-patch verification.
-          verify = header.read_text(encoding="utf-8").splitlines()
-          if verify[guard_idx].strip() != NEW:
-              fail("post-patch guard verification failed")
-          if sum(1 for x in verify if x.strip() == OLD) != 0:
-              fail("old guard remains after patch")
-          if sum(1 for x in verify if x.strip() == NEW) != 1:
-              fail("expected exactly one new guard after patch")
-          if sum(1 for x in verify if "bDynamicVlanDisabled" in x) != 1:
-              fail("bDynamicVlanDisabled declaration count changed")
-
-          report = [
-              "=== VLAN member-condition patch: PASS ===",
-              f"SRC: {src}",
-              f"Header: {header}",
-              f"struct _COMMON_CONFIG line: {struct_start + 1}",
-              f"bDynamicVlanDisabled declaration line: {member + 1}",
-              f"Guard line: {guard_idx + 1}: {NEW}",
-              "Declaration scope validation: PASS",
-              "Guard validation: PASS",
-              "Post-patch verification: PASS",
-              f"Idempotency state: {'ALREADY_PATCHED' if already_patched else 'PATCHED'}",
-              "=== End VLAN member-condition patch ===",
+          verify_lines = header.read_text(encoding="utf-8").splitlines(keepends=True)
+          verify_declarations = [
+              i for i, line in enumerate(verify_lines)
+              if TARGET in line and line.strip().endswith(";")
           ]
-          AUDIT.write_text("\\n".join(report) + "\\n", encoding="utf-8")
-          print(AUDIT.read_text(encoding="utf-8"), end="")
+          if len(verify_declarations) != 1:
+              fail(f"Post-check failed: expected one {TARGET} declaration")
+          verify_member_i = verify_declarations[0]
+          verify_stack = []
+          for i in range(verify_member_i + 1):
+              directive = verify_lines[i].strip()
+              if directive.startswith(("#if ", "#ifdef ", "#ifndef ")):
+                  verify_stack.append((i, directive))
+              elif directive.startswith(("#elif ", "#else")):
+                  if not verify_stack:
+                      fail(f"Post-check found unbalanced branch at line {i + 1}")
+              elif directive.startswith("#endif"):
+                  if not verify_stack:
+                      fail(f"Post-check found unbalanced #endif at line {i + 1}")
+                  verify_stack.pop()
+          if not verify_stack or verify_stack[-1][1] != NEW_GUARD:
+              fail("Post-check failed: the member's direct active guard is not the approved combined condition")
+
+          result = "ALREADY_PATCHED" if already_patched else "PATCHED"
+          report = [
+              "=== VLAN member-condition patch: " + result + " ===",
+              "SRC: " + os.environ["SRC"],
+              "Header: " + str(header),
+              "struct _COMMON_CONFIG line: " + str(struct_i + 1),
+              "Declaration line: " + str(verify_member_i + 1) + ": " + verify_lines[verify_member_i].strip(),
+              "Guard line: " + str(guard_i + 1) + ": " + NEW_GUARD,
+              "Struct scope validation: PASS",
+              "Direct guard validation: PASS",
+              "Post-patch verification: PASS",
+          ]
+          audit.write_text("\n".join(report) + "\n", encoding="utf-8")
+          print(audit.read_text(encoding="utf-8"), end="")
           PY
 
           echo "VLAN patch audit saved to $VLAN_AUDIT"
@@ -573,10 +576,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: n60pro-vlan-patch-audit
-          path: vlan_patch_audit.txt
+          name: vlan-patch-audit
+          path: ${{ github.workspace }}/vlan_patch_audit.txt
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 7
 
       - name: Build standard profile
         id: build_step
