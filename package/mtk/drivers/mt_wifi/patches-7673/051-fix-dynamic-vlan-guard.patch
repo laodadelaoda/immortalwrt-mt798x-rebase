@@ -1,0 +1,19 @@
+From: ChatGPT <noreply@openai.com>
+Subject: [PATCH] mtk: mt_wifi: widen bDynamicVlanDisabled guard
+
+bDynamicVlanDisabled is referenced in ap_data.c under
+RT_CFG80211_SUPPORT || DYNAMIC_VLAN_SUPPORT, but only declared
+under DYNAMIC_VLAN_SUPPORT. Widen the guard.
+
+---
+ mt_wifi/embedded/include/rtmp.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/mt_wifi/embedded/include/rtmp.h b/mt_wifi/embedded/include/rtmp.h
+--- a/mt_wifi/embedded/include/rtmp.h
++++ b/mt_wifi/embedded/include/rtmp.h
+@@ -3637,3 +3637,3 @@
+-#ifdef DYNAMIC_VLAN_SUPPORT
++#if defined(RT_CFG80211_SUPPORT) || defined(DYNAMIC_VLAN_SUPPORT)
+    BOOLEAN bDynamicVlanDisabled;
+ #endif
