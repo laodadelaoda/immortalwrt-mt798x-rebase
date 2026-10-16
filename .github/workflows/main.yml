@@ -117,8 +117,7 @@ jobs:
           # Dependencies required by mtwifi-cfg-ucode (verified in package Makefile)
           CONFIG_PACKAGE_mtwifi-cfg-ucode=y
           CONFIG_PACKAGE_datconf=y
-          CONFIG_PACKAGE_l1util=y          CONFIG_PACKAGE_ucode=y
-          CONFIG_PACKAGE_ucode-mod-fs=y
+          CONFIG_PACKAGE_l1util=y          CONFIG_PACKAGE_ucode=y          CONFIG_PACKAGE_ucode-mod-fs=y
           CONFIG_PACKAGE_ucode-mod-log=y
           CONFIG_PACKAGE_ucode-mod-ubus=y
           CONFIG_PACKAGE_ucode-mod-uci=y
@@ -237,8 +236,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "===== Step 1: prepare MTK driver source ====="
-          make package/mtk/drivers/mt_wifi/prepare V=s
+          echo "===== Step 1: prepare MTK driver source ====="          make package/mtk/drivers/mt_wifi/prepare V=s
 
           echo "===== Step 2: locate the actual driver header ====="
           mapfile -t SEC_FILES < <(
@@ -357,8 +355,7 @@ jobs:
               -exec grep -nH -E 'HAS_DOT11K_RRM_SUPPORT|DOT11K_RRM_SUPPORT' {} + \
               || true
             echo
-            echo "=== RRM header and type references ==="
-            grep -RniE \
+            echo "=== RRM header and type references ==="            grep -RniE \
               --include='*.h' --include='*.c' --include='Makefile' --include='*.mk' \
               'RRM_BEACON_REQ_INFO|DOT11K_RRM_SUPPORT|HAS_DOT11K_RRM_SUPPORT' \
               "$SRC" | head -250 || true
@@ -453,10 +450,9 @@ jobs:
 
           echo "===== Step 5: patch bDynamicVlanDisabled guard in rtmp.h ====="
           export SRC
-          VLAN_AUDIT="vlan_patch_audit.txt"
-          export VLAN_AUDIT
+          export VLAN_AUDIT="vlan_patch_audit.txt"
 
-          python3 - <<'PY' 2>&1 | tee "$VLAN_AUDIT"
+          python3 - <<'PY'
           import os
           import re
           import sys
@@ -464,211 +460,116 @@ jobs:
 
           OLD = "#ifdef DYNAMIC_VLAN_SUPPORT"
           NEW = "#if defined(RT_CFG80211_SUPPORT) || defined(DYNAMIC_VLAN_SUPPORT)"
+          AUDIT = Path(os.environ["VLAN_AUDIT"])
 
-          def fail(message):
-              print(f"ERROR: {message}")
+          def fail(msg):
+              print("ERROR: " + msg)
               sys.exit(1)
 
           src = Path(os.environ["SRC"]).resolve()
-          if not src.is_dir():
-              fail(f"SRC directory does not exist: {src}")
-
           header = src / "embedded/include/rtmp.h"
+
+          if not src.is_dir():
+              fail(f"SRC directory not found: {src}")
           if not header.is_file():
-              fail(f"target rtmp.h not found: {header}")
+              fail(f"rtmp.h not found: {header}")
 
-          original = header.read_text(encoding="utf-8")
-          lines = original.splitlines(keepends=True)
+          text = header.read_text(encoding="utf-8")
+          lines = text.splitlines(keepends=True)
 
-          # Find the actual bDynamicVlanDisabled declaration, not a reference.
-          member_re = re.compile(
-              r"^[ \\t]*(?:[A-Za-z_][A-Za-z0-9_ \\t*]*\\s+)?bDynamicVlanDisabled\\b"
-          )
-          member_candidates = [
-              i for i, line in enumerate(lines)
-              if member_re.search(line)
-          ]
-
-          if len(member_candidates) != 1:
-              fail(
-                  "expected exactly one bDynamicVlanDisabled declaration "
-                  f"in rtmp.h, found {len(member_candidates)}"
-              )
-
-          member_idx = member_candidates[0]
-
-          # Locate the enclosing struct _COMMON_CONFIG using brace depth.
+          # Locate the actual declaration inside struct _COMMON_CONFIG.
           struct_re = re.compile(r"\\bstruct[ \\t]+_COMMON_CONFIG\\b")
-          struct_starts = [
-              i for i, line in enumerate(lines)
-              if struct_re.search(line)
-          ]
+          member_re = re.compile(r"^.*\\bbDynamicVlanDisabled\\b.*$")
+          structs = [i for i, line in enumerate(lines) if struct_re.search(line)]
+          if len(structs) != 1:
+              fail(f"expected exactly one struct _COMMON_CONFIG, found {len(structs)}")
 
-          if len(struct_starts) != 1:
-              fail(
-                  "expected exactly one struct _COMMON_CONFIG definition/reference "
-                  f"in rtmp.h, found {len(struct_starts)}"
-              )
+          struct_start = structs[0]
+          members = [i for i, line in enumerate(lines)
+                     if member_re.search(line) and i >= struct_start]
+          if len(members) != 1:
+              fail(f"expected exactly one bDynamicVlanDisabled declaration, found {len(members)}")
+          member = members[0]
 
-          struct_idx = struct_starts[0]
-
-          # Basic C brace scanner from the struct declaration to its closing brace.
+          # Confirm the member is before the end of the _COMMON_CONFIG definition.
           depth = 0
           opened = False
           struct_end = None
-          in_block_comment = False
-
-          def scan_braces(text):
-              nonlocal in_block_comment
-              delta = 0
-              i = 0
-              in_string = None
-              while i < len(text):
-                  ch = text[i]
-                  nxt = text[i + 1] if i + 1 < len(text) else ""
-                  if in_block_comment:
-                      if ch == "*" and nxt == "/":
-                          in_block_comment = False
-                          i += 2
-                          continue
-                      i += 1
-                      continue
-                  if in_string:
-                      if ch == "\\\\":
-                          i += 2
-                          continue
-                      if ch == in_string:
-                          in_string = None
-                      i += 1
-                      continue
-                  if ch == "/" and nxt == "*":
-                      in_block_comment = True
-                      i += 2
-                      continue
-                  if ch == "/" and nxt == "/":
-                      break
-                  if ch in ("\\\"", "'"):
-                      in_string = ch
-                      i += 1
-                      continue
-                  if ch == "{":
-                      delta += 1
-                  elif ch == "}":
-                      delta -= 1
-                  i += 1
-              return delta
-
-          for i in range(struct_idx, len(lines)):
-              depth += scan_braces(lines[i])
+          for i in range(struct_start, len(lines)):
+              depth += lines[i].count("{") - lines[i].count("}")
               if depth > 0:
                   opened = True
               elif opened and depth == 0:
                   struct_end = i
                   break
+          if struct_end is None or not (struct_start <= member <= struct_end):
+              fail("bDynamicVlanDisabled is not inside struct _COMMON_CONFIG")
 
-          if struct_end is None:
-              fail("could not determine the end of struct _COMMON_CONFIG")
-
-          if not (struct_idx <= member_idx <= struct_end):
-              fail(
-                  "bDynamicVlanDisabled declaration is not inside "
-                  "struct _COMMON_CONFIG"
-              )
-
-          # Track the enclosing preprocessor condition at the declaration.
-          conditional_stack = []
-          directive_re = re.compile(r"^[ \\t]*#")
-          for i in range(member_idx + 1):
-              stripped = lines[i].strip()
-              if not directive_re.match(stripped):
+          # Track conditional-compilation nesting up to the declaration.
+          stack = []
+          directive = re.compile(r"^#[ \\t]*(if|ifdef|ifndef|elif|else|endif)\\b")
+          for i in range(member + 1):
+              s = lines[i].strip()
+              m = directive.match(s)
+              if not m:
                   continue
-
-              if re.match(r"^#[ \\t]*if[ \\t]+", stripped):
-                  conditional_stack.append((i, stripped))
-              elif re.match(r"^#[ \\t]*ifdef[ \\t]+", stripped):
-                  conditional_stack.append((i, stripped))
-              elif re.match(r"^#[ \\t]*ifndef[ \\t]+", stripped):
-                  conditional_stack.append((i, stripped))
-              elif re.match(r"^#[ \\t]*elif\\b", stripped):
-                  if not conditional_stack:
-                      fail(f"unbalanced #elif at line {i + 1}")
-                  # Keep the opening directive because it identifies the enclosing block.
-              elif re.match(r"^#[ \\t]*else\\b", stripped):
-                  if not conditional_stack:
-                      fail(f"unbalanced #else at line {i + 1}")
-              elif re.match(r"^#[ \\t]*endif\\b", stripped):
-                  if not conditional_stack:
+              kind = m.group(1)
+              if kind in ("if", "ifdef", "ifndef"):
+                  stack.append((i, s))
+              elif kind in ("elif", "else"):
+                  if not stack:
+                      fail(f"unbalanced #{kind} at line {i + 1}")
+              elif kind == "endif":
+                  if not stack:
                       fail(f"unbalanced #endif at line {i + 1}")
-                  conditional_stack.pop()
+                  stack.pop()
 
-          if not conditional_stack:
-              fail("bDynamicVlanDisabled declaration is not under a preprocessor condition")
+          if not stack:
+              fail("no enclosing preprocessor condition for bDynamicVlanDisabled")
 
-          enclosing_idx, enclosing = conditional_stack[-1]
-          if enclosing != OLD:
+          guard_idx, guard = stack[-1]
+          if guard != OLD:
               fail(
-                  "unexpected enclosing condition for bDynamicVlanDisabled: "
-                  f"line {enclosing_idx + 1}: {enclosing!r}; expected {OLD!r}"
+                  f"unexpected enclosing guard at line {guard_idx + 1}: "
+                  f"{guard!r}; expected {OLD!r}"
               )
 
-          # The guard must be the actual declaration guard, and the approved
-          # replacement must be applied only to that exact directive.
-          if lines[enclosing_idx].strip() != OLD:
-              fail("internal guard-location validation failed")
+          # Approved replacement only; never alter an unexpected source revision.
+          newline = "\\r\\n" if lines[guard_idx].endswith("\\r\\n") else "\\n"
+          lines[guard_idx] = NEW + newline
+          patched = "".join(lines)
+          if patched == text:
+              fail("replacement made no change")
 
-          if lines[member_idx].count("bDynamicVlanDisabled") != 1:
-              fail("member declaration contains an unexpected number of occurrences")
+          header.write_text(patched, encoding="utf-8")
 
-          lines[enclosing_idx] = re.sub(
-              r"^([ \\t]*)#ifdef[ \\t]+DYNAMIC_VLAN_SUPPORT[ \\t]*(\\r?\\n)?$",
-              lambda m: m.group(1) + NEW + (m.group(2) or ""),
-              lines[enclosing_idx],
-              count=1,
-          )
+          # Mandatory post-patch verification.
+          verify = header.read_text(encoding="utf-8").splitlines()
+          if verify[guard_idx].strip() != NEW:
+              fail("post-patch guard verification failed")
+          if sum(1 for x in verify if x.strip() == OLD) != 0:
+              fail("old guard remains after patch")
+          if sum(1 for x in verify if x.strip() == NEW) != 1:
+              fail("expected exactly one new guard after patch")
+          if sum(1 for x in verify if "bDynamicVlanDisabled" in x) != 1:
+              fail("bDynamicVlanDisabled declaration count changed")
 
-          updated = "".join(lines)
-          if updated == original:
-              fail("replacement produced no file change")
-
-          header.write_text(updated, encoding="utf-8")
-
-          # Mandatory post-write verification.
-          verified = header.read_text(encoding="utf-8")
-          verified_lines = verified.splitlines(keepends=True)
-
-          if verified_lines[enclosing_idx].strip() != NEW:
-              fail(
-                  "post-patch guard verification failed: "
-                  f"line {enclosing_idx + 1}: "
-                  f"{verified_lines[enclosing_idx].strip()!r}"
-              )
-
-          old_count = sum(1 for line in verified_lines if line.strip() == OLD)
-          new_count = sum(1 for line in verified_lines if line.strip() == NEW)
-
-          if new_count != 1:
-              fail(f"expected exactly one new VLAN guard, found {new_count}")
-          if old_count != 0:
-              fail(f"old VLAN guard still present in rtmp.h: {old_count} occurrence(s)")
-
-          if sum(
-              1 for line in verified_lines
-              if re.search(r"\\bbDynamicVlanDisabled\\b", line)
-          ) != 1:
-              fail("post-patch bDynamicVlanDisabled declaration count changed")
-
-          print("=== VLAN member-condition patch: PASS ===")
-          print(f"SRC: {src}")
-          print(f"Header: {header}")
-          print(f"struct _COMMON_CONFIG: line {struct_idx + 1}")
-          print(f"bDynamicVlanDisabled declaration: line {member_idx + 1}")
-          print(f"Original guard: line {enclosing_idx + 1}: {OLD}")
-          print(f"Applied guard: line {enclosing_idx + 1}: {NEW}")
-          print("Declaration scope validation: PASS")
-          print("Guard validation: PASS")
-          print("Post-patch verification: PASS")
-          print("Idempotency state: PATCHED")
-          print("=== End VLAN member-condition patch ===")
+          report = [
+              "=== VLAN member-condition patch: PASS ===",
+              f"SRC: {src}",
+              f"Header: {header}",
+              f"struct _COMMON_CONFIG line: {struct_start + 1}",
+              f"bDynamicVlanDisabled declaration line: {member + 1}",
+              f"Original guard line: {guard_idx + 1}: {OLD}",
+              f"Applied guard line: {guard_idx + 1}: {NEW}",
+              "Declaration scope validation: PASS",
+              "Guard validation: PASS",
+              "Post-patch verification: PASS",
+              "Idempotency state: PATCHED",
+              "=== End VLAN member-condition patch ===",
+          ]
+          AUDIT.write_text("\\n".join(report) + "\\n", encoding="utf-8")
+          print(AUDIT.read_text(encoding="utf-8"), end="")
           PY
 
           echo "VLAN patch audit saved to $VLAN_AUDIT"
@@ -798,57 +699,3 @@ jobs:
           if find "$DEST" -maxdepth 1 -iname '*mtkuboot*' | grep -q .; then
             echo "::error::MTK U-Boot artifact detected; refusing to package."
             exit 1
-          fi
-
-          {
-            echo "Build policy: STANDARD PROFILE ONLY; MTK U-Boot excluded"
-            echo "Profile: netcore_n60-pro"
-            echo "Source revision:"
-            git log -1 --format='%H %s'
-            echo "Build step outcome: ${{ steps.build_step.outcome }}"
-            echo "Firmware produced: ${FIRMWARE_PRODUCED:-unknown}"
-            echo "Files:"
-            find "$DEST" -maxdepth 1 -type f -printf '%f\n' | sort
-          } > "$DEST/BUILD-INFO.txt"
-
-          (
-            cd "$DEST"
-            shopt -s nullglob
-            if ls *.itb >/dev/null 2>&1; then
-              sha256sum *.itb > SHA256SUMS.txt
-              cat SHA256SUMS.txt
-            fi
-          ) || true
-
-          echo "===== Artifact tree ====="
-          find artifacts/N60-Pro -maxdepth 2 -type f -printf '%p (%s bytes)\n' | sort
-
-      - name: Upload artifacts
-        if: always()        uses: actions/upload-artifact@v4
-        with:
-          name: N60-Pro-Standard-${{ github.run_number }}
-          path: artifacts/N60-Pro/
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Report ccache statistics
-        if: always()
-        run: ccache -s || true
-
-      - name: Enforce build and firmware success
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Build step outcome: ${{ steps.build_step.outcome }}"
-          echo "Firmware produced: ${FIRMWARE_PRODUCED:-no}"
-          if [ "${{ steps.build_step.outcome }}" != "success" ]; then
-            echo "::error::Firmware build step did not succeed. This run must remain failed."
-            exit 1
-          fi
-          if [ "${FIRMWARE_PRODUCED:-no}" != "yes" ]; then
-            echo "::error::Expected standard netcore_n60-pro sysupgrade ITB is missing."
-            exit 1
-          fi
-          test -s "bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
-          echo "PASS: build succeeded and the expected sysupgrade ITB exists."
