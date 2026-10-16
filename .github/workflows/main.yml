@@ -103,18 +103,15 @@ jobs:
           CONFIG_PACKAGE_kmod-mt_wifi=y
           CONFIG_PACKAGE_kmod-conninfra=y
           CONFIG_PACKAGE_kmod-warp=y
-          # MT7986 must use the chip-specific WARP v2 implementation.
           CONFIG_WARP_VERSION=2
           CONFIG_WARP_CHIPSET="mt7986"
           CONFIG_PACKAGE_kmod-mediatek_hnat=y
           CONFIG_PACKAGE_wifi-dats=y
 
-          # Explicitly disable legacy packages that conflict with mtwifi-cfg-ucode.
           # CONFIG_PACKAGE_mtwifi-cfg is not set
           # CONFIG_PACKAGE_luci-app-mtk is not set
           # CONFIG_PACKAGE_wifi-profile is not set
 
-          # Dependencies required by mtwifi-cfg-ucode (verified in package Makefile)
           CONFIG_PACKAGE_mtwifi-cfg-ucode=y
           CONFIG_PACKAGE_datconf=y
           CONFIG_PACKAGE_l1util=y
@@ -127,7 +124,6 @@ jobs:
           CONFIG_PACKAGE_ucode-mod-l1parser=y
           CONFIG_PACKAGE_wifi-scripts=y
 
-          # Wi-Fi userspace tools
           CONFIG_PACKAGE_iw=y
           CONFIG_PACKAGE_iwinfo-ucode=y
           CONFIG_PACKAGE_luci-app-mtwifi-cfg=y
@@ -136,6 +132,11 @@ jobs:
           CONFIG_MTK_MT_WIFI=m
           CONFIG_MTK_MT_AP_SUPPORT=y
           CONFIG_MTK_CFG80211_SUPPORT=y
+
+          # Explicitly enable EAP prerequisite and management TX power control.
+          CONFIG_MTK_WIFI_EAP_FEATURE=y
+          CONFIG_MTK_MGMT_TXPWR_CTRL=y
+
           CONFIG_MTK_WPA3_SUPPORT=y
           CONFIG_MTK_HOSTAPD_WPA3_SUPPORT=y
           CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y
@@ -188,6 +189,8 @@ jobs:
           require_config 'CONFIG_PACKAGE_ucode-mod-l1parser=y'
           require_config 'CONFIG_MTK_WPA3_SUPPORT=y'
           require_config 'CONFIG_MTK_HOSTAPD_WPA3_SUPPORT=y'
+          require_config 'CONFIG_MTK_WIFI_EAP_FEATURE=y'
+          require_config 'CONFIG_MTK_MGMT_TXPWR_CTRL=y'
 
           if ! grep -Eq '^CONFIG_MTK_MT_AP_SUPPORT=(y|m)$' .config; then
             echo "::error::MTK AP support is neither built-in nor modular after make defconfig."
@@ -210,7 +213,7 @@ jobs:
 
           cp .config artifacts/N60-Pro/standard/config.buildinfo
           echo "===== Effective MTK Wi-Fi configuration ====="
-          grep -E '^(CONFIG_WARP_VERSION=|CONFIG_WARP_CHIPSET=|CONFIG_PACKAGE_(kmod-mt_wifi|kmod-conninfra|kmod-warp|kmod-mediatek_hnat|wifi-dats|mtwifi-cfg-ucode|ucode-mod-datconf|ucode-mod-l1parser|iw|iwinfo|iwinfo-ucode)=|CONFIG_MTK_(MT_WIFI|CHIP_MT7986|FIRST_IF_MT7986|WIFI_MODE|WIFI_SKU_TYPE|WIFI_ADIE_TYPE|CONNINFRA_APSOC|DBDC_MODE)|CONFIG_first_card)' .config
+          grep -E '^(CONFIG_WARP_VERSION=|CONFIG_WARP_CHIPSET=|CONFIG_PACKAGE_(kmod-mt_wifi|kmod-conninfra|kmod-warp|kmod-mediatek_hnat|wifi-dats|mtwifi-cfg-ucode|ucode-mod-datconf|ucode-mod-l1parser|iw|iwinfo|iwinfo-ucode)=|CONFIG_MTK_(MT_WIFI|MT_AP_SUPPORT|CFG80211_SUPPORT|WIFI_EAP_FEATURE|MGMT_TXPWR_CTRL|CHIP_MT7986|FIRST_IF_MT7986|WIFI_MODE|WIFI_SKU_TYPE|WIFI_ADIE_TYPE|CONNINFRA_APSOC|DBDC_MODE)|CONFIG_first_card)' .config
           echo "PASS: standard profile and MT7986 vendor Wi-Fi stack selected."
 
       - name: Download sources
@@ -221,10 +224,25 @@ jobs:
         run: |
           set -Eeuo pipefail
 
-          echo "===== Step 1: standard MT Wi-Fi prepare ====="
+          echo "===== Step 1: verify management TX power configuration ====="
+          require_config() {
+            if ! grep -Fqx "$1" .config; then
+              echo "::error::Required configuration missing: $1"
+              grep -E '^CONFIG_MTK_(MT_AP_SUPPORT|CFG80211_SUPPORT|WIFI_EAP_FEATURE|MGMT_TXPWR_CTRL)=' .config || true
+              exit 1
+            fi
+          }
+
+          require_config 'CONFIG_MTK_WIFI_EAP_FEATURE=y'
+          require_config 'CONFIG_MTK_MGMT_TXPWR_CTRL=y'
+
+          echo "===== Effective management TX power configuration ====="
+          grep -E '^CONFIG_MTK_(MT_AP_SUPPORT|CFG80211_SUPPORT|WIFI_EAP_FEATURE|MGMT_TXPWR_CTRL)=' .config
+
+          echo "===== Step 2: standard MT Wi-Fi prepare ====="
           make package/mtk/drivers/mt_wifi/prepare V=s
 
-          echo "===== Step 2: locate prepared driver source ====="
+          echo "===== Step 3: locate prepared driver source ====="
           mapfile -t RTMP_FILES < <(
             find build_dir -type f \
               -path '*/embedded/include/rtmp.h' -print
@@ -234,7 +252,8 @@ jobs:
           for rtmp in "${RTMP_FILES[@]}"; do
             src="$(dirname "$(dirname "$(dirname "$rtmp")")")"
             if [ -f "$src/os/linux/config.mk" ] &&
-               [ -f "$src/embedded/include/security/sec_cmm.h" ]; then
+               [ -f "$src/embedded/include/security/sec_cmm.h" ] &&
+               [ -f "$src/embedded/ap/ap_cfg.c" ]; then
               SOURCES+=("$src")
             fi
           done
@@ -243,7 +262,9 @@ jobs:
             echo "::error::Expected exactly one valid prepared MT Wi-Fi source root; found ${#SOURCES[@]}."
             echo "===== All candidate rtmp.h files ====="
             printf '%s\n' "${RTMP_FILES[@]}"
-            echo "===== All candidate config.mk files ====="
+            echo "===== Candidate ap_cfg.c files ====="
+            find build_dir -type f -path '*/embedded/ap/ap_cfg.c' -print || true
+            echo "===== Candidate config.mk files ====="
             find build_dir -type f -path '*/os/linux/config.mk' -print || true
             echo "===== MT Wi-Fi-related directories ====="
             find build_dir -maxdepth 8 -iname '*mt_wifi*' -print || true
@@ -254,11 +275,13 @@ jobs:
           CFG="$SRC/os/linux/config.mk"
           RTMP="$SRC/embedded/include/rtmp.h"
           SEC="$SRC/embedded/include/security/sec_cmm.h"
+          AP_CFG="$SRC/embedded/ap/ap_cfg.c"
 
           echo "Resolved driver source root: $SRC"
           echo "RRM config: $CFG"
           echo "VLAN header: $RTMP"
           echo "SAE header: $SEC"
+          echo "AP source: $AP_CFG"
 
           DIAG="artifacts/N60-Pro/standard/DRIVER-PREPARE-DIAGNOSTICS.txt"
           mkdir -p "$(dirname "$DIAG")"
@@ -269,6 +292,10 @@ jobs:
             echo "Config: $CFG"
             echo "RTMP header: $RTMP"
             echo "SAE header: $SEC"
+            echo "AP source: $AP_CFG"
+            echo
+            echo "=== Effective management TX power configuration ==="
+            grep -E '^CONFIG_MTK_(MT_AP_SUPPORT|CFG80211_SUPPORT|WIFI_EAP_FEATURE|MGMT_TXPWR_CTRL)=' .config || true
             echo
             echo "=== SAE guard context ==="
             nl -ba "$SEC" | awk 'NR >= 10 && NR <= 20'
@@ -292,6 +319,20 @@ jobs:
               'bDynamicVlanDisabled|DYNAMIC_VLAN_SUPPORT|RT_CFG80211_SUPPORT' \
               "$RTMP" || true
             echo
+            echo "=== Management TX power function and member references ==="
+            grep -n -B 25 -A 25 -E \
+              'rtmp_get_mgmtpwr|MgmtTxPwr|EpaFeGain|TxPwrDelta' \
+              "$AP_CFG" || true
+            echo
+            echo "=== Management TX power preprocessor guard context ==="
+            grep -n -B 12 -A 12 -E \
+              'MGMT_TXPWR_CTRL|WIFI_EAP_FEATURE|rtmp_get_mgmtpwr|MgmtTxPwr|EpaFeGain|TxPwrDelta' \
+              "$AP_CFG" "$RTMP" "$CFG" || true
+            echo
+            echo "=== Management TX power member declarations across driver headers ==="
+            grep -RniE --include='*.h' \
+              'MgmtTxPwr|EpaFeGain|TxPwrDelta' "$SRC" || true
+            echo
             echo "=== Patch inventory ==="
             ls -1 package/mtk/drivers/mt_wifi/patches-7673/
             echo
@@ -306,6 +347,22 @@ jobs:
         continue-on-error: true
         run: |
           set -Eeuo pipefail
+
+          echo "===== Step 0: audit management TX power configuration ====="
+
+          require_config() {
+            if ! grep -Fqx "$1" .config; then
+              echo "::error::Required configuration missing before build: $1"
+              grep -E '^CONFIG_MTK_(MT_AP_SUPPORT|CFG80211_SUPPORT|WIFI_EAP_FEATURE|MGMT_TXPWR_CTRL)=' .config || true
+              exit 1
+            fi
+          }
+
+          require_config 'CONFIG_MTK_WIFI_EAP_FEATURE=y'
+          require_config 'CONFIG_MTK_MGMT_TXPWR_CTRL=y'
+
+          echo "===== Effective management TX power configuration ====="
+          grep -E '^CONFIG_MTK_(MT_AP_SUPPORT|CFG80211_SUPPORT|WIFI_EAP_FEATURE|MGMT_TXPWR_CTRL)=' .config
 
           PATCH_DIR="package/mtk/drivers/mt_wifi/patches-7673"
           mkdir -p "$PATCH_DIR"
