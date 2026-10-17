@@ -2,14 +2,14 @@ name: Build N60 Pro - ImmortalWrt 25.12 (Standard Only)
 
 on:
   push:
-    branches: ["n60pro-mtk-closed-driver"]
+    branches: ["pr-ap-ioctl-strace-evidence"]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: n60-pro-build
+  group: n60-pro-build-pr-ap-ioctl-strace-evidence
   cancel-in-progress: true
 
 jobs:
