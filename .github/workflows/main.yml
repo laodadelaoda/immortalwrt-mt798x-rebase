@@ -427,11 +427,12 @@ jobs:
             051-fix-dynamic-vlan-guard.patch \
             052-fix-mgmt-txpwr-config.patch \
             053-fix-ap-ioctl-rt-config-include.patch \
-            055-fix-build-rsnxe-ie-macro.patch
+            055-fix-wpa3-macro-all.patch \
+            057-fix-rsnxe-callers.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
-              grep -n -E 'Applying|042-fix|050-fix|051-fix|052-fix|053-fix|055-fix|Patch failed|Hunk FAILED' "$PREPARE_LOG" || true
+              grep -n -E 'Applying|042-fix|050-fix|051-fix|052-fix|053-fix|055-fix|057-fix|Patch failed|Hunk FAILED' "$PREPARE_LOG" || true
               exit 1
             fi
           done
@@ -442,7 +443,7 @@ jobs:
             exit 1
           fi
 
-          echo "PASS: prepare log contains 042, 050, 051, 052, 053, 055 patches."
+          echo "PASS: prepare log contains 042, 050, 051, 052, 053, 055, 057 patches."
 
           locate_driver_source() {
             local rtmp src
@@ -538,19 +539,23 @@ jobs:
 
           echo "PASS: SAE, RRM, VLAN and MGMT_TXPWR_CTRL source/configuration checks passed."
 
-          echo "===== Step 2b: verify 055 macro unification ====="
+          echo "===== Step 2b: verify 055 + 057 macro unification ====="
           for f in \
             "$SRC/embedded/include/security/sec.h" \
             "$SRC/embedded/security/cmm_sec.c" \
-            "$SRC/embedded/include/security/sec_cmm.h"
+            "$SRC/embedded/include/security/sec_cmm.h" \
+            "$SRC/embedded/fsm/ap_mgmt_assoc.c" \
+            "$SRC/embedded/common/ft.c" \
+            "$SRC/embedded/fsm/sta_mgmt_assoc.c" \
+            "$SRC/embedded/security/cmm_wpa.c"
           do
             if grep -q 'HOSTAPD_WPA3R3_SUPPORT' "$f"; then
-              echo "::error::055 failed: $f still contains HOSTAPD_WPA3R3_SUPPORT"
+              echo "::error::055/057 failed: $f still contains HOSTAPD_WPA3R3_SUPPORT"
               grep -n 'HOSTAPD_WPA3R3_SUPPORT' "$f" || true
               exit 1
             fi
           done
-          echo "PASS: 055 applied — no HOSTAPD_WPA3R3_SUPPORT remains in sec.h / cmm_sec.c / sec_cmm.h."
+          echo "PASS: 055 + 057 applied — no HOSTAPD_WPA3R3_SUPPORT remains in the 7 touched files."
 
           echo "===== Step 3: read-only ap_ioctl source/include evidence ====="
           AP_IOCTL="$SRC/os/linux/ap_ioctl.c"
