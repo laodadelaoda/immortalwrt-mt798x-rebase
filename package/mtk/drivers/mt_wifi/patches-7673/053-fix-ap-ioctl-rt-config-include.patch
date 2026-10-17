@@ -1,9 +1,8 @@
 From: ChatGPT <noreply@openai.com>
 Subject: [PATCH] mtk: mt_wifi: restore rt_config include in ap_ioctl
 
-ap_ioctl.c uses driver types and declarations provided through
-rt_config.h, but the include is commented out. Restore the include so
-the translation unit sees the required driver declarations.
+Restore the rt_config.h include in ap_ioctl.c so the driver declarations
+are visible to this translation unit.
 
 ---
  mt_wifi/os/linux/ap_ioctl.c | 2 +-
@@ -12,6 +11,13 @@ the translation unit sees the required driver declarations.
 diff --git a/mt_wifi/os/linux/ap_ioctl.c b/mt_wifi/os/linux/ap_ioctl.c
 --- a/mt_wifi/os/linux/ap_ioctl.c
 +++ b/mt_wifi/os/linux/ap_ioctl.c
-@@ -25,7 +25,7 @@
+@@ -25,8 +25,8 @@
+ */
+ #define RTMP_MODULE_OS
 -/*#include "rt_config.h" */
 +#include "rt_config.h"
+ #include "rtmp_comm.h"
+ #include "rt_os_util.h"
+ #include "rt_os_net.h"
+ #include <linux/wireless.h>
+ #include "rtmp_def.h"
