@@ -595,10 +595,10 @@ jobs:
           files = [pathlib.Path(x) for x in index.read_text().splitlines() if x.strip()]
           text = depfile.read_text(errors="replace") if depfile.exists() else ""
           # Normalize Makefile continuations before testing exact basenames.
-          normalized = re.sub(r"\\\\\n", " ", text)
+          normalized = re.sub(r"\\\n", " ", text)
           lines = ["AP_IOCTL .d fixed-format header audit", "Dependency files found: %d" % len(files)]
           for name in wanted:
-              hits = sorted(set(re.findall(r"(?<![A-Za-z0-9_.+-])([^\\s\\\\]*" + re.escape(name) + r")(?![A-Za-z0-9_.+-])", normalized)))
+              hits = sorted(set(re.findall(r"(?<![A-Za-z0-9_.+-])([^\s\\]*" + re.escape(name) + r")(?![A-Za-z0-9_.+-])", normalized)))
               lines.append("%s: %s" % (name, "FOUND | " + "; ".join(hits) if hits else "NOT_FOUND"))
           report.write_text("\n".join(lines) + "\n", encoding="utf-8")
           print(report.read_text(), end="")
@@ -613,10 +613,10 @@ jobs:
           import ast, pathlib, re, shlex, sys
           trace_path, raw_path, cmd_path, evidence_path, dest = map(pathlib.Path, sys.argv[1:])
           lines = trace_path.read_text(errors="replace").splitlines()
-          prefix = re.compile(r"^(?:\\[pid\\s+(\\d+)\\]\\s+|(\\d+)\\s+)?")
-          chdir_re = re.compile(r'\\bchdir\\(("(?:\\\\.|[^"\\\\])*")\\)\\s+=\\s+0')
-          exec_re = re.compile(r'execve\\(("(?:\\\\.|[^"\\\\])*"),\\s*(\\[.*\\]),\\s*.*\\)\\s+=')
-          clone_re = re.compile(r'\\b(?:clone|clone3|fork|vfork)\\(.*\\)\\s+=\\s+(\\d+)')
+          prefix = re.compile(r"^(?:\[pid\s+(\d+)\]\s+|(\d+)\s+)?")
+          chdir_re = re.compile(r'\bchdir\(("(?:\\.|[^"\\])*")\)\s+=\s+0')
+          exec_re = re.compile(r'execve\(("(?:\\.|[^"\\])*"),\s*(\[.*\]),\s*.*\)\s+=')
+          clone_re = re.compile(r'\b(?:clone|clone3|fork|vfork)\(.*\)\s+=\s+(\d+)')
           cwd_by_pid = {"main": pathlib.Path.cwd().resolve()}
           parent_by_pid = {}
           found = []
