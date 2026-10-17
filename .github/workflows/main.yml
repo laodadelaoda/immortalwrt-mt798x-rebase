@@ -430,7 +430,7 @@ jobs:
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
-              grep -n -E 'Applying|042-fix|050-fix|051-fix|052-fix|Patch failed|Hunk FAILED' "$PREPARE_LOG" || true
+              grep -n -E 'Applying|042-fix|050-fix|051-fix|052-fix|053-fix|Patch failed|Hunk FAILED' "$PREPARE_LOG" || true
               exit 1
             fi
           done
@@ -441,7 +441,7 @@ jobs:
             exit 1
           fi
 
-          echo "PASS: prepare log contains 042, 050, 051, 052 patches."
+          echo "PASS: prepare log contains 042, 050, 051, 052, 053 patches."
 
           locate_driver_source() {
             local rtmp src
@@ -536,30 +536,6 @@ jobs:
             }
 
           echo "PASS: SAE, RRM, VLAN and MGMT_TXPWR_CTRL source/configuration checks passed."
-
-          echo "===== TEST: restore rt_config.h include in ap_ioctl.c ====="
-          python3 - "$SRC/os/linux/ap_ioctl.c" <<'PY'
-          import pathlib
-          import sys
-
-          p = pathlib.Path(sys.argv[1])
-          text = p.read_text()
-          old = '/*#include "rt_config.h" */'
-          new = '#include "rt_config.h"'
-
-          count = text.count(old)
-          if count != 1:
-              raise SystemExit(
-                  f"ERROR: expected exactly one commented rt_config.h include; found {count}"
-              )
-
-          p.write_text(text.replace(old, new, 1))
-          check = p.read_text()
-          if check.count(new) != 1 or old in check:
-              raise SystemExit("ERROR: rt_config.h include verification failed")
-
-          print("PASS: restored exactly one rt_config.h include for this build.")
-          PY
 
           echo "===== Step 3: read-only ap_ioctl source/include evidence ====="
           AP_IOCTL="$SRC/os/linux/ap_ioctl.c"
