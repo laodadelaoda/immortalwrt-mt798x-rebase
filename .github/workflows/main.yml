@@ -2,14 +2,14 @@ name: Build N60 Pro - ImmortalWrt 25.12 (Standard Only)
 
 on:
   push:
-    branches: ["n60pro-mtk-closed-driver"]
+    branches: ["pr-ap-ioctl-strace-evidence"]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: n60-pro-build
+  group: n60-pro-build-pr-ap-ioctl-strace-evidence
   cancel-in-progress: true
 
 jobs:
@@ -61,7 +61,7 @@ jobs:
             gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
             python3-dev rsync unzip zlib1g-dev file wget time xsltproc \
             libelf-dev device-tree-compiler qemu-utils python3-setuptools \
-            python3-pyelftools swig ccache
+            python3-pyelftools swig ccache strace
 
       - name: Set Go proxy
         run: |
@@ -522,72 +522,20 @@ jobs:
 
           echo "PASS: SAE, RRM, VLAN and MGMT_TXPWR_CTRL source/configuration checks passed."
 
-          echo "===== TEST: restore rt_config.h include in ap_ioctl.c ====="
-          python3 - "$SRC/os/linux/ap_ioctl.c" <<'PY'
-          import pathlib
-          import sys
-
-          p = pathlib.Path(sys.argv[1])
-          text = p.read_text()
-          old = '/*#include "rt_config.h" */'
-          new = '#include "rt_config.h"'
-
-          count = text.count(old)
-          if count != 1:
-              raise SystemExit(
-                  f"ERROR: expected exactly one commented rt_config.h include; found {count}"
-              )
-
-          p.write_text(text.replace(old, new, 1))
-          check = p.read_text()
-          if check.count(new) != 1 or old in check:
-              raise SystemExit("ERROR: rt_config.h include verification failed")
-
-          print("PASS: restored exactly one rt_config.h include for this build.")
-          PY
-
-          echo "===== Step 3: read-only ap_ioctl source/include evidence ====="
+          echo "===== Step 3: preserve original ap_ioctl.c without modifying it ====="
           AP_IOCTL="$SRC/os/linux/ap_ioctl.c"
           APIO_EVIDENCE="artifacts/N60-Pro/standard/AP_IOCTL-EVIDENCE.txt"
           mkdir -p "$(dirname "$APIO_EVIDENCE")"
-
           test -s "$AP_IOCTL" || { echo "::error::ap_ioctl.c not found: $AP_IOCTL"; exit 1; }
+          { echo "Source: $AP_IOCTL"; nl -ba "$AP_IOCTL" | sed -n "1,40p"; echo; grep -nE "^[[:space:]]*#[[:space:]]*include" "$AP_IOCTL" || true; echo "SOURCE_MODIFIED_BY_DIAGNOSTIC_STEP=no"; } | tee "$APIO_EVIDENCE"
 
-          {
-            echo "===== ap_ioctl.c 位置 ====="
-            echo "$AP_IOCTL"
-
-            echo
-            echo "===== ap_ioctl.c 前 35 行 ====="
-            sed -n '1,35p' "$AP_IOCTL"
-
-            echo
-            echo "===== ap_ioctl.c 所有 include ====="
-            grep -nE '^[[:space:]]*#[[:space:]]*include' "$AP_IOCTL"
-
-            echo
-            echo "===== rt_config.h 是否 include rtmp.h ====="
-            RT_CONFIG=$(find "$SRC" -name "rt_config.h" -print | head -1)
-            echo "rt_config.h: $RT_CONFIG"
-            test -s "$RT_CONFIG" && grep -n 'rtmp.h' "$RT_CONFIG" | head -10 || true
-
-            echo
-            echo "===== 谁 include 了 rt_config.h（在 \$SRC 内）====="
-            grep -rln 'rt_config\.h' "$SRC" 2>/dev/null | head -30 || true
-
-            echo
-            echo "===== 谁 include 了 rtmp.h（在 \$SRC 内）====="
-            grep -rln 'rtmp\.h' "$SRC" 2>/dev/null | head -30 || true
-          } | tee "$APIO_EVIDENCE"
-
-          echo "PASS: Step 3 source/include evidence saved."
-          echo "NOTE: GCC -H/-E evidence is captured AFTER the real build from the exact compiler invocation in FULL-BUILD-VS-LOG.txt."
-          echo "===== Step 4: full firmware build with complete log capture ====="
+          echo "===== Step 4: trace actual compiler process calls ====="
           BUILD_LOG="artifacts/N60-Pro/standard/FULL-BUILD-VS-LOG.txt"
+          STRACE_LOG="artifacts/N60-Pro/standard/AP_IOCTL-STRACE-EXECVE-CHDIR.txt"
           mkdir -p "$(dirname "$BUILD_LOG")"
-
+          strace -V
           set -o pipefail
-          make -j"$(nproc)" V=s 2>&1 | tee "$BUILD_LOG"
+          strace -f -qq -s 65535 -e trace=execve,chdir -o "$STRACE_LOG" make -j1 V=s 2>&1 | tee "$BUILD_LOG"
 
           echo "===== Step 5: audit actual compiler log for MGMT_TXPWR_CTRL ====="
           if grep -Fq -- '-DMGMT_TXPWR_CTRL' "$BUILD_LOG"; then
@@ -613,300 +561,137 @@ jobs:
           sha256sum "$SYSUP"
           echo "PASS: standard N60 Pro sysupgrade ITB exists and is non-empty."
 
-      - name: Capture ap_ioctl GCC include-chain evidence
-        if: ${{ !cancelled() }}
+      - name: Capture ap_ioctl compiler and include evidence
+        if: always()
         shell: bash
         run: |
           set -Eeuo pipefail
+          DEST="artifacts/N60-Pro/standard"
+          TRACE="$DEST/AP_IOCTL-STRACE-EXECVE-CHDIR.txt"
+          EVIDENCE="$DEST/AP_IOCTL-EVIDENCE.txt"
+          RAW="$DEST/AP_IOCTL-GCC-RAW-ARGV.txt"
+          CMD="$DEST/AP_IOCTL-GCC-COMMAND.sh"
+          TREE="$DEST/AP_IOCTL-GCC-H-INCLUDE-TREE.txt"
+          PRE="$DEST/AP_IOCTL-PREPROCESSED.i"
+          DEP="$DEST/AP_IOCTL-OBJECT-DEPENDENCIES.d"
+          DEP_INDEX="$DEST/AP_IOCTL-DEPENDENCY-FILES.txt"
+          mkdir -p "$DEST"
+          touch "$EVIDENCE"
 
-          echo "===== Capture GCC -H/-E evidence from kbuild .cmd file ====="
-          BUILD_LOG="artifacts/N60-Pro/standard/FULL-BUILD-VS-LOG.txt"
-          APIO_EVIDENCE="artifacts/N60-Pro/standard/AP_IOCTL-EVIDENCE.txt"
-          APIO_TREE="artifacts/N60-Pro/standard/AP_IOCTL-GCC-H-INCLUDE-TREE.txt"
-          APIO_PRE="artifacts/N60-Pro/standard/AP_IOCTL-PREPROCESSED.i"
-          APIO_CMD="artifacts/N60-Pro/standard/AP_IOCTL-GCC-COMMAND.sh"
-          APIO_CMDFILE_COPY="artifacts/N60-Pro/standard/AP_IOCTL-OBJECT-CMD.txt"
+          echo "===== Preserve all .ap_ioctl.o.d files and report six key headers =====" | tee -a "$EVIDENCE"
+          find build_dir -type f -name ".ap_ioctl.o.d" -print | sort > "$DEP_INDEX" 2>/dev/null || true
+          cat "$DEP_INDEX" | tee -a "$EVIDENCE"
+          : > "$DEP"
+          while IFS= read -r dep_source; do
+            [ -s "$dep_source" ] || continue
+            printf '\n===== SOURCE: %s =====\n' "$dep_source" >> "$DEP"
+            cat "$dep_source" >> "$DEP"
+            printf '\n' >> "$DEP"
+          done < "$DEP_INDEX"
+          python3 - "$DEP_INDEX" "$DEP" "$DEST/AP_IOCTL-DEPENDENCY-HEADER-AUDIT.txt" <<'PYDEP'
+          import pathlib, re, sys
+          index, depfile, report = map(pathlib.Path, sys.argv[1:])
+          wanted = ["rtmp.h", "rt_config.h", "ap.h", "debug.h", "sec_cmm.h", "rt_os_util.h"]
+          files = [pathlib.Path(x) for x in index.read_text().splitlines() if x.strip()]
+          text = depfile.read_text(errors="replace") if depfile.exists() else ""
+          # Normalize Makefile continuations before testing exact basenames.
+          normalized = re.sub(r"\\\n", " ", text)
+          lines = ["AP_IOCTL .d fixed-format header audit", "Dependency files found: %d" % len(files)]
+          if len(files) != 1:
+              lines.append("RESULT: INCONCLUSIVE (expected exactly one .ap_ioctl.o.d file)")
+          for name in wanted:
+              hits = sorted(set(re.findall(r"(?<![A-Za-z0-9_.+-])([^\s\\]*" + re.escape(name) + r")(?![A-Za-z0-9_.+-])", normalized)))
+              lines.append("%s %s%s" % (("IN_TU:" if hits else "NOT_IN_TU:"), name, " | " + "; ".join(hits) if hits else ""))
+          lines.append("RESULT: " + ("PASS" if len(files) == 1 else "INCONCLUSIVE"))
+          report.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print(report.read_text(), end="")
+          with pathlib.Path("artifacts/N60-Pro/standard/AP_IOCTL-EVIDENCE.txt").open("a", encoding="utf-8") as ev:
+              ev.write("\n" + report.read_text())
+          PYDEP
 
-          mkdir -p "$(dirname "$APIO_EVIDENCE")"
-
-          # Re-resolve the prepared source root because shell variables do not persist between steps.
-          mapfile -t RTMP_FILES < <(
-            find build_dir -type f -path '*/embedded/include/rtmp.h' -print
-          )
-
-          SOURCES=()
-          for rtmp in "${RTMP_FILES[@]}"; do
-            src="$(dirname "$(dirname "$(dirname "$rtmp")")")"
-            if [ -f "$src/os/linux/config.mk" ] &&
-               [ -f "$src/embedded/include/security/sec_cmm.h" ] &&
-               [ -f "$src/os/linux/ap_ioctl.c" ]; then
-              SOURCES+=("$src")
-            fi
-          done
-
-          if [ "${#SOURCES[@]}" -ne 1 ]; then
-            echo "::warning::Could not uniquely resolve prepared MT Wi-Fi source root; GCC evidence not generated."
-            printf '%s\n' "${RTMP_FILES[@]}"
+          if [ ! -s "$TRACE" ]; then
+            echo "No strace log; compiler replay skipped." | tee -a "$EVIDENCE"
             exit 0
           fi
 
-          SRC="${SOURCES[0]}"
-          AP_IOCTL="$SRC/os/linux/ap_ioctl.c"
-
-          test -s "$AP_IOCTL" || {
-            echo "::warning::ap_ioctl.c is missing; GCC evidence not generated."
-            exit 0
-          }
-
-          echo "Source root: $SRC" | tee -a "$APIO_EVIDENCE"
-          echo "Build log:   $BUILD_LOG" | tee -a "$APIO_EVIDENCE"
-          echo "ap_ioctl.c:  $AP_IOCTL" | tee -a "$APIO_EVIDENCE"
-
-          # kbuild writes the FULL compiler command into <obj>.o.cmd.
-          # V=s only prints "CC [M] .../ap_ioctl.o", so the log never carries the full gcc line.
-          mapfile -t CMD_CANDIDATES < <(
-            find build_dir -type f \
-              \( -name 'ap_ioctl.o.cmd' -o -name '.ap_ioctl.o.cmd' \) \
-              -print 2>/dev/null
-          )
-
-          APIO_CMD_FILE=""
-          if [ "${#CMD_CANDIDATES[@]}" -eq 1 ]; then
-            APIO_CMD_FILE="${CMD_CANDIDATES[0]}"
-          elif [ "${#CMD_CANDIDATES[@]}" -gt 1 ]; then
-            for c in "${CMD_CANDIDATES[@]}"; do
-              case "$c" in
-                *mt_wifi*|*mt-wifi*|*mtwifi*) APIO_CMD_FILE="$c"; break ;;
-              esac
-            done
-            [ -z "$APIO_CMD_FILE" ] && APIO_CMD_FILE="${CMD_CANDIDATES[0]}"
-          fi
-
-          if [ -z "$APIO_CMD_FILE" ] || [ ! -s "$APIO_CMD_FILE" ]; then
-            {
-              echo
-              echo "===== kbuild .cmd file not found ====="
-              echo "Searched under build_dir for ap_ioctl.o.cmd / .ap_ioctl.o.cmd"
-              echo
-              echo "--- matches for *ap_ioctl*.cmd ---"
-              find build_dir -type f -name '*ap_ioctl*.cmd' -print 2>/dev/null | head -50 || true
-              echo
-              echo "--- all files under build_dir matching *ap_ioctl* (first 50) ---"
-              find build_dir -type f -name '*ap_ioctl*' -print 2>/dev/null | head -50 || true
-              echo
-              echo "RESULT: GCC -H/-E was skipped because the kbuild .cmd file was not present."
-              echo "This is a diagnostic limitation, not a firmware source error."
-            } | tee -a "$APIO_EVIDENCE"
-            exit 0
-          fi
-
-          echo "kbuild .cmd: $APIO_CMD_FILE" | tee -a "$APIO_EVIDENCE"
-          cp "$APIO_CMD_FILE" "$APIO_CMDFILE_COPY" 2>/dev/null || true
-
-          TMP_EVIDENCE="$(mktemp -d)"
-          trap 'rm -rf "$TMP_EVIDENCE"' EXIT
-          COMMAND_FILE="$TMP_EVIDENCE/ap_ioctl-gcc-command.sh"
-          INCLUDE_LOG="$TMP_EVIDENCE/ap_ioctl-gcc-H.log"
-          PREPROCESSED="$TMP_EVIDENCE/ap_ioctl-preprocessed.i"
-
-          cat > "$TMP_EVIDENCE/extract-cmd.py" <<'PY'
-          import pathlib
-          import re
-          import shlex
-          import sys
-
-          cmd_path     = pathlib.Path(sys.argv[1])
-          source       = pathlib.Path(sys.argv[2]).resolve()
-          source_root  = pathlib.Path(sys.argv[3]).resolve()
-          command_file = pathlib.Path(sys.argv[4])
-          preprocessed = pathlib.Path(sys.argv[5])
-
-          text = cmd_path.read_text(errors="replace")
-
-          # kbuild .cmd format (stable across Linux 5.x/6.x):
-          #   cmd_/abs/path/ap_ioctl.o := /abs/path/aarch64-openwrt-linux-musl-gcc ... -c -o /abs/path/ap_ioctl.o /abs/path/ap_ioctl.c
-          pattern = re.compile(
-              r'^[ \t]*cmd_[^\n:]*ap_ioctl\.o[ \t]*:=[ \t]*(.+)$',
-              re.MULTILINE,
-          )
-          m = pattern.search(text)
-          if not m:
-              pattern2 = re.compile(
-                  r'^[ \t]*cmd_[^\n]*ap_ioctl[^\n]*:=[ \t]*(.+)$',
-                  re.MULTILINE,
-              )
-              m = pattern2.search(text)
-          if not m:
-              raise SystemExit("ERROR: no 'cmd_...ap_ioctl.o :=' line found in " + str(cmd_path))
-
-          command = m.group(1).strip()
-          if not command:
-              raise SystemExit("ERROR: extracted cmd_ line is empty")
-
-          argv = shlex.split(command)
-          if not argv:
-              raise SystemExit("ERROR: extracted compiler argv is empty")
-
-          compiler_index = None
-          for i, arg in enumerate(argv):
-              name = pathlib.PurePosixPath(arg).name
-              if (
-                  name == "gcc"
-                  or name.endswith("-gcc")
-                  or name.startswith("aarch64-openwrt-linux-musl-gcc")
-                  or name.endswith("gcc-14")
-                  or name.endswith("gcc-14.3.0")
-              ):
-                  compiler_index = i
-                  break
-          if compiler_index is None:
-              raise SystemExit(f"ERROR: no GCC executable found in extracted command: {argv[:8]}")
-
-          argv = argv[compiler_index:]
-
-          # Drop build-only flags: -c, -o <file>, -MD/-MMD/-MP, -MF/-MT/-MQ <arg>
-          new = []
-          i = 0
-          while i < len(argv):
-              arg = argv[i]
-              if arg == "-c":
-                  i += 1
-                  continue
-              if arg == "-o":
-                  i += 2
-                  continue
-              if arg in ("-MD", "-MMD", "-MP"):
-                  i += 1
-                  continue
-              if arg in ("-MF", "-MT", "-MQ"):
-                  i += 2
-                  continue
-              new.append(arg)
-              i += 1
-
-          matches = [
-              i for i, arg in enumerate(new)
-              if pathlib.Path(arg).name == "ap_ioctl.c"
-          ]
-          if not matches:
-              raise SystemExit("ERROR: normalized compiler command no longer contains ap_ioctl.c")
-
-          new[matches[-1]] = str(source)
-          new += ["-H", "-E", "-o", str(preprocessed)]
-
-          # Use the .cmd file directory as cwd to mirror kbuild's invocation.
-          work_dir = cmd_path.parent.resolve()
-
-          script = (
-              "#!/bin/bash\nset -Eeuo pipefail\n"
-              + "cd " + shlex.quote(str(work_dir)) + "\n"
-              + shlex.join(new) + "\n"
-          )
-          command_file.write_text(script)
-          command_file.chmod(0o700)
-          print("PASS: generated reproducible GCC -H -E command from kbuild .cmd")
+          python3 - "$TRACE" "$RAW" "$CMD" "$EVIDENCE" "$DEST" <<'PY'
+          import ast, pathlib, re, shlex, sys
+          trace_path, raw_path, cmd_path, evidence_path, dest = map(pathlib.Path, sys.argv[1:])
+          lines = trace_path.read_text(errors="replace").splitlines()
+          prefix = re.compile(r"^(?:\[pid\s+(\d+)\]\s+|(\d+)\s+)?")
+          chdir_re = re.compile(r'\bchdir\(("(?:\\.|[^"\\])*")\)\s+=\s+0')
+          exec_re = re.compile(r'execve\(("(?:\\.|[^"\\])*"),\s*(\[.*\]),\s*.*\)\s+=')
+          cwd_by_pid = {}
+          found = []
+          def inherited_cwd(pid):
+              seen=set()
+              while pid not in seen:
+                  seen.add(pid)
+                  if pid in cwd_by_pid: return cwd_by_pid[pid]
+                  pid="main"
+              return None
+          for no, line in enumerate(lines, 1):
+              m=prefix.match(line); pid=(m.group(1) or m.group(2) or "main") if m else "main"; body=line[m.end():] if m else line
+              cm=chdir_re.search(body)
+              if cm:
+                  directory=ast.literal_eval(cm.group(1))
+                  previous=inherited_cwd(pid)
+                  p=pathlib.Path(directory)
+                  cwd_by_pid[pid]=(p if p.is_absolute() else (previous or pathlib.Path.cwd())/p).resolve()
+              em=exec_re.search(body)
+              if not em: continue
+              try: argv=ast.literal_eval(em.group(2))
+              except (ValueError, SyntaxError): continue
+              if not isinstance(argv,list) or not argv or not all(isinstance(x,str) for x in argv): continue
+              # ccache can be the execve executable and the real compiler follows as argv[1].
+              candidates=[pathlib.PurePosixPath(x).name for x in argv[:3]]
+              is_ccache=any(x=="ccache" or x.endswith("/ccache") for x in candidates)
+              compiler=any(x in ("gcc","cc","clang") or x.endswith("-gcc") or ("gcc" in x and "openwrt-linux" in x) for x in candidates)
+              if (compiler or is_ccache) and any(pathlib.PurePosixPath(x).name=="ap_ioctl.c" for x in argv):
+                  found.append((no,pid,argv,inherited_cwd(pid),line))
+          with evidence_path.open("a",encoding="utf-8") as ev:
+              ev.write("\n===== Parsed compiler execve records =====\nmatching compiler/ccache argv count: %d\n" % len(found))
+              if not found:
+                  ev.write("No compiler/ccache execve argv for ap_ioctl.c; -H/-E skipped.\n")
+                  raise SystemExit(0)
+              no,pid,argv,cwd,raw_line=found[-1]
+              raw_argv = argv[1:] if pathlib.PurePosixPath(argv[0]).name == "ccache" else argv
+              raw_path.write_text("%s\ntrace line: %s\npid: %s\nresolved cwd: %r\nargv parsed with ast.literal_eval:\n%r\noriginal strace line:\n%s\n" % (raw_argv[0],no,pid,cwd,argv,raw_line),encoding="utf-8")
+              ev.write("selected trace line: %s; pid=%s; resolved cwd=%r\n" % (no,pid,cwd))
+              candidates=[p.resolve() for p in pathlib.Path("build_dir").rglob("mt_wifi_ap") if p.is_dir()]
+              ev.write("mt_wifi_ap directory count=%d\n" % len(candidates))
+              if len(candidates)!=1:
+                  ev.write("Expected exactly one mt_wifi_ap directory; replay skipped. Candidates: %r\n" % candidates)
+                  raise SystemExit(0)
+              # Prefer the compiler PID's traced cwd. Only use the unique module directory when cwd is absent.
+              if cwd is None or not cwd.is_dir():
+                  cwd=candidates[0]
+                  ev.write("cwd fallback to unique mt_wifi_ap directory=%s\n" % cwd)
+              args=[]; i=0
+              while i<len(argv):
+                  a=argv[i]
+                  if a in ("-c","-MD","-MMD","-MP"): i+=1; continue
+                  if a in ("-o","-MF","-MT","-MQ"): i+=2; continue
+                  if a.startswith(("-Wp,-MD,","-Wp,-MMD,","-Wp,-MF,","-Wp,-MT,")): i+=1; continue
+                  args.append(a); i+=1
+              # If argv is the ccache wrapper, use its real compiler argv following ccache.
+              if pathlib.PurePosixPath(args[0]).name=="ccache":
+                  args=args[1:]
+              args.extend(["-H","-E","-o",str((dest/"AP_IOCTL-PREPROCESSED.i").resolve())])
+              cmd_path.write_text("#!/usr/bin/env bash\nset -Eeuo pipefail\ncd "+shlex.quote(str(cwd))+"\nexec "+shlex.join(args)+"\n",encoding="utf-8")
+              cmd_path.chmod(0o700)
+              ev.write("replay cwd=%s\ncommand script=%s\nargv source: parsed strace execve record\n" % (cwd,cmd_path))
           PY
 
-          set +e
-          python3 "$TMP_EVIDENCE/extract-cmd.py" \
-            "$APIO_CMD_FILE" "$AP_IOCTL" "$SRC" "$COMMAND_FILE" "$PREPROCESSED"
-          PY_RC=$?
-          set -e
-
-          if [ "$PY_RC" -ne 0 ] || [ ! -s "$COMMAND_FILE" ]; then
-            {
-              echo
-              echo "===== GCC command extraction failed ====="
-              echo "extract-cmd.py exit status: $PY_RC"
-              echo "APIO_CMD_FILE=$APIO_CMD_FILE"
-              echo "Command file exists: $([ -s "$COMMAND_FILE" ] && echo yes || echo no)"
-              echo
-              echo "--- kbuild .cmd content (first 60 lines) ---"
-              sed -n '1,60p' "$APIO_CMD_FILE" 2>/dev/null || true
-              echo
-              echo "RESULT: GCC -H/-E skipped due to extraction failure."
-              echo "This is a diagnostic limitation, not a firmware source error."
-            } | tee -a "$APIO_EVIDENCE"
-            exit 0
+          if [ -s "$CMD" ]; then
+            set +e
+            "$CMD" > "$DEST/AP_IOCTL-PREPROCESS-STDOUT.txt" 2> "$TREE"
+            GCC_RC=$?
+            set -e
+            { echo "GCC -H -E exit status: $GCC_RC"; echo "===== include tree matches ====="; grep -nE "rt_config\.h|rtmp\.h|rtmp_comm\.h|rt_linux\.h|debug\.h|sec_cmm\.h|sae_cmm\.h" "$TREE" | head -300 || true; if [ -s "$PRE" ]; then echo "preprocessed bytes: $(wc -c < "$PRE")"; grep -nE "struct wifi_dev|PRTMP_ADAPTER|CHANNEL_CTRL|mtwf_dbg_prt" "$PRE" | head -200 || true; else echo "preprocessed output missing/empty"; fi; } | tee -a "$EVIDENCE"
           fi
-
-          echo "--- actual GCC command used for evidence ---"
-          cat "$COMMAND_FILE" | tee "$APIO_CMD"
-
-          echo "--- run GCC -H -E on the current, unmodified ap_ioctl.c ---"
-          set +e
-          "$COMMAND_FILE" 2>"$INCLUDE_LOG"
-          GCC_RC=$?
-          set -e
-          echo "gcc -H -E exit status: $GCC_RC"
-
-          cp "$INCLUDE_LOG" "$APIO_TREE" 2>/dev/null || true
-
-          {
-            echo
-            echo "===== GCC -H include tree (key lines) ====="
-            grep -nE 'rtmp\.h|rtmp_comm\.h|rtmp_os\.h|rt_linux\.h|rt_os\.h|rt_os_util\.h|rt_os_net\.h|rtmp_def\.h|debug\.h|sec_cmm\.h|sae_cmm\.h|rt_config\.h' "$INCLUDE_LOG" | head -300 || true
-
-            echo
-            echo "===== GCC -H include tree size ====="
-            wc -l "$INCLUDE_LOG" || true
-
-            echo
-            echo "===== GCC -E result checks ====="
-            if [ -s "$PREPROCESSED" ]; then
-              echo "PREPROCESSED_FILE=$PREPROCESSED"
-              for pattern in \
-                'struct wifi_dev {' \
-                'typedef.*PRTMP_ADAPTER' \
-                'CHANNEL_CTRL' \
-                'mtwf_dbg_prt'
-              do
-                count=$(grep -Ec "$pattern" "$PREPROCESSED" 2>/dev/null || true)
-                echo "$pattern : $count"
-              done
-
-              echo
-              echo "--- rtmp.h line markers in preprocessed output ---"
-              grep -n 'embedded/include/rtmp\.h' "$PREPROCESSED" | head -20 || true
-
-              echo
-              echo "--- definitions/uses around target symbols ---"
-              grep -nE 'struct wifi_dev|PRTMP_ADAPTER|CHANNEL_CTRL|mtwf_dbg_prt' "$PREPROCESSED" | head -200 || true
-            else
-              echo "WARN: preprocessed output file was not produced."
-            fi
-          } | tee -a "$APIO_EVIDENCE"
-
-          if [ -s "$PREPROCESSED" ]; then
-            cp "$PREPROCESSED" "$APIO_PRE"
-          else
-            echo "WARN: AP_IOCTL-PREPROCESSED.i is empty/missing." | tee -a "$APIO_EVIDENCE"
-          fi
-
-          {
-            echo
-            echo "===== gcc -H -E diagnostics ====="
-            echo "kbuild .cmd file: $APIO_CMD_FILE"
-            echo "gcc exit status:  $GCC_RC"
-            if grep -q 'rtmp\.h' "$INCLUDE_LOG"; then
-              echo "RESULT: rtmp.h APPEARS in actual ap_ioctl.c include tree."
-            else
-              echo "RESULT: rtmp.h DOES NOT APPEAR in actual ap_ioctl.c include tree."
-            fi
-            if grep -q 'rt_config\.h' "$INCLUDE_LOG"; then
-              echo "RESULT: rt_config.h APPEARS in actual ap_ioctl.c include tree."
-            else
-              echo "RESULT: rt_config.h DOES NOT APPEAR in actual ap_ioctl.c include tree."
-            fi
-            echo
-            echo "IMPORTANT: This evidence uses the exact compiler command captured from the kbuild .cmd file; it does not modify ap_ioctl.c."
-          } | tee -a "$APIO_EVIDENCE"
-
-          echo "PASS: GCC include-chain evidence capture completed."
-          echo "Artifacts:"
-          ls -lh "$APIO_EVIDENCE" "$APIO_TREE" "$APIO_CMD" "$APIO_CMDFILE_COPY" 2>/dev/null || true
-          ls -lh "$APIO_PRE" 2>/dev/null || true
-
+          echo "===== Evidence artifacts ====="
+          ls -lh "$EVIDENCE" "$TRACE" "$RAW" "$CMD" "$TREE" "$PRE" "$DEP" "$DEP_INDEX" "$DEST/AP_IOCTL-DEPENDENCY-HEADER-AUDIT.txt" 2>/dev/null || true
       - name: Check whether firmware was actually produced
         if: always()
         shell: bash
