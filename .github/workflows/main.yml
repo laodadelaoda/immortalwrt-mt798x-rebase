@@ -687,6 +687,8 @@ jobs:
           log = log_path.read_text(errors="replace").splitlines()
           source = source_path.resolve()
           candidates = []
+          current_make_dir = None
+          entering_dir_re = re.compile(r"Entering directory ['\u0060'](.+?)['\u0060']")
 
           def is_gcc(token):
               name = pathlib.PurePosixPath(token).name
@@ -695,6 +697,9 @@ jobs:
                       name.endswith("gcc-14") or name.endswith("gcc-14.3.0"))
 
           for line_no, line in enumerate(log, 1):
+              entering = entering_dir_re.search(line)
+              if entering:
+                  current_make_dir = pathlib.Path(entering.group(1)).resolve()
               if "ap_ioctl.c" not in line or re.search(r"(^|\s)-c(\s|$)", line) is None:
                   continue
               try:
@@ -708,7 +713,7 @@ jobs:
               compiler_argv = argv[compiler_index:]
               if not any(pathlib.PurePosixPath(arg).name == "ap_ioctl.c" for arg in compiler_argv):
                   continue
-              candidates.append((line_no, line, compiler_argv))
+              candidates.append((line_no, line, compiler_argv, current_make_dir))
 
           with evidence_path.open("a", encoding="utf-8") as evidence:
               evidence.write("\n===== GCC command capture from build log =====\n")
@@ -723,7 +728,7 @@ jobs:
                   raise SystemExit(0)
 
               # Prefer the last matching invocation, which is normally the failing compile.
-              line_no, raw_line, argv = candidates[-1]
+              line_no, raw_line, argv, kernel_root = candidates[-1]
               raw_path.write_text(
                   "Build log line: " + str(line_no) + "\n" + raw_line + "\n",
                   encoding="utf-8",
@@ -732,31 +737,16 @@ jobs:
               evidence.write("Raw compiler line saved to: " + str(raw_path) + "\n")
               evidence.write(raw_line + "\n")
 
-              # Require an absolute -o target so the kernel build root can be derived
-              # from the actual object path instead of assuming a working directory.
-              try:
-                  out_index = argv.index("-o")
-                  object_arg = argv[out_index + 1]
-              except (ValueError, IndexError):
-                  evidence.write("RESULT: Compiler line has no recognizable '-o <object>' pair; -H/-E skipped.\n")
-                  print("WARN: cannot derive object path from real compiler command; -H/-E skipped.")
-                  raise SystemExit(0)
-
-              object_path = pathlib.Path(object_arg)
-              if not object_path.is_absolute():
-                  evidence.write("RESULT: Object path is relative; working directory cannot be proven from this log; -H/-E skipped.\n")
-                  print("WARN: relative object path; refusing to guess the compiler working directory.")
-                  raise SystemExit(0)
-
-              resolved_object = object_path.resolve()
-              kernel_root = None
-              for parent in resolved_object.parents:
-                  if (parent / "include/linux/kconfig.h").is_file() and (parent / "scripts/Makefile.build").is_file():
-                      kernel_root = parent
-                      break
+              # Use the actual GNU make directory printed immediately before this
+              # compiler invocation. Do not infer the working directory from object paths.
               if kernel_root is None:
-                  evidence.write("RESULT: Could not derive kernel build root from the actual object path; -H/-E skipped.\n")
-                  print("WARN: kernel build root could not be proven; -H/-E skipped.")
+                  evidence.write("RESULT: No preceding make Entering directory line identifies the compiler working directory; -H/-E skipped.\n")
+                  print("WARN: compiler working directory not proven by the build log; -H/-E skipped.")
+                  raise SystemExit(0)
+              if not ((kernel_root / "include/linux/kconfig.h").is_file() and
+                      (kernel_root / "scripts/Makefile.build").is_file()):
+                  evidence.write("RESULT: Nearest make directory is not a validated kernel build root: " + str(kernel_root) + "; -H/-E skipped.\n")
+                  print("WARN: nearest make directory failed kernel-root validation; -H/-E skipped.")
                   raise SystemExit(0)
 
               # Preserve real compiler/include/define flags; remove compile-output and
