@@ -425,7 +425,7 @@ jobs:
             042-fix-sae-structure-include-guard.patch \
             050-fix-rrm-config.patch \
             051-fix-dynamic-vlan-guard.patch \
-            052-fix-mgmt-txpwr-config.patch
+            052-fix-mgmt-txpwr-config.patch \
             053-fix-ap-ioctl-rt-config-include.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
