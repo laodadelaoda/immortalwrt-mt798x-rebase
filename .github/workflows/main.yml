@@ -197,7 +197,8 @@ jobs:
           require_config 'CONFIG_MTK_CFG80211_SUPPORT=y'
           require_config 'CONFIG_MTK_MT_WIFI=m'
 
-          if grep -qx 'CONFIG_TARGET_mediatek_filogic_DEVICE_netcore_n60-pro-mtkuboot=y' .config; then            echo "::error::MTK U-Boot profile must not be selected."
+          if grep -qx 'CONFIG_TARGET_mediatek_filogic_DEVICE_netcore_n60-pro-mtkuboot=y' .config; then
+            echo "::error::MTK U-Boot profile must not be selected."
             exit 1
           fi
 
@@ -396,7 +397,8 @@ jobs:
           require_config 'CONFIG_MTK_CFG80211_SUPPORT=y'
           require_config 'CONFIG_MTK_MT_WIFI=m'
 
-          echo "===== Effective management TX power configuration ====="          grep -E '^CONFIG_MTK_(MT_AP_SUPPORT|CFG80211_SUPPORT|WIFI_EAP_FEATURE|MGMT_TXPWR_CTRL)=' .config
+          echo "===== Effective management TX power configuration ====="
+          grep -E '^CONFIG_MTK_(MT_AP_SUPPORT|CFG80211_SUPPORT|WIFI_EAP_FEATURE|MGMT_TXPWR_CTRL)=' .config
 
           echo "===== Step 1: clean MT Wi-Fi package and prepare with static patches ====="
           make package/mtk/drivers/mt_wifi/clean V=s
@@ -596,6 +598,7 @@ jobs:
             grep -n -i -m 50 -E 'MGMT_TXPWR_CTRL|mt_wifi.*ap_cfg\.c|ap_cfg\.c:|WFLAGS' "$BUILD_LOG" || true
             exit 1
           fi
+
           echo "===== Step 6: verify the exact standard N60 Pro sysupgrade image ====="
           SYSUP="bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
 
