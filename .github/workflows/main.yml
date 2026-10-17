@@ -601,7 +601,7 @@ jobs:
               lines.append("RESULT: INCONCLUSIVE (expected exactly one .ap_ioctl.o.d file)")
           for name in wanted:
               hits = sorted(set(re.findall(r"(?<![A-Za-z0-9_.+-])([^\s\\]*" + re.escape(name) + r")(?![A-Za-z0-9_.+-])", normalized)))
-              lines.append("%s: %s%s" % (("IN_TU: " if hits else "NOT_IN_TU: "), name, " | " + "; ".join(hits) if hits else ""))
+              lines.append("%s %s%s" % (("IN_TU:" if hits else "NOT_IN_TU:"), name, " | " + "; ".join(hits) if hits else ""))
           lines.append("RESULT: " + ("PASS" if len(files) == 1 else "INCONCLUSIVE"))
           report.write_text("\n".join(lines) + "\n", encoding="utf-8")
           print(report.read_text(), end="")
@@ -621,7 +621,7 @@ jobs:
           prefix = re.compile(r"^(?:\[pid\s+(\d+)\]\s+|(\d+)\s+)?")
           chdir_re = re.compile(r'\bchdir\(("(?:\\.|[^"\\])*")\)\s+=\s+0')
           exec_re = re.compile(r'execve\(("(?:\\.|[^"\\])*"),\s*(\[.*\]),\s*.*\)\s+=')
-          cwd_by_pid = {"main": pathlib.Path.cwd().resolve()}
+          cwd_by_pid = {}
           found = []
           def inherited_cwd(pid):
               seen=set()
@@ -655,7 +655,8 @@ jobs:
                   ev.write("No compiler/ccache execve argv for ap_ioctl.c; -H/-E skipped.\n")
                   raise SystemExit(0)
               no,pid,argv,cwd,raw_line=found[-1]
-              raw_path.write_text("trace line: %s\npid: %s\nresolved cwd: %r\nargv parsed with ast.literal_eval:\n%r\noriginal strace line:\n%s\n" % (no,pid,cwd,argv,raw_line),encoding="utf-8")
+              raw_argv = argv[1:] if pathlib.PurePosixPath(argv[0]).name == "ccache" else argv
+              raw_path.write_text("%s\ntrace line: %s\npid: %s\nresolved cwd: %r\nargv parsed with ast.literal_eval:\n%r\noriginal strace line:\n%s\n" % (raw_argv[0],no,pid,cwd,argv,raw_line),encoding="utf-8")
               ev.write("selected trace line: %s; pid=%s; resolved cwd=%r\n" % (no,pid,cwd))
               candidates=[p.resolve() for p in pathlib.Path("build_dir").rglob("mt_wifi_ap") if p.is_dir()]
               ev.write("mt_wifi_ap directory count=%d\n" % len(candidates))
