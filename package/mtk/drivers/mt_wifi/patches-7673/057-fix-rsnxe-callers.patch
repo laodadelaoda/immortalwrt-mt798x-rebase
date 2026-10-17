@@ -1,0 +1,61 @@
+diff -ru a/mt_wifi/embedded/common/ft.c b/mt_wifi/embedded/common/ft.c
+--- a/mt_wifi/embedded/common/ft.c	2025-04-08 12:54:08.000000000 +0800
++++ b/mt_wifi/embedded/common/ft.c	2026-10-18 02:47:15.955780839 +0800
+@@ -2396,7 +2396,7 @@
+ 
+ 	if (pFtInfo_in->FtIeInfo.MICCtr.field.rsnxe_used
+ 		&& rsnxe_len == 0
+-#ifdef HOSTAPD_WPA3R3_SUPPORT
++#ifdef HOSTAPD_WPA3_SUPPORT
+ 		&& build_rsnxe_ie(wdev, &wdev->SecConfig, NULL) != 0) {
+ #else
+ 		&& build_rsnxe_ie(&wdev->SecConfig, NULL) != 0) {
+diff -ru a/mt_wifi/embedded/fsm/sta_mgmt_assoc.c b/mt_wifi/embedded/fsm/sta_mgmt_assoc.c
+--- a/mt_wifi/embedded/fsm/sta_mgmt_assoc.c	2025-04-08 12:23:08.000000000 +0800
++++ b/mt_wifi/embedded/fsm/sta_mgmt_assoc.c	2026-10-18 02:47:15.973710523 +0800
+@@ -1649,13 +1649,13 @@
+ 			|| (IS_MAP_CERT_ENABLE(pAd) && WMODE_CAP_6G(wdev->PhyMode))
+ #endif
+ 			)
+-#ifdef HOSTAPD_WPA3R3_SUPPORT
++#ifdef HOSTAPD_WPA3_SUPPORT
+ 			FrameLen += build_rsnxe_ie(wdev, &wdev->SecConfig, pOutBuffer + FrameLen);
+ #else
+ 			FrameLen += build_rsnxe_ie(&wdev->SecConfig, pOutBuffer + FrameLen);
+ #endif
+ #else
+-#ifdef HOSTAPD_WPA3R3_SUPPORT
++#ifdef HOSTAPD_WPA3_SUPPORT
+ 		FrameLen += build_rsnxe_ie(wdev, &wdev->SecConfig, pOutBuffer + FrameLen);
+ #else
+ 		FrameLen += build_rsnxe_ie(&wdev->SecConfig, pOutBuffer + FrameLen);
+@@ -1908,7 +1908,7 @@
+ 				UCHAR rsnxe_ie[MAX_LEN_OF_RSNXEIE];
+ 				UCHAR rsnxe_ie_len;
+ 
+-#ifdef HOSTAPD_WPA3R3_SUPPORT
++#ifdef HOSTAPD_WPA3_SUPPORT
+ 				rsnxe_ie_len = build_rsnxe_ie(wdev, &wdev->SecConfig, rsnxe_ie);
+ #else
+ 				rsnxe_ie_len = build_rsnxe_ie(&wdev->SecConfig, rsnxe_ie);
+@@ -2040,7 +2040,7 @@
+ #endif /* DOT11_N_SUPPORT */
+ 		ie_info.frame_buf = (UCHAR *)(pOutBuffer + FrameLen);
+ 		FrameLen += build_extended_cap_ie(pAd, &ie_info);
+-#ifdef HOSTAPD_WPA3R3_SUPPORT
++#ifdef HOSTAPD_WPA3_SUPPORT
+ 		FrameLen += build_rsnxe_ie(wdev, &wdev->SecConfig, pOutBuffer + FrameLen);
+ #else
+ 		FrameLen += build_rsnxe_ie(&wdev->SecConfig, pOutBuffer + FrameLen);
+diff -ru a/mt_wifi/embedded/security/cmm_wpa.c b/mt_wifi/embedded/security/cmm_wpa.c
+--- a/mt_wifi/embedded/security/cmm_wpa.c	2025-04-08 12:23:08.000000000 +0800
++++ b/mt_wifi/embedded/security/cmm_wpa.c	2026-10-18 02:47:15.959668715 +0800
+@@ -3878,7 +3878,7 @@
+ 			) {
+ 				ULONG offset;
+ 
+-#ifdef HOSTAPD_WPA3R3_SUPPORT
++#ifdef HOSTAPD_WPA3_SUPPORT
+ 				offset = build_rsnxe_ie(pEntry->wdev, pSecGroup, Key_Data + data_offset);
+ #else
+ 				offset = build_rsnxe_ie(pSecGroup, Key_Data + data_offset);
