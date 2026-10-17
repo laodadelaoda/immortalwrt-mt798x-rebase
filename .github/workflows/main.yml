@@ -269,6 +269,20 @@ jobs:
           SEC="$SRC/embedded/include/security/sec_cmm.h"
           AP_CFG="$SRC/embedded/ap/ap_cfg.c"
 
+          echo "===== Verify patch 053 restores rt_config.h include in ap_ioctl.c ====="
+          AP_IOCTL_SRC="$SRC/os/linux/ap_ioctl.c"
+          if ! grep -Fqx '#include "rt_config.h"' "$AP_IOCTL_SRC"; then
+            echo "::error::Patch 053 assertion failed: active ap_ioctl.c lacks the exact rt_config.h include."
+            nl -ba "$AP_IOCTL_SRC" | sed -n '20,36p'
+            exit 1
+          fi
+          if grep -Fq '/*#include "rt_config.h" */' "$AP_IOCTL_SRC"; then
+            echo "::error::Patch 053 assertion failed: commented rt_config.h include remains."
+            nl -ba "$AP_IOCTL_SRC" | sed -n '20,36p'
+            exit 1
+          fi
+          echo "PASS: active ap_ioctl.c contains #include \"rt_config.h\" and no commented duplicate."
+
           echo "Resolved driver source root: $SRC"
           echo "RRM config: $CFG"
           echo "VLAN header: $RTMP"
@@ -412,6 +426,7 @@ jobs:
             050-fix-rrm-config.patch \
             051-fix-dynamic-vlan-guard.patch \
             052-fix-mgmt-txpwr-config.patch
+            053-fix-ap-ioctl-rt-config-include.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
