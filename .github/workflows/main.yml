@@ -535,7 +535,7 @@ jobs:
           mkdir -p "$(dirname "$BUILD_LOG")"
           strace -V
           set -o pipefail
-          strace -f -qq -s 65535 -e trace=execve,chdir,clone,fork,vfork -o "$STRACE_LOG" make -j1 V=s 2>&1 | tee "$BUILD_LOG"
+          strace -f -qq -s 65535 -e trace=execve,chdir -o "$STRACE_LOG" make -j1 V=s 2>&1 | tee "$BUILD_LOG"
 
           echo "===== Step 5: audit actual compiler log for MGMT_TXPWR_CTRL ====="
           if grep -Fq -- '-DMGMT_TXPWR_CTRL' "$BUILD_LOG"; then
@@ -591,17 +591,22 @@ jobs:
           python3 - "$DEP_INDEX" "$DEP" "$DEST/AP_IOCTL-DEPENDENCY-HEADER-AUDIT.txt" <<'PYDEP'
           import pathlib, re, sys
           index, depfile, report = map(pathlib.Path, sys.argv[1:])
-          wanted = ["rt_config.h", "rtmp.h", "rtmp_comm.h", "rt_linux.h", "debug.h", "sec_cmm.h"]
+          wanted = ["rtmp.h", "rt_config.h", "ap.h", "debug.h", "sec_cmm.h", "rt_os_util.h"]
           files = [pathlib.Path(x) for x in index.read_text().splitlines() if x.strip()]
           text = depfile.read_text(errors="replace") if depfile.exists() else ""
           # Normalize Makefile continuations before testing exact basenames.
           normalized = re.sub(r"\\\n", " ", text)
           lines = ["AP_IOCTL .d fixed-format header audit", "Dependency files found: %d" % len(files)]
+          if len(files) != 1:
+              lines.append("RESULT: INCONCLUSIVE (expected exactly one .ap_ioctl.o.d file)")
           for name in wanted:
               hits = sorted(set(re.findall(r"(?<![A-Za-z0-9_.+-])([^\s\\]*" + re.escape(name) + r")(?![A-Za-z0-9_.+-])", normalized)))
-              lines.append("%s: %s" % (name, "FOUND | " + "; ".join(hits) if hits else "NOT_FOUND"))
+              lines.append("%s: %s%s" % (("IN_TU: " if hits else "NOT_IN_TU: "), name, " | " + "; ".join(hits) if hits else ""))
+          lines.append("RESULT: " + ("PASS" if len(files) == 1 else "INCONCLUSIVE"))
           report.write_text("\n".join(lines) + "\n", encoding="utf-8")
           print(report.read_text(), end="")
+          with pathlib.Path("artifacts/N60-Pro/standard/AP_IOCTL-EVIDENCE.txt").open("a", encoding="utf-8") as ev:
+              ev.write("\n" + report.read_text())
           PYDEP
 
           if [ ! -s "$TRACE" ]; then
@@ -616,16 +621,14 @@ jobs:
           prefix = re.compile(r"^(?:\[pid\s+(\d+)\]\s+|(\d+)\s+)?")
           chdir_re = re.compile(r'\bchdir\(("(?:\\.|[^"\\])*")\)\s+=\s+0')
           exec_re = re.compile(r'execve\(("(?:\\.|[^"\\])*"),\s*(\[.*\]),\s*.*\)\s+=')
-          clone_re = re.compile(r'\b(?:clone|clone3|fork|vfork)\(.*\)\s+=\s+(\d+)')
           cwd_by_pid = {"main": pathlib.Path.cwd().resolve()}
-          parent_by_pid = {}
           found = []
           def inherited_cwd(pid):
               seen=set()
               while pid not in seen:
                   seen.add(pid)
                   if pid in cwd_by_pid: return cwd_by_pid[pid]
-                  pid=parent_by_pid.get(pid, "main")
+                  pid="main"
               return None
           for no, line in enumerate(lines, 1):
               m=prefix.match(line); pid=(m.group(1) or m.group(2) or "main") if m else "main"; body=line[m.end():] if m else line
@@ -635,8 +638,6 @@ jobs:
                   previous=inherited_cwd(pid)
                   p=pathlib.Path(directory)
                   cwd_by_pid[pid]=(p if p.is_absolute() else (previous or pathlib.Path.cwd())/p).resolve()
-              fm=clone_re.search(body)
-              if fm: parent_by_pid[fm.group(1)]=pid
               em=exec_re.search(body)
               if not em: continue
               try: argv=ast.literal_eval(em.group(2))
