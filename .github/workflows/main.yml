@@ -535,7 +535,7 @@ jobs:
           mkdir -p "$(dirname "$BUILD_LOG")"
           strace -V
           set -o pipefail
-          strace -f -qq -s 65535 -e trace=execve,chdir -o "$STRACE_LOG" make -j"$(nproc)" V=s 2>&1 | tee "$BUILD_LOG"
+          strace -f -qq -s 65535 -e trace=execve,chdir,clone,fork,vfork -o "$STRACE_LOG" make -j1 V=s 2>&1 | tee "$BUILD_LOG"
 
           echo "===== Step 5: audit actual compiler log for MGMT_TXPWR_CTRL ====="
           if grep -Fq -- '-DMGMT_TXPWR_CTRL' "$BUILD_LOG"; then
@@ -578,16 +578,31 @@ jobs:
           mkdir -p "$DEST"
           touch "$EVIDENCE"
 
-          echo "===== Preserve GCC dependency file as independent evidence =====" | tee -a "$EVIDENCE"
-          find build_dir -type f -name ".ap_ioctl.o.d" -print > "$DEP_INDEX" 2>/dev/null || true
+          echo "===== Preserve all .ap_ioctl.o.d files and report six key headers =====" | tee -a "$EVIDENCE"
+          find build_dir -type f -name ".ap_ioctl.o.d" -print | sort > "$DEP_INDEX" 2>/dev/null || true
           cat "$DEP_INDEX" | tee -a "$EVIDENCE"
-          DEP_SOURCE="$(head -n 1 "$DEP_INDEX" || true)"
-          if [ -n "$DEP_SOURCE" ] && [ -s "$DEP_SOURCE" ]; then
-            cp "$DEP_SOURCE" "$DEP"
-            echo "Copied dependency evidence from: $DEP_SOURCE" | tee -a "$EVIDENCE"
-          else
-            echo "No non-empty .ap_ioctl.o.d found; absence recorded." | tee -a "$EVIDENCE"
-          fi
+          : > "$DEP"
+          while IFS= read -r dep_source; do
+            [ -s "$dep_source" ] || continue
+            printf '\n===== SOURCE: %s =====\n' "$dep_source" >> "$DEP"
+            cat "$dep_source" >> "$DEP"
+            printf '\n' >> "$DEP"
+          done < "$DEP_INDEX"
+          python3 - "$DEP_INDEX" "$DEP" "$DEST/AP_IOCTL-DEPENDENCY-HEADER-AUDIT.txt" <<'PYDEP'
+          import pathlib, re, sys
+          index, depfile, report = map(pathlib.Path, sys.argv[1:])
+          wanted = ["rt_config.h", "rtmp.h", "rtmp_comm.h", "rt_linux.h", "debug.h", "sec_cmm.h"]
+          files = [pathlib.Path(x) for x in index.read_text().splitlines() if x.strip()]
+          text = depfile.read_text(errors="replace") if depfile.exists() else ""
+          # Normalize Makefile continuations before testing exact basenames.
+          normalized = re.sub(r"\\\\\n", " ", text)
+          lines = ["AP_IOCTL .d fixed-format header audit", "Dependency files found: %d" % len(files)]
+          for name in wanted:
+              hits = sorted(set(re.findall(r"(?<![A-Za-z0-9_.+-])([^\\s\\\\]*" + re.escape(name) + r")(?![A-Za-z0-9_.+-])", normalized)))
+              lines.append("%s: %s" % (name, "FOUND | " + "; ".join(hits) if hits else "NOT_FOUND"))
+          report.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print(report.read_text(), end="")
+          PYDEP
 
           if [ ! -s "$TRACE" ]; then
             echo "No strace log; compiler replay skipped." | tee -a "$EVIDENCE"
@@ -598,56 +613,72 @@ jobs:
           import ast, pathlib, re, shlex, sys
           trace_path, raw_path, cmd_path, evidence_path, dest = map(pathlib.Path, sys.argv[1:])
           lines = trace_path.read_text(errors="replace").splitlines()
-          prefix = re.compile(r"^(?:\[pid\s+(\d+)\]\s+|(\d+)\s+)?")
-          chdir_re = re.compile(r'\bchdir\("(?:\\.|[^"\\])*"\)\s+=\s+0')
-          exec_re = re.compile(r'execve\("(?:\\.|[^"\\])*",\s*(\[.*\]),\s*.*\)\s+=')
-          cwd_by_pid = {}
-          initial_cwd = pathlib.Path.cwd().resolve()
+          prefix = re.compile(r"^(?:\\[pid\\s+(\\d+)\\]\\s+|(\\d+)\\s+)?")
+          chdir_re = re.compile(r'\\bchdir\\(("(?:\\\\.|[^"\\\\])*")\\)\\s+=\\s+0')
+          exec_re = re.compile(r'execve\\(("(?:\\\\.|[^"\\\\])*"),\\s*(\\[.*\\]),\\s*.*\\)\\s+=')
+          clone_re = re.compile(r'\\b(?:clone|clone3|fork|vfork)\\(.*\\)\\s+=\\s+(\\d+)')
+          cwd_by_pid = {"main": pathlib.Path.cwd().resolve()}
+          parent_by_pid = {}
           found = []
+          def inherited_cwd(pid):
+              seen=set()
+              while pid not in seen:
+                  seen.add(pid)
+                  if pid in cwd_by_pid: return cwd_by_pid[pid]
+                  pid=parent_by_pid.get(pid, "main")
+              return None
           for no, line in enumerate(lines, 1):
-              m = prefix.match(line); pid = (m.group(1) or m.group(2) or "main") if m else "main"; body = line[m.end():] if m else line
-              cm = chdir_re.search(body)
+              m=prefix.match(line); pid=(m.group(1) or m.group(2) or "main") if m else "main"; body=line[m.end():] if m else line
+              cm=chdir_re.search(body)
               if cm:
-                  call = body[cm.start():cm.end()]
-                  raw_dir = re.search(r'chdir\(("(?:\\.|[^"\\])*")\)', call).group(1)
-                  directory = ast.literal_eval(raw_dir)
-                  previous = cwd_by_pid.get(pid, initial_cwd)
-                  p = pathlib.Path(directory)
-                  cwd_by_pid[pid] = (p if p.is_absolute() else previous / p).resolve()
-              em = exec_re.search(body)
+                  directory=ast.literal_eval(cm.group(1))
+                  previous=inherited_cwd(pid)
+                  p=pathlib.Path(directory)
+                  cwd_by_pid[pid]=(p if p.is_absolute() else (previous or pathlib.Path.cwd())/p).resolve()
+              fm=clone_re.search(body)
+              if fm: parent_by_pid[fm.group(1)]=pid
+              em=exec_re.search(body)
               if not em: continue
-              try: argv = ast.literal_eval(em.group(1))
+              try: argv=ast.literal_eval(em.group(2))
               except (ValueError, SyntaxError): continue
-              if not isinstance(argv, list) or not argv or not all(isinstance(x, str) for x in argv): continue
-              exe = pathlib.PurePosixPath(argv[0]).name
-              compiler = exe in ("gcc", "cc", "clang") or exe.endswith("-gcc") or ("gcc" in exe and "openwrt-linux" in exe)
-              if compiler and any(pathlib.PurePosixPath(x).name == "ap_ioctl.c" for x in argv):
-                  found.append((no, pid, argv, cwd_by_pid.get(pid), line))
-          with evidence_path.open("a", encoding="utf-8") as ev:
-              ev.write("\n===== Parsed compiler execve records =====\n")
-              ev.write("matching compiler argv count: " + str(len(found)) + "\n")
+              if not isinstance(argv,list) or not argv or not all(isinstance(x,str) for x in argv): continue
+              # ccache can be the execve executable and the real compiler follows as argv[1].
+              candidates=[pathlib.PurePosixPath(x).name for x in argv[:3]]
+              is_ccache=any(x=="ccache" or x.endswith("/ccache") for x in candidates)
+              compiler=any(x in ("gcc","cc","clang") or x.endswith("-gcc") or ("gcc" in x and "openwrt-linux" in x) for x in candidates)
+              if (compiler or is_ccache) and any(pathlib.PurePosixPath(x).name=="ap_ioctl.c" for x in argv):
+                  found.append((no,pid,argv,inherited_cwd(pid),line))
+          with evidence_path.open("a",encoding="utf-8") as ev:
+              ev.write("\n===== Parsed compiler execve records =====\nmatching compiler/ccache argv count: %d\n" % len(found))
               if not found:
-                  ev.write("No compiler execve argv for ap_ioctl.c; -H/-E skipped.\n")
+                  ev.write("No compiler/ccache execve argv for ap_ioctl.c; -H/-E skipped.\n")
                   raise SystemExit(0)
-              no, pid, argv, cwd, raw_line = found[-1]
-              raw_path.write_text("trace line: %s\npid: %s\nrecorded chdir cwd: %r\nargv parsed with ast.literal_eval:\n%r\noriginal strace line:\n%s\n" % (no,pid,cwd,argv,raw_line), encoding="utf-8")
-              ev.write("selected trace line: %s; pid=%s; recorded cwd=%r\n" % (no,pid,cwd))
-              # If this PID has no chdir record, use a unique mt_wifi_ap directory only; otherwise skip.
+              no,pid,argv,cwd,raw_line=found[-1]
+              raw_path.write_text("trace line: %s\npid: %s\nresolved cwd: %r\nargv parsed with ast.literal_eval:\n%r\noriginal strace line:\n%s\n" % (no,pid,cwd,argv,raw_line),encoding="utf-8")
+              ev.write("selected trace line: %s; pid=%s; resolved cwd=%r\n" % (no,pid,cwd))
+              candidates=[p.resolve() for p in pathlib.Path("build_dir").rglob("mt_wifi_ap") if p.is_dir()]
+              ev.write("mt_wifi_ap directory count=%d\n" % len(candidates))
+              if len(candidates)!=1:
+                  ev.write("Expected exactly one mt_wifi_ap directory; replay skipped. Candidates: %r\n" % candidates)
+                  raise SystemExit(0)
+              # Prefer the compiler PID's traced cwd. Only use the unique module directory when cwd is absent.
               if cwd is None or not cwd.is_dir():
-                  candidates = [p.resolve() for p in pathlib.Path("build_dir").rglob("mt_wifi_ap") if p.is_dir()]
-                  if len(candidates) == 1: cwd = candidates[0]; ev.write("cwd fallback: unique mt_wifi_ap directory=%s\n" % cwd)
-                  else: ev.write("cwd unproven; mt_wifi_ap candidates=%d; replay skipped\n" % len(candidates)); raise SystemExit(0)
+                  cwd=candidates[0]
+                  ev.write("cwd fallback to unique mt_wifi_ap directory=%s\n" % cwd)
               args=[]; i=0
-              while i < len(argv):
+              while i<len(argv):
                   a=argv[i]
                   if a in ("-c","-MD","-MMD","-MP"): i+=1; continue
                   if a in ("-o","-MF","-MT","-MQ"): i+=2; continue
                   if a.startswith(("-Wp,-MD,","-Wp,-MMD,","-Wp,-MF,","-Wp,-MT,")): i+=1; continue
                   args.append(a); i+=1
+              # If argv is the ccache wrapper, use its real compiler argv following ccache.
+              if pathlib.PurePosixPath(args[0]).name=="ccache":
+                  args=args[1:]
               args.extend(["-H","-E","-o",str((dest/"AP_IOCTL-PREPROCESSED.i").resolve())])
-              cmd_path.write_text("#!/usr/bin/env bash\nset -Eeuo pipefail\ncd "+shlex.quote(str(cwd))+"\nexec "+shlex.join(args)+"\n", encoding="utf-8")
+              cmd_path.write_text("#!/usr/bin/env bash\nset -Eeuo pipefail\ncd "+shlex.quote(str(cwd))+"\nexec "+shlex.join(args)+"\n",encoding="utf-8")
               cmd_path.chmod(0o700)
-              ev.write("replay cwd=%s\ncommand script=%s\ncompiler/include/define flags came from parsed execve argv; none were invented\n" % (cwd,cmd_path))
+              ev.write("replay cwd=%s\ncommand script=%s\nargv source: parsed strace execve record\n" % (cwd,cmd_path))
           PY
 
           if [ -s "$CMD" ]; then
@@ -658,7 +689,7 @@ jobs:
             { echo "GCC -H -E exit status: $GCC_RC"; echo "===== include tree matches ====="; grep -nE "rt_config\.h|rtmp\.h|rtmp_comm\.h|rt_linux\.h|debug\.h|sec_cmm\.h|sae_cmm\.h" "$TREE" | head -300 || true; if [ -s "$PRE" ]; then echo "preprocessed bytes: $(wc -c < "$PRE")"; grep -nE "struct wifi_dev|PRTMP_ADAPTER|CHANNEL_CTRL|mtwf_dbg_prt" "$PRE" | head -200 || true; else echo "preprocessed output missing/empty"; fi; } | tee -a "$EVIDENCE"
           fi
           echo "===== Evidence artifacts ====="
-          ls -lh "$EVIDENCE" "$TRACE" "$RAW" "$CMD" "$TREE" "$PRE" "$DEP" "$DEP_INDEX" 2>/dev/null || true
+          ls -lh "$EVIDENCE" "$TRACE" "$RAW" "$CMD" "$TREE" "$PRE" "$DEP" "$DEP_INDEX" "$DEST/AP_IOCTL-DEPENDENCY-HEADER-AUDIT.txt" 2>/dev/null || true
       - name: Check whether firmware was actually produced
         if: always()
         shell: bash
