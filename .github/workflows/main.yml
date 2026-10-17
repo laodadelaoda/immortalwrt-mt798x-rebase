@@ -522,6 +522,30 @@ jobs:
 
           echo "PASS: SAE, RRM, VLAN and MGMT_TXPWR_CTRL source/configuration checks passed."
 
+          echo "===== TEST: restore rt_config.h include in ap_ioctl.c ====="
+          python3 - "$SRC/os/linux/ap_ioctl.c" <<'PY'
+          import pathlib
+          import sys
+
+          p = pathlib.Path(sys.argv[1])
+          text = p.read_text()
+          old = '/*#include "rt_config.h" */'
+          new = '#include "rt_config.h"'
+
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(
+                  f"ERROR: expected exactly one commented rt_config.h include; found {count}"
+              )
+
+          p.write_text(text.replace(old, new, 1))
+          check = p.read_text()
+          if check.count(new) != 1 or old in check:
+              raise SystemExit("ERROR: rt_config.h include verification failed")
+
+          print("PASS: restored exactly one rt_config.h include for this build.")
+          PY
+
           echo "===== Step 3: read-only ap_ioctl source/include evidence ====="
           AP_IOCTL="$SRC/os/linux/ap_ioctl.c"
           APIO_EVIDENCE="artifacts/N60-Pro/standard/AP_IOCTL-EVIDENCE.txt"
