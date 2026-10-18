@@ -430,7 +430,8 @@ jobs:
             054-restore-rt-config-include-all.patch \
             055-fix-wpa3-macro-all.patch \
             057-fix-rsnxe-callers.patch \
-            058-fix-ftcfg-guard.patch
+            058-fix-ftcfg-guard.patch \
+            059-fix-commoncfg-arrow.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
