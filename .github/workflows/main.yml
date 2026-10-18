@@ -133,7 +133,10 @@ jobs:
 
           CONFIG_MTK_WIFI_EAP_FEATURE=y
           CONFIG_MTK_MGMT_TXPWR_CTRL=y
-
+          
+          # CONFIG_MTK_PRE_CAL_TRX_SET1_SUPPORT is not set
+          # CONFIG_MTK_PRE_CAL_TRX_SET2_SUPPORT is not set
+          
           CONFIG_MTK_WPA3_SUPPORT=y
           CONFIG_MTK_HOSTAPD_WPA3_SUPPORT=y
           CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y
