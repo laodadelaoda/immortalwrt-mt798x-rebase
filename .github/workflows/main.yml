@@ -1,4 +1,4 @@
-name: Build N60 Pro - ImmortalWrt 25.12 (Standard Only)
+3name: Build N60 Pro - ImmortalWrt 25.12 (Standard Only)
 
 on:
   push:
@@ -440,7 +440,8 @@ jobs:
             061-fix-netif-rx-ni.patch \
             062-fix-hetb-wlan-service-guard.patch \
             063-fix-eapstats-rtcfg-guard.patch \
-            064-fix-get-max-path-guard.patch
+            064-fix-get-max-path-guard.patch \
+            065-fix-offchannel-scan-guard.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
