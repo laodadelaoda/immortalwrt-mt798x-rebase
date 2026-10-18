@@ -1,4 +1,4 @@
-3name: Build N60 Pro - ImmortalWrt 25.12 (Standard Only)
+name: Build N60 Pro - ImmortalWrt 25.12 (Standard Only)
 
 on:
   push:
