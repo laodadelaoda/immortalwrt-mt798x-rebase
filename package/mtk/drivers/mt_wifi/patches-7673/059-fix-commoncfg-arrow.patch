@@ -1,0 +1,12 @@
+diff -ru a/mt_wifi/embedded/common/cmm_cfg.c b/mt_wifi/embedded/common/cmm_cfg.c
+--- a/mt_wifi/embedded/common/cmm_cfg.c	2025-04-08 12:54:11.000000000 +0800
++++ b/mt_wifi/embedded/common/cmm_cfg.c	2026-10-18 11:58:24.491709075 +0800
+@@ -1461,7 +1461,7 @@
+ 			RT_CFG80211_REINIT(pAd, wdev);
+ 
+ #ifndef DISABLE_HOSTAPD_BEACON
+-		if (!pAd->CommonCfg->bHostapdDisabled)
++		if (!pAd->CommonCfg.bHostapdDisabled)
+ 			RT_CFG80211_CRDA_REG_RULE_APPLY(pAd);
+ #endif
+ 	}
