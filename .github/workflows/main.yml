@@ -439,7 +439,8 @@ jobs:
             060-remove-unconditional-precal-flags.patch \
             061-fix-netif-rx-ni.patch \
             062-fix-hetb-wlan-service-guard.patch \
-            063-fix-eapstats-rtcfg-guard.patch
+            063-fix-eapstats-rtcfg-guard.patch \
+            064-fix-get-max-path-guard.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
