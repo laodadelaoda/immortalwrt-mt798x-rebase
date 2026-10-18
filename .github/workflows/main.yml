@@ -427,6 +427,7 @@ jobs:
             051-fix-dynamic-vlan-guard.patch \
             052-fix-mgmt-txpwr-config.patch \
             053-fix-ap-ioctl-rt-config-include.patch \
+            054-restore-rt-config-include-all.patch \
             055-fix-wpa3-macro-all.patch \
             057-fix-rsnxe-callers.patch \
             058-fix-ftcfg-guard.patch
