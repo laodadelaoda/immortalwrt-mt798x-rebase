@@ -1,0 +1,15 @@
+diff -ru a/mt_wifi/embedded/fsm/ap_mgmt_auth.c b/mt_wifi/embedded/fsm/ap_mgmt_auth.c
+--- a/mt_wifi/embedded/fsm/ap_mgmt_auth.c	2025-04-08 12:23:08.000000000 +0800
++++ b/mt_wifi/embedded/fsm/ap_mgmt_auth.c	2026-10-18 09:24:47.039503227 +0800
+@@ -705,7 +705,11 @@
+ #endif //DOT11_SAE_SUPPORT
+ 			if ((IS_AKM_WPA2_SHA256(AkmMap) || IS_AKM_WPA2PSK_SHA256(AkmMap)) &&
+ 				pEntry->SecConfig.ft_only == FALSE) {
++#ifdef DOT11R_FT_SUPPORT
+ 				if (!wdev->FtCfg.FtCapFlag.Dot11rFtEnable) {
++#else
++				if (TRUE) {
++#endif /* DOT11R_FT_SUPPORT */
+ 					if ((pAuth_info->auth_alg == AUTH_MODE_FT) ||
+ 						(pAuth_info->auth_alg == AUTH_MODE_SAE) ||
+ 						(pAuth_info->auth_alg == AUTH_MODE_KEY) ||
