@@ -441,7 +441,8 @@ jobs:
             062-fix-hetb-wlan-service-guard.patch \
             063-fix-eapstats-rtcfg-guard.patch \
             064-fix-get-max-path-guard.patch \
-            065-fix-offchannel-scan-guard.patch
+            065-fix-offchannel-scan-guard.patch \
+            066-fix-cfg80211-ft-guard.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
