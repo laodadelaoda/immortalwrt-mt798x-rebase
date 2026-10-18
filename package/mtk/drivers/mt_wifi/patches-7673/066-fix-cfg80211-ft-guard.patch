@@ -1,0 +1,19 @@
+diff -ru a/mt_wifi/os/linux/cfg80211/cfg80211_rx.c b/mt_wifi/os/linux/cfg80211/cfg80211_rx.c
+--- a/mt_wifi/os/linux/cfg80211/cfg80211_rx.c	2025-04-08 12:23:07.000000000 +0800
++++ b/mt_wifi/os/linux/cfg80211/cfg80211_rx.c	2026-10-18 22:39:53.811148578 +0800
+@@ -288,6 +288,7 @@
+ 	HEADER_802_11 AuthReqHdr;
+ #endif /* BAND_STEERING */
+ 
++#ifdef DOT11R_FT_SUPPORT
+ 	if (auth_info->auth_alg == AUTH_MODE_FT) {
+ 		PEID_STRUCT eid_ptr;
+ 		UCHAR *Ptr;
+@@ -368,6 +369,7 @@
+ 			eid_ptr = (PEID_STRUCT)((UCHAR *)eid_ptr + 2 + eid_ptr->Len);
+ 		}
+ 	}
++#endif /* DOT11R_FT_SUPPORT */
+ 
+ #ifdef BAND_STEERING
+ 	NdisZeroMemory(&AuthReqHdr, sizeof(HEADER_802_11));
