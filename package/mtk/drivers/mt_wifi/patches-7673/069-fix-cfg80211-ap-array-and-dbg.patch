@@ -1,0 +1,30 @@
+diff -ru a/mt_wifi/os/linux/cfg80211/cfg80211_ap.c b/mt_wifi/os/linux/cfg80211/cfg80211_ap.c
+--- a/mt_wifi/os/linux/cfg80211/cfg80211_ap.c	2025-04-08 12:23:07.000000000 +0800
++++ b/mt_wifi/os/linux/cfg80211/cfg80211_ap.c	2026-10-19 07:31:07.014663113 +0800
+@@ -704,7 +704,7 @@
+ #ifndef DISABLE_HOSTAPD_BEACON
+     if (pBeacon->interval != 0) {
+ 		MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_INFO, "CFG_TIM New BI %d\n", pBeacon->interval);
+-		pAd->CommonCfg.BeaconPeriod = pBeacon->interval;
++		pAd->CommonCfg.BeaconPeriod[BandIdx] = pBeacon->interval;
+ 	}
+ 
+ 	if (pBeacon->dtim_period != 0) {
+@@ -1529,7 +1529,7 @@
+ 	pAd = (PRTMP_ADAPTER)pAdOrg;
+ 	wlan_operate_set_rts_len_thld(wdev, len_thld);
+ 	MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_DEBUG,
+-			("%s =====>threshold %d\n", __func__, len_thld));
++			"%s =====>threshold %d\n", __func__, len_thld);
+ }
+ 
+ 
+@@ -1547,7 +1547,7 @@
+ 	pAd = (PRTMP_ADAPTER)pAdOrg;
+ 	wlan_operate_set_frag_thld(wdev, threshold);
+ 	MTWF_DBG(pAd, DBG_CAT_SEC, DBG_SUBCAT_ALL, DBG_LVL_DEBUG,
+-			("%s =====>operate: frag_thld=%d\n", __func__, threshold));
++			"%s =====>operate: frag_thld=%d\n", __func__, threshold);
+ }
+ 
+ #ifdef ACK_CTS_TIMEOUT_SUPPORT
