@@ -1,0 +1,12 @@
+diff -ru a/mt_wifi/os/linux/cfg80211/cfg80211_tx.c b/mt_wifi/os/linux/cfg80211/cfg80211_tx.c
+--- a/mt_wifi/os/linux/cfg80211/cfg80211_tx.c	2026-10-19 01:30:40.877796335 +0800
++++ b/mt_wifi/os/linux/cfg80211/cfg80211_tx.c	2026-10-19 01:30:40.921578456 +0800
+@@ -1174,7 +1174,7 @@
+ 						if (pFtInfoBuf)
+ 							os_free_mem(pFtInfoBuf);
+ #endif /* DOT11R_FT_SUPPORT */
+-						return FALSE;
++						return;
+ 					}
+ 					break;
+ #endif
