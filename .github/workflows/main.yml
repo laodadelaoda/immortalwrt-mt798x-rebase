@@ -136,6 +136,7 @@ jobs:
           
           # CONFIG_MTK_PRE_CAL_TRX_SET1_SUPPORT is not set
           # CONFIG_MTK_PRE_CAL_TRX_SET2_SUPPORT is not set
+          # CONFIG_MTK_RLM_CAL_CACHE_SUPPORT is not set
           
           CONFIG_MTK_WPA3_SUPPORT=y
           CONFIG_MTK_HOSTAPD_WPA3_SUPPORT=y
@@ -434,7 +435,8 @@ jobs:
             055-fix-wpa3-macro-all.patch \
             057-fix-rsnxe-callers.patch \
             058-fix-ftcfg-guard.patch \
-            059-fix-commoncfg-arrow.patch
+            059-fix-commoncfg-arrow.patch \
+            060-remove-unconditional-precal-flags.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
