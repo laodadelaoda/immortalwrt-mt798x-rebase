@@ -1,0 +1,24 @@
+diff -ru a/mt_wifi/os/linux/cfg80211/cfg80211_tx.c b/mt_wifi/os/linux/cfg80211/cfg80211_tx.c
+--- a/mt_wifi/os/linux/cfg80211/cfg80211_tx.c	2025-04-08 12:23:07.000000000 +0800
++++ b/mt_wifi/os/linux/cfg80211/cfg80211_tx.c	2026-10-19 00:14:07.946201114 +0800
+@@ -1086,7 +1086,9 @@
+ 			UCHAR WPA2_OUI[3] = {0x00, 0x0F, 0xAC};
+ 			/* PFT_INFO pFtInfo = &auth_info->FtInfo; */
+ 
++#ifdef DOT11R_FT_SUPPORT
+ 			NdisZeroMemory(pFtInfoBuf, sizeof(FT_INFO));
++#endif /* DOT11R_FT_SUPPORT */
+ 
+ 			/* Ptr = &Fr->Octet[6]; */
+ 			Ptr = mgmt->u.reassoc_resp.variable;
+@@ -1168,8 +1170,10 @@
+ 					} else {
+ 						MTWF_DBG(pAd, DBG_CAT_AP, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+ 								"%s() - wrong IE_RSN\n", __func__);
++#ifdef DOT11R_FT_SUPPORT
+ 						if (pFtInfoBuf)
+ 							os_free_mem(pFtInfoBuf);
++#endif /* DOT11R_FT_SUPPORT */
+ 						return FALSE;
+ 					}
+ 					break;
