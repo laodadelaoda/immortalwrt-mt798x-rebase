@@ -436,7 +436,8 @@ jobs:
             057-fix-rsnxe-callers.patch \
             058-fix-ftcfg-guard.patch \
             059-fix-commoncfg-arrow.patch \
-            060-remove-unconditional-precal-flags.patch
+            060-remove-unconditional-precal-flags.patch \
+            061-fix-netif-rx-ni.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
