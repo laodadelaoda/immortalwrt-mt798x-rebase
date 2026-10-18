@@ -444,7 +444,8 @@ jobs:
             065-fix-offchannel-scan-guard.patch \
             066-fix-cfg80211-ft-guard.patch \
             067-fix-cfg80211-tx-ft-guard.patch \
-            068-fix-cfg80211-tx-return-false.patch
+            068-fix-cfg80211-tx-return-false.patch \
+            069-fix-cfg80211-ap-array-and-dbg.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
