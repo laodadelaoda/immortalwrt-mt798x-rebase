@@ -450,7 +450,8 @@ jobs:
             071-fix-cfg80211-ops-6.12.patch \
             073-fix-mgmtkeydefaultset-endif.patch \
             072-fix-mgmt-frame-register-6.12.patch \
-            074-fix-update-mgmt-frame-regs-pad.patch
+            074-fix-update-mgmt-frame-regs-pad.patch \
+            075-fix-ate-missing-macros-and-typos.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
