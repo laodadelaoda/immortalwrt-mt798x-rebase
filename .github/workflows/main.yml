@@ -1,4 +1,66 @@
-       - name: Configure standard profile only
+name: Build N60 Pro - ImmortalWrt 25.12 (Standard Only)
+
+on:
+  push:
+    branches: ["n60pro-mtk-closed-driver"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: n60-pro-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost \
+            "$AGENT_TOOLSDIRECTORY" || true
+          df -h
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison g++ gawk \
+            gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
+            python3-dev rsync unzip zlib1g-dev file wget time xsltproc \
+            libelf-dev device-tree-compiler qemu-utils python3-setuptools \
+            python3-pyelftools swig ccache
+
+      - name: Set Go proxy
+        run: |
+          echo "GOPROXY=https://goproxy.cn,direct" >> $GITHUB_ENV
+          echo "GOSUMDB=off" >> $GITHUB_ENV
+
+      - name: Restore compiler cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ${{ runner.os }}-n60pro-standard-ccache-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-n60pro-standard-ccache-${{ github.ref_name }}-
+            ${{ runner.os }}-n60pro-standard-ccache-
+
+      - name: Update and install feeds
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Configure standard profile only
         shell: bash
         run: |
           set -euo pipefail
@@ -15,7 +77,7 @@
           CONFIG_PACKAGE_luci-mod-network=y
           CONFIG_CCACHE=y
 
-          # ======= 关掉报错的毫无用处的包 =======
+          # ======= 关掉引发无效 warning 的包 =======
           # CONFIG_PACKAGE_prosody is not set
           
           # ======= 防止 wpad 冲突 =======
@@ -35,7 +97,7 @@
           CONFIG_PACKAGE_kmod-mediatek_hnat=m
           CONFIG_PACKAGE_wifi-dats=y
 
-          # ======= 原厂微码固件加载开关 =======
+          # ======= 微码固件加载（系统会自动选用默认的 20260601） =======
           CONFIG_MTK_WIFI_FW_BIN_LOAD=y
 
           # CONFIG_PACKAGE_mtwifi-cfg is not set
@@ -92,7 +154,6 @@
           cp .config artifacts/N60-Pro/standard/config.before-defconfig
           make defconfig
 
-          # 打印出来看看最终生效了什么，不再强行拦截退出
           echo "===== Effective MTK Wi-Fi configuration ====="
           grep -E '^(CONFIG_MTK_|CONFIG_first_card|CONFIG_PACKAGE_(kmod-(mt_wifi|mac80211|cfg80211|conninfra|warp|mediatek_hnat)|wifi-dats|mtwifi-cfg-ucode))' .config || true
 
@@ -108,3 +169,205 @@
 
           cp .config artifacts/N60-Pro/standard/config.buildinfo
           echo "PASS: standard profile and MT7986 vendor Wi-Fi stack selected."
+
+      - name: Download sources
+        run: make download -j$(nproc)
+
+      - name: Prepare driver source and run read-only diagnostics
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "===== Step 2: standard MT Wi-Fi prepare ====="
+          make package/mtk/drivers/mt_wifi/prepare V=s
+
+          echo "===== Step 3: locate prepared driver source ====="
+          mapfile -t RTMP_FILES < <(
+            find build_dir -type f \
+              -path '*/embedded/include/rtmp.h' -print
+          )
+
+          SOURCES=()
+          for rtmp in "${RTMP_FILES[@]}"; do
+            src="$(dirname "$(dirname "$(dirname "$rtmp")")")"
+            if [ -f "$src/os/linux/config.mk" ] &&
+               [ -f "$src/embedded/include/security/sec_cmm.h" ] &&
+               [ -f "$src/embedded/ap/ap_cfg.c" ]; then
+              SOURCES+=("$src")
+            fi
+          done
+
+          if [ "${#SOURCES[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one valid prepared MT Wi-Fi source root; found ${#SOURCES[@]}."
+            exit 1
+          fi
+
+          SRC="${SOURCES[0]}"
+          CFG="$SRC/os/linux/config.mk"
+          RTMP="$SRC/embedded/include/rtmp.h"
+          AP_CFG="$SRC/embedded/ap/ap_cfg.c"
+          echo "PASS: prepare OK."
+
+      - name: Build standard profile
+        id: build_step
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -Eeuo pipefail
+
+          echo "===== Step 1: clean MT Wi-Fi package and prepare with static patches ====="
+          make package/mtk/drivers/mt_wifi/clean V=s
+
+          PREPARE_LOG="artifacts/N60-Pro/standard/mtwifi-prepare.log"
+          mkdir -p "$(dirname "$PREPARE_LOG")"
+          make package/mtk/drivers/mt_wifi/prepare V=s 2>&1 | tee "$PREPARE_LOG"
+
+          for patch in \
+            042-fix-sae-structure-include-guard.patch \
+            050-fix-rrm-config.patch \
+            051-fix-dynamic-vlan-guard.patch \
+            052-fix-mgmt-txpwr-config.patch \
+            053-fix-ap-ioctl-rt-config-include.patch \
+            054-restore-rt-config-include-all.patch \
+            055-fix-wpa3-macro-all.patch \
+            057-fix-rsnxe-callers.patch \
+            058-fix-ftcfg-guard.patch \
+            059-fix-commoncfg-arrow.patch \
+            060-remove-unconditional-precal-flags.patch \
+            061-fix-netif-rx-ni.patch \
+            062-fix-hetb-wlan-service-guard.patch \
+            063-fix-eapstats-rtcfg-guard.patch \
+            064-fix-get-max-path-guard.patch \
+            065-fix-offchannel-scan-guard.patch \
+            066-fix-cfg80211-ft-guard.patch \
+            067-fix-cfg80211-tx-ft-guard.patch \
+            068-fix-cfg80211-tx-return-false.patch \
+            069-fix-cfg80211-ap-array-and-dbg.patch \
+            070-fix-cfg80211-util-he-macros-roam.patch \
+            071-fix-cfg80211-ops-6.12.patch \
+            073-fix-mgmtkeydefaultset-endif.patch \
+            072-fix-mgmt-frame-register-6.12.patch \
+            074-fix-update-mgmt-frame-regs-pad.patch \
+            075-fix-ate-missing-macros-and-typos.patch \
+            076-fix-ate-dpd-macros-and-u_int32.patch
+          do
+            if ! grep -Fq "$patch" "$PREPARE_LOG"; then
+              echo "::error::Prepare log does not show $patch being applied."
+              exit 1
+            fi
+          done
+
+          if grep -Eq 'Hunk FAILED|Patch failed|patch failed' "$PREPARE_LOG"; then
+            echo "::error::Patch failure text found in prepare log."
+            exit 1
+          fi
+
+          echo "PASS: prepare log contains all patches."
+
+          echo "===== Step 4: full firmware build with complete log capture ====="
+          BUILD_LOG="artifacts/N60-Pro/standard/FULL-BUILD-VS-LOG.txt"
+          mkdir -p "$(dirname "$BUILD_LOG")"
+
+          set -o pipefail
+          make -j"$(nproc)" V=s 2>&1 | tee "$BUILD_LOG"
+
+          echo "===== Step 6: verify the exact standard N60 Pro sysupgrade image ====="
+          SYSUP="bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
+
+          if [ ! -s "$SYSUP" ]; then
+            echo "::error::Expected non-empty sysupgrade ITB not found: $SYSUP"
+            exit 1
+          fi
+
+          ls -lh "$SYSUP"
+          sha256sum "$SYSUP"
+          echo "PASS: standard N60 Pro sysupgrade ITB exists and is non-empty."
+
+      - name: Check whether firmware was actually produced
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          OUT="bin/targets/mediatek/filogic"
+          SYSUP="$OUT/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
+          if [ -s "$SYSUP" ]; then
+            echo "FIRMWARE_PRODUCED=yes" >> $GITHUB_ENV
+            echo "Firmware produced: $SYSUP"
+            ls -lh "$SYSUP"
+          else
+            echo "FIRMWARE_PRODUCED=no" >> $GITHUB_ENV
+            echo "::warning::No sysupgrade ITB produced. Build failed or target output differs."
+            ls -lh "$OUT" 2>/dev/null || echo "(output dir missing)"
+          fi
+
+      - name: Collect firmware artifacts
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          OUT="bin/targets/mediatek/filogic"
+          DEST="artifacts/N60-Pro/standard"
+          mkdir -p "$DEST"
+
+          find "$OUT" -maxdepth 1 -type f \
+            \( -name '*netcore_n60-pro*.itb' -o -name '*netcore_n60-pro*.manifest' \
+               -o -name 'sha256sums' -o -name '*.buildinfo' \) \
+            -exec cp -v {} "$DEST/" \; 2>/dev/null
+
+          if find "$DEST" -maxdepth 1 -iname '*mtkuboot*' | grep -q .; then
+            echo "::error::MTK U-Boot artifact detected; refusing to package."
+            exit 1
+          fi
+
+          {
+            echo "Build policy: STANDARD PROFILE ONLY; MTK U-Boot excluded"
+            echo "Profile: netcore_n60-pro"
+            echo "Source revision:"
+            git log -1 --format='%H %s'
+            echo "Build step outcome: ${{ steps.build_step.outcome }}"
+            echo "Firmware produced: ${FIRMWARE_PRODUCED:-unknown}"
+            echo "Files:"
+            find "$DEST" -maxdepth 1 -type f -printf '%f\n' | sort
+          } > "$DEST/BUILD-INFO.txt"
+
+          (
+            cd "$DEST"
+            shopt -s nullglob
+            if ls *.itb >/dev/null 2>&1; then
+              sha256sum *.itb > SHA256SUMS.txt
+              cat SHA256SUMS.txt
+            fi
+          ) || true
+
+          echo "===== Artifact tree ====="
+          find artifacts/N60-Pro -maxdepth 2 -type f -printf '%p (%s bytes)\n' | sort
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: N60-Pro-Standard-${{ github.run_number }}
+          path: artifacts/N60-Pro/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Report ccache statistics
+        if: always()
+        run: ccache -s || true
+
+      - name: Enforce build and firmware success
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Build step outcome: ${{ steps.build_step.outcome }}"
+          echo "Firmware produced: ${FIRMWARE_PRODUCED:-no}"
+          if [ "${{ steps.build_step.outcome }}" != "success" ]; then
+            echo "::error::Firmware build step did not succeed. This run must remain failed."
+            exit 1
+          fi
+          if [ "${FIRMWARE_PRODUCED:-no}" != "yes" ]; then
+            echo "::error::Expected standard netcore_n60-pro sysupgrade ITB is missing."
+            exit 1
+          fi
+          test -s "bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
+          echo "PASS: build succeeded and the expected sysupgrade ITB exists."
