@@ -302,9 +302,8 @@ define KernelPackage/mt_wifi
   CATEGORY:=MTK Properties
   TITLE:=MTK wifi AP driver
   DEPENDS:=+wifi-dats +kmod-conninfra +kmod-mediatek_hnat +kmod-warp +kmod-mac80211 +kmod-cfg80211
-  FILES:=$(PKG_BUILD_DIR)/mt_wifi_ap/mt_wifi.ko \
-	$(PKG_BUILD_DIR)/mt_wifi/embedded/plug_in/warp_proxy/mtk_warp_proxy.ko
-  AUTOLOAD:=$(call AutoProbe,mt_wifi mtk_warp_proxy)
+  FILES:=$(PKG_BUILD_DIR)/mt_wifi_ap/mt_wifi.ko
+  AUTOLOAD:=$(call AutoProbe,mt_wifi)
   SUBMENU:=Drivers
   MENU:=1
 endef
