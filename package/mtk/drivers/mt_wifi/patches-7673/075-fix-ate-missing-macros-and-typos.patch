@@ -1,0 +1,129 @@
+diff -ru a/mt_wifi/ate/ate_agent.c b/mt_wifi/ate/ate_agent.c
+--- a/mt_wifi/ate/ate_agent.c	2025-04-08 12:54:27.000000000 +0800
++++ b/mt_wifi/ate/ate_agent.c	2026-10-19 17:43:20.554053163 +0800
+@@ -1447,10 +1447,10 @@
+ 		if (ate_op->set_ru_info)
+ 			ate_op->set_ru_info(ad, band_idx, Arg);
+ 		else
+-			MTWF_DBG(pAd, DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
++			MTWF_DBG(ad, DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+ 				"handler not registered, dismissed!\n");
+ 	} else {
+-		MTWF_DBG(pAd, DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Invalid string\n");
++		MTWF_DBG(ad, DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Invalid string\n");
+ 	}
+ 
+ 	return ret;
+@@ -6460,7 +6460,7 @@
+ 				} else
+ 					Ret = chip_dbg->check_txv(pAd->hdev_ctrl, "Rate", entry->phy_param.rate, control_band_idx);
+ 				if (phy_mode < MODE_HTMIX)
+-					Ret = chip_dbg->check_txv(pAd->hdev_ctrl, "NSTS", 0);
++					Ret = chip_dbg->check_txv(pAd->hdev_ctrl, "NSTS", 0, control_band_idx);
+ 				else if (phy_mode < MODE_VHT)
+ 					Ret = chip_dbg->check_txv(pAd->hdev_ctrl, "NSTS", (entry->phy_param.rate >> 3), control_band_idx);
+ 				else
+diff -ru a/mt_wifi/ate/mt_mac/mt_testmode.c b/mt_wifi/ate/mt_mac/mt_testmode.c
+--- a/mt_wifi/ate/mt_mac/mt_testmode.c	2025-04-08 12:54:27.000000000 +0800
++++ b/mt_wifi/ate/mt_mac/mt_testmode.c	2026-10-19 17:43:20.552781706 +0800
+@@ -42,6 +42,17 @@
+ #include "chip/mt7981.h"
+ #endif
+ 
++/* 075: 不完整 tar 缺失的 PREK_GROUP_* 定义，按顺序补 0/1/2 */
++#ifndef PREK_GROUP_CLEAN
++#define PREK_GROUP_CLEAN 0
++#endif
++#ifndef PREK_GROUP_DUMP
++#define PREK_GROUP_DUMP 1
++#endif
++#ifndef PREK_GROUP_PROC
++#define PREK_GROUP_PROC 2
++#endif
++
+ #define MCAST_WCID_TO_REMOVE 0  /* Pat: TODO */
+ 
+ static struct _ATE_DATA_RATE_MAP cck_mode_mcs_to_data_rate_map[] = {
+@@ -7146,8 +7157,10 @@
+ 	UCHAR control_band_idx = TESTMODE_GET_BAND_IDX(pAd), ant_mask = 0;
+ 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
+ 
++#if defined(GET_MAX_PATH)
+ 	for (ant_loop = 0; ant_loop < GET_MAX_PATH(cap, control_band_idx, 0); ant_loop++)
+ 		ant_mask |= (0x1 << ant_loop);
++#endif
+ 
+ 	Ant &= ant_mask;
+ 
+@@ -7170,8 +7183,10 @@
+ 	UCHAR control_band_idx = TESTMODE_GET_BAND_IDX(pAd), ant_mask = 0;
+ 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
+ 
++#if defined(GET_MAX_PATH)
+ 	for (ant_loop = 0; ant_loop < GET_MAX_PATH(cap, control_band_idx, 1); ant_loop++)
+ 		ant_mask |= (0x1 << ant_loop);
++#endif
+ 
+ 	Ant &= ant_mask;
+ 
+@@ -7320,7 +7335,11 @@
+ 	HcReleaseRadioForWdev(pAd, wdev);
+ #endif /* !defined(COMPOS_TESTMODE_WIN) */
+ 
++#if defined(GET_MAX_PATH)
+ 	max_path_num = GET_MAX_PATH(cap, control_band_idx, 1);
++#else
++	max_path_num = 1;
++#endif
+ 	if (IS_ATE_DBDC(pAd))
+ 		if (!IS_PHY_CAPS(cap->phy_caps, fPHY_CAP_DUALPHY))
+ 			max_stream_num = max_path_num / 2 ? max_path_num / 2 : 1;
+diff -ru a/mt_wifi/ate/testmode_ioctl.c b/mt_wifi/ate/testmode_ioctl.c
+--- a/mt_wifi/ate/testmode_ioctl.c	2025-04-08 12:54:27.000000000 +0800
++++ b/mt_wifi/ate/testmode_ioctl.c	2026-10-19 17:43:20.555397016 +0800
+@@ -2181,7 +2181,7 @@
+ 			  Band, Control, AntMask, tx_mode, BW, Pri_Ch, Rate, Central_Ch, TxfdMode);
+ 
+ 	if (Control) {
+-		if (ATEOp->StartContinousTx && Band_idx < TEST_DBDC_BAND_NUM) {
++		if (ATEOp->StartContinousTx && Band_idx < TESTMODE_BAND_NUM) {
+ 			TESTMODE_SET_PARAM(pAd, Band_idx, tx_mode, tx_mode);
+ 			TESTMODE_SET_PARAM(pAd, Band_idx, bw, BW);
+ 			TESTMODE_SET_PARAM(pAd, Band_idx, ctrl_ch, Pri_Ch);
+@@ -6750,21 +6750,21 @@
+ 	EthGetParamAndShiftBuff(TRUE, sizeof(UINT32), &data, (UCHAR *)&seg_sta_cnt[0]);
+ 	EthGetParamAndShiftBuff(TRUE, sizeof(UINT32), &data, (UCHAR *)&seg_sta_cnt[1]);
+ 
+-	if (band_idx >= TEST_DBDC_BAND_NUM) {
+-		SERV_LOG(SERV_DBG_CAT_TEST, SERV_DBG_LVL_ERROR,
+-		("%s: band_idx=%d, error\n", __func__, band_idx));
+-		Ret = SERV_STATUS_AGENT_INVALID_BANDIDX;
++	if (band_idx >= TESTMODE_BAND_NUM) {
++		MTWF_DBG(ad, DBG_CAT_TEST, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
++		"%s: band_idx=%d, error\n", __func__, band_idx);
++		Ret = -1;
+ 		goto err_out;
+ 	}
+ 
+ 	if ((seg_sta_cnt[0] > SEG_STA_CNT)
+ 		|| (seg_sta_cnt[1] > SEG_STA_CNT)) {
+-		Ret = SERV_STATUS_AGENT_INVALID_PARAM;
++		Ret = -1;
+ 		goto err_out;
+ 	}
+ 
+ 	if (seg_sta_cnt[0] + seg_sta_cnt[1] == 0) {
+-		Ret = SERV_STATUS_AGENT_INVALID_LEN;
++		Ret = -1;
+ 		goto err_out;
+ 	}
+ 
+@@ -6785,7 +6785,7 @@
+ 		for (sta_seq = 0 ; sta_seq < seg_sta_cnt[segment_idx] ; sta_seq++) {
+ 			UINT allocation = 0;
+ 			if (seg_sta_cnt[0] + seg_sta_cnt[1] == 0) {
+-				Ret = SERV_STATUS_AGENT_INVALID_LEN;
++				Ret = -1;
+ 				goto err_out;
+ 			}
+ 			param_cnt = (len-sizeof(UINT32)*3)/(seg_sta_cnt[0]+seg_sta_cnt[1])/sizeof(UINT32);
