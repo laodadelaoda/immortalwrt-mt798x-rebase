@@ -448,7 +448,8 @@ jobs:
             069-fix-cfg80211-ap-array-and-dbg.patch \
             070-fix-cfg80211-util-he-macros-roam.patch \
             071-fix-cfg80211-ops-6.12.patch \
-            073-fix-mgmtkeydefaultset-endif.patch
+            073-fix-mgmtkeydefaultset-endif.patch \
+            072-fix-mgmt-frame-register-6.12.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
