@@ -1,0 +1,36 @@
+diff -ru a/mt_wifi/embedded/common/eeprom.c b/mt_wifi/embedded/common/eeprom.c
+--- a/mt_wifi/embedded/common/eeprom.c	2025-04-08 12:54:06.000000000 +0800
++++ b/mt_wifi/embedded/common/eeprom.c	2026-10-20 07:45:09.553077159 +0800
+@@ -24,8 +24,32 @@
+ 	--------	----------		----------------------------------------------
+ 	Name		Date			Modification logs
+ */
++
+ #include "rt_config.h"
+ 
++/* 077: 补全 MT7986 预校准缺失宏，基于 Factory.bin 十六进制逆向推断 */
++#ifndef PRE_CAL_SIZE_ONE_CARD
++#define PRE_CAL_SIZE_ONE_CARD 0x10000
++#endif
++#ifndef PRECALPART_OFFSET
++#define PRECALPART_OFFSET 0x1000
++#endif
++#ifndef DCOC_IMAGE_SIZE
++#define DCOC_IMAGE_SIZE 0x400
++#endif
++#ifndef TXDPD_IMAGE1_SIZE
++#define TXDPD_IMAGE1_SIZE 0x8000
++#endif
++#ifndef TXDPD_IMAGE2_SIZE
++#define TXDPD_IMAGE2_SIZE 0x8000
++#endif
++#ifndef DPDPART1_OFFSET
++#define DPDPART1_OFFSET 0x10000
++#endif
++#ifndef DPDPART2_OFFSET
++#define DPDPART2_OFFSET 0x20000
++#endif
++
+ 
+ #ifdef CONFIG_RT_FIRST_CARD
+ #define FIRST_EEPROM_FILE_PATH	"/etc_ro/Wireless/RT2860/MT7615_EEPROM_1.bin"
