@@ -1,0 +1,70 @@
+diff -ru a/mt_wifi/ate/mt_mac/mt_testmode.c b/mt_wifi/ate/mt_mac/mt_testmode.c
+--- a/mt_wifi/ate/mt_mac/mt_testmode.c	2026-10-19 19:33:09.250833782 +0800
++++ b/mt_wifi/ate/mt_mac/mt_testmode.c	2026-10-19 19:33:09.322051933 +0800
+@@ -53,6 +53,22 @@
+ #define PREK_GROUP_PROC 2
+ #endif
+ 
++#ifndef PREK_DPD_CLEAN
++#define PREK_DPD_CLEAN 3
++#endif
++#ifndef PREK_DPD_DUMP
++#define PREK_DPD_DUMP 4
++#endif
++#ifndef PREK_DPD_5G_PROC
++#define PREK_DPD_5G_PROC 5
++#endif
++#ifndef PREK_DPD_2G_PROC
++#define PREK_DPD_2G_PROC 6
++#endif
++#ifndef PREK_DPD_6G_PROC
++#define PREK_DPD_6G_PROC 7
++#endif
++
+ #define MCAST_WCID_TO_REMOVE 0  /* Pat: TODO */
+ 
+ static struct _ATE_DATA_RATE_MAP cck_mode_mcs_to_data_rate_map[] = {
+@@ -10183,8 +10199,8 @@
+ 	USHORT                doCal1 = 0;
+ 	MT_SWITCH_CHANNEL_CFG ch_cfg;
+ #ifdef DBDC_MODE
+-	u_int32 band0_tx_path_backup, band0_rx_path_backup;
+-	u_int32 band1_tx_path_backup, band1_rx_path_backup;
++	u_int32_t band0_tx_path_backup, band0_rx_path_backup;
++	u_int32_t band1_tx_path_backup, band1_rx_path_backup;
+ #endif
+ 	RTMP_CHIP_OP *pChipOps = NULL;
+ 	struct _RTMP_CHIP_CAP *cap = NULL;
+@@ -10492,8 +10508,8 @@
+ 	USHORT                doCal1 = 0;
+ 	MT_SWITCH_CHANNEL_CFG ch_cfg;
+ #ifdef DBDC_MODE
+-	u_int32 band0_tx_path_backup, band0_rx_path_backup;
+-	u_int32 band1_tx_path_backup, band1_rx_path_backup;
++	u_int32_t band0_tx_path_backup, band0_rx_path_backup;
++	u_int32_t band1_tx_path_backup, band1_rx_path_backup;
+ #endif
+ 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
+ 
+@@ -10854,8 +10870,8 @@
+ 	USHORT                doCal1 = 0;
+ 	MT_SWITCH_CHANNEL_CFG ch_cfg;
+ #ifdef DBDC_MODE
+-	u_int32 band0_tx_path_backup, band0_rx_path_backup;
+-	u_int32 band1_tx_path_backup, band1_rx_path_backup;
++	u_int32_t band0_tx_path_backup, band0_rx_path_backup;
++	u_int32_t band1_tx_path_backup, band1_rx_path_backup;
+ #endif
+ 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
+ 
+@@ -11216,8 +11232,8 @@
+ 	USHORT                doCal1 = 0;
+ 	MT_SWITCH_CHANNEL_CFG ch_cfg;
+ #ifdef DBDC_MODE
+-	u_int32 band0_tx_path_backup, band0_rx_path_backup;
+-	u_int32 band1_tx_path_backup, band1_rx_path_backup;
++	u_int32_t band0_tx_path_backup, band0_rx_path_backup;
++	u_int32_t band1_tx_path_backup, band1_rx_path_backup;
+ #endif
+ 	struct _RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
+ 
