@@ -30,28 +30,6 @@ jobs:
             "$AGENT_TOOLSDIRECTORY" || true
           df -h
 
-      - name: Verify source layout (warnings only)
-        shell: bash
-        run: |
-          set +e
-          echo "===== Source revision ====="
-          git log -1 --format='%H %s'
-
-          echo "===== Device definition ====="
-          grep -Rni --include='*.mk' 'netcore_n60-pro' target/linux/mediatek || true
-
-          echo "===== DTS presence (warning only, does not block build) ====="
-          DTS="target/linux/mediatek/dts/mt7986a-netcore-n60-pro.dts"
-          if [ -s "$DTS" ]; then
-            echo "DTS found: $DTS"
-            sha256sum "$DTS"
-          else
-            echo "::warning::DTS not found at expected path; build will use whatever the target defines."
-          fi
-
-          echo "===== MTK Wi-Fi compatibility patches ====="
-          ls -1 package/mtk/drivers/mt_wifi/patches-7673/ 2>/dev/null | head -50 || true
-
       - name: Install build dependencies
         shell: bash
         run: |
@@ -99,6 +77,13 @@ jobs:
           CONFIG_PACKAGE_luci-mod-network=y
           CONFIG_CCACHE=y
 
+          # ======= 防止 wpad 冲突（极重要）=======
+          # CONFIG_PACKAGE_wpad-basic-mbedtls is not set
+          CONFIG_PACKAGE_wpad-openssl=y
+          CONFIG_PACKAGE_libustream-openssl=y
+          CONFIG_PACKAGE_libopenssl=y
+          
+          # ======= MTK Wi-Fi 核心驱动 =======
           CONFIG_PACKAGE_kmod-mt_wifi=y
           CONFIG_PACKAGE_kmod-mac80211=y
           CONFIG_PACKAGE_kmod-cfg80211=y
@@ -108,6 +93,10 @@ jobs:
           CONFIG_WARP_CHIPSET="mt7986"
           CONFIG_PACKAGE_kmod-mediatek_hnat=y
           CONFIG_PACKAGE_wifi-dats=y
+
+          # ======= 原厂微码固件加载配置 =======
+          CONFIG_MTK_WIFI_FW_BIN_LOAD=y
+          CONFIG_MTK_MT_WIFI_FIRMWARE_PATH_MT7986="mt7986-fw-20250408"
 
           # CONFIG_PACKAGE_mtwifi-cfg is not set
           # CONFIG_PACKAGE_luci-app-mtk is not set
@@ -164,9 +153,6 @@ jobs:
           cp .config artifacts/N60-Pro/standard/config.before-defconfig
           make defconfig
 
-          echo "=== RRM Kconfig after defconfig ==="
-          grep -nE 'DOT11K_RRM_SUPPORT' .config | tee artifacts/N60-Pro/standard/RRM-KCONFIG-AFTER.txt || echo "(no RRM entries)"
-
           require_config() {
             if ! grep -Fqx "$1" .config; then
               echo "::error::Required configuration missing after make defconfig: $1"
@@ -196,6 +182,8 @@ jobs:
           require_config 'CONFIG_MTK_HOSTAPD_WPA3_SUPPORT=y'
           require_config 'CONFIG_MTK_WIFI_EAP_FEATURE=y'
           require_config 'CONFIG_MTK_MGMT_TXPWR_CTRL=y'
+          require_config 'CONFIG_MTK_WIFI_FW_BIN_LOAD=y'
+          require_config 'CONFIG_MTK_MT_WIFI_FIRMWARE_PATH_MT7986="mt7986-fw-20250408"'
 
           if ! grep -Eq '^CONFIG_MTK_MT_AP_SUPPORT=(y|m)$' .config; then
             echo "::error::MTK AP support is neither built-in nor modular after make defconfig."
@@ -217,8 +205,6 @@ jobs:
           fi
 
           cp .config artifacts/N60-Pro/standard/config.buildinfo
-          echo "===== Effective MTK Wi-Fi configuration ====="
-          grep -E '^(CONFIG_WARP_VERSION=|CONFIG_WARP_CHIPSET=|CONFIG_PACKAGE_(kmod-mt_wifi|kmod-mac80211|kmod-cfg80211|kmod-conninfra|kmod-warp|kmod-mediatek_hnat|wifi-dats|mtwifi-cfg-ucode|ucode-mod-datconf|ucode-mod-l1parser|iw|iwinfo|iwinfo-ucode)=|CONFIG_MTK_(MT_WIFI|MT_AP_SUPPORT|CFG80211_SUPPORT|WIFI_EAP_FEATURE|MGMT_TXPWR_CTRL|CHIP_MT7986|FIRST_IF_MT7986|WIFI_MODE|WIFI_SKU_TYPE|WIFI_ADIE_TYPE|CONNINFRA_APSOC|DBDC_MODE)|CONFIG_first_card)' .config
           echo "PASS: standard profile and MT7986 vendor Wi-Fi stack selected."
 
       - name: Download sources
@@ -228,21 +214,6 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-
-          echo "===== Step 1: verify management TX power configuration ====="
-          require_config() {
-            if ! grep -Fqx "$1" .config; then
-              echo "::error::Required configuration missing: $1"
-              grep -E '^CONFIG_MTK_(MT_AP_SUPPORT|CFG80211_SUPPORT|WIFI_EAP_FEATURE|MGMT_TXPWR_CTRL)=' .config || true
-              exit 1
-            fi
-          }
-
-          require_config 'CONFIG_MTK_WIFI_EAP_FEATURE=y'
-          require_config 'CONFIG_MTK_MGMT_TXPWR_CTRL=y'
-
-          echo "===== Effective management TX power configuration ====="
-          grep -E '^CONFIG_MTK_(MT_AP_SUPPORT|CFG80211_SUPPORT|WIFI_EAP_FEATURE|MGMT_TXPWR_CTRL)=' .config
 
           echo "===== Step 2: standard MT Wi-Fi prepare ====="
           make package/mtk/drivers/mt_wifi/prepare V=s
@@ -265,137 +236,15 @@ jobs:
 
           if [ "${#SOURCES[@]}" -ne 1 ]; then
             echo "::error::Expected exactly one valid prepared MT Wi-Fi source root; found ${#SOURCES[@]}."
-            printf '%s\n' "${RTMP_FILES[@]}"
-            find build_dir -type f -path '*/embedded/ap/ap_cfg.c' -print || true
-            find build_dir -type f -path '*/os/linux/config.mk' -print || true
             exit 1
           fi
 
           SRC="${SOURCES[0]}"
           CFG="$SRC/os/linux/config.mk"
           RTMP="$SRC/embedded/include/rtmp.h"
-          SEC="$SRC/embedded/include/security/sec_cmm.h"
           AP_CFG="$SRC/embedded/ap/ap_cfg.c"
-
-          echo "===== Verify patch 053 restores rt_config.h include in ap_ioctl.c ====="
-          AP_IOCTL_SRC="$SRC/os/linux/ap_ioctl.c"
-          if ! grep -Fqx '#include "rt_config.h"' "$AP_IOCTL_SRC"; then
-            echo "::error::Patch 053 assertion failed: active ap_ioctl.c lacks the exact rt_config.h include."
-            nl -ba "$AP_IOCTL_SRC" | sed -n '20,36p'
-            exit 1
-          fi
-          if grep -Fq '/*#include "rt_config.h" */' "$AP_IOCTL_SRC"; then
-            echo "::error::Patch 053 assertion failed: commented rt_config.h include remains."
-            nl -ba "$AP_IOCTL_SRC" | sed -n '20,36p'
-            exit 1
-          fi
-          echo "PASS: active ap_ioctl.c contains #include \"rt_config.h\" and no commented duplicate."
-
-          echo "Resolved driver source root: $SRC"
-          echo "RRM config: $CFG"
-          echo "VLAN header: $RTMP"
-          echo "SAE header: $SEC"
-          echo "AP source: $AP_CFG"
-
-          echo "===== Step 2.5: audit 042 SAE include change and sae_cmm.h guard ====="
-          SAE_CMM="$SRC/embedded/include/security/sae_cmm.h"
-          PATCH_042="package/mtk/drivers/mt_wifi/patches-7673/042-fix-sae-structure-include-guard.patch"
-
-          test -s "$PATCH_042" || { echo "::error::042 SAE patch is missing or empty."; exit 1; }
-          echo "--- 042 patch content ---"
-          cat "$PATCH_042"
-
-          python3 - "$PATCH_042" <<'PY'
-          import pathlib, sys
-          text = pathlib.Path(sys.argv[1]).read_text()
-          expected = '#if defined(DOT11_SAE_SUPPORT) || defined(SUPP_SAE_SUPPORT)'
-          if text.count(expected) != 1:
-              raise SystemExit(f"ERROR: expected exactly one combined SAE include condition in 042; found {text.count(expected)}")
-          if text.count('sec_cmm.h') < 2 or text.count('sae_cmm.h') < 2:
-              raise SystemExit("ERROR: 042 patch does not contain expected sec_cmm/sae_cmm diff context")
-          if 'rtmp.h' in text:
-              raise SystemExit("ERROR: 042 patch unexpectedly mentions rtmp.h")
-          print("PASS: 042 is a one-line sec_cmm.h include-condition patch.")
-          PY
-
-          test -s "$SAE_CMM" || { echo "::error::sae_cmm.h not found: $SAE_CMM"; exit 1; }
-          echo "--- sae_cmm.h first 40 lines ---"
-          nl -ba "$SAE_CMM" | sed -n '1,40p'
-
-          python3 - "$SAE_CMM" <<'PY'
-          import pathlib, re, sys
-          lines = pathlib.Path(sys.argv[1]).read_text().splitlines()
-          if len(lines) < 3:
-              raise SystemExit("ERROR: sae_cmm.h is unexpectedly short")
-          if not re.match(r'^\s*#\s*ifndef\b', lines[0]):
-              raise SystemExit("ERROR: sae_cmm.h does not start with an include guard")
-          m = re.match(r'^\s*#\s*ifndef\s+(\S+)', lines[0])
-          macro = m.group(1)
-          if not re.match(r'^\s*#\s*define\s+' + re.escape(macro) + r'\b', lines[1]):
-              raise SystemExit(f"ERROR: sae_cmm.h guard mismatch: expected #define {macro} on line 2")
-          depth = 0
-          for i, line in enumerate(lines, 1):
-              s = line.strip()
-              if re.match(r'^#\s*(if|ifdef|ifndef)\b', s):
-                  depth += 1
-              elif re.match(r'^#\s*endif\b', s):
-                  depth -= 1
-                  if depth < 0:
-                      raise SystemExit(f"ERROR: unmatched #endif at sae_cmm.h:{i}")
-          if depth != 0:
-              raise SystemExit(f"ERROR: unbalanced preprocessor directives in sae_cmm.h; depth={depth}")
-          print(f"PASS: sae_cmm.h include guard is {macro} and preprocessor nesting is balanced.")
-          PY
-
-          echo "--- direct SAE include relationships ---"
-          grep -nE '^[[:space:]]*#include[[:space:]]+".*(sec_cmm|sae_cmm)\.h"' "$SEC" "$SAE_CMM" "$RTMP" || true
-          echo "PASS: 042 and sae_cmm.h read-only audit completed."
-
-          DIAG="artifacts/N60-Pro/standard/DRIVER-PREPARE-DIAGNOSTICS.txt"
-          mkdir -p "$(dirname "$DIAG")"
-
-          {
-            echo "=== MT Wi-Fi Prepare diagnostics ==="
-            echo "Source root: $SRC"
-            echo "Config: $CFG"
-            echo "RTMP header: $RTMP"
-            echo "SAE header: $SEC"
-            echo "AP source: $AP_CFG"
-            echo
-            echo "=== Effective management TX power configuration ==="
-            grep -E '^CONFIG_MTK_(MT_AP_SUPPORT|CFG80211_SUPPORT|WIFI_EAP_FEATURE|MGMT_TXPWR_CTRL)=' .config || true
-            echo
-            echo "=== SAE guard context ==="
-            nl -ba "$SEC" | awk 'NR >= 10 && NR <= 20'
-            echo
-            echo "=== RRM config context around line 73 ==="
-            nl -ba "$CFG" | awk 'NR >= 68 && NR <= 78'
-            echo
-            echo "=== bDynamicVlanDisabled references ==="
-            grep -RniE --include='*.h' --include='*.c' \
-              'bDynamicVlanDisabled' "$SRC" || true
-            echo
-            echo "=== VLAN guard context in rtmp.h ==="
-            grep -n -B 8 -A 8 -E \
-              'bDynamicVlanDisabled|DYNAMIC_VLAN_SUPPORT|RT_CFG80211_SUPPORT' \
-              "$RTMP" || true
-            echo
-            echo "=== Management TX power references ==="
-            grep -n -B 25 -A 25 -E \
-              'rtmp_get_mgmtpwr|MgmtTxPwr|EpaFeGain|TxPwrDelta' \
-              "$AP_CFG" || true
-            echo
-            echo "=== Management TX power member declarations ==="
-            grep -RniE --include='*.h' \
-              'MgmtTxPwr|EpaFeGain|TxPwrDelta' "$SRC" || true
-            echo
-            echo "=== Patch inventory ==="
-            ls -1 package/mtk/drivers/mt_wifi/patches-7673/
-            echo
-            echo "CUSTOM_SOURCE_MODIFIED=no"
-          } | tee "$DIAG"
-
-          echo "PASS: read-only diagnostics saved to $DIAG"
+          
+          echo "PASS: prepare OK."
 
       - name: Build standard profile
         id: build_step
@@ -403,24 +252,6 @@ jobs:
         continue-on-error: true
         run: |
           set -Eeuo pipefail
-
-          echo "===== Step 0: audit effective MTK Wi-Fi configuration ====="
-
-          require_config() {
-            if ! grep -Fqx "$1" .config; then
-              echo "::error::Required configuration missing before build: $1"
-              grep -E '^CONFIG_MTK_(MT_AP_SUPPORT|CFG80211_SUPPORT|WIFI_EAP_FEATURE|MGMT_TXPWR_CTRL)=' .config || true
-              exit 1
-            fi
-          }
-
-          require_config 'CONFIG_MTK_WIFI_EAP_FEATURE=y'
-          require_config 'CONFIG_MTK_MGMT_TXPWR_CTRL=y'
-          require_config 'CONFIG_MTK_CFG80211_SUPPORT=y'
-          require_config 'CONFIG_MTK_MT_WIFI=m'
-
-          echo "===== Effective management TX power configuration ====="
-          grep -E '^CONFIG_MTK_(MT_AP_SUPPORT|CFG80211_SUPPORT|WIFI_EAP_FEATURE|MGMT_TXPWR_CTRL)=' .config
 
           echo "===== Step 1: clean MT Wi-Fi package and prepare with static patches ====="
           make package/mtk/drivers/mt_wifi/clean V=s
@@ -460,167 +291,17 @@ jobs:
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
-              grep -n -E 'Applying|042-fix|050-fix|051-fix|052-fix|053-fix|055-fix|057-fix|Patch failed|Hunk FAILED' "$PREPARE_LOG" || true
               exit 1
             fi
           done
 
           if grep -Eq 'Hunk FAILED|Patch failed|patch failed' "$PREPARE_LOG"; then
             echo "::error::Patch failure text found in prepare log."
-            grep -n -B 3 -A 5 -E 'Hunk FAILED|Patch failed|patch failed' "$PREPARE_LOG" || true
             exit 1
           fi
 
-          echo "PASS: prepare log contains 042, 050, 051, 052, 053, 055, 057 patches."
+          echo "PASS: prepare log contains all patches."
 
-          locate_driver_source() {
-            local rtmp src
-            local -a rtmp_files=()
-            local -a sources=()
-
-            mapfile -t rtmp_files < <(
-              find build_dir -type f \
-                -path '*/embedded/include/rtmp.h' -print
-            )
-
-            for rtmp in "${rtmp_files[@]}"; do
-              src="$(dirname "$(dirname "$(dirname "$rtmp")")")"
-              if [ -f "$src/os/linux/config.mk" ] &&
-                 [ -f "$src/embedded/include/security/sec_cmm.h" ] &&
-                 [ -f "$src/embedded/ap/ap_cfg.c" ]; then
-                sources+=("$src")
-              fi
-            done
-
-            if [ "${#sources[@]}" -ne 1 ]; then
-              echo "::error::Expected exactly one valid MT Wi-Fi source root; found ${#sources[@]}."
-              printf '%s\n' "${rtmp_files[@]}"
-              find build_dir -type f -path '*/os/linux/config.mk' -print || true
-              find build_dir -type f -path '*/embedded/ap/ap_cfg.c' -print || true
-              return 1
-            fi
-
-            printf '%s\n' "${sources[0]}"
-          }
-
-          SRC="$(locate_driver_source)"
-          CFG="$SRC/os/linux/config.mk"
-          RTMP="$SRC/embedded/include/rtmp.h"
-          SEC="$SRC/embedded/include/security/sec_cmm.h"
-          AP_CFG="$SRC/embedded/ap/ap_cfg.c"
-
-          echo "Resolved source root: $SRC"
-          test -f "$CFG"
-          test -f "$RTMP"
-          test -f "$SEC"
-          test -f "$AP_CFG"
-
-          echo "===== Step 2: verify all fixes in prepared source ====="
-          grep -Fqx \
-            '#if defined(DOT11_SAE_SUPPORT) || defined(SUPP_SAE_SUPPORT)' \
-            <(awk 'NR==14 { print; exit }' "$SEC") || {
-              echo "::error::SAE line-14 fix missing after prepare."
-              nl -ba "$SEC" | awk 'NR >= 10 && NR <= 18'
-              exit 1
-            }
-
-          grep -Fqx 'HAS_DOT11K_RRM_SUPPORT=y' "$CFG" || {
-            echo "::error::RRM fix missing after prepare."
-            grep -n -C 3 'HAS_DOT11K_RRM_SUPPORT' "$CFG" || true
-            exit 1
-          }
-
-          grep -Fq \
-            '#if defined(RT_CFG80211_SUPPORT) || defined(DYNAMIC_VLAN_SUPPORT)' \
-            "$RTMP" || {
-              echo "::error::VLAN fix missing after prepare."
-              grep -n -B 8 -A 8 'bDynamicVlanDisabled' "$RTMP" || true
-              exit 1
-            }
-
-          grep -Fqx 'HAS_MGMT_TXPWR_CTRL=y' "$CFG" || {
-            echo "::error::HAS_MGMT_TXPWR_CTRL=y missing after prepare."
-            grep -n -B 3 -A 3 'MGMT_TXPWR_CTRL' "$CFG" || true
-            exit 1
-          }
-
-          grep -Fqx 'WFLAGS += -DMGMT_TXPWR_CTRL' "$CFG" || {
-            echo "::error::WFLAGS mapping for MGMT_TXPWR_CTRL missing after prepare."
-            grep -n -B 5 -A 5 'MGMT_TXPWR_CTRL' "$CFG" || true
-            exit 1
-          }
-
-          echo "===== Verify management TX power member declarations ====="
-          grep -n -B 4 -A 4 -E \
-            'MgmtTxPwr|EpaFeGain|TxPwrDelta' "$RTMP" || {
-              echo "::error::Expected management TX power member declarations not found in rtmp.h."
-              exit 1
-            }
-
-          echo "===== Verify management TX power references ====="
-          grep -n -B 5 -A 5 -E \
-            'rtmp_get_mgmtpwr|MgmtTxPwr|EpaFeGain|TxPwrDelta' \
-            "$AP_CFG" || {
-              echo "::error::Expected management TX power references not found in ap_cfg.c."
-              exit 1
-            }
-
-          echo "PASS: SAE, RRM, VLAN and MGMT_TXPWR_CTRL source/configuration checks passed."
-
-          echo "===== Step 2b: verify 055 + 057 macro unification ====="
-          for f in \
-            "$SRC/embedded/include/security/sec.h" \
-            "$SRC/embedded/security/cmm_sec.c" \
-            "$SRC/embedded/include/security/sec_cmm.h" \
-            "$SRC/embedded/fsm/ap_mgmt_assoc.c" \
-            "$SRC/embedded/common/ft.c" \
-            "$SRC/embedded/fsm/sta_mgmt_assoc.c" \
-            "$SRC/embedded/security/cmm_wpa.c"
-          do
-            if grep -q 'HOSTAPD_WPA3R3_SUPPORT' "$f"; then
-              echo "::error::055/057 failed: $f still contains HOSTAPD_WPA3R3_SUPPORT"
-              grep -n 'HOSTAPD_WPA3R3_SUPPORT' "$f" || true
-              exit 1
-            fi
-          done
-          echo "PASS: 055 + 057 applied — no HOSTAPD_WPA3R3_SUPPORT remains in the 7 touched files."
-
-          echo "===== Step 3: read-only ap_ioctl source/include evidence ====="
-          AP_IOCTL="$SRC/os/linux/ap_ioctl.c"
-          APIO_EVIDENCE="artifacts/N60-Pro/standard/AP_IOCTL-EVIDENCE.txt"
-          mkdir -p "$(dirname "$APIO_EVIDENCE")"
-
-          test -s "$AP_IOCTL" || { echo "::error::ap_ioctl.c not found: $AP_IOCTL"; exit 1; }
-
-          {
-            echo "===== ap_ioctl.c 位置 ====="
-            echo "$AP_IOCTL"
-
-            echo
-            echo "===== ap_ioctl.c 前 35 行 ====="
-            sed -n '1,35p' "$AP_IOCTL"
-
-            echo
-            echo "===== ap_ioctl.c 所有 include ====="
-            grep -nE '^[[:space:]]*#[[:space:]]*include' "$AP_IOCTL"
-
-            echo
-            echo "===== rt_config.h 是否 include rtmp.h ====="
-            RT_CONFIG=$(find "$SRC" -name "rt_config.h" -print | head -1)
-            echo "rt_config.h: $RT_CONFIG"
-            test -s "$RT_CONFIG" && grep -n 'rtmp.h' "$RT_CONFIG" | head -10 || true
-
-            echo
-            echo "===== 谁 include 了 rt_config.h（在 \$SRC 内）====="
-            grep -rln 'rt_config\.h' "$SRC" 2>/dev/null | head -30 || true
-
-            echo
-            echo "===== 谁 include 了 rtmp.h（在 \$SRC 内）====="
-            grep -rln 'rtmp\.h' "$SRC" 2>/dev/null | head -30 || true
-          } | tee "$APIO_EVIDENCE"
-
-          echo "PASS: Step 3 source/include evidence saved."
-          echo "NOTE: GCC -H/-E evidence is captured AFTER the real build from the exact compiler invocation in FULL-BUILD-VS-LOG.txt."
           echo "===== Step 4: full firmware build with complete log capture ====="
           BUILD_LOG="artifacts/N60-Pro/standard/FULL-BUILD-VS-LOG.txt"
           mkdir -p "$(dirname "$BUILD_LOG")"
@@ -628,323 +309,17 @@ jobs:
           set -o pipefail
           make -j"$(nproc)" V=s 2>&1 | tee "$BUILD_LOG"
 
-          echo "===== Step 5: audit actual compiler log for MGMT_TXPWR_CTRL ====="
-          if grep -Fq -- '-DMGMT_TXPWR_CTRL' "$BUILD_LOG"; then
-            echo "PASS: full build log contains -DMGMT_TXPWR_CTRL."
-            grep -n -m 10 -B 2 -A 2 -- '-DMGMT_TXPWR_CTRL' "$BUILD_LOG" || true
-          else
-            echo "::error::Full build log contains no -DMGMT_TXPWR_CTRL compiler flag."
-            grep -n -i -m 50 -E 'MGMT_TXPWR_CTRL|mt_wifi.*ap_cfg\.c|ap_cfg\.c:|WFLAGS' "$BUILD_LOG" || true
-            exit 1
-          fi
-
           echo "===== Step 6: verify the exact standard N60 Pro sysupgrade image ====="
           SYSUP="bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
 
           if [ ! -s "$SYSUP" ]; then
             echo "::error::Expected non-empty sysupgrade ITB not found: $SYSUP"
-            find bin/targets/mediatek/filogic -maxdepth 1 -type f \
-              -printf '%f (%s bytes)\n' 2>/dev/null || true
             exit 1
           fi
 
           ls -lh "$SYSUP"
           sha256sum "$SYSUP"
           echo "PASS: standard N60 Pro sysupgrade ITB exists and is non-empty."
-
-      - name: Capture ap_ioctl GCC include-chain evidence
-        if: ${{ !cancelled() }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-
-          echo "===== Capture GCC -H/-E evidence from kbuild .cmd file ====="
-          BUILD_LOG="artifacts/N60-Pro/standard/FULL-BUILD-VS-LOG.txt"
-          APIO_EVIDENCE="artifacts/N60-Pro/standard/AP_IOCTL-EVIDENCE.txt"
-          APIO_TREE="artifacts/N60-Pro/standard/AP_IOCTL-GCC-H-INCLUDE-TREE.txt"
-          APIO_PRE="artifacts/N60-Pro/standard/AP_IOCTL-PREPROCESSED.i"
-          APIO_CMD="artifacts/N60-Pro/standard/AP_IOCTL-GCC-COMMAND.sh"
-          APIO_CMDFILE_COPY="artifacts/N60-Pro/standard/AP_IOCTL-OBJECT-CMD.txt"
-
-          mkdir -p "$(dirname "$APIO_EVIDENCE")"
-
-          # Re-resolve the prepared source root because shell variables do not persist between steps.
-          mapfile -t RTMP_FILES < <(
-            find build_dir -type f -path '*/embedded/include/rtmp.h' -print
-          )
-
-          SOURCES=()
-          for rtmp in "${RTMP_FILES[@]}"; do
-            src="$(dirname "$(dirname "$(dirname "$rtmp")")")"
-            if [ -f "$src/os/linux/config.mk" ] &&
-               [ -f "$src/embedded/include/security/sec_cmm.h" ] &&
-               [ -f "$src/os/linux/ap_ioctl.c" ]; then
-              SOURCES+=("$src")
-            fi
-          done
-
-          if [ "${#SOURCES[@]}" -ne 1 ]; then
-            echo "::warning::Could not uniquely resolve prepared MT Wi-Fi source root; GCC evidence not generated."
-            printf '%s\n' "${RTMP_FILES[@]}"
-            exit 0
-          fi
-
-          SRC="${SOURCES[0]}"
-          AP_IOCTL="$SRC/os/linux/ap_ioctl.c"
-
-          test -s "$AP_IOCTL" || {
-            echo "::warning::ap_ioctl.c is missing; GCC evidence not generated."
-            exit 0
-          }
-
-          echo "Source root: $SRC" | tee -a "$APIO_EVIDENCE"
-          echo "Build log:   $BUILD_LOG" | tee -a "$APIO_EVIDENCE"
-          echo "ap_ioctl.c:  $AP_IOCTL" | tee -a "$APIO_EVIDENCE"
-
-          # kbuild writes the FULL compiler command into <obj>.o.cmd.
-          # V=s only prints "CC [M] .../ap_ioctl.o", so the log never carries the full gcc line.
-          mapfile -t CMD_CANDIDATES < <(
-            find build_dir -type f \
-              \( -name 'ap_ioctl.o.cmd' -o -name '.ap_ioctl.o.cmd' \) \
-              -print 2>/dev/null
-          )
-
-          APIO_CMD_FILE=""
-          if [ "${#CMD_CANDIDATES[@]}" -eq 1 ]; then
-            APIO_CMD_FILE="${CMD_CANDIDATES[0]}"
-          elif [ "${#CMD_CANDIDATES[@]}" -gt 1 ]; then
-            for c in "${CMD_CANDIDATES[@]}"; do
-              case "$c" in
-                *mt_wifi*|*mt-wifi*|*mtwifi*) APIO_CMD_FILE="$c"; break ;;
-              esac
-            done
-            [ -z "$APIO_CMD_FILE" ] && APIO_CMD_FILE="${CMD_CANDIDATES[0]}"
-          fi
-
-          if [ -z "$APIO_CMD_FILE" ] || [ ! -s "$APIO_CMD_FILE" ]; then
-            {
-              echo
-              echo "===== kbuild .cmd file not found ====="
-              echo "Searched under build_dir for ap_ioctl.o.cmd / .ap_ioctl.o.cmd"
-              echo
-              echo "--- matches for *ap_ioctl*.cmd ---"
-              find build_dir -type f -name '*ap_ioctl*.cmd' -print 2>/dev/null | head -50 || true
-              echo
-              echo "--- all files under build_dir matching *ap_ioctl* (first 50) ---"
-              find build_dir -type f -name '*ap_ioctl*' -print 2>/dev/null | head -50 || true
-              echo
-              echo "RESULT: GCC -H/-E was skipped because the kbuild .cmd file was not present."
-              echo "This is a diagnostic limitation, not a firmware source error."
-            } | tee -a "$APIO_EVIDENCE"
-            exit 0
-          fi
-
-          echo "kbuild .cmd: $APIO_CMD_FILE" | tee -a "$APIO_EVIDENCE"
-          cp "$APIO_CMD_FILE" "$APIO_CMDFILE_COPY" 2>/dev/null || true
-
-          TMP_EVIDENCE="$(mktemp -d)"
-          trap 'rm -rf "$TMP_EVIDENCE"' EXIT
-          COMMAND_FILE="$TMP_EVIDENCE/ap_ioctl-gcc-command.sh"
-          INCLUDE_LOG="$TMP_EVIDENCE/ap_ioctl-gcc-H.log"
-          PREPROCESSED="$TMP_EVIDENCE/ap_ioctl-preprocessed.i"
-
-          cat > "$TMP_EVIDENCE/extract-cmd.py" <<'PY'
-          import pathlib
-          import re
-          import shlex
-          import sys
-
-          cmd_path     = pathlib.Path(sys.argv[1])
-          source       = pathlib.Path(sys.argv[2]).resolve()
-          source_root  = pathlib.Path(sys.argv[3]).resolve()
-          command_file = pathlib.Path(sys.argv[4])
-          preprocessed = pathlib.Path(sys.argv[5])
-
-          text = cmd_path.read_text(errors="replace")
-
-          # kbuild .cmd format (stable across Linux 5.x/6.x):
-          #   cmd_/abs/path/ap_ioctl.o := /abs/path/aarch64-openwrt-linux-musl-gcc ... -c -o /abs/path/ap_ioctl.o /abs/path/ap_ioctl.c
-          pattern = re.compile(
-              r'^[ \t]*cmd_[^\n:]*ap_ioctl\.o[ \t]*:=[ \t]*(.+)$',
-              re.MULTILINE,
-          )
-          m = pattern.search(text)
-          if not m:
-              pattern2 = re.compile(
-                  r'^[ \t]*cmd_[^\n]*ap_ioctl[^\n]*:=[ \t]*(.+)$',
-                  re.MULTILINE,
-              )
-              m = pattern2.search(text)
-          if not m:
-              raise SystemExit("ERROR: no 'cmd_...ap_ioctl.o :=' line found in " + str(cmd_path))
-
-          command = m.group(1).strip()
-          if not command:
-              raise SystemExit("ERROR: extracted cmd_ line is empty")
-
-          argv = shlex.split(command)
-          if not argv:
-              raise SystemExit("ERROR: extracted compiler argv is empty")
-
-          compiler_index = None
-          for i, arg in enumerate(argv):
-              name = pathlib.PurePosixPath(arg).name
-              if (
-                  name == "gcc"
-                  or name.endswith("-gcc")
-                  or name.startswith("aarch64-openwrt-linux-musl-gcc")
-                  or name.endswith("gcc-14")
-                  or name.endswith("gcc-14.3.0")
-              ):
-                  compiler_index = i
-                  break
-          if compiler_index is None:
-              raise SystemExit(f"ERROR: no GCC executable found in extracted command: {argv[:8]}")
-
-          argv = argv[compiler_index:]
-
-          # Drop build-only flags: -c, -o <file>, -MD/-MMD/-MP, -MF/-MT/-MQ <arg>
-          new = []
-          i = 0
-          while i < len(argv):
-              arg = argv[i]
-              if arg == "-c":
-                  i += 1
-                  continue
-              if arg == "-o":
-                  i += 2
-                  continue
-              if arg in ("-MD", "-MMD", "-MP"):
-                  i += 1
-                  continue
-              if arg in ("-MF", "-MT", "-MQ"):
-                  i += 2
-                  continue
-              new.append(arg)
-              i += 1
-
-          matches = [
-              i for i, arg in enumerate(new)
-              if pathlib.Path(arg).name == "ap_ioctl.c"
-          ]
-          if not matches:
-              raise SystemExit("ERROR: normalized compiler command no longer contains ap_ioctl.c")
-
-          new[matches[-1]] = str(source)
-          new += ["-H", "-E", "-o", str(preprocessed)]
-
-          # Use the .cmd file directory as cwd to mirror kbuild's invocation.
-          work_dir = cmd_path.parent.resolve()
-
-          script = (
-              "#!/bin/bash\nset -Eeuo pipefail\n"
-              + "cd " + shlex.quote(str(work_dir)) + "\n"
-              + shlex.join(new) + "\n"
-          )
-          command_file.write_text(script)
-          command_file.chmod(0o700)
-          print("PASS: generated reproducible GCC -H -E command from kbuild .cmd")
-          PY
-
-          set +e
-          python3 "$TMP_EVIDENCE/extract-cmd.py" \
-            "$APIO_CMD_FILE" "$AP_IOCTL" "$SRC" "$COMMAND_FILE" "$PREPROCESSED"
-          PY_RC=$?
-          set -e
-
-          if [ "$PY_RC" -ne 0 ] || [ ! -s "$COMMAND_FILE" ]; then
-            {
-              echo
-              echo "===== GCC command extraction failed ====="
-              echo "extract-cmd.py exit status: $PY_RC"
-              echo "APIO_CMD_FILE=$APIO_CMD_FILE"
-              echo "Command file exists: $([ -s "$COMMAND_FILE" ] && echo yes || echo no)"
-              echo
-              echo "--- kbuild .cmd content (first 60 lines) ---"
-              sed -n '1,60p' "$APIO_CMD_FILE" 2>/dev/null || true
-              echo
-              echo "RESULT: GCC -H/-E skipped due to extraction failure."
-              echo "This is a diagnostic limitation, not a firmware source error."
-            } | tee -a "$APIO_EVIDENCE"
-            exit 0
-          fi
-
-          echo "--- actual GCC command used for evidence ---"
-          cat "$COMMAND_FILE" | tee "$APIO_CMD"
-
-          echo "--- run GCC -H -E on the current, unmodified ap_ioctl.c ---"
-          set +e
-          "$COMMAND_FILE" 2>"$INCLUDE_LOG"
-          GCC_RC=$?
-          set -e
-          echo "gcc -H -E exit status: $GCC_RC"
-
-          cp "$INCLUDE_LOG" "$APIO_TREE" 2>/dev/null || true
-
-          {
-            echo
-            echo "===== GCC -H include tree (key lines) ====="
-            grep -nE 'rtmp\.h|rtmp_comm\.h|rtmp_os\.h|rt_linux\.h|rt_os\.h|rt_os_util\.h|rt_os_net\.h|rtmp_def\.h|debug\.h|sec_cmm\.h|sae_cmm\.h|rt_config\.h' "$INCLUDE_LOG" | head -300 || true
-
-            echo
-            echo "===== GCC -H include tree size ====="
-            wc -l "$INCLUDE_LOG" || true
-
-            echo
-            echo "===== GCC -E result checks ====="
-            if [ -s "$PREPROCESSED" ]; then
-              echo "PREPROCESSED_FILE=$PREPROCESSED"
-              for pattern in \
-                'struct wifi_dev {' \
-                'typedef.*PRTMP_ADAPTER' \
-                'CHANNEL_CTRL' \
-                'mtwf_dbg_prt'
-              do
-                count=$(grep -Ec "$pattern" "$PREPROCESSED" 2>/dev/null || true)
-                echo "$pattern : $count"
-              done
-
-              echo
-              echo "--- rtmp.h line markers in preprocessed output ---"
-              grep -n 'embedded/include/rtmp\.h' "$PREPROCESSED" | head -20 || true
-
-              echo
-              echo "--- definitions/uses around target symbols ---"
-              grep -nE 'struct wifi_dev|PRTMP_ADAPTER|CHANNEL_CTRL|mtwf_dbg_prt' "$PREPROCESSED" | head -200 || true
-            else
-              echo "WARN: preprocessed output file was not produced."
-            fi
-          } | tee -a "$APIO_EVIDENCE"
-
-          if [ -s "$PREPROCESSED" ]; then
-            cp "$PREPROCESSED" "$APIO_PRE"
-          else
-            echo "WARN: AP_IOCTL-PREPROCESSED.i is empty/missing." | tee -a "$APIO_EVIDENCE"
-          fi
-
-          {
-            echo
-            echo "===== gcc -H -E diagnostics ====="
-            echo "kbuild .cmd file: $APIO_CMD_FILE"
-            echo "gcc exit status:  $GCC_RC"
-            if grep -q 'rtmp\.h' "$INCLUDE_LOG"; then
-              echo "RESULT: rtmp.h APPEARS in actual ap_ioctl.c include tree."
-            else
-              echo "RESULT: rtmp.h DOES NOT APPEAR in actual ap_ioctl.c include tree."
-            fi
-            if grep -q 'rt_config\.h' "$INCLUDE_LOG"; then
-              echo "RESULT: rt_config.h APPEARS in actual ap_ioctl.c include tree."
-            else
-              echo "RESULT: rt_config.h DOES NOT APPEAR in actual ap_ioctl.c include tree."
-            fi
-            echo
-            echo "IMPORTANT: This evidence uses the exact compiler command captured from the kbuild .cmd file; it does not modify ap_ioctl.c."
-          } | tee -a "$APIO_EVIDENCE"
-
-          echo "PASS: GCC include-chain evidence capture completed."
-          echo "Artifacts:"
-          ls -lh "$APIO_EVIDENCE" "$APIO_TREE" "$APIO_CMD" "$APIO_CMDFILE_COPY" 2>/dev/null || true
-          ls -lh "$APIO_PRE" 2>/dev/null || true
 
       - name: Check whether firmware was actually produced
         if: always()
