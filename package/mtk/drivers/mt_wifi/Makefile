@@ -337,6 +337,8 @@ if [ "$$(CONFIG_MTK_WIFI_FW_BIN_LOAD)" = "y" ]; then \
 	if [ "$$(CONFIG_MTK_CHIP_MT7986)" = "y" ] ; then \
 		if [ "$$(CONFIG_MTK_MT_WIFI_FIRMWARE_PATH_MT7986)" != "" ]; then \
 			$(INSTALL_BIN) ./files/$$(CONFIG_MTK_MT_WIFI_FIRMWARE_PATH_MT7986)/* $(1)/lib/firmware/; \
+		elif [ -d "./files/mt7986-fw-20250408" ]; then \
+			$(INSTALL_BIN) ./files/mt7986-fw-20250408/* $(1)/lib/firmware/; \
 		else \
 			$(INSTALL_BIN) $(PKG_BUILD_DIR)/bin/mt7986/rebb/WIFI_RAM_CODE_MT7986.bin \
 			$(PKG_BUILD_DIR)/bin/mt7986/rebb/WIFI_RAM_CODE_MT7986_MT7975.bin \
