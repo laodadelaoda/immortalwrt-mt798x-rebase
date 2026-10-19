@@ -626,7 +626,14 @@ jobs:
           mkdir -p "$(dirname "$BUILD_LOG")"
 
           set -o pipefail
-          make -j"$(nproc)" V=s 2>&1 | tee "$BUILD_LOG"
+          # 1. 先编译底层依赖，防止并发导致找不到符号 (modpost undefined)
+          echo "===== Pre-building mac80211 and cfg80211 to satisfy mt_wifi dependencies ====="
+          make package/kernel/mac80211/compile V=s 2>&1 | tee "$BUILD_LOG"
+          make package/kernel/cfg80211/compile V=s 2>&1 | tee -a "$BUILD_LOG"
+          
+          # 2. 再全量编译剩余所有内容（此时 mt_wifi 能找到符号了）
+          echo "===== Starting full parallel build ====="
+          make -j"$(nproc)" V=s 2>&1 | tee -a "$BUILD_LOG"
 
           echo "===== Step 5: audit actual compiler log for MGMT_TXPWR_CTRL ====="
           if grep -Fq -- '-DMGMT_TXPWR_CTRL' "$BUILD_LOG"; then
