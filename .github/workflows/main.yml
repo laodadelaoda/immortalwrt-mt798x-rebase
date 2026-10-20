@@ -122,8 +122,6 @@ jobs:
           CONFIG_PACKAGE_luci-app-mtwifi-cfg=y
 
           CONFIG_MTK_MT_WIFI=m
-          CONFIG_MTK_RTMP_PCI_SUPPORT=y
-          CONFIG_MTK_RTMP_RBUS_SUPPORT=y
           CONFIG_MTK_MT_AP_SUPPORT=y
           CONFIG_MTK_CFG80211_SUPPORT=y
           CONFIG_MTK_WIFI_EAP_FEATURE=y
@@ -252,7 +250,8 @@ jobs:
             074-fix-update-mgmt-frame-regs-pad.patch \
             075-fix-ate-missing-macros-and-typos.patch \
             076-fix-ate-dpd-macros-and-u_int32.patch \
-            077-fix-precal-macros.patch
+            077-fix-precal-macros.patch \
+            078-fix-mt7986-pcie-cflags.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
