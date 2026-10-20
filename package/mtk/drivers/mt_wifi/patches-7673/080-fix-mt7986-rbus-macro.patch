@@ -1,0 +1,11 @@
+diff -ru a/mt_wifi/os/linux/Makefile.mt_wifi_ap b/mt_wifi/os/linux/Makefile.mt_wifi_ap
+--- a/mt_wifi/os/linux/Makefile.mt_wifi_ap	2025-04-08 12:23:07.000000000 +0800
++++ b/mt_wifi/os/linux/Makefile.mt_wifi_ap	2026-10-20 14:33:31.887769636 +0800
+@@ -2170,6 +2170,7 @@
+ 
+ ifeq ($(CONFIG_CHIP_MT7986),y)
+ EXTRA_CFLAGS += -DMT7986 -DMT_BBP -DMT_RF -DRTMP_RF_RW_SUPPORT -DMT_MAC -DRTMP_MAC_PCI
++EXTRA_CFLAGS += -DRTMP_RBUS_SUPPORT
+ EXTRA_CFLAGS += -DMT_DMAC -DMT_FMAC -DDATA_TXPWR_CTRL
+ EXTRA_CFLAGS += -DWARP_512_SUPPORT
+ EXTRA_CFLAGS += -DICAP_FW_SUPPORT
