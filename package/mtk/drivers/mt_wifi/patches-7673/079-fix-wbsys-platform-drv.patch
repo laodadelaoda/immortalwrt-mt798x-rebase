@@ -1,6 +1,6 @@
 diff -ru a/mt_wifi/os/linux/Makefile.mt_wifi_ap b/mt_wifi/os/linux/Makefile.mt_wifi_ap
 --- a/mt_wifi/os/linux/Makefile.mt_wifi_ap	2025-04-08 12:23:07.000000000 +0800
-+++ b/mt_wifi/os/linux/Makefile.mt_wifi_ap	2026-10-20 12:43:18.854791675 +0800
++++ b/mt_wifi/os/linux/Makefile.mt_wifi_ap	2026-10-20 15:48:43.653285627 +0800
 @@ -1871,7 +1871,7 @@
  CONFIG_PLATFORM_DRV_SUPPORT=y
  endif
@@ -19,15 +19,16 @@ diff -ru a/mt_wifi/os/linux/Makefile.mt_wifi_ap b/mt_wifi/os/linux/Makefile.mt_w
  EXTRA_CFLAGS += -DPLATFORM_DRIVER_SUPPORT
  endif
  
-@@ -2170,6 +2170,7 @@
+@@ -2170,6 +2170,8 @@
  
  ifeq ($(CONFIG_CHIP_MT7986),y)
  EXTRA_CFLAGS += -DMT7986 -DMT_BBP -DMT_RF -DRTMP_RF_RW_SUPPORT -DMT_MAC -DRTMP_MAC_PCI
 +EXTRA_CFLAGS += -DPLATFORM_DRIVER_SUPPORT
++EXTRA_CFLAGS += -DRTMP_RBUS_SUPPORT
  EXTRA_CFLAGS += -DMT_DMAC -DMT_FMAC -DDATA_TXPWR_CTRL
  EXTRA_CFLAGS += -DWARP_512_SUPPORT
  EXTRA_CFLAGS += -DICAP_FW_SUPPORT
-@@ -2283,7 +2284,7 @@
+@@ -2283,7 +2285,7 @@
  CONFIG_PLATFORM_DRV_SUPPORT=y
  endif
  
@@ -36,7 +37,7 @@ diff -ru a/mt_wifi/os/linux/Makefile.mt_wifi_ap b/mt_wifi/os/linux/Makefile.mt_w
  EXTRA_CFLAGS += -DPLATFORM_DRIVER_SUPPORT
  endif
  
-@@ -2466,7 +2467,7 @@
+@@ -2466,7 +2468,7 @@
  CONFIG_PLATFORM_DRV_SUPPORT=y
  endif
  
@@ -45,7 +46,7 @@ diff -ru a/mt_wifi/os/linux/Makefile.mt_wifi_ap b/mt_wifi/os/linux/Makefile.mt_w
  EXTRA_CFLAGS += -DPLATFORM_DRIVER_SUPPORT
  endif
  
-@@ -2662,7 +2663,7 @@
+@@ -2662,7 +2664,7 @@
  CONFIG_PLATFORM_DRV_SUPPORT=y
  endif
  
@@ -54,3 +55,11 @@ diff -ru a/mt_wifi/os/linux/Makefile.mt_wifi_ap b/mt_wifi/os/linux/Makefile.mt_w
  EXTRA_CFLAGS += -DPLATFORM_DRIVER_SUPPORT
  endif
  
+@@ -2833,6 +2835,7 @@
+ 
+ $(DRV_NAME)-objs += $(SRC_EMBEDDED_DIR)/common/cmm_mac_pci.o
+ $(DRV_NAME)-objs += $(SRC_EMBEDDED_DIR)/common/hif_pci.o
++$(DRV_NAME)-objs += $(SRC_DIR)/os/linux/wbsys_main_dev.o
+ 
+ $(DRV_NAME)-objs += $(SRC_DIR)/os/linux/rt_pci_rbus.o\
+                     $(SRC_DIR)/os/linux/rt_rbus_pci_drv.o\
