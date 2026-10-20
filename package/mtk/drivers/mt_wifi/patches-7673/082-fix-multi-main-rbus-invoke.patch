@@ -1,0 +1,12 @@
+diff -ru a/mt_wifi/os/linux/multi_main_dev.c b/mt_wifi/os/linux/multi_main_dev.c
+--- a/mt_wifi/os/linux/multi_main_dev.c	2025-04-08 12:23:07.000000000 +0800
++++ b/mt_wifi/os/linux/multi_main_dev.c	2026-10-20 19:41:26.623951458 +0800
+@@ -130,7 +130,7 @@
+ 	int status = 0;
+ 
+ 	os_module_init();
+-#ifdef RTMP_RBUS_SUPPORT
++#if 1
+ 	status = wbsys_module_init();
+ 
+ 	if (status)
