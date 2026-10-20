@@ -88,6 +88,7 @@ jobs:
           
           # ======= MTK Wi-Fi 核心驱动 =======
           CONFIG_PACKAGE_kmod-mt_wifi=y
+          CONFIG_PACKAGE_kmod-pcie-mediatek=y
           CONFIG_PACKAGE_kmod-mac80211=y
           CONFIG_PACKAGE_kmod-cfg80211=y
           CONFIG_PACKAGE_kmod-conninfra=y
@@ -121,6 +122,8 @@ jobs:
           CONFIG_PACKAGE_luci-app-mtwifi-cfg=y
 
           CONFIG_MTK_MT_WIFI=m
+          CONFIG_MTK_RTMP_PCI_SUPPORT=y
+          CONFIG_MTK_RTMP_RBUS_SUPPORT=y
           CONFIG_MTK_MT_AP_SUPPORT=y
           CONFIG_MTK_CFG80211_SUPPORT=y
           CONFIG_MTK_WIFI_EAP_FEATURE=y
