@@ -88,7 +88,6 @@ jobs:
           
           # ======= MTK Wi-Fi 核心驱动 =======
           CONFIG_PACKAGE_kmod-mt_wifi=y
-          CONFIG_PACKAGE_kmod-pcie-mediatek=y
           CONFIG_PACKAGE_kmod-mac80211=y
           CONFIG_PACKAGE_kmod-cfg80211=y
           CONFIG_PACKAGE_kmod-conninfra=y
@@ -251,7 +250,7 @@ jobs:
             075-fix-ate-missing-macros-and-typos.patch \
             076-fix-ate-dpd-macros-and-u_int32.patch \
             077-fix-precal-macros.patch \
-            078-fix-mt7986-pcie-cflags.patch
+            079-fix-wbsys-platform-drv.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
