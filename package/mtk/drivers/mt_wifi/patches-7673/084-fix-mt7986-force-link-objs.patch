@@ -1,0 +1,14 @@
+diff -ru a/mt_wifi/os/linux/Makefile.mt_wifi_ap b/mt_wifi/os/linux/Makefile.mt_wifi_ap
+--- a/mt_wifi/os/linux/Makefile.mt_wifi_ap	2025-04-08 12:23:07.000000000 +0800
++++ b/mt_wifi/os/linux/Makefile.mt_wifi_ap	2026-10-20 23:20:48.272619981 +0800
+@@ -2824,7 +2824,9 @@
+ # Root
+ #
+ 
+-$(DRV_NAME)-objs += $(ap_objs) $(cmm_objs) $(asic_objs) $(chip_objs) $(rate_objs)\
++$(DRV_NAME)-objs += $(ap_objs) $(cmm_objs) $(asic_objs) $(chip_objs) $(rate_objs) \
++	$(SRC_DIR)/os/linux/multi_main_dev.o \
++	$(SRC_DIR)/os/linux/wbsys_main_dev.o\
+                     $(spec_objs) $(func_objs) $(os_objs) $(dot11_ft_objs) $(serv_objs)
+ 
+ $(DRV_NAME)-objs += $(SRC_EMBEDDED_DIR)/common/eeprom.o\
