@@ -252,7 +252,8 @@ jobs:
             077-fix-precal-macros.patch \
             087-fix-mt7986-wbsys-force.patch \
             088-fix-wbsys-6.12.patch \
-            089-fix-multi-main-include.patch
+            089-fix-multi-main-include.patch \
+            090-fix-multi-main-rtconfig.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
