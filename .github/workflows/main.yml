@@ -4,6 +4,12 @@ on:
   push:
     branches: ["n60pro-mtk-closed-driver"]
   workflow_dispatch:
+    inputs:
+      quick_wifi_only:
+        description: 'Quick WiFi only (skip full firmware)'
+        required: false
+        default: 'false'
+        type: boolean
 
 permissions:
   contents: read
@@ -50,7 +56,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
-          key: ${{ runner.os }}-n60pro-standard-ccache-${{ github.ref_name }}-${{ github.sha }}
+          key: ${{ runner.os }}-n60pro-standard-ccache-${{ github.ref_name }}
           restore-keys: |
             ${{ runner.os }}-n60pro-standard-ccache-${{ github.ref_name }}-
             ${{ runner.os }}-n60pro-standard-ccache-
@@ -253,7 +259,8 @@ jobs:
             087-fix-mt7986-wbsys-force.patch \
             088-fix-wbsys-6.12.patch \
             089-fix-multi-main-include.patch \
-            090-fix-multi-main-rtconfig.patch
+            090-fix-multi-main-rtconfig.patch \
+            091-fix-gpl-license.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
@@ -268,30 +275,53 @@ jobs:
 
           echo "PASS: prepare log contains all patches."
 
-          echo "===== Step 4: full firmware build with complete log capture ====="
+          echo "===== Step 4: build (quick or full) ====="
           BUILD_LOG="artifacts/N60-Pro/standard/FULL-BUILD-VS-LOG.txt"
           mkdir -p "$(dirname "$BUILD_LOG")"
 
           set -o pipefail
-          make -j"$(nproc)" V=s 2>&1 | tee "$BUILD_LOG"
-
-          echo "===== Step 6: verify the exact standard N60 Pro sysupgrade image ====="
-          SYSUP="bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
-
-          if [ ! -s "$SYSUP" ]; then
-            echo "::error::Expected non-empty sysupgrade ITB not found: $SYSUP"
-            exit 1
+          if [ "${{ github.event.inputs.quick_wifi_only }}" = "true" ]; then
+            echo "===== QUICK MODE: only mt_wifi ====="
+            make package/mtk/drivers/mt_wifi/compile V=s 2>&1 | tee "$BUILD_LOG"
+          else
+            echo "===== FULL MODE ====="
+            make -j"$(nproc)" V=s 2>&1 | tee "$BUILD_LOG"
           fi
 
-          ls -lh "$SYSUP"
-          sha256sum "$SYSUP"
-          echo "PASS: standard N60 Pro sysupgrade ITB exists and is non-empty."
+          if [ "${{ github.event.inputs.quick_wifi_only }}" = "true" ]; then
+            echo "===== Step 6: verify mt_wifi.ko (quick mode) ====="
+            KO="build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/mt_wifi/mt_wifi_ap/mt_wifi.ko"
+            if [ -s "$KO" ]; then
+              echo "PASS: mt_wifi.ko generated in quick mode"
+              ls -lh "$KO"
+            else
+              echo "::error::mt_wifi.ko not generated in quick mode"
+              exit 1
+            fi
+          else
+            echo "===== Step 6: verify the exact standard N60 Pro sysupgrade image ====="
+            SYSUP="bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
+
+            if [ ! -s "$SYSUP" ]; then
+              echo "::error::Expected non-empty sysupgrade ITB not found: $SYSUP"
+              exit 1
+            fi
+
+            ls -lh "$SYSUP"
+            sha256sum "$SYSUP"
+            echo "PASS: standard N60 Pro sysupgrade ITB exists and is non-empty."
+          fi
 
       - name: Check whether firmware was actually produced
         if: always()
         shell: bash
         run: |
           set +e
+          if [ "${{ github.event.inputs.quick_wifi_only }}" = "true" ]; then
+            echo "FIRMWARE_PRODUCED=quick-mode" >> $GITHUB_ENV
+            echo "Quick mode: firmware not produced by design."
+            exit 0
+          fi
           OUT="bin/targets/mediatek/filogic"
           SYSUP="$OUT/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
           if [ -s "$SYSUP" ]; then
@@ -364,6 +394,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [ "${{ github.event.inputs.quick_wifi_only }}" = "true" ]; then
+            if [ "${{ steps.build_step.outcome }}" != "success" ]; then
+              echo "::error::Quick mode build did not succeed."
+              exit 1
+            fi
+            echo "PASS: quick mode build succeeded."
+            exit 0
+          fi
           echo "Build step outcome: ${{ steps.build_step.outcome }}"
           echo "Firmware produced: ${FIRMWARE_PRODUCED:-no}"
           if [ "${{ steps.build_step.outcome }}" != "success" ]; then
