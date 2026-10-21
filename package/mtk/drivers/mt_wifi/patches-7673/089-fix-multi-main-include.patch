@@ -1,0 +1,10 @@
+--- a/mt_wifi/os/linux/multi_main_dev.c
++++ b/mt_wifi/os/linux/multi_main_dev.c
+@@ -29,6 +29,7 @@
+ #include "rtmp_comm.h"
+ #include "rt_os_util.h"
+ #include "rt_os_net.h"
++#include "rtmp.h"
+ #include <linux/pci.h>
+ 
+ /* Index 0 for Card_1, Index 1 for Card_2 */
