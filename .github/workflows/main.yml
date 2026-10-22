@@ -256,12 +256,7 @@ jobs:
             075-fix-ate-missing-macros-and-typos.patch \
             076-fix-ate-dpd-macros-and-u_int32.patch \
             077-fix-precal-macros.patch \
-            087-fix-mt7986-wbsys-force.patch \
-            088-fix-wbsys-6.12.patch \
-            089-fix-multi-main-include.patch \
-            090-fix-multi-main-rtconfig.patch \
-            091-fix-gpl-license.patch \
-            092-disable-wbsys.patch
+            091-fix-gpl-license.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
