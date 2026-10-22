@@ -256,7 +256,8 @@ jobs:
             075-fix-ate-missing-macros-and-typos.patch \
             076-fix-ate-dpd-macros-and-u_int32.patch \
             077-fix-precal-macros.patch \
-            091-fix-gpl-license.patch
+            091-fix-gpl-license.patch \
+            093-debug-probe.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
