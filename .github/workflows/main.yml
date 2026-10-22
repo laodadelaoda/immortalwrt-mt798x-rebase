@@ -260,7 +260,8 @@ jobs:
             088-fix-wbsys-6.12.patch \
             089-fix-multi-main-include.patch \
             090-fix-multi-main-rtconfig.patch \
-            091-fix-gpl-license.patch
+            091-fix-gpl-license.patch \
+            092-disable-wbsys.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
