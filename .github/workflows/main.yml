@@ -76,7 +76,7 @@ jobs:
           ccache --set-config=compiler_check=content
 
           echo "===== 使用 10-01 完整基线配置 ====="
-          cp configs/n60pro-1001.config .config
+          cp config/n60pro-1001.config .config
           wc -l .config
 
           cp .config artifacts/N60-Pro/standard/config.before-defconfig
