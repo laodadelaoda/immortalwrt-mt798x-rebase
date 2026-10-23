@@ -188,7 +188,8 @@ jobs:
 
           for patch in \
             091-fix-gpl-license.patch \
-            093-debug-probe.patch
+            093-debug-probe.patch \
+            094-fix-wnm-fortify.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
