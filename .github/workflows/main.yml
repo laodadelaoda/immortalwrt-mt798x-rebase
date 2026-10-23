@@ -244,9 +244,10 @@ jobs:
 
           set -o pipefail
           if [ "${{ github.event.inputs.quick_wifi_only }}" = "true" ]; then
-            echo "===== QUICK MODE: build host tools and toolchain first ====="
+            echo "===== QUICK MODE: build host tools first ====="
             make tools/install -j"$(nproc)" V=s 2>&1 | tee -a "$BUILD_LOG"
-            make toolchain/install -j"$(nproc)" V=s 2>&1 | tee -a "$BUILD_LOG"
+            echo "===== QUICK MODE: prepare kernel config ====="
+            make target/linux/prepare V=s 2>&1 | tee -a "$BUILD_LOG"
             echo "===== QUICK MODE: only mt_wifi ====="
             make package/mtk/drivers/mt_wifi/compile V=s 2>&1 | tee -a "$BUILD_LOG"
           else
