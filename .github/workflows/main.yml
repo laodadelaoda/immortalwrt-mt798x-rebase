@@ -223,39 +223,45 @@ jobs:
           echo "===== Step 1: clean MT Wi-Fi package and prepare with static patches ====="
           make package/mtk/drivers/mt_wifi/clean V=s
 
+          # =========================================================================
+          # 实验：在临时构建目录中精准剔除 042~077 补丁 (不影响仓库原文件)
+          # =========================================================================
+          echo "===== EXPERIMENT: Removing 042-077 patches to test baseline ====="
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/042-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/050-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/051-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/052-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/053-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/054-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/055-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/057-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/058-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/059-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/060-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/061-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/062-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/063-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/064-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/065-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/066-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/067-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/068-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/069-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/070-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/071-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/072-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/073-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/074-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/075-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/076-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/077-*.patch
+          echo "PASS: Experimental patches removed from temp build dir."
+
           PREPARE_LOG="artifacts/N60-Pro/standard/mtwifi-prepare.log"
           mkdir -p "$(dirname "$PREPARE_LOG")"
           make package/mtk/drivers/mt_wifi/prepare V=s 2>&1 | tee "$PREPARE_LOG"
 
           for patch in \
-            042-fix-sae-structure-include-guard.patch \
-            050-fix-rrm-config.patch \
-            051-fix-dynamic-vlan-guard.patch \
-            052-fix-mgmt-txpwr-config.patch \
-            053-fix-ap-ioctl-rt-config-include.patch \
-            054-restore-rt-config-include-all.patch \
-            055-fix-wpa3-macro-all.patch \
-            057-fix-rsnxe-callers.patch \
-            058-fix-ftcfg-guard.patch \
-            059-fix-commoncfg-arrow.patch \
-            060-remove-unconditional-precal-flags.patch \
-            061-fix-netif-rx-ni.patch \
-            062-fix-hetb-wlan-service-guard.patch \
-            063-fix-eapstats-rtcfg-guard.patch \
-            064-fix-get-max-path-guard.patch \
-            065-fix-offchannel-scan-guard.patch \
-            066-fix-cfg80211-ft-guard.patch \
-            067-fix-cfg80211-tx-ft-guard.patch \
-            068-fix-cfg80211-tx-return-false.patch \
-            069-fix-cfg80211-ap-array-and-dbg.patch \
-            070-fix-cfg80211-util-he-macros-roam.patch \
-            071-fix-cfg80211-ops-6.12.patch \
-            073-fix-mgmtkeydefaultset-endif.patch \
-            072-fix-mgmt-frame-register-6.12.patch \
-            074-fix-update-mgmt-frame-regs-pad.patch \
-            075-fix-ate-missing-macros-and-typos.patch \
-            076-fix-ate-dpd-macros-and-u_int32.patch \
-            077-fix-precal-macros.patch \
             091-fix-gpl-license.patch \
             093-debug-probe.patch
           do
@@ -270,7 +276,7 @@ jobs:
             exit 1
           fi
 
-          echo "PASS: prepare log contains all patches."
+          echo "PASS: prepare log contains required patches."
 
           echo "===== Step 4: build (quick or full) ====="
           BUILD_LOG="artifacts/N60-Pro/standard/FULL-BUILD-VS-LOG.txt"
