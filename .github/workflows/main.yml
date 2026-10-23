@@ -75,87 +75,35 @@ jobs:
           ccache --max-size=5G
           ccache --set-config=compiler_check=content
 
-          cat > .config <<'EOF'
-          CONFIG_TARGET_mediatek=y
-          CONFIG_TARGET_mediatek_filogic=y
-          CONFIG_TARGET_mediatek_filogic_DEVICE_netcore_n60-pro=y
-          CONFIG_PACKAGE_luci=y
-          CONFIG_PACKAGE_luci-mod-network=y
-          CONFIG_CCACHE=y
+          # =========================================================================
+          # 使用 10-01 完整基线配置（9483 行），不再手写 .config
+          # 基线来源：N60Pro_闭源固件.config，2026-10-01 16:35，本地 WSL 构建
+          # =========================================================================
+          echo "===== 使用 10-01 完整基线配置 ====="
+          cp configs/n60pro-1001.config .config
+          wc -l .config
 
-          # ======= 关掉引发无效 warning 的包 =======
-          # CONFIG_PACKAGE_prosody is not set
-          
-          # ======= 防止 wpad 冲突 =======
-          # CONFIG_PACKAGE_wpad-basic-mbedtls is not set
-          CONFIG_PACKAGE_wpad-openssl=y
-          CONFIG_PACKAGE_libustream-openssl=y
-          CONFIG_PACKAGE_libopenssl=y
-          
-          # ======= MTK Wi-Fi 核心驱动 (纯粹 WEXT 模式，剔除 mac80211/cfg80211 依赖) =======
-          CONFIG_PACKAGE_kmod-mt_wifi=y
-          # CONFIG_PACKAGE_kmod-mac80211 is not set
-          # CONFIG_PACKAGE_kmod-cfg80211 is not set
-          CONFIG_PACKAGE_kmod-conninfra=y
-          CONFIG_PACKAGE_kmod-warp=y
-          CONFIG_WARP_VERSION=2
-          CONFIG_WARP_CHIPSET="mt7986"
-          CONFIG_PACKAGE_kmod-mediatek_hnat=m
-          CONFIG_PACKAGE_wifi-dats=y
+          # =========================================================================
+          # cfg80211 实验：只改两个宏
+          # 不开 kmod-mac80211，不开 HOSTAPD_WPA3
+          # =========================================================================
+          sed -i 's|^# CONFIG_MTK_CFG80211_SUPPORT is not set|CONFIG_MTK_CFG80211_SUPPORT=y|' .config
+          sed -i 's|^# CONFIG_PACKAGE_kmod-cfg80211 is not set|CONFIG_PACKAGE_kmod-cfg80211=y|' .config
 
-          # ======= 微码固件加载 =======
-          CONFIG_MTK_WIFI_FW_BIN_LOAD=y
-
-          CONFIG_PACKAGE_mtwifi-cfg-ucode=y
-          CONFIG_PACKAGE_datconf=y
-          CONFIG_PACKAGE_l1util=y
-          CONFIG_PACKAGE_ucode=y
-          CONFIG_PACKAGE_ucode-mod-fs=y
-          CONFIG_PACKAGE_ucode-mod-log=y
-          CONFIG_PACKAGE_ucode-mod-ubus=y
-          CONFIG_PACKAGE_ucode-mod-uci=y
-          CONFIG_PACKAGE_ucode-mod-datconf=y
-          CONFIG_PACKAGE_ucode-mod-l1parser=y
-          CONFIG_PACKAGE_wifi-scripts=y
-
-          CONFIG_PACKAGE_iw=y
-          CONFIG_PACKAGE_iwinfo-ucode=y
-          CONFIG_PACKAGE_luci-app-mtwifi-cfg=y
-
-          CONFIG_MTK_MT_WIFI=m
-          CONFIG_MTK_MT_AP_SUPPORT=y
-          # CONFIG_MTK_CFG80211_SUPPORT is not set
-          CONFIG_MTK_WIFI_EAP_FEATURE=y
-          CONFIG_MTK_MGMT_TXPWR_CTRL=y
-          
-          # ======= 预校准 =======
-          # CONFIG_MTK_PRE_CAL_TRX_SET1_SUPPORT is not set
-          # CONFIG_MTK_PRE_CAL_TRX_SET2_SUPPORT is not set
-          # CONFIG_MTK_RLM_CAL_CACHE_SUPPORT is not set
-          
-          CONFIG_MTK_WPA3_SUPPORT=y
-          CONFIG_MTK_HOSTAPD_WPA3_SUPPORT=y
-          CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y
-          CONFIG_MTK_MT_WIFI_PATH="mt_wifi"
-          CONFIG_MTK_CHIP_MT7986=y
-          CONFIG_MTK_FIRST_IF_MT7986=y
-          CONFIG_MTK_SECOND_IF_NONE=y
-          CONFIG_MTK_THIRD_IF_NONE=y
-          CONFIG_MTK_FIRST_IF_EEPROM_FLASH=y
-          CONFIG_MTK_FIRST_IF_IPAILNA=y
-          CONFIG_MTK_DBDC_MODE=y
-          CONFIG_MTK_WIFI_MODE_AP=m
-          CONFIG_MTK_WIFI_SKU_TYPE="AX6000"
-          CONFIG_MTK_WIFI_ADIE_TYPE="mt7976"
-          CONFIG_MTK_CONNINFRA_APSOC=y
-          CONFIG_MTK_CONNINFRA_APSOC_MT7986=y
-          CONFIG_MTK_DOT11K_RRM_SUPPORT=y
-          CONFIG_first_card=y
-          CONFIG_first_card_name="MT7986"
-          EOF
+          echo "===== sed 后 cfg80211 宏状态 ====="
+          grep -E 'CONFIG_MTK_CFG80211_SUPPORT|CONFIG_PACKAGE_kmod-cfg80211|CONFIG_PACKAGE_kmod-mac80211' .config
 
           cp .config artifacts/N60-Pro/standard/config.before-defconfig
           make defconfig
+
+          echo "===== defconfig 后 cfg80211 宏状态 ====="
+          grep -E 'CONFIG_MTK_CFG80211_SUPPORT|CONFIG_PACKAGE_kmod-cfg80211|CONFIG_PACKAGE_kmod-mac80211' .config
+
+          echo "===== DEVICE 选择 ====="
+          grep -E 'CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_netcore_n60-pro' .config
+
+          echo "===== HOSTAPD_WPA3 状态 ====="
+          grep -E 'CONFIG_MTK_HOSTAPD_WPA3_SUPPORT' .config || echo "(10-01 config 中没有这一项，defconfig 后应为 is not set)"
 
           # ======= 检查必须配置 =======
           if grep -qx 'CONFIG_TARGET_mediatek_filogic_DEVICE_netcore_n60-pro-mtkuboot=y' .config; then
@@ -164,7 +112,7 @@ jobs:
           fi
 
           cp .config artifacts/N60-Pro/standard/config.buildinfo
-          echo "PASS: standard profile and MT7986 vendor Wi-Fi stack selected."
+          echo "PASS: 10-01 baseline config loaded, cfg80211 enabled, mac80211 off."
 
       - name: Download sources
         run: make download -j$(nproc)
@@ -180,14 +128,25 @@ jobs:
           make package/mtk/drivers/mt_wifi/clean V=s
 
           # =========================================================================
-          # 实验：精准保留必须的补丁，剔除不需要的补丁
-          # 保留：042, 053, 054, 055, 057 (6.12 API 必须)
-          # 剔除：050, 051, 052, 058~077 (非必要，可能引发时序问题)
+          # cfg80211 实验：只保留 001~041 + 091 + 093
+          # 删除：042、050~052、053~057、058~077
+          # 库里的 patch 文件全部保留，这里只是 CI 运行时临时排除
           # =========================================================================
-          echo "===== EXPERIMENT: Removing non-essential patches ====="
+          echo "===== EXPERIMENT: cfg80211 基线，只保留 001~041 + 091 + 093 ====="
+
+          # WPA3 / SAE 产物（HOSTAPD_WPA3 未开时不需要）
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/042-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/053-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/054-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/055-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/057-*.patch
+
+          # config.mk 接线类
           rm -f package/mtk/drivers/mt_wifi/patches-7673/050-*.patch
           rm -f package/mtk/drivers/mt_wifi/patches-7673/051-*.patch
           rm -f package/mtk/drivers/mt_wifi/patches-7673/052-*.patch
+
+          # 其余 6.12 兼容 / cfg80211 编译修复
           rm -f package/mtk/drivers/mt_wifi/patches-7673/058-*.patch
           rm -f package/mtk/drivers/mt_wifi/patches-7673/059-*.patch
           rm -f package/mtk/drivers/mt_wifi/patches-7673/060-*.patch
@@ -208,19 +167,14 @@ jobs:
           rm -f package/mtk/drivers/mt_wifi/patches-7673/075-*.patch
           rm -f package/mtk/drivers/mt_wifi/patches-7673/076-*.patch
           rm -f package/mtk/drivers/mt_wifi/patches-7673/077-*.patch
-          echo "PASS: Non-essential patches removed from temp build dir."
+          echo "PASS: Non-baseline patches removed from temp build dir."
 
           PREPARE_LOG="artifacts/N60-Pro/standard/mtwifi-prepare.log"
           mkdir -p "$(dirname "$PREPARE_LOG")"
           make package/mtk/drivers/mt_wifi/prepare V=s 2>&1 | tee "$PREPARE_LOG"
 
-          # 验证保留下来的补丁确实被应用了
+          # 只验证 10-01 基线必需的补丁
           for patch in \
-            042-fix-sae-structure-include-guard.patch \
-            053-fix-ap-ioctl-rt-config-include.patch \
-            054-restore-rt-config-include-all.patch \
-            055-fix-wpa3-macro-all.patch \
-            057-fix-rsnxe-callers.patch \
             091-fix-gpl-license.patch \
             093-debug-probe.patch
           do
@@ -235,7 +189,7 @@ jobs:
             exit 1
           fi
 
-          echo "PASS: prepare log contains required patches."
+          echo "PASS: prepare log contains 091 and 093."
 
           echo "===== Step 4: build (quick or full) ====="
           BUILD_LOG="artifacts/N60-Pro/standard/FULL-BUILD-VS-LOG.txt"
