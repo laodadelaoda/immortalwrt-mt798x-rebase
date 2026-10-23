@@ -69,73 +69,29 @@ jobs:
       - name: Configure standard profile only
         shell: bash
         run: |
-          set +e
+          set -euo pipefail
           rm -rf artifacts/N60-Pro
           mkdir -p "$HOME/.cache/ccache" artifacts/N60-Pro/standard
-          DIAG="artifacts/N60-Pro/standard/configure-diagnostics.txt"
-          : > "$DIAG"
-
           ccache --max-size=5G
           ccache --set-config=compiler_check=content
 
-          {
-          echo "===== C1: config 文件检查 ====="
-          ls -lh configs/n60pro-1001.config
-          if [ ! -f configs/n60pro-1001.config ]; then
-            echo "::error::configs/n60pro-1001.config 不存在于当前 checkout"
-            exit 1
-          fi
-          wc -l configs/n60pro-1001.config
-
-          echo "===== C2: cp config ====="
+          echo "===== 使用 10-01 完整基线配置 ====="
           cp configs/n60pro-1001.config .config
           wc -l .config
 
-          echo "===== C3: 处理 CRLF ====="
-          sed -i 's/\r$//' .config
-
-          echo "===== C4: 原始 cfg80211 行 ====="
-          grep -n 'CFG80211_SUPPORT\|kmod-cfg80211\|kmod-mac80211' .config || echo "(grep 无匹配)"
-
-          echo "===== C5: sed 改 cfg80211 ====="
-          sed -i 's|^# CONFIG_MTK_CFG80211_SUPPORT is not set|CONFIG_MTK_CFG80211_SUPPORT=y|' .config
-          sed -i 's|^# CONFIG_PACKAGE_kmod-cfg80211 is not set|CONFIG_PACKAGE_kmod-cfg80211=y|' .config
-
-          echo "===== C6: sed 后 cfg80211 行 ====="
-          grep -n 'CFG80211_SUPPORT\|kmod-cfg80211\|kmod-mac80211' .config || echo "(grep 无匹配)"
-
-          echo "===== C7: 保存 before-defconfig ====="
           cp .config artifacts/N60-Pro/standard/config.before-defconfig
-
-          echo "===== C8: make defconfig ====="
           make defconfig
-          echo "make defconfig 退出码: $?"
 
-          echo "===== C9: defconfig 后 cfg80211 行 ====="
-          grep -n 'CFG80211_SUPPORT\|kmod-cfg80211\|kmod-mac80211' .config || echo "(grep 无匹配)"
+          echo "===== DEVICE 选择 ====="
+          grep -E 'CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_netcore_n60-pro' .config
 
-          echo "===== C10: DEVICE 选择 ====="
-          grep -n 'CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_netcore_n60-pro' .config || echo "(grep 无匹配)"
-
-          echo "===== C11: HOSTAPD_WPA3 状态 ====="
-          grep -n 'CONFIG_MTK_HOSTAPD_WPA3_SUPPORT' .config || echo "(10-01 config 中不存在这一项)"
-
-          echo "===== C12: 保存 buildinfo ====="
-          cp .config artifacts/N60-Pro/standard/config.buildinfo
-
-          echo "===== C13: mtkuboot 检查 ====="
           if grep -qx 'CONFIG_TARGET_mediatek_filogic_DEVICE_netcore_n60-pro-mtkuboot=y' .config; then
             echo "::error::MTK U-Boot profile must not be selected."
             exit 1
           fi
 
-          echo "===== Configure 阶段完成 ====="
-          } 2>&1 | tee -a "$DIAG"
-
-          if [ ! -f artifacts/N60-Pro/standard/config.buildinfo ]; then
-            echo "::error::Configure 阶段未完成，config.buildinfo 不存在"
-            exit 1
-          fi
+          cp .config artifacts/N60-Pro/standard/config.buildinfo
+          echo "PASS: 10-01 baseline config loaded."
 
       - name: Download sources
         run: make download -j$(nproc)
@@ -147,19 +103,18 @@ jobs:
         run: |
           set -Eeuo pipefail
 
-          echo "===== Step 1: clean MT Wi-Fi package and prepare with static patches ====="
+          echo "===== Step 1: clean MT Wi-Fi package ====="
           make package/mtk/drivers/mt_wifi/clean V=s
 
-          echo "===== EXPERIMENT: cfg80211 基线，只保留 001~041 + 091 + 093 ====="
-
+          echo "===== Step 2: remove 042~077, keep 001~041 + 091 + 093 + 094 ====="
           rm -f package/mtk/drivers/mt_wifi/patches-7673/042-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/050-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/051-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/052-*.patch
           rm -f package/mtk/drivers/mt_wifi/patches-7673/053-*.patch
           rm -f package/mtk/drivers/mt_wifi/patches-7673/054-*.patch
           rm -f package/mtk/drivers/mt_wifi/patches-7673/055-*.patch
           rm -f package/mtk/drivers/mt_wifi/patches-7673/057-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/050-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/051-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/052-*.patch
           rm -f package/mtk/drivers/mt_wifi/patches-7673/058-*.patch
           rm -f package/mtk/drivers/mt_wifi/patches-7673/059-*.patch
           rm -f package/mtk/drivers/mt_wifi/patches-7673/060-*.patch
@@ -180,10 +135,9 @@ jobs:
           rm -f package/mtk/drivers/mt_wifi/patches-7673/075-*.patch
           rm -f package/mtk/drivers/mt_wifi/patches-7673/076-*.patch
           rm -f package/mtk/drivers/mt_wifi/patches-7673/077-*.patch
-          echo "PASS: Non-baseline patches removed from temp build dir."
 
+          echo "===== Step 3: prepare mt_wifi ====="
           PREPARE_LOG="artifacts/N60-Pro/standard/mtwifi-prepare.log"
-          mkdir -p "$(dirname "$PREPARE_LOG")"
           make package/mtk/drivers/mt_wifi/prepare V=s 2>&1 | tee "$PREPARE_LOG"
 
           for patch in \
@@ -202,73 +156,36 @@ jobs:
             exit 1
           fi
 
-          echo "PASS: prepare log contains 091 and 093."
+          echo "PASS: 091, 093, 094 applied."
 
-          echo "===== Step 4: build (quick or full) ====="
+          echo "===== Step 4: full build ====="
           BUILD_LOG="artifacts/N60-Pro/standard/FULL-BUILD-VS-LOG.txt"
-          mkdir -p "$(dirname "$BUILD_LOG")"
           : > "$BUILD_LOG"
-
           set -o pipefail
-          if [ "${{ github.event.inputs.quick_wifi_only }}" = "true" ]; then
-            echo "===== QUICK MODE: build host tools first ====="
-            make tools/install -j"$(nproc)" V=s 2>&1 | tee -a "$BUILD_LOG"
-            echo "===== QUICK MODE: prepare kernel config ====="
-            make target/linux/prepare V=s 2>&1 | tee -a "$BUILD_LOG"
-            echo "===== QUICK MODE: only mt_wifi ====="
-            make package/mtk/drivers/mt_wifi/compile V=s 2>&1 | tee -a "$BUILD_LOG"
-          else
-            echo "===== FULL MODE ====="
-            make -j"$(nproc)" V=s 2>&1 | tee -a "$BUILD_LOG"
+          make -j"$(nproc)" V=s 2>&1 | tee -a "$BUILD_LOG"
+
+          echo "===== Step 5: verify sysupgrade ITB ====="
+          SYSUP="bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
+          if [ ! -s "$SYSUP" ]; then
+            echo "::error::Expected sysupgrade ITB not found: $SYSUP"
+            exit 1
           fi
+          ls -lh "$SYSUP"
+          sha256sum "$SYSUP"
 
-          if [ "${{ github.event.inputs.quick_wifi_only }}" = "true" ]; then
-            echo "===== Step 6: verify mt_wifi.ko (quick mode) ====="
-            KO="build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/mt_wifi/mt_wifi_ap/mt_wifi.ko"
-            if [ -s "$KO" ]; then
-              echo "PASS: mt_wifi.ko generated in quick mode"
-              ls -lh "$KO"
-            else
-              echo "::error::mt_wifi.ko not generated in quick mode"
-              exit 1
-            fi
-          else
-            echo "===== Step 6: verify the exact standard N60 Pro sysupgrade image ====="
-            SYSUP="bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
-
-            if [ ! -s "$SYSUP" ]; then
-              echo "::error::Expected non-empty sysupgrade ITB not found: $SYSUP"
-              exit 1
-            fi
-
-            ls -lh "$SYSUP"
-            sha256sum "$SYSUP"
-            echo "PASS: standard N60 Pro sysupgrade ITB exists and is non-empty."
-          fi
-
-      - name: Check whether firmware was actually produced
+      - name: Check firmware produced
         if: always()
         shell: bash
         run: |
           set +e
-          if [ "${{ github.event.inputs.quick_wifi_only }}" = "true" ]; then
-            echo "FIRMWARE_PRODUCED=quick-mode" >> $GITHUB_ENV
-            echo "Quick mode: firmware not produced by design."
-            exit 0
-          fi
-          OUT="bin/targets/mediatek/filogic"
-          SYSUP="$OUT/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
+          SYSUP="bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
           if [ -s "$SYSUP" ]; then
             echo "FIRMWARE_PRODUCED=yes" >> $GITHUB_ENV
-            echo "Firmware produced: $SYSUP"
-            ls -lh "$SYSUP"
           else
             echo "FIRMWARE_PRODUCED=no" >> $GITHUB_ENV
-            echo "::warning::No sysupgrade ITB produced. Build failed or target output differs."
-            ls -lh "$OUT" 2>/dev/null || echo "(output dir missing)"
           fi
 
-      - name: Collect firmware artifacts
+      - name: Collect artifacts
         if: always()
         shell: bash
         run: |
@@ -276,20 +193,16 @@ jobs:
           OUT="bin/targets/mediatek/filogic"
           DEST="artifacts/N60-Pro/standard"
           mkdir -p "$DEST"
-
           find "$OUT" -maxdepth 1 -type f \
             \( -name '*netcore_n60-pro*.itb' -o -name '*netcore_n60-pro*.manifest' \
                -o -name 'sha256sums' -o -name '*.buildinfo' \) \
             -exec cp -v {} "$DEST/" \; 2>/dev/null
-
           if find "$DEST" -maxdepth 1 -iname '*mtkuboot*' | grep -q .; then
             echo "::error::MTK U-Boot artifact detected; refusing to package."
             exit 1
           fi
-
           {
             echo "Build policy: STANDARD PROFILE ONLY; MTK U-Boot excluded"
-            echo "Profile: netcore_n60-pro"
             echo "Source revision:"
             git log -1 --format='%H %s'
             echo "Build step outcome: ${{ steps.build_step.outcome }}"
@@ -297,17 +210,7 @@ jobs:
             echo "Files:"
             find "$DEST" -maxdepth 1 -type f -printf '%f\n' | sort
           } > "$DEST/BUILD-INFO.txt"
-
-          (
-            cd "$DEST"
-            shopt -s nullglob
-            if ls *.itb >/dev/null 2>&1; then
-              sha256sum *.itb > SHA256SUMS.txt
-              cat SHA256SUMS.txt
-            fi
-          ) || true
-
-          echo "===== Artifact tree ====="
+          ( cd "$DEST" && shopt -s nullglob && if ls *.itb >/dev/null 2>&1; then sha256sum *.itb > SHA256SUMS.txt; cat SHA256SUMS.txt; fi ) || true
           find artifacts/N60-Pro -maxdepth 2 -type f -printf '%p (%s bytes)\n' | sort
 
       - name: Upload artifacts
@@ -323,28 +226,18 @@ jobs:
         if: always()
         run: ccache -s || true
 
-      - name: Enforce build and firmware success
+      - name: Enforce build success
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ github.event.inputs.quick_wifi_only }}" = "true" ]; then
-            if [ "${{ steps.build_step.outcome }}" != "success" ]; then
-              echo "::error::Quick mode build did not succeed."
-              exit 1
-            fi
-            echo "PASS: quick mode build succeeded."
-            exit 0
-          fi
-          echo "Build step outcome: ${{ steps.build_step.outcome }}"
-          echo "Firmware produced: ${FIRMWARE_PRODUCED:-no}"
           if [ "${{ steps.build_step.outcome }}" != "success" ]; then
-            echo "::error::Firmware build step did not succeed. This run must remain failed."
+            echo "::error::Build step did not succeed."
             exit 1
           fi
           if [ "${FIRMWARE_PRODUCED:-no}" != "yes" ]; then
-            echo "::error::Expected standard netcore_n60-pro sysupgrade ITB is missing."
+            echo "::error::Firmware not produced."
             exit 1
           fi
           test -s "bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
-          echo "PASS: build succeeded and the expected sysupgrade ITB exists."
+          echo "PASS: build succeeded, sysupgrade ITB exists."
