@@ -92,10 +92,10 @@ jobs:
           CONFIG_PACKAGE_libustream-openssl=y
           CONFIG_PACKAGE_libopenssl=y
           
-          # ======= MTK Wi-Fi 核心驱动 =======
+          # ======= MTK Wi-Fi 核心驱动 (纯粹 WEXT 模式，剔除 mac80211/cfg80211 依赖) =======
           CONFIG_PACKAGE_kmod-mt_wifi=y
-          CONFIG_PACKAGE_kmod-mac80211=y
-          CONFIG_PACKAGE_kmod-cfg80211=y
+          # CONFIG_PACKAGE_kmod-mac80211 is not set
+          # CONFIG_PACKAGE_kmod-cfg80211 is not set
           CONFIG_PACKAGE_kmod-conninfra=y
           CONFIG_PACKAGE_kmod-warp=y
           CONFIG_WARP_VERSION=2
@@ -124,7 +124,7 @@ jobs:
 
           CONFIG_MTK_MT_WIFI=m
           CONFIG_MTK_MT_AP_SUPPORT=y
-          CONFIG_MTK_CFG80211_SUPPORT=y
+          # CONFIG_MTK_CFG80211_SUPPORT is not set
           CONFIG_MTK_WIFI_EAP_FEATURE=y
           CONFIG_MTK_MGMT_TXPWR_CTRL=y
           
@@ -240,14 +240,18 @@ jobs:
           echo "===== Step 4: build (quick or full) ====="
           BUILD_LOG="artifacts/N60-Pro/standard/FULL-BUILD-VS-LOG.txt"
           mkdir -p "$(dirname "$BUILD_LOG")"
+          : > "$BUILD_LOG"
 
           set -o pipefail
           if [ "${{ github.event.inputs.quick_wifi_only }}" = "true" ]; then
+            echo "===== QUICK MODE: build host tools and toolchain first ====="
+            make tools/install -j"$(nproc)" V=s 2>&1 | tee -a "$BUILD_LOG"
+            make toolchain/install -j"$(nproc)" V=s 2>&1 | tee -a "$BUILD_LOG"
             echo "===== QUICK MODE: only mt_wifi ====="
-            make package/mtk/drivers/mt_wifi/compile V=s 2>&1 | tee "$BUILD_LOG"
+            make package/mtk/drivers/mt_wifi/compile V=s 2>&1 | tee -a "$BUILD_LOG"
           else
             echo "===== FULL MODE ====="
-            make -j"$(nproc)" V=s 2>&1 | tee "$BUILD_LOG"
+            make -j"$(nproc)" V=s 2>&1 | tee -a "$BUILD_LOG"
           fi
 
           if [ "${{ github.event.inputs.quick_wifi_only }}" = "true" ]; then
