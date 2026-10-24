@@ -1,6 +1,11 @@
 --- a/mt_wifi/embedded/common/wnm.c
 +++ b/mt_wifi/embedded/common/wnm.c
-@@ -2025,2 +2025,6 @@
+@@ -2020,10 +2020,13 @@
+	FrameLen += 1;
+	WNMFrame->u.BTM_REQ.Action = BSS_TRANSITION_REQ;
+	FrameLen += 1;
+	WNMFrame->u.BTM_REQ.DialogToken = Event->u.BTM_REQ_DATA.DialogToken;
+	FrameLen += 1;
 -	NdisMoveMemory(WNMFrame->u.BTM_REQ.Variable, Event->u.BTM_REQ_DATA.BTMReq,
 -				   Event->u.BTM_REQ_DATA.BTMReqLen);
 +	{
@@ -8,3 +13,6 @@
 +		NdisMoveMemory(btm_var, Event->u.BTM_REQ_DATA.BTMReq,
 +				   Event->u.BTM_REQ_DATA.BTMReqLen);
 +	}
+	FrameLen += Event->u.BTM_REQ_DATA.BTMReqLen;
+	BTMSetPeerCurrentState(pAd, Elem, WAIT_PEER_BTM_RSP);
+	MiniportMMRequest(pAd, (MGMT_USE_QUEUE_FLAG | QID_AC_BE), Buf, FrameLen);
