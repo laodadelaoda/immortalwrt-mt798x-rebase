@@ -1,0 +1,10 @@
+--- a/mt_wifi/embedded/common/wnm.c
++++ b/mt_wifi/embedded/common/wnm.c
+@@ -2025,2 +2025,6 @@
+-	NdisMoveMemory(WNMFrame->u.BTM_REQ.Variable, Event->u.BTM_REQ_DATA.BTMReq,
+-				   Event->u.BTM_REQ_DATA.BTMReqLen);
++	{
++		UCHAR *btm_var = WNMFrame->u.BTM_REQ.Variable;
++		NdisMoveMemory(btm_var, Event->u.BTM_REQ_DATA.BTMReq,
++				   Event->u.BTM_REQ_DATA.BTMReqLen);
++	}
