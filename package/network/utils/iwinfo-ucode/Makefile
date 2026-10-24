@@ -10,7 +10,7 @@ define Package/ucode-mod-iwinfo
   SECTION:=lang
   CATEGORY:=Languages
   TITLE:=ucode binding for libiwinfo
-  DEPENDS:=+libucode +libiwinfo @!PACKAGE_iwinfo
+  DEPENDS:=+libucode +libiwinfo
 endef
 
 define Package/ucode-mod-iwinfo/description
