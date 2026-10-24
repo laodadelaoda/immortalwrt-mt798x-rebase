@@ -1,18 +1,44 @@
---- a/mt_wifi/embedded/common/wnm.c
-+++ b/mt_wifi/embedded/common/wnm.c
-@@ -2020,10 +2020,13 @@
-	FrameLen += 1;
-	WNMFrame->u.BTM_REQ.Action = BSS_TRANSITION_REQ;
-	FrameLen += 1;
-	WNMFrame->u.BTM_REQ.DialogToken = Event->u.BTM_REQ_DATA.DialogToken;
-	FrameLen += 1;
+--- a/mt_wifi/embedded/common/wnm.c	2026-10-24 10:39:41.274865119 +0800
++++ b/mt_wifi/embedded/common/wnm.c	2026-10-24 10:39:41.277759240 +0800
+@@ -64,7 +64,8 @@
+ 	query_data->ifindex = RtmpOsGetNetIfIndex(net_dev);
+ 	memcpy(query_data->peer_mac_addr, peer_mac_addr, 6);
+ 	query_data->btm_query_len	= btm_query_len;
+-	memcpy(query_data->btm_query, btm_query, btm_query_len);
++	UCHAR *btm_q_ptr = query_data->btm_query;
++	memcpy(btm_q_ptr, btm_query, btm_query_len);
+ 
+ 	RtmpOSWrielessEventSend(net_dev, RT_WLAN_EVENT_CUSTOM,
+ 					OID_802_11_WNM_EVENT, NULL, (PUCHAR)buf, buflen);
+@@ -90,7 +91,8 @@
+ 	query_data->ifindex = RtmpOsGetNetIfIndex(net_dev);
+ 	memcpy(query_data->peer_mac_addr, peer_mac_addr, 6);
+ 	query_data->btm_query_len	= btm_query_len;
+-	memcpy(query_data->btm_query, btm_query, btm_query_len);
++	UCHAR *btm_q_ptr = query_data->btm_query;
++	memcpy(btm_q_ptr, btm_query, btm_query_len);
+ 	RtmpOSWrielessEventSend(net_dev, RT_WLAN_EVENT_CUSTOM,
+ 							OID_802_11_WNM_BTM_QUERY, NULL, (PUCHAR)buf, buflen);
+ 	os_free_mem(buf);
+@@ -2022,7 +2024,8 @@
+ 	FrameLen += 1;
+ 	WNMFrame->u.BTM_REQ.DialogToken = Event->u.BTM_REQ_DATA.DialogToken;
+ 	FrameLen += 1;
 -	NdisMoveMemory(WNMFrame->u.BTM_REQ.Variable, Event->u.BTM_REQ_DATA.BTMReq,
--				   Event->u.BTM_REQ_DATA.BTMReqLen);
-+	{
-+		UCHAR *btm_var = WNMFrame->u.BTM_REQ.Variable;
-+		NdisMoveMemory(btm_var, Event->u.BTM_REQ_DATA.BTMReq,
-+				   Event->u.BTM_REQ_DATA.BTMReqLen);
-+	}
-	FrameLen += Event->u.BTM_REQ_DATA.BTMReqLen;
-	BTMSetPeerCurrentState(pAd, Elem, WAIT_PEER_BTM_RSP);
-	MiniportMMRequest(pAd, (MGMT_USE_QUEUE_FLAG | QID_AC_BE), Buf, FrameLen);
++	UCHAR *btm_var_ptr = WNMFrame->u.BTM_REQ.Variable;
++	NdisMoveMemory(btm_var_ptr, Event->u.BTM_REQ_DATA.BTMReq,
+ 				   Event->u.BTM_REQ_DATA.BTMReqLen);
+ 	FrameLen += Event->u.BTM_REQ_DATA.BTMReqLen;
+ 	BTMSetPeerCurrentState(pAd, Elem, WAIT_PEER_BTM_RSP);
+--- a/mt_wifi/embedded/ap/ap_cfg.c	2026-10-24 10:39:41.276009389 +0800
++++ b/mt_wifi/embedded/ap/ap_cfg.c	2026-10-24 10:39:41.281049249 +0800
+@@ -26844,7 +26844,8 @@
+ 	Len += 1;
+ 	Event->u.BTM_REQ_DATA.BTMReqLen = BTMReqLen;
+ 	Len += 2;
+-	NdisMoveMemory(Event->u.BTM_REQ_DATA.BTMReq, BTMReq, BTMReqLen);
++	UCHAR *btm_req_ptr = Event->u.BTM_REQ_DATA.BTMReq;
++	NdisMoveMemory(btm_req_ptr, BTMReq, BTMReqLen);
+ 	Len += BTMReqLen;
+ 	MTWF_PRINT("\nbefore adding BSS Transition Candidate List Entries::BTMReqLen=%d, Len=%d\n",
+ 			  BTMReqLen, Len);
