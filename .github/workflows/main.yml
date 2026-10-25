@@ -1,10 +1,35 @@
-name: Build N60 Pro - ImmortalWrt 25.12 (Standard Only)
+name: Build ImmortalWrt 25.12 (MT798x filogic)
 
 on:
   push:
     branches: ["n60pro-mtk-closed-driver"]
   workflow_dispatch:
     inputs:
+      device:
+        description: 'Target device'
+        required: true
+        default: 'netcore_n60-pro'
+        type: choice
+        options:
+          - netcore_n60-pro
+          - netcore_n60
+          - cudy_tr3000-v1
+          - cmcc_rax3000m
+          - xiaomi_redmi-router-ax6000-stock
+          - xiaomi_mi-router-ax3000t
+          - jdcloud_re-cp-03
+          - glinet_gl-mt3000
+          - bananapi_bpi-r3
+          - bananapi_bpi-r4
+      profile:
+        description: 'Config profile'
+        required: true
+        default: 'standard'
+        type: choice
+        options:
+          - standard
+          - minimal
+          - full
       quick_wifi_only:
         description: 'Quick WiFi only (skip full firmware)'
         required: false
@@ -22,10 +47,13 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
+    env:
+      DEVICE: ${{ inputs.device || 'netcore_n60-pro' }}
+      PROFILE: ${{ inputs.profile || 'standard' }}
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
@@ -53,50 +81,80 @@ jobs:
           echo "GOSUMDB=off" >> $GITHUB_ENV
 
       - name: Restore compiler cache
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
-          key: ${{ runner.os }}-n60pro-standard-ccache-${{ github.ref_name }}
+          key: ${{ runner.os }}-n60pro-ccache-${{ github.ref_name }}-${{ env.DEVICE }}-${{ env.PROFILE }}
           restore-keys: |
-            ${{ runner.os }}-n60pro-standard-ccache-${{ github.ref_name }}-
-            ${{ runner.os }}-n60pro-standard-ccache-
+            ${{ runner.os }}-n60pro-ccache-${{ github.ref_name }}-${{ env.DEVICE }}-
+            ${{ runner.os }}-n60pro-ccache-${{ github.ref_name }}-
+            ${{ runner.os }}-n60pro-ccache-
 
       - name: Update and install feeds
         run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Configure standard profile only
+      - name: Configure firmware
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf artifacts/N60-Pro
-          mkdir -p "$HOME/.cache/ccache" artifacts/N60-Pro/standard
+
+          echo "===== Device: $DEVICE, Profile: $PROFILE ====="
+
+          rm -rf artifacts
+          mkdir -p "$HOME/.cache/ccache" "artifacts/$DEVICE/$PROFILE"
           ccache --max-size=5G
           ccache --set-config=compiler_check=content
 
-          echo "===== 使用 10-01 完整基线配置 ====="
-          cp config/n60pro-1001.config .config
+          # 选择基础 config
+          case "$PROFILE" in
+            standard) BASE_CONFIG="config/n60pro-1001.config" ;;
+            minimal)  BASE_CONFIG="config/n60pro-minimal.config" ;;
+            full)     BASE_CONFIG="config/n60pro-full.config" ;;
+            *) echo "::error::Unknown profile: $PROFILE"; exit 1 ;;
+          esac
+
+          if [ ! -f "$BASE_CONFIG" ]; then
+            echo "::error::Config not found: $BASE_CONFIG"
+            exit 1
+          fi
+
+          cp "$BASE_CONFIG" .config
+          cp .config "artifacts/$DEVICE/$PROFILE/config.before-defconfig"
           wc -l .config
 
-          cp .config artifacts/N60-Pro/standard/config.before-defconfig
+          # 替换设备行：只保留目标设备的 DEVICE=y
+          if grep -q '^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_' .config; then
+            sed -i -E "s|^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_[^=]+=y|# &|" .config
+            sed -i -E "s|^# (CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_${DEVICE})=y|\\1=y|" .config
+          fi
+
+          # 如果 config 里没有目标设备行，显式追加
+          if ! grep -q "^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_${DEVICE}=y" .config; then
+            echo "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_${DEVICE}=y" >> .config
+          fi
+
           make defconfig
 
           echo "===== DEVICE 选择 ====="
-          grep -E 'CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_netcore_n60-pro' .config
+          grep -E "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_${DEVICE}" .config || {
+            echo "::error::Target device ${DEVICE} not selected after defconfig"
+            exit 1
+          }
 
-          if grep -qx 'CONFIG_TARGET_mediatek_filogic_DEVICE_netcore_n60-pro-mtkuboot=y' .config; then
+          if grep -qx "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_${DEVICE}-mtkuboot=y" .config 2>/dev/null; then
             echo "::error::MTK U-Boot profile must not be selected."
             exit 1
           fi
 
-          cp .config artifacts/N60-Pro/standard/config.buildinfo
-          echo "PASS: 10-01 baseline config loaded."
+          cp .config "artifacts/$DEVICE/$PROFILE/config.buildinfo"
+          echo "PASS: $DEVICE / $PROFILE config loaded."
 
       - name: Download sources
         run: make download -j$(nproc)
 
-      - name: Build standard profile
+      - name: Build firmware
         id: build_step
         shell: bash
         continue-on-error: true
@@ -137,7 +195,7 @@ jobs:
           rm -f package/mtk/drivers/mt_wifi/patches-7673/077-*.patch
 
           echo "===== Step 3: prepare mt_wifi ====="
-          PREPARE_LOG="artifacts/N60-Pro/standard/mtwifi-prepare.log"
+          PREPARE_LOG="artifacts/$DEVICE/$PROFILE/mtwifi-prepare.log"
           make package/mtk/drivers/mt_wifi/prepare V=s 2>&1 | tee "$PREPARE_LOG"
 
           for patch in \
@@ -159,13 +217,13 @@ jobs:
           echo "PASS: 091, 093, 094 applied."
 
           echo "===== Step 4: full build ====="
-          BUILD_LOG="artifacts/N60-Pro/standard/FULL-BUILD-VS-LOG.txt"
+          BUILD_LOG="artifacts/$DEVICE/$PROFILE/FULL-BUILD-VS-LOG.txt"
           : > "$BUILD_LOG"
           set -o pipefail
           make -j"$(nproc)" V=s 2>&1 | tee -a "$BUILD_LOG"
 
           echo "===== Step 5: verify sysupgrade ITB ====="
-          SYSUP="bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
+          SYSUP="bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-${DEVICE}-squashfs-sysupgrade.itb"
           if [ ! -s "$SYSUP" ]; then
             echo "::error::Expected sysupgrade ITB not found: $SYSUP"
             exit 1
@@ -178,7 +236,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          SYSUP="bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
+          SYSUP="bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-${DEVICE}-squashfs-sysupgrade.itb"
           if [ -s "$SYSUP" ]; then
             echo "FIRMWARE_PRODUCED=yes" >> $GITHUB_ENV
           else
@@ -191,10 +249,10 @@ jobs:
         run: |
           set +e
           OUT="bin/targets/mediatek/filogic"
-          DEST="artifacts/N60-Pro/standard"
+          DEST="artifacts/$DEVICE/$PROFILE"
           mkdir -p "$DEST"
           find "$OUT" -maxdepth 1 -type f \
-            \( -name '*netcore_n60-pro*.itb' -o -name '*netcore_n60-pro*.manifest' \
+            \( -name "*${DEVICE}*.itb" -o -name "*${DEVICE}*.manifest" \
                -o -name 'sha256sums' -o -name '*.buildinfo' \) \
             -exec cp -v {} "$DEST/" \; 2>/dev/null
           if find "$DEST" -maxdepth 1 -iname '*mtkuboot*' | grep -q .; then
@@ -202,7 +260,7 @@ jobs:
             exit 1
           fi
           {
-            echo "Build policy: STANDARD PROFILE ONLY; MTK U-Boot excluded"
+            echo "Build policy: DEVICE=$DEVICE, PROFILE=$PROFILE"
             echo "Source revision:"
             git log -1 --format='%H %s'
             echo "Build step outcome: ${{ steps.build_step.outcome }}"
@@ -211,14 +269,14 @@ jobs:
             find "$DEST" -maxdepth 1 -type f -printf '%f\n' | sort
           } > "$DEST/BUILD-INFO.txt"
           ( cd "$DEST" && shopt -s nullglob && if ls *.itb >/dev/null 2>&1; then sha256sum *.itb > SHA256SUMS.txt; cat SHA256SUMS.txt; fi ) || true
-          find artifacts/N60-Pro -maxdepth 2 -type f -printf '%p (%s bytes)\n' | sort
+          find artifacts -maxdepth 3 -type f -printf '%p (%s bytes)\n' | sort
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
-          name: N60-Pro-Standard-${{ github.run_number }}
-          path: artifacts/N60-Pro/
+          name: ${{ env.DEVICE }}-${{ env.PROFILE }}-${{ github.run_number }}
+          path: artifacts/${{ env.DEVICE }}/${{ env.PROFILE }}/
           if-no-files-found: warn
           retention-days: 14
 
@@ -239,5 +297,6 @@ jobs:
             echo "::error::Firmware not produced."
             exit 1
           fi
-          test -s "bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-netcore_n60-pro-squashfs-sysupgrade.itb"
+          SYSUP="bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-${DEVICE}-squashfs-sysupgrade.itb"
+          test -s "$SYSUP"
           echo "PASS: build succeeded, sysupgrade ITB exists."
