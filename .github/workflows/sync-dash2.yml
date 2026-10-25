@@ -1,0 +1,122 @@
+name: Sync luci-app-mtk-dash2 from upstream
+
+on:
+  schedule:
+    - cron: '0 3 */3 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-dash2
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout target branch
+        uses: actions/checkout@v4
+        with:
+          ref: n60pro-mtk-closed-driver
+          fetch-depth: 1
+
+      - name: Get latest upstream release
+        id: rel
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/yyyyy114514/luci-app-mtk-dash2/releases/latest"
+          resp=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" "$api")
+          tag=$(printf '%s' "$resp" | jq -r .tag_name)
+          if [ "$tag" = "null" ] || [ -z "$tag" ]; then
+            echo "::error::No upstream release found"
+            exit 1
+          fi
+          sha=$(printf '%s' "$resp" | jq -r .target_commitish)
+          if [ "$sha" = "main" ] || [ "$sha" = "null" ] || [ -z "$sha" ]; then
+            sha=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
+              "https://api.github.com/repos/yyyyy114514/luci-app-mtk-dash2/commits/$tag" | jq -r .sha)
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "latest tag=$tag sha=$sha"
+
+      - name: Read current version
+        id: cur
+        run: |
+          set -euo pipefail
+          mf="package/mtk/applications/luci-app-mtk-dash2/Makefile"
+          v=""
+          if [ -f "$mf" ]; then
+            v=$(grep -m1 '^PKG_VERSION:=' "$mf" | cut -d= -f2 | tr -d ' ' || true)
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "current version=$v"
+
+      - name: Compare versions
+        id: cmp
+        env:
+          NEW_TAG: ${{ steps.rel.outputs.tag }}
+          CUR_VER: ${{ steps.cur.outputs.version }}
+        run: |
+          set -euo pipefail
+          new_ver="${NEW_TAG#v}"
+          if [ "$new_ver" = "$CUR_VER" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "no update needed: $CUR_VER"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "update needed: $CUR_VER -> $new_ver"
+          fi
+
+      - name: Sync source and open PR
+        if: steps.cmp.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_TAG: ${{ steps.rel.outputs.tag }}
+          NEW_SHA: ${{ steps.rel.outputs.sha }}
+        run: |
+          set -euo pipefail
+          dest="package/mtk/applications/luci-app-mtk-dash2"
+          tmp=$(mktemp -d)
+          git clone --depth 1 --branch "$NEW_TAG" \
+            https://github.com/yyyyy114514/luci-app-mtk-dash2.git "$tmp/src"
+          mkdir -p "$dest"
+          rsync -a --delete --exclude='.git' "$tmp/src/" "$dest/"
+
+          branch="auto/sync-dash2-${NEW_TAG}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          git add "$dest"
+          if git diff --cached --quiet; then
+            echo "no diff after sync, skip"
+            exit 0
+          fi
+          git commit -m "package: sync luci-app-mtk-dash2 to ${NEW_TAG} (${NEW_SHA})"
+          git push -u origin "$branch" --force
+
+          body_file=$(mktemp)
+          cat > "$body_file" <<EOF
+          上游 Release: ${NEW_TAG}
+          上游 commit: ${NEW_SHA}
+
+          请人工检查：
+          1. package/mtk/applications/luci-app-mtk-dash2/Makefile 的 LUCI_DEPENDS 是否变化；
+          2. 如果依赖变化，config/n60pro-1001.config 是否需要补 CONFIG_PACKAGE_*；
+          3. 合并后会触发 full 构建。
+          EOF
+
+          if gh pr list --head "$branch" --base n60pro-mtk-closed-driver --json number --jq '.[0].number' | grep -q '^[0-9]'; then
+            echo "PR already exists, skip create"
+          else
+            gh pr create \
+              --base n60pro-mtk-closed-driver \
+              --head "$branch" \
+              --title "package: sync luci-app-mtk-dash2 to ${NEW_TAG}" \
+              --body-file "$body_file"
+          fi
