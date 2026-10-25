@@ -25,7 +25,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
@@ -53,7 +53,7 @@ jobs:
           echo "GOSUMDB=off" >> $GITHUB_ENV
 
       - name: Restore compiler cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/ccache
           key: ${{ runner.os }}-n60pro-standard-ccache-${{ github.ref_name }}
@@ -215,7 +215,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: N60-Pro-Standard-${{ github.run_number }}
           path: artifacts/N60-Pro/
