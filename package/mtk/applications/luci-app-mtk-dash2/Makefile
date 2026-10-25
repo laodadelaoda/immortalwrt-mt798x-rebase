@@ -5,7 +5,7 @@ PKG_VERSION:=0.4.5
 PKG_RELEASE:=1
 
 LUCI_TITLE:=MTK Dash2 Wi-Fi and MAP management
-LUCI_DEPENDS:=+luci-base +luci-lib-jsonc +luci-lib-nixio +libubus-lua +lua +rpcd +iwinfo-ucode
+LUCI_DEPENDS:=+luci-base +luci-lib-jsonc +luci-lib-nixio +libubus-lua +lua +rpcd +iwinfo
 LUCI_PKGARCH:=all
 
 include $(TOPDIR)/feeds/luci/luci.mk
