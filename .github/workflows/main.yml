@@ -154,14 +154,15 @@ jobs:
       - name: Fix permissions for custom files
         shell: bash
         run: |
-          # Convert Windows CRLF to Linux LF for the init script
-          if [ -f "files/etc/init.d/wapp" ]; then
-            sed -i 's/\r$//' files/etc/init.d/wapp
-          fi
-          # Set executable permissions
+          # Set executable permissions for wapp binaries
           chmod +x files/usr/bin/wapp
           chmod +x files/usr/bin/wappctrl
-          chmod +x files/etc/init.d/wapp
+          
+          # Convert Windows CRLF to Linux LF for rc.local and set executable
+          if [ -f "files/etc/rc.local" ]; then
+            sed -i 's/\r$//' files/etc/rc.local
+            chmod +x files/etc/rc.local
+          fi
           echo "PASS: Custom file permissions fixed."
 
       - name: Download sources
@@ -200,7 +201,7 @@ jobs:
             exit 1
           fi
 
-          echo "PASS: Critical patches (041, 091, 093, 094) applied successfully."
+          echo "PASS: Critical patches (041, 091, 093, 094, 095) applied successfully."
 
           echo "===== Step 3: full build ====="
           BUILD_LOG="artifacts/$DEVICE/$PROFILE/FULL-BUILD-VS-LOG.txt"
