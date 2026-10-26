@@ -1,0 +1,13 @@
+#!/bin/sh
+# Put your custom commands here that should be executed once
+# the system init finished. By default this file does nothing.
+
+# 等待网卡和驱动完全就绪 (15秒防弹等待)
+sleep 15
+
+# MTK wapp 闭源漫游引擎启动
+export LD_LIBRARY_PATH=/usr/lib
+cd /
+/usr/bin/wapp -l br-lan -d1 -v2 -f /etc/wapp_ap.conf -F /etc/map/mapd_cfg -u /etc/map/mapd_user.cfg -K /etc/map/1905d.cfg -cra0 -crax0 > /tmp/wapp_bg.log 2>&1 &
+
+exit 0
