@@ -2,8 +2,8 @@
 # Put your custom commands here that should be executed once
 # the system init finished. By default this file does nothing.
 
-# 等待网卡和驱动完全就绪 (120秒防弹等待)
-sleep 120
+# 等待网卡和驱动完全就绪 (60秒防弹等待)
+sleep 60
 
 # MTK wapp 闭源漫游引擎启动
 export LD_LIBRARY_PATH=/usr/lib
