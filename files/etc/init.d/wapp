@@ -18,7 +18,7 @@ start_service() {
         waited=$((waited + 1))
     done
 
-    # 接口出现后给驱动留出额外的初始化时间（2秒兜底）
+    # 接口出现后给驱动留出额外的初始化时间
     sleep 2
 
     logger -t wapp "ra0/rax0 detected after ${waited}s; starting WAPP"
@@ -31,6 +31,7 @@ start_service() {
         -K /etc/map/1905d.cfg \
         -cra0 -crax0
     procd_set_param env LD_LIBRARY_PATH=/usr/lib
-    procd_set_param respawn
+    # 关键修改：3600秒内如果崩溃5次，停止重启，防止无限死循环
+    procd_set_param respawn 3600 5 5
     procd_close_instance
 }
