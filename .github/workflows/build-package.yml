@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
@@ -41,7 +41,7 @@ jobs:
 
       # 极其重要：必须复用主固件的编译缓存，否则内核 Hash 不匹配，单独编 kmod 会耗费 40 分钟以上
       - name: Restore build cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cache/ccache
@@ -109,7 +109,7 @@ jobs:
           fi
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: apk-${{ github.event.inputs.package_name }}
           path: specific-apks-*.tar.gz
