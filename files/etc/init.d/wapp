@@ -1,0 +1,16 @@
+#!/bin/sh /etc/rc.common
+START=99
+USE_PROCD=1
+
+start_service() {
+    procd_open_instance
+    procd_set_param command /usr/bin/wapp -l br-lan -d1 -v2 \
+        -f /etc/wapp_ap.conf \
+        -F /etc/map/mapd_cfg \
+        -u /etc/map/mapd_user.cfg \
+        -K /etc/map/1905d.cfg \
+        -cra0 -crax0
+    procd_set_param env LD_LIBRARY_PATH=/usr/lib
+    procd_set_param respawn
+    procd_close_instance
+}

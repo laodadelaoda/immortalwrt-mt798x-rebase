@@ -151,19 +151,33 @@ jobs:
           cp .config "artifacts/$DEVICE/$PROFILE/config.buildinfo"
           echo "PASS: $DEVICE / $PROFILE config loaded, MBO verified."
 
-      - name: Fix permissions for custom files
+      - name: Install WAPP overlay and fix permissions
         shell: bash
         run: |
-          # 转换 Windows 换行符为 Linux 格式，防止脚本报错
-          if [ -f "files/etc/init.d/wapp" ]; then
-            sed -i 's/\r$//' files/etc/init.d/wapp
-          fi
-          # 赋予可执行权限
+          set -euo pipefail
+
+          # Verify required WAPP files exist in the tracked overlay.
+          test -f wapp-overlay/usr/bin/wapp
+          test -f wapp-overlay/usr/bin/wappctrl
+          test -f wapp-overlay/etc/init.d/wapp
+          test -f wapp-overlay/etc/wapp_ap.conf
+          test -f wapp-overlay/etc/wapp_ap_ra0.conf
+          test -f wapp-overlay/etc/wapp_ap_rax0.conf
+          test -f wapp-overlay/etc/map/mapd_cfg
+          test -f wapp-overlay/etc/map/mapd_user.cfg
+          test -f wapp-overlay/etc/map/1905d.cfg
+
+          # Install files into the OpenWrt root filesystem overlay.
+          mkdir -p files
+          cp -a wapp-overlay/. files/
+
+          # Normalize the init script and set executable permissions.
+          sed -i 's/\r$//' files/etc/init.d/wapp
           chmod +x files/usr/bin/wapp
           chmod +x files/usr/bin/wappctrl
           chmod +x files/etc/init.d/wapp
-          echo "PASS: Custom file permissions fixed."
 
+          echo "PASS: WAPP overlay installed and permissions fixed."
       - name: Download sources
         run: make download -j$(nproc)
 
