@@ -1,8 +1,28 @@
 #!/bin/sh /etc/rc.common
+
 START=99
 USE_PROCD=1
 
 start_service() {
+    local waited=0
+
+    # 等待 MTK 无线接口创建，最多等待 60 秒
+    while [ ! -d /sys/class/net/ra0 ] || \
+          [ ! -d /sys/class/net/rax0 ]; do
+        if [ "$waited" -ge 60 ]; then
+            logger -t wapp "ERROR: ra0/rax0 not ready after 60 seconds"
+            return 1
+        fi
+
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    # 接口出现后给驱动留出额外的初始化时间（2秒兜底）
+    sleep 2
+
+    logger -t wapp "ra0/rax0 detected after ${waited}s; starting WAPP"
+
     procd_open_instance
     procd_set_param command /usr/bin/wapp -l br-lan -d1 -v2 \
         -f /etc/wapp_ap.conf \
