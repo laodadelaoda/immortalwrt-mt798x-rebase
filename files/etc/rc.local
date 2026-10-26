@@ -3,7 +3,7 @@
 # the system init finished. By default this file does nothing.
 
 # 等待网卡和驱动完全就绪 (15秒防弹等待)
-sleep 15
+sleep 60
 
 # MTK wapp 闭源漫游引擎启动
 export LD_LIBRARY_PATH=/usr/lib
