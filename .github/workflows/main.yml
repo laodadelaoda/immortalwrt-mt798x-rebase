@@ -186,7 +186,8 @@ jobs:
             041-fix-cmm_data-header-translated-port-security.patch \
             091-fix-gpl-license.patch \
             093-debug-probe.patch \
-            094-fix-wnm-fortify.patch
+            094-fix-wnm-fortify.patch \
+            095-fix-wnm-fortify-rsp.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
