@@ -5,9 +5,20 @@
 # 等待网卡和驱动完全就绪 (60秒防弹等待)
 sleep 60
 
-# MTK wapp 闭源漫游引擎启动
+# 1. 加载 1905 依赖的 mapfilter 驱动模块
+insmod /lib/modules/$(uname -r)/mapfilter.ko 2>/dev/null
+
+# 2. 启动 wapp (GL 7.6.7.3 专用极简参数)
 export LD_LIBRARY_PATH=/usr/lib
 cd /
-/usr/bin/wapp -l br-lan -d1 -v2 -f /etc/wapp_ap.conf -F /etc/map/mapd.cfg -u /etc/map/mapd_user.cfg -K /etc/map/1905d.cfg -cra0 -crax0 > /tmp/wapp_bg.log 2>&1 &
+/usr/bin/wapp -d1 -v2 -cra0 -crax0 > /tmp/wapp_bg.log 2>&1 &
+sleep 3
+
+# 3. 启动 1905daemon (N60 Pro 作主路由，必须使用 -r0)
+/usr/bin/p1905_managerd -r0 -f /etc/map/1905d.cfg -F /etc/map/wts_bss_info_config > /tmp/p1905.log 2>&1 &
+sleep 2
+
+# 4. 启动 mapd (读取 mapd_cfg，不再读带点的 mapd.cfg)
+/usr/bin/mapd -I /etc/map/mapd_cfg -O /etc/mapd_strng.conf > /tmp/mapd.log 2>&1 &
 
 exit 0
