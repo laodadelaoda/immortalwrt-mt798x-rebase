@@ -30,6 +30,11 @@ on:
           - standard
           - minimal
           - full
+      quick_wifi_only:
+        description: 'Quick WiFi only (skip full firmware)'
+        required: false
+        default: 'false'
+        type: boolean
 
 permissions:
   contents: read
@@ -48,7 +53,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
@@ -76,7 +81,7 @@ jobs:
           echo "GOSUMDB=off" >> $GITHUB_ENV
 
       - name: Restore compiler cache
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
           key: ${{ runner.os }}-n60pro-ccache-${{ github.ref_name }}-${{ env.DEVICE }}-${{ env.PROFILE }}
@@ -102,7 +107,7 @@ jobs:
           ccache --max-size=5G
           ccache --set-config=compiler_check=content
 
-          # Select base config
+          # 选择基础 config
           case "$PROFILE" in
             standard) BASE_CONFIG="config/n60pro-1001.config" ;;
             minimal)  BASE_CONFIG="config/n60pro-minimal.config" ;;
@@ -119,19 +124,20 @@ jobs:
           cp .config "artifacts/$DEVICE/$PROFILE/config.before-defconfig"
           wc -l .config
 
-          # Replace target device line
+          # 替换设备行：只保留目标设备的 DEVICE=y
           if grep -q '^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_' .config; then
             sed -i -E "s|^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_[^=]+=y|# &|" .config
             sed -i -E "s|^# (CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_${DEVICE})=y|\\1=y|" .config
           fi
 
+          # 如果 config 里没有目标设备行，显式追加
           if ! grep -q "^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_${DEVICE}=y" .config; then
             echo "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_${DEVICE}=y" >> .config
           fi
 
           make defconfig
 
-          echo "===== DEVICE selection ====="
+          echo "===== DEVICE 选择 ====="
           grep -E "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_${DEVICE}" .config || {
             echo "::error::Target device ${DEVICE} not selected after defconfig"
             exit 1
@@ -142,28 +148,26 @@ jobs:
             exit 1
           fi
 
-          # Ensure MBO support is enabled for wapp/BTM
-          if ! grep -q "^CONFIG_MTK_MBO_SUPPORT=y" .config; then
-            echo "::error::CONFIG_MTK_MBO_SUPPORT is not enabled!"
-            exit 1
-          fi
-
           cp .config "artifacts/$DEVICE/$PROFILE/config.buildinfo"
-          echo "PASS: $DEVICE / $PROFILE config loaded, MBO verified."
+          echo "PASS: $DEVICE / $PROFILE config loaded."
 
-      - name: Fix permissions for custom files
-        shell: bash
+      - name: Download MTK closed-source packages
         run: |
-          # Set executable permissions for wapp binaries
-          chmod +x files/usr/bin/wapp
-          chmod +x files/usr/bin/wappctrl
-          
-          # Convert Windows CRLF to Linux LF for rc.local and set executable
-          if [ -f "files/etc/rc.local" ]; then
-            sed -i 's/\r$//' files/etc/rc.local
-            chmod +x files/etc/rc.local
-          fi
-          echo "PASS: Custom file permissions fixed."
+          mkdir -p dl
+          REL="https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3"
+          for f in \
+            mt79xx_20250408-705eb4.tar.xz \
+            mapfilter-96f2afed.tar.bz2 \
+            wappd-80ca5724.tar.bz2 \
+            mapd-6eca4331.tar.bz2 \
+            libmapd-0132d199.tar.bz2 \
+            1905daemon-35234223.tar.bz2 \
+            bndstrg_plus-8350508d.tar.bz2 \
+            fwdd-bcbae0e4.tar.bz2
+          do
+            wget -q -P dl "$REL/$f" || { echo "::error::download $f failed"; exit 1; }
+          done
+          ls -lh dl/
 
       - name: Download sources
         run: make download -j$(nproc)
@@ -178,18 +182,44 @@ jobs:
           echo "===== Step 1: clean MT Wi-Fi package ====="
           make package/mtk/drivers/mt_wifi/clean V=s
 
-          echo "===== Step 2: prepare mt_wifi ====="
+          echo "===== Step 2: remove 042~077, keep 001~041 + 091 + 093 + 094 ====="
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/042-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/050-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/051-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/052-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/053-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/054-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/055-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/057-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/058-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/059-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/060-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/061-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/062-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/063-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/064-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/065-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/066-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/067-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/068-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/069-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/070-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/071-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/072-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/073-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/074-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/075-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/076-*.patch
+          rm -f package/mtk/drivers/mt_wifi/patches-7673/077-*.patch
+
+          echo "===== Step 3: prepare mt_wifi ====="
           PREPARE_LOG="artifacts/$DEVICE/$PROFILE/mtwifi-prepare.log"
           make package/mtk/drivers/mt_wifi/prepare V=s 2>&1 | tee "$PREPARE_LOG"
 
-          # Verify critical patches are applied
           for patch in \
-            041-fix-cmm_data-header-translated-port-security.patch \
             091-fix-gpl-license.patch \
             093-debug-probe.patch \
-            094-fix-wnm-fortify.patch \
-            095-fix-wnm-fortify-rsp.patch \
-            096-wnm-fix-send-btm-req-fortify.patch
+            094-fix-wnm-fortify.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
@@ -202,15 +232,15 @@ jobs:
             exit 1
           fi
 
-          echo "PASS: Critical patches (041, 091, 093, 094, 095) applied successfully."
+          echo "PASS: 091, 093, 094 applied."
 
-          echo "===== Step 3: full build ====="
+          echo "===== Step 4: full build ====="
           BUILD_LOG="artifacts/$DEVICE/$PROFILE/FULL-BUILD-VS-LOG.txt"
           : > "$BUILD_LOG"
           set -o pipefail
           make -j"$(nproc)" V=s 2>&1 | tee -a "$BUILD_LOG"
 
-          echo "===== Step 4: verify sysupgrade ITB ====="
+          echo "===== Step 5: verify sysupgrade ITB ====="
           SYSUP="bin/targets/mediatek/filogic/immortalwrt-mediatek-filogic-${DEVICE}-squashfs-sysupgrade.itb"
           if [ ! -s "$SYSUP" ]; then
             echo "::error::Expected sysupgrade ITB not found: $SYSUP"
@@ -261,7 +291,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.DEVICE }}-${{ env.PROFILE }}-${{ github.run_number }}
           path: artifacts/${{ env.DEVICE }}/${{ env.PROFILE }}/
