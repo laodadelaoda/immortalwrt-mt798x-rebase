@@ -1,0 +1,14 @@
+#!/bin/sh
+
+DAT0=/etc/wireless/mediatek/mt7986-ax6000.dbdc.b0.dat
+DAT1=/etc/wireless/mediatek/mt7986-ax6000.dbdc.b1.dat
+for f in "$DAT0" "$DAT1"; do
+    [ -f "$f" ] || continue
+    sed -i 's/^MapMode=0/MapMode=1/' "$f"
+done
+
+[ -f /etc/map/mapd_cfg ] || cp /etc/map/mapd.cfg /etc/map/mapd_cfg
+grep -q '^map_root=1' /etc/map/1905d.cfg || sed -i 's/^map_root=.*/map_root=1/' /etc/map/1905d.cfg
+grep -q '^map_agent=0' /etc/map/1905d.cfg || sed -i 's/^map_agent=.*/map_agent=0/' /etc/map/1905d.cfg
+
+exit 0
