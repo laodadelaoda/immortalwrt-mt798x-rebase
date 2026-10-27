@@ -1,6 +1,8 @@
 --- a/net/netfilter/Kconfig
 +++ b/net/netfilter/Kconfig
-@@ -xxx,xxx +xxx,xxx @@
+@@ -1,4 +1,14 @@
+ # SPDX-License-Identifier: GPL-2.0-only
+ 
 +config MAP_FILTER_SUPPORT
 +	tristate "MTK MAP netfilter support"
 +	depends on NETFILTER
@@ -13,4 +15,6 @@
 +	  To compile this code as a module, choose M here: the module
 +	  will be called mapfilter.
 +
- endmenu
+ menu "Core Netfilter Configuration"
+ 
+ config NETFILTER_NETLINK
