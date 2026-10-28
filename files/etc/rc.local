@@ -5,20 +5,36 @@
 # 等待网卡和驱动完全就绪 (60秒防弹等待)
 sleep 60
 
-# 1. 加载 1905 依赖的 mapfilter 驱动模块
-insmod /lib/modules/$(uname -r)/mapfilter.ko 2>/dev/null
+# 0. 动态修复 libnl-tiny 软链接 (解决 p1905_managerd 找不到库的问题)
+# 每次开机检测，确保 .so 永远指向系统原生的最新 .so.1
+if [ -f /usr/lib/libnl-tiny.so.1 ] && [ ! -f /usr/lib/libnl-tiny.so ]; then
+    ln -sf /usr/lib/libnl-tiny.so.1 /usr/lib/libnl-tiny.so
+    echo "libnl-tiny.so softlink created." > /dev/kmsg
+fi
+
+# 1. 加载 1905 依赖的 mapfilter 驱动模块 (先检查是否已加载，防重复)
+if ! lsmod | grep -q mapfilter; then
+    insmod /lib/modules/$(uname -r)/mapfilter.ko 2>/dev/null
+fi
 
 # 2. 启动 wapp (GL 7.6.7.3 专用极简参数)
+# 加一句 killall 防止后台脚本或系统 init 已经拉起，导致端口冲突
+killall wapp 2>/dev/null
+sleep 1
 export LD_LIBRARY_PATH=/usr/lib
 cd /
 /usr/bin/wapp -d1 -v2 -cra0 -crax0 > /tmp/wapp_bg.log 2>&1 &
 sleep 3
 
 # 3. 启动 1905daemon (N60 Pro 作主路由，必须使用 -r0)
+killall p1905_managerd 2>/dev/null
+sleep 1
 /usr/bin/p1905_managerd -r0 -f /etc/map/1905d.cfg -F /etc/map/wts_bss_info_config > /tmp/p1905.log 2>&1 &
 sleep 2
 
 # 4. 启动 mapd (读取 mapd_cfg，不再读带点的 mapd.cfg)
+killall mapd 2>/dev/null
+sleep 1
 /usr/bin/mapd -I /etc/map/mapd_cfg -O /etc/mapd_strng.conf > /tmp/mapd.log 2>&1 &
 
 exit 0
