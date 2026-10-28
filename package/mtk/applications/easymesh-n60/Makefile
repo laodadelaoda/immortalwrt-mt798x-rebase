@@ -10,7 +10,7 @@ define Package/easymesh-n60
   SECTION:=net
   CATEGORY:=Network
   TITLE:=MTK EasyMesh binaries and config for N60 Pro
-  DEPENDS:=+kmod-mapfilter +libnl-tiny
+  DEPENDS:=+kmod-mapfilter +libnl-tiny +libkvcutil
 endef
 
 define Package/easymesh-n60/description
