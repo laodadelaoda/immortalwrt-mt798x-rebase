@@ -36,8 +36,14 @@ start_service() {
 
     sleep 2
 
+    # Generate only /etc/mapd_strng.conf from existing N60 Pro settings.
+    # Do not run the upstream uci2map.lua converter, which rewrites other
+    # MAPD/P1905 files and depends on a separate /etc/config/mapd layout.
     procd_open_instance mapd
-    procd_set_param command /usr/bin/mapd -I /etc/map/mapd_cfg -O /etc/mapd_strng.conf
+    procd_set_param command /bin/sh -c '
+        /usr/sbin/generate-mapd-strng || exit 1
+        exec /usr/bin/mapd -I /etc/map/mapd_cfg -O /etc/mapd_strng.conf
+    '
     procd_set_param respawn
     procd_close_instance
 }
