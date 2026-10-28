@@ -8,6 +8,14 @@ for f in "$DAT0" "$DAT1"; do
 done
 
 [ -f /etc/map/mapd_cfg ] || cp /etc/map/mapd.cfg /etc/map/mapd_cfg
+grep -q '^DeviceRole=1grep -q '^map_root=1' /etc/map/1905d.cfg || sed -i 's/^map_root=.*/map_root=1/' /etc/map/1905d.cfg
+grep -q '^map_agent=0' /etc/map/1905d.cfg || sed -i 's/^map_agent=.*/map_agent=0/' /etc/map/1905d.cfg
+
+# Register the package-managed EasyMesh service for subsequent boots.
+/etc/init.d/easymesh enable
+
+exit 0
+ /etc/map/mapd_cfg || sed -i 's/^DeviceRole=.*/DeviceRole=1/' /etc/map/mapd_cfg
 grep -q '^map_root=1' /etc/map/1905d.cfg || sed -i 's/^map_root=.*/map_root=1/' /etc/map/1905d.cfg
 grep -q '^map_agent=0' /etc/map/1905d.cfg || sed -i 's/^map_agent=.*/map_agent=0/' /etc/map/1905d.cfg
 
