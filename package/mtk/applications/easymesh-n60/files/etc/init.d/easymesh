@@ -4,46 +4,166 @@ START=99
 STOP=10
 USE_PROCD=1
 
-start_service() {
-    # Preserve the existing boot-time wait for MTK Wi-Fi driver readiness.
-    sleep 60
-
-    # GL 7.6.7.3 p1905_managerd expects this unversioned library name.
-    if [ -f /usr/lib/libnl-tiny.so.1 ] && [ ! -e /usr/lib/libnl-tiny.so ]; then
-        ln -sf /usr/lib/libnl-tiny.so.1 /usr/lib/libnl-tiny.so
-    fi
-
-    modprobe mapfilter 2>/dev/null
-
-    procd_open_instance wapp
-    procd_set_param command /usr/bin/wapp -d1 -v2 -cra0 -crax0
-    procd_set_param respawn
-    procd_close_instance
-
-    sleep 2
-
-    procd_open_instance p1905
-    procd_set_param command /bin/sh -c '
-        role=$(grep "^map_root=" /etc/map/1905d.cfg | cut -d= -f2)
-        if [ "$role" = "1" ]; then
-            exec /usr/bin/p1905_managerd -r0 -f /etc/map/1905d.cfg -F /etc/map/wts_bss_info_config
-        else
-            exec /usr/bin/p1905_managerd -r1 -f /etc/map/1905d.cfg -F /etc/map/wts_bss_info_config
-        fi
-    '
-    procd_set_param respawn
-    procd_close_instance
-
-    sleep 2
-
-    procd_open_instance mapd
-    procd_set_param command /usr/bin/mapd -I /etc/map/mapd_cfg -O /etc/mapd_strng.conf
-    procd_set_param respawn
-    procd_close_instance
+log_error() {
+    logger -t easymesh "$*"
+    echo "easymesh: $*" >&2
 }
 
-stop_service() {
-    killall mapd 2>/dev/null
-    killall p1905_managerd 2>/dev/null
-    killall wapp 2>/dev/null
+wait_for_interfaces() {
+    n=0
+    while :; do
+        if ip link show dev br-lan >/dev/null 2>&1 &&
+           ip link show dev ra0 >/dev/null 2>&1 &&
+           ip link show dev rax0 >/dev/null 2>&1; then
+            return 0
+        fi
+        [ "$n" -lt 60 ] || {
+            log_error "timed out waiting for br-lan, ra0 and rax0"
+            return 1
+        }
+        sleep 1
+        n=$((n + 1))
+    done
+}
+
+ensure_mapd_strng_config() {
+    [ -s /etc/mapd_strng.conf ] && return 0
+
+    # Defaults used by the GL EasyMesh startup script; preserve an existing
+    # user-edited file rather than overwriting it on every service start.
+    cat > /etc/mapd_strng.conf <<'EOF'
+LowRSSIAPSteerEdge_RE=40
+CUOverloadTh_2G=70
+CUOverloadTh_5G_L=80
+CUOverloadTh_5G_H=80
+MetricPolicyChUtilThres_24G=70
+MetricPolicyChUtilThres_5GL=80
+MetricPolicyChUtilThres_5GH=80
+ChPlanningChUtilThresh_24G=70
+ChPlanningChUtilThresh_5GL=80
+ChPlanningEDCCAThresh_24G=200
+ChPlanningEDCCAThresh_5GL=200
+ChPlanningOBSSThresh_24G=200
+ChPlanningOBSSThresh_5GL=200
+ChPlanningR2MonitorTimeoutSecs=300
+ChPlanningR2MonitorProhibitSecs=900
+ChPlanningR2MetricReportingInterval=10
+ChPlanningR2MinScoreMargin=10
+MetricRepIntv=10
+MetricPolicyRcpi_24G=100
+MetricPolicyRcpi_5GL=100
+MetricPolicyRcpi_5GH=100
+EOF
+}
+
+start_service() {
+    local map_root map_agent role_flag
+
+    # Fail early when the packaged runtime configuration is incomplete.
+    for f in \
+        /usr/bin/wapp \
+        /usr/bin/p1905_managerd \
+        /usr/bin/mapd \
+        /etc/wapp_ap.conf \
+        /etc/map/mapd_cfg \
+        /etc/map/mapd_user.cfg \
+        /etc/map/1905d.cfg \
+        /etc/map/wts_bss_info_config
+    do
+        [ -s "$f" ] || {
+            log_error "required file missing or empty: $f"
+            return 1
+        }
+    done
+
+    # N60 Pro original interface names: 2.4 GHz ra0 and 5 GHz rax0.
+    wait_for_interfaces || return 1
+
+    map_root="$(sed -n 's/^map_root=//p' /etc/map/1905d.cfg | head -n 1)"
+    map_agent="$(sed -n 's/^map_agent=//p' /etc/map/1905d.cfg | head -n 1)"
+    case "$map_root:$map_agent" in
+        1:0) role_flag=-r0 ;;
+        0:1) role_flag=-r1 ;;
+        *)
+            log_error "invalid EasyMesh role: map_root='$map_root', map_agent='$map_agent'"
+            return 1
+            ;;
+    esac
+
+    if ! modprobe mapfilter; then
+        [ -d /sys/module/mapfilter ] || {
+            log_error "failed to load mapfilter"
+            return 1
+        }
+    fi
+    [ -d /sys/module/mapfilter ] || {
+        log_error "mapfilter is not present after modprobe"
+        return 1
+    }
+
+    [ -e /usr/lib/libnl-tiny.so.1 ] || {
+        log_error "required library missing: /usr/lib/libnl-tiny.so.1"
+        return 1
+    }
+    if [ ! -e /usr/lib/libnl-tiny.so ]; then
+        ln -s libnl-tiny.so.1 /usr/lib/libnl-tiny.so || {
+            log_error "cannot create /usr/lib/libnl-tiny.so symlink"
+            return 1
+        }
+    fi
+
+    ensure_mapd_strng_config || {
+        log_error "cannot prepare /etc/mapd_strng.conf"
+        return 1
+    }
+
+    # Remove a stale control socket before launching the sole managed WAPP.
+    rm -f /tmp/wapp_ctrl
+
+    procd_open_instance wapp
+    procd_set_param command /usr/bin/wapp \
+        -l br-lan -d1 -v2 \
+        -f /etc/wapp_ap.conf \
+        -F /etc/map/mapd_cfg \
+        -u /etc/map/mapd_user.cfg \
+        -K /etc/map/1905d.cfg \
+        -cra0 -crax0
+    procd_set_param respawn 3600 5 5
+    procd_close_instance
+
+    # GL-style dependency ordering: wait for WAPP's real control socket,
+    # not a fixed sleep, before starting the 1905 daemon.
+    procd_open_instance p1905
+    procd_set_param command /bin/sh -c '
+        role_flag="$1"
+        n=0
+        while [ ! -S /tmp/wapp_ctrl ] && [ "$n" -lt 60 ]; do
+            sleep 1
+            n=$((n + 1))
+        done
+        [ -S /tmp/wapp_ctrl ] || {
+            logger -t easymesh "timed out waiting for WAPP control socket"
+            exit 1
+        }
+        exec /usr/bin/p1905_managerd "$role_flag" -f /etc/map/1905d.cfg -F /etc/map/wts_bss_info_config
+    ' easymesh "$role_flag"
+    procd_set_param respawn 3600 5 5
+    procd_close_instance
+
+    # Wait for the 1905 daemon's abstract Unix socket before starting mapd.
+    procd_open_instance mapd
+    procd_set_param command /bin/sh -c '
+        n=0
+        while ! grep -Fq "@1905_daemon" /proc/net/unix && [ "$n" -lt 60 ]; do
+            sleep 1
+            n=$((n + 1))
+        done
+        grep -Fq "@1905_daemon" /proc/net/unix || {
+            logger -t easymesh "timed out waiting for 1905 daemon socket"
+            exit 1
+        }
+        exec /usr/bin/mapd -I /etc/map/mapd_cfg -O /etc/mapd_strng.conf
+    '
+    procd_set_param respawn 3600 5 5
+    procd_close_instance
 }
