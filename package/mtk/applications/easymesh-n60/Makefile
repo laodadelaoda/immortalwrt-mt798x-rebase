@@ -10,7 +10,7 @@ define Package/easymesh-n60
   SECTION:=net
   CATEGORY:=Network
   TITLE:=MTK EasyMesh binaries and config for N60 Pro
-  DEPENDS:=+kmod-mapfilter
+  DEPENDS:=+kmod-mapfilter +libnl-tiny
 endef
 
 define Package/easymesh-n60/description
@@ -32,6 +32,9 @@ $(INSTALL_BIN) ./files/usr/bin/mapd $(1)/usr/bin/
 $(INSTALL_BIN) ./files/usr/bin/p1905_managerd $(1)/usr/bin/
 $(INSTALL_BIN) ./files/usr/lib/libeth_1905ops.so $(1)/usr/lib/
 $(INSTALL_BIN) ./files/usr/lib/libmapd_interface_client.so $(1)/usr/lib/
+$(INSTALL_DATA) ./files/usr/lib/libssl.so.1.1 $(1)/usr/lib/
+$(INSTALL_DATA) ./files/usr/lib/libcrypto.so.1.1 $(1)/usr/lib/
+ln -sf libnl-tiny.so.1 $(1)/usr/lib/libnl-tiny.so
 $(INSTALL_DATA) ./files/etc/map/mapd_cfg $(1)/etc/map/
 $(INSTALL_DATA) ./files/etc/map/mapd_user.cfg $(1)/etc/map/
 $(INSTALL_DATA) ./files/etc/map/1905d.cfg $(1)/etc/map/

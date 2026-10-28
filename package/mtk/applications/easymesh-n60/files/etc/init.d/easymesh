@@ -5,6 +5,14 @@ STOP=10
 USE_PROCD=1
 
 start_service() {
+    # Preserve the existing boot-time wait for MTK Wi-Fi driver readiness.
+    sleep 60
+
+    # GL 7.6.7.3 p1905_managerd expects this unversioned library name.
+    if [ -f /usr/lib/libnl-tiny.so.1 ] && [ ! -e /usr/lib/libnl-tiny.so ]; then
+        ln -sf /usr/lib/libnl-tiny.so.1 /usr/lib/libnl-tiny.so
+    fi
+
     modprobe mapfilter 2>/dev/null
 
     procd_open_instance wapp
