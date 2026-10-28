@@ -1,7 +1,7 @@
 mode=1
 lan_interface=eth0
 wan_interface=eth1
-DeviceRole=2
+DeviceRole=1
 APSteerRssiTh=-68
 BhPriority2G=3
 BhPriority5GL=1
