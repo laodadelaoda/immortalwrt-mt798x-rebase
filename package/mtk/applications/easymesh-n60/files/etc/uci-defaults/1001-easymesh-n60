@@ -11,4 +11,7 @@ done
 grep -q '^map_root=1' /etc/map/1905d.cfg || sed -i 's/^map_root=.*/map_root=1/' /etc/map/1905d.cfg
 grep -q '^map_agent=0' /etc/map/1905d.cfg || sed -i 's/^map_agent=.*/map_agent=0/' /etc/map/1905d.cfg
 
+# Register the package-managed EasyMesh service for subsequent boots.
+/etc/init.d/easymesh enable
+
 exit 0
