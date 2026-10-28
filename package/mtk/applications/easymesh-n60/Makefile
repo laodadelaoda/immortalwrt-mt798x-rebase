@@ -19,7 +19,7 @@ define Package/easymesh-n60/description
 endef
 
 define Build/Prepare
-mkdir -p $(PKG_BUILD_DIR)
+	mkdir -p $(PKG_BUILD_DIR)
 endef
 
 define Build/Compile
