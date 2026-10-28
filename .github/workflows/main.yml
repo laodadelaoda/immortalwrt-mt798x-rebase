@@ -57,6 +57,24 @@ jobs:
         with:
           fetch-depth: 1
 
+      # 👇 核心修复：只在编译期暴力赋予四个文件可执行权限 👇
+      - name: Fix permissions for core binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "===== 修复外挂文件的执行权限 ====="
+          if [ -d "files" ]; then
+            # 专门针对四个核心文件加固 (防止被 git 的默认 644 权限覆盖)
+            chmod +x files/usr/bin/mapd 2>/dev/null || true
+            chmod +x files/usr/bin/p1905_managerd 2>/dev/null || true
+            chmod +x files/usr/bin/wappctrl 2>/dev/null || true
+            chmod +x files/usr/bin/wapp 2>/dev/null || true
+            
+            echo "===== 最终权限检查 ====="
+            ls -lh files/usr/bin/ || true
+          fi
+      # 👆 核心修复结束 👆
+
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
