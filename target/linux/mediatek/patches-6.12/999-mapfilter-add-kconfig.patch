@@ -1,16 +1,14 @@
 --- a/net/netfilter/Kconfig
 +++ b/net/netfilter/Kconfig
-@@ -1,1 +1,13 @@
+@@ -1,1 +1,11 @@
 +config MAP_FILTER_SUPPORT
-+tristate "MTK MAP netfilter support"
-+depends on NETFILTER
-+depends on NF_CONNTRACK
-+depends on NF_NAT
-+help
-+  MTK MAP netfilter module. Required by p1905_managerd for
-+  MAP_SO_BASE and MAP_NETLINK socket options.
++  tristate "MTK MAP netfilter support"
++  depends on NETFILTER
++  depends on NF_CONNTRACK
++  depends on NF_NAT
++  help
++    MTK MAP netfilter module. Required by p1905_managerd.
++    To compile this code as a module, choose M here.
 +
-+  To compile this code as a module, choose M here: the module
-+  will be called mapfilter.
 +
  menu "Core Netfilter Configuration"
