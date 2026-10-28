@@ -26,10 +26,11 @@ define Build/Compile
 endef
 
 define Package/easymesh-n60/install
-$(INSTALL_DIR) $(1)/usr/bin $(1)/usr/lib $(1)/etc/map $(1)/etc/init.d $(1)/etc/uci-defaults
+$(INSTALL_DIR) $(1)/usr/bin $(1)/usr/sbin $(1)/usr/lib $(1)/etc/map $(1)/etc/init.d $(1)/etc/uci-defaults
 $(INSTALL_BIN) ./files/usr/bin/wapp $(1)/usr/bin/
 $(INSTALL_BIN) ./files/usr/bin/mapd $(1)/usr/bin/
 $(INSTALL_BIN) ./files/usr/bin/p1905_managerd $(1)/usr/bin/
+$(INSTALL_BIN) ./files/usr/sbin/generate-mapd-strng $(1)/usr/sbin/
 $(INSTALL_BIN) ./files/usr/lib/libeth_1905ops.so $(1)/usr/lib/
 $(INSTALL_BIN) ./files/usr/lib/libmapd_interface_client.so $(1)/usr/lib/
 $(INSTALL_DATA) ./files/usr/lib/libssl.so.1.1 $(1)/usr/lib/
