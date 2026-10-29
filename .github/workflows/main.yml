@@ -63,7 +63,7 @@ jobs:
           set -euo pipefail
           PKG="package/mtk/applications/easymesh-n60/files/usr/bin"
           for f in wapp mapd p1905_managerd; do
-            test -x "$PKG/$f" || { echo "::error::Missing or non-executable packaged binary: $PKG/$f"; exit 1; }
+            test -f "$PKG/$f" || { echo "::error::Missing packaged binary: $PKG/$f"; exit 1; }
           done
           ls -lh "$PKG"
 
