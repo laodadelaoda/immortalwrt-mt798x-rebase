@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=easymesh-n60
 PKG_VERSION:=7.6.7.3
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -43,8 +43,8 @@ define Package/easymesh-n60/install
 	$(INSTALL_BIN) ./files/usr/bin/mapd $(1)/usr/bin/
 	$(INSTALL_BIN) ./files/usr/bin/p1905_managerd $(1)/usr/bin/
 	$(INSTALL_BIN) ./files/usr/sbin/generate-mapd-strng $(1)/usr/sbin/
-	$(INSTALL_DATA) ./files/usr/lib/libeth_1905ops.so $(1)/usr/lib/
-	$(INSTALL_DATA) ./files/usr/lib/libmapd_interface_client.so $(1)/usr/lib/
+	$(INSTALL_BIN) ./files/usr/lib/libeth_1905ops.so $(1)/usr/lib/
+	$(INSTALL_BIN) ./files/usr/lib/libmapd_interface_client.so $(1)/usr/lib/
 	$(INSTALL_DATA) ./files/usr/lib/libssl.so.1.1 $(1)/usr/lib/
 	$(INSTALL_DATA) ./files/usr/lib/libcrypto.so.1.1 $(1)/usr/lib/
 	ln -sf libnl-tiny.so.1 $(1)/usr/lib/libnl-tiny.so
