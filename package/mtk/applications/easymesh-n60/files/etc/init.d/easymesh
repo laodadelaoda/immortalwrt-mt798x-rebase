@@ -15,9 +15,10 @@ start_service() {
 
     modprobe mapfilter 2>/dev/null
 
+    # The N60 wrapper keeps procd attached to WAPP's lifetime. Do not add
+    # respawn here: the upstream WAPP binary may daemonize and leave children.
     procd_open_instance wapp
-    procd_set_param command /usr/bin/wapp -d1 -v2 -cra0 -crax0
-    procd_set_param respawn
+    procd_set_param command /usr/bin/wapp-n60-wrapper
     procd_close_instance
 
     sleep 2

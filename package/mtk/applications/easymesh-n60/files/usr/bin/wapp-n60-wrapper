@@ -1,0 +1,42 @@
+#!/bin/sh
+# N60 Pro adaptation of MediaTek's wapp_openwrt.sh startup model.
+# Keep the existing ra0/rax0 configuration intact; do not regenerate it
+# from l1dat, overwrite wapp_ap.conf, or remove /tmp/wapp* files.
+
+LOG_TAG="wapp-n60"
+
+log_msg() {
+    logger -t "$LOG_TAG" "$*"
+}
+
+# A single WAPP instance is intended for the two N60 Pro radio interfaces.
+killall wapp 2>/dev/null || true
+sleep 2
+
+for iface in ra0 rax0; do
+    if [ ! -d "/sys/class/net/$iface" ]; then
+        log_msg "ERROR: required interface $iface is missing; WAPP not started"
+        exit 1
+    fi
+done
+
+if [ ! -s /etc/wapp_ap.conf ] ||
+   ! grep -Fq '/etc/wapp_ap_ra0.conf' /etc/wapp_ap.conf ||
+   ! grep -Fq '/etc/wapp_ap_rax0.conf' /etc/wapp_ap.conf; then
+    log_msg "ERROR: /etc/wapp_ap.conf does not contain both N60 Pro band configs"
+    exit 1
+fi
+
+log_msg "Starting WAPP for ra0 and rax0"
+# Run in the foreground first. If this WAPP build daemonizes and returns,
+# keep this wrapper alive while its WAPP process(es) remain, so procd tracks
+# the actual service lifetime instead of restarting a short-lived parent.
+/usr/bin/wapp -d1 -v2 -cra0 -crax0
+wapp_rc=$?
+
+while pidof wapp >/dev/null 2>&1; do
+    sleep 2
+done
+
+log_msg "WAPP process set exited (rc=$wapp_rc)"
+exit "$wapp_rc"
