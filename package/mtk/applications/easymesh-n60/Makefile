@@ -19,20 +19,32 @@ define Package/easymesh-n60/description
 endef
 
 define Build/Prepare
-	mkdir -p $(PKG_BUILD_DIR)
+	set -eu; \
+	ARCHIVE="$(DL_DIR)/wappd-80ca5724.tar.bz2"; \
+	echo "73fa8995533e701d3d5774faa92d274497f99e1a37c81ce445f25a959b4b7462  $$ARCHIVE" | sha256sum -c -; \
+	mkdir -p $(PKG_BUILD_DIR); \
+	tar -xjf "$$ARCHIVE" -C $(PKG_BUILD_DIR) \
+		wappd/config_and_icon_files/wapp_ap_ra0_default.conf \
+		wappd/config_and_icon_files/wapp_ap_rax0_default.conf; \
+	for f in wapp_ap_ra0_default.conf wapp_ap_rax0_default.conf; do \
+		cfg="$(PKG_BUILD_DIR)/wappd/config_and_icon_files/$$f"; \
+		sed -i 's/^interworking=1$$/interworking=0/' "$$cfg"; \
+		printf '\n# MediaTek MBO parameters for N60 Pro\nmbo_ap_cdcp=1\nmbo_ap_assoc_disallow_reason=0\nmbo_ap_assoc_retry_delay=0\nmbo_ap_transition_reason_code=0\nmbo_ap_capability=64\n' >> "$$cfg"; \
+	done; \
+	printf 'conf_list=/etc/wapp_ap_ra0.conf;/etc/wapp_ap_rax0.conf;\n' > $(PKG_BUILD_DIR)/wapp_ap.conf
 endef
 
 define Build/Compile
 endef
 
 define Package/easymesh-n60/install
-	$(INSTALL_DIR) $(1)/usr/bin $(1)/usr/sbin $(1)/usr/lib $(1)/etc/map $(1)/etc/init.d $(1)/etc/uci-defaults
+	$(INSTALL_DIR) $(1)/usr/bin $(1)/usr/sbin $(1)/usr/lib $(1)/etc $(1)/etc/map $(1)/etc/init.d $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/usr/bin/wapp $(1)/usr/bin/
 	$(INSTALL_BIN) ./files/usr/bin/mapd $(1)/usr/bin/
 	$(INSTALL_BIN) ./files/usr/bin/p1905_managerd $(1)/usr/bin/
 	$(INSTALL_BIN) ./files/usr/sbin/generate-mapd-strng $(1)/usr/sbin/
-	$(INSTALL_BIN) ./files/usr/lib/libeth_1905ops.so $(1)/usr/lib/
-	$(INSTALL_BIN) ./files/usr/lib/libmapd_interface_client.so $(1)/usr/lib/
+	$(INSTALL_DATA) ./files/usr/lib/libeth_1905ops.so $(1)/usr/lib/
+	$(INSTALL_DATA) ./files/usr/lib/libmapd_interface_client.so $(1)/usr/lib/
 	$(INSTALL_DATA) ./files/usr/lib/libssl.so.1.1 $(1)/usr/lib/
 	$(INSTALL_DATA) ./files/usr/lib/libcrypto.so.1.1 $(1)/usr/lib/
 	ln -sf libnl-tiny.so.1 $(1)/usr/lib/libnl-tiny.so
@@ -40,6 +52,9 @@ define Package/easymesh-n60/install
 	$(INSTALL_DATA) ./files/etc/map/mapd_user.cfg $(1)/etc/map/
 	$(INSTALL_DATA) ./files/etc/map/1905d.cfg $(1)/etc/map/
 	$(INSTALL_DATA) ./files/etc/map/wts_bss_info_config $(1)/etc/map/
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wapp_ap.conf $(1)/etc/wapp_ap.conf
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap_ra0_default.conf $(1)/etc/wapp_ap_ra0.conf
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap_rax0_default.conf $(1)/etc/wapp_ap_rax0.conf
 	$(INSTALL_BIN) ./files/etc/init.d/easymesh $(1)/etc/init.d/
 	$(INSTALL_BIN) ./files/etc/uci-defaults/1001-easymesh-n60 $(1)/etc/uci-defaults/
 endef
