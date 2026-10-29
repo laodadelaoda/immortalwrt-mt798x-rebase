@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=easymesh-n60
 PKG_VERSION:=7.6.7.3
-PKG_RELEASE:=4
+PKG_RELEASE:=5
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -21,18 +21,18 @@ endef
 define Build/Prepare
 	set -eu; \
 	ARCHIVE="$(DL_DIR)/wappd-80ca5724.tar.bz2"; \
-	echo "73fa8995533e701d3d5774faa92d274497f99e1a37c81ce445f25a959b4b7462  $ARCHIVE" | sha256sum -c -; \
+	echo "73fa8995533e701d3d5774faa92d274497f99e1a37c81ce445f25a959b4b7462  $$ARCHIVE" | sha256sum -c -; \
 	mkdir -p $(PKG_BUILD_DIR); \
-	tar -xjf "$ARCHIVE" -C $(PKG_BUILD_DIR) \
+	tar -xjf "$$ARCHIVE" -C $(PKG_BUILD_DIR) \
 		wappd/config_and_icon_files/wapp_ap_ra0_default.conf \
 		wappd/config_and_icon_files/wapp_ap_rax0_default.conf; \
 	for f in wapp_ap_ra0_default.conf wapp_ap_rax0_default.conf; do \
-		cfg="$(PKG_BUILD_DIR)/wappd/config_and_icon_files/$f"; \
-		sed -i 's/^interworking=1$/interworking=0/' "$cfg"; \
-		sed -i '/^mbo_ap_cdcp=/d; /^mbo_ap_assoc_disallow_reason=/d; /^mbo_ap_assoc_retry_delay=/d; /^mbo_ap_transition_reason_code=/d; /^mbo_ap_capability=/d' "$cfg"; \
-		printf '\n# MediaTek MBO parameters for N60 Pro\nmbo_ap_cdcp=1\nmbo_ap_assoc_disallow_reason=0\nmbo_ap_assoc_retry_delay=0\nmbo_ap_transition_reason_code=0\nmbo_ap_capability=64\n' >> "$cfg"; \
+		cfg="$(PKG_BUILD_DIR)/wappd/config_and_icon_files/$$f"; \
+		sed -i 's/^interworking=1$$/interworking=0/' "$$cfg"; \
+		sed -i '/^mbo_ap_cdcp=/d; /^mbo_ap_assoc_disallow_reason=/d; /^mbo_ap_assoc_retry_delay=/d; /^mbo_ap_transition_reason_code=/d; /^mbo_ap_capability=/d' "$$cfg"; \
+		printf '\\n# MediaTek MBO parameters for N60 Pro\\nmbo_ap_cdcp=1\\nmbo_ap_assoc_disallow_reason=0\\nmbo_ap_assoc_retry_delay=0\\nmbo_ap_transition_reason_code=0\\nmbo_ap_capability=64\\n' >> "$$cfg"; \
 	done; \
-	printf 'conf_list=/etc/wapp_ap_ra0.conf;/etc/wapp_ap_rax0.conf;\n' > $(PKG_BUILD_DIR)/wapp_ap.conf
+	printf 'conf_list=/etc/wapp_ap_ra0.conf;/etc/wapp_ap_rax0.conf;\\n' > $(PKG_BUILD_DIR)/wapp_ap.conf
 endef
 
 define Build/Compile
