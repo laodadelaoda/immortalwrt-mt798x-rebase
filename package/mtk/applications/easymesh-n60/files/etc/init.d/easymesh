@@ -5,8 +5,19 @@ STOP=10
 USE_PROCD=1
 
 start_service() {
-    # Preserve the existing boot-time wait for MTK Wi-Fi driver readiness.
-    sleep 60
+    # Wait for both N60 Pro radios, but avoid a fixed 60-second delay when ready.
+    waited=0
+    while [ "$waited" -lt 60 ]; do
+        if [ -d /sys/class/net/ra0 ] && [ -d /sys/class/net/rax0 ]; then
+            break
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    if [ ! -d /sys/class/net/ra0 ] || [ ! -d /sys/class/net/rax0 ]; then
+        logger -t easymesh "ERROR: ra0/rax0 did not appear within 60 seconds"
+        return 1
+    fi
 
     # GL 7.6.7.3 p1905_managerd expects this unversioned library name.
     if [ -f /usr/lib/libnl-tiny.so.1 ] && [ ! -e /usr/lib/libnl-tiny.so ]; then

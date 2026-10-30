@@ -13,11 +13,7 @@ var reloadSvc = rpc.declare({ object: 'map-easymesh', method: 'reload' });
 var getWappDiag = rpc.declare({ object: 'map-easymesh', method: 'wapp_diag' });
 var enableWapp = rpc.declare({ object: 'map-easymesh', method: 'wapp_enable' });
 
-var ROLE_OPTS = [
-	['0', _('Agent（被管理节点）')],
-	['1', _('Controller（控制器）')],
-	['2', _('Controller + Agent（控制器兼节点）')]
-];
+var ROLE_OPTS = [['1', _('Controller / Root（控制器 / 根节点）']]];
 var AUTH_OPTS = [
 	['OPEN', 'OPEN'],
 	['WPAPSK', 'WPAPSK'],
@@ -36,7 +32,6 @@ var SWITCH_FIELDS = [
 	{ id: 'netopt', label: '网络优化' },
 	{ id: 'auto_bh', label: '自动回程切换' },
 	{ id: 'non_map_ap', label: '非 MAP AP 兼容' },
-	{ id: 'dhcp_ctl', label: 'DHCP 控制' },
 	{ id: 'mode', label: '运行模式', opts: MODE_OPTS }
 ];
 var ETH_FIELDS = [
@@ -149,8 +144,6 @@ return view.extend({
 				[_('/etc/map 可写'), caps.writable ? _('是') : _('否')],
 				[_('当前角色'), st.role || _('未知')],
 				[_('MAP 版本'), st.map_ver || '-'],
-				[_('Controller ALID'), (st.fields && st.fields.ctrl_alid && st.fields.ctrl_alid.value) || '-'],
-				[_('Agent ALID'), (st.fields && st.fields.agent_alid && st.fields.agent_alid.value) || '-'],
 				[_('拓扑节点'), st.nodes ? String((st.nodes || []).length) : '-'],
 				[_('回程链路'), st.backhaul_links ? String((st.backhaul_links || []).length) : '-']
 			];
@@ -158,27 +151,24 @@ return view.extend({
 			var wappOut = E('pre', { 'style': 'white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto' }, []);
 			var wappReady = wd && !wd.unavailable && wd.ok;
 			if (wappReady) {
-				rows.push([_('wapp 二进制'), wd.wapp_bin || _('缺失')]);
-				rows.push([_('wapp 进程'), wd.wapp_running ? _('运行中') : _('未运行')]);
-				rows.push([_('wapp 控制套接字'), wd.wapp_ctrl_socket ? _('存在') : _('不存在')]);
-				rows.push([_('wapp 开关 (wapp=1)'), wd.switch_on ? _('已开启') : _('未开启')]);
-				rows.push([_('ra0 启动判定'), wd.ra0 ? _('满足') : _('不满足')]);
-				rows.push([_('rax0 启动判定'), wd.rax0 ? _('满足') : _('不满足')]);
-				(wd.devices || []).forEach(function(d) {
-					rows.push([_('无线设备 %s').format(d.section), 'wapp=' + d.wapp + ', bandsteering=' + d.bandsteering + ', ieee80211r=' + d.ieee80211r + ', disabled=' + d.disabled]);
-				});
+				rows.push([_('EasyMesh 服务'), wd.service_status || _('未知')]);
+				rows.push([_('N60 启动包装器'), wd.wrapper || _('缺失')]);
+				rows.push([_('WAPP 进程'), wd.wapp_running ? _('运行中') : _('未运行')]);
+				rows.push([_('P1905 进程'), wd.p1905_running ? _('运行中') : _('未运行')]);
+				rows.push([_('MAPD 进程'), wd.mapd_running ? _('运行中') : _('未运行')]);
+				rows.push([_('WAPP 控制套接字'), wd.wapp_ctrl_socket ? _('存在') : _('不存在')]);
 				(wd.reasons || []).forEach(function(r) { wappReasons.push(_('wapp 启动条件：%s').format(r)); });
-				if (!wd.can_start) wappReasons.push(_('wapp 启动前置条件未满足，可使用下方按钮自动设置并启动。'));
+				if (!wd.can_start) wappReasons.push(_('N60 EasyMesh 服务或配置文件未就绪；下方按钮将通过 easymesh 服务启动，不会改写无线 UCI 参数。'));
 			} else if (wd && wd.unavailable) {
 				wappReasons.push(_('当前后端不支持 wapp 诊断，请升级插件后端。'));
 			}
 			Object.keys(svcs).forEach(function(s) {
 				var v = svcs[s] || {};
-				var txt = v.status === 'running' ? _('运行中') : (v.status === 'stopped' ? _('已停止') : (v.status === 'disabled' ? _('未启用') : (v.status === 'config' ? _('配置就绪') : _('缺失'))));
+				var txt = v.status === 'running' ? _('运行中') : (v.status === 'partial' ? _('部分运行') : (v.status === 'stopped' ? _('已停止') : (v.status === 'disabled' ? _('未启用') : (v.status === 'config' ? _('配置就绪') : _('缺失')))));
 				rows.push([_('服务 %s').format(s), txt]);
 			});
 			var warns = [];
-			if (!caps.wappctrl) warns.push(_('wappctrl 不可用：无线回程与 DPP 入网不可用，建议安装 mtwifi-wapp。'));
+			if (!caps.wappctrl) warns.push(_('wappctrl 不可用：拓扑与部分只读诊断不可用；WAPP/P1905/MAPD 核心服务仍由 easymesh 管理。'));
 			if (!caps.iface) warns.push(_('未探测到无线接口：无线回程不可用。'));
 			if (!caps.config_present) warns.push(_('MAP 配置文件缺失：向导无法写入，请先确认固件已安装 MAP 组件。'));
 			if (!caps.writable) warns.push(_('/etc/map 不可写：所有写入将被拒绝。'));
@@ -191,7 +181,7 @@ return view.extend({
 			if (wappReady) {
 				var enableBtn = E('button', { 'class': 'cbi-button cbi-button-action', 'click': function(ev) {
 					ev.preventDefault();
-					if (!window.confirm(_('确认启用 wapp 并启动服务？将设置 wapp=1，必要时开启 bandsteering，并执行 startwapp.sh。'))) return;
+					if (!window.confirm(_('确认启用并启动 N60 EasyMesh 服务？将由 easymesh 统一启动 WAPP、P1905 和 MAPD，不修改无线 UCI 参数。'))) return;
 					wappOut.innerHTML = '';
 					enableBtn.disabled = true;
 					enableWapp().then(function(r) {
@@ -208,7 +198,7 @@ return view.extend({
 						appendLine(wappOut, _('调用失败：%s').format(String(e)));
 						enableBtn.disabled = false;
 					});
-				} }, [_('一键启用 wapp')]);
+				} }, [_('启用 EasyMesh 服务')]);
 				panel.appendChild(fieldRow(_('wapp 服务'), enableBtn));
 				panel.appendChild(wappOut);
 			}
@@ -220,11 +210,12 @@ return view.extend({
 		/* ---------- Step 2: 角色 ---------- */
 		var roleSel;
 		(function() {
-			roleSel = sel(ROLE_OPTS, fields.role ? fields.role.value : '1');
+			roleSel = sel(ROLE_OPTS, '1');
+			roleSel.disabled = true;
 			var panel = E('div', { 'class': 'cbi-section' });
 			panel.appendChild(E('h3', {}, [_('② 选择设备角色')]));
 			panel.appendChild(E('p', { 'class': 'alert-message notice' }, [
-				_('Controller 负责整网管理与漫游决策；Agent 是被管理的接入节点；Controller + Agent 既管理整网又提供接入。')
+				_('N60 Pro 固定作为 EasyMesh Root / Controller，负责整网管理与漫游决策。')
 			]));
 			panel.appendChild(fieldRow(_('设备角色'), roleSel));
 			panel.appendChild(makeNav(1));

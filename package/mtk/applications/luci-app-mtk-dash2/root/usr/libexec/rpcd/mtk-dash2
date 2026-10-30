@@ -298,16 +298,14 @@ local function parse_scan(out)
 	return cells
 end
 
-local MAP_COMPONENTS = { "wappctrl", "wapp", "bs20" }
+local MAP_COMPONENTS = { "wapp", "mapd", "p1905_managerd", "wappctrl" }
 local MAP_FILES = { "1905d.cfg", "mapd_cfg" }
-local MAP_SERVICES = { "mapd", "wapp", "bs20" }
+local MAP_SERVICES = { "easymesh" }
 
 local MODULES = {
 	{ id = "wireless", label = "Wireless UCI", src = "/etc/config/wireless", arc = "wireless.conf" },
 	{ id = "map_1905d", label = "MAP 1905d.cfg", src = MAP_DIR .. "/1905d.cfg", arc = "map/1905d.cfg" },
 	{ id = "map_mapd", label = "MAP mapd_cfg", src = MAP_DIR .. "/mapd_cfg", arc = "map/mapd_cfg" },
-	{ id = "wapp_uci", label = "WAPP UCI", src = "/etc/config/wapp", arc = "etc-config-wapp" },
-	{ id = "mapd_uci", label = "MAPD UCI", src = "/etc/config/mapd", arc = "etc-config-mapd" },
 }
 
 local function map_config_summary()
@@ -332,7 +330,7 @@ local function map_config_summary()
 end
 
 local function running_processes()
-	local names = { "wapp", "bs20", "mapd", "1905" }
+	local names = { "wapp", "mapd", "p1905_managerd" }
 	local found, seen = {}, {}
 	for pid in safe_dir("/proc") do
 		if pid:match("^%d+$") and not seen[pid] then
@@ -453,13 +451,14 @@ local function runtime_probes()
 	for _, s in ipairs(MAP_SERVICES) do
 		local initd = "/etc/init.d/" .. s
 		if fs.access(initd, "x") then
-			local code, out = sh(initd .. " running")
+			local wc = sh("pidof wapp")
+			local pc = sh("pidof p1905_managerd")
+			local mc = sh("pidof mapd")
+			local count = (wc == 0 and 1 or 0) + (pc == 0 and 1 or 0) + (mc == 0 and 1 or 0)
 			probes[s] = {
-				status = code == 0 and "running" or "available",
-				exit_code = code,
-				command = initd .. " running",
-				tool = "init.d",
-				output = clean_text(out):sub(1, 400),
+				status = count == 3 and "running" or (count > 0 and "partial" or "stopped"),
+				components = { wapp = wc == 0, p1905_managerd = pc == 0, mapd = mc == 0 },
+				tool = "process",
 			}
 		else
 			probes[s] = { status = "unavailable", reason = "missing_service" }
@@ -548,7 +547,7 @@ local function capabilities()
 	for _, n in ipairs(MAP_SERVICES) do
 		svcs[n] = fs.access("/etc/init.d/" .. n, "x")
 	end
-	local has_svc = svcs.mapd or svcs.wapp or svcs.bs20
+	local has_svc = svcs.easymesh
 	local probes = runtime_probes()
 	return {
 		ok = true,
@@ -706,7 +705,6 @@ local DEVICE_VALUE_FIELDS = {
 	dbdc_main = { kind = "bool" },
 	bandsteering = { kind = "bool" },
 	noscan = { kind = "bool" },
-	wapp = { kind = "bool" },
 }
 local VIF_VALUE_FIELDS = {
 	mode = { kind = "enum", values = { "ap", "sta" } },
@@ -1429,7 +1427,7 @@ local function apply_map(args)
 		if fs.access("/etc/init.d/" .. n, "x") then svcs[#svcs + 1] = n end
 	end
 	if #svcs == 0 then
-		return { ok = false, degraded = true, error = "未检测到可确认的 MAP 服务（mapd/wapp/bs20 均不存在），配置已落盘，重载需人工执行" }
+		return { ok = false, degraded = true, error = "未检测到 N60 Pro easymesh 管理服务，配置已落盘，重载需人工执行" }
 	end
 	if not args.restart then
 		return { ok = false, need_restart = true, services = svcs, error = "需重启 MAP 服务以应用配置，请二次确认后传 restart=true" }

@@ -10,7 +10,7 @@ local fs = require "nixio.fs"
 
 local MAP_DIR = "/etc/map"
 local FILE_PATHS = { ["wapp_ap_ra0.conf"] = "/etc/wapp_ap_ra0.conf" }
-local SERVICES = { "mapd", "wapp", "bs20" }
+local SERVICES = { "easymesh" }
 local BIN_DIRS = { "/usr/sbin", "/usr/bin", "/sbin", "/bin", "/usr/libexec" }
 local SENSITIVE = { "key", "pass", "secret", "psk", "password", "cred", "alid" }
 local DIRTY = "[%z\1-\8\11\12\14-\31\127]"
@@ -149,9 +149,9 @@ local FIELDS = {
 	bh_prio_5gh = { file = "mapd_cfg", key = "BhPriority5GH", label = "回程优先级 5G-高", type = "int", min = 0, max = 3, d = "1" },
 	bh_prio_6g = { file = "mapd_cfg", key = "BhPriority6G", label = "回程优先级 6G", type = "int", min = 0, max = 3, d = "1" },
 	bss_cfg_priority = {
-		file = "mapd_cfg", key = "bss_config_priority", label = "BSS 配置优先级",
-		type = "string",
-		d = "ra0;rax0;apclix0",
+		file = "1905d.cfg", key = "bss_config_priority", label = "BSS 配置优先级",
+		type = "string", allow_empty = true,
+		d = "",
 	},
 	lowrssi_edge_re = {
 		file = "mapd_cfg", key = "LowRSSIAPSteerEdge_RE", label = "低 RSSI 引导边缘 (RE)",
@@ -224,11 +224,9 @@ local FIELDS = {
 	bh2_enc = { file = "mapd_cfg", key = "BhProfile2EncrypType", label = "回程加密 2", type = "string", d = "" },
 	bh2_key = { file = "mapd_cfg", key = "BhProfile2WpaPsk", label = "回程密钥 2", secret = true, d = "" },
 	bh2_raid = { file = "mapd_cfg", key = "BhProfile2RaID", label = "回程射频 2", type = "string", d = "" },
-	ctrl_alid = { file = "1905d.cfg", key = "map_controller_alid", label = "Controller ALID", type = "mac", d = "" },
-	agent_alid = { file = "1905d.cfg", key = "map_agent_alid", label = "Agent ALID", type = "mac", d = "" },
-	radio_band = { file = "1905d.cfg", key = "radio_band", label = "各射频频段", type = "string", d = "24G;5G;5G;" },
+	radio_band = { file = "1905d.cfg", key = "radio_band", label = "各射频频段", type = "string", d = "24G;5GL;5GH;" },
 	br_inf = { file = "1905d.cfg", key = "br_inf", label = "桥接接口", type = "string", d = "br-lan" },
-	al_inf = { file = "1905d.cfg", key = "al_inf", label = "AL 接口", type = "string", d = "ra0" },
+	al_inf = { file = "1905d.cfg", key = "al_inf", label = "AL 接口", type = "string", d = "rax0" },
 	eth_dev_name = { file = "1905d.cfg", key = "ethernet_dev_name", label = "以太网设备名（高级）", type = "string", optional = true, d = "" },
 	decrypt_th = { file = "1905d.cfg", key = "decrypt_fail_threshold", label = "解密失败阈值", type = "int", min = 1, max = 100, d = "10" },
 	gtk_rekey = { file = "1905d.cfg", key = "gtk_rekey_interval", label = "GTK 重键间隔 (s)", type = "int", min = 60, max = 86400, d = "3600" },
@@ -265,10 +263,7 @@ local FIELDS = {
 	chplan_r2_min_score = { file = "mapd_cfg", key = "ChPlanningR2MinScoreMargin", label = "信道规划 R2 最小评分余量", type = "int", min = 1, max = 1000, optional = true, d = "" },
 	chplan_r2_mon_prohibit = { file = "mapd_cfg", key = "ChPlanningR2MonitorProhibitSecs", label = "信道规划 R2 禁止监测 (s)", type = "int", min = 1, max = 3600, optional = true, d = "" },
 	chplan_r2_mon_timeout = { file = "mapd_cfg", key = "ChPlanningR2MonitorTimeoutSecs", label = "信道规划 R2 监测超时 (s)", type = "int", min = 1, max = 3600, optional = true, d = "" },
-	map_ver = {
-		file = "1905d.cfg", key = "map_ver", label = "MAP 版本",
-		type = "enum", map = { R1 = "R1", R2 = "R2" }, labels = { R1 = "R1", R2 = "R2" }, enum_sort = { "R1", "R2" },
-		d = "R1",
+
 	},
 	mode = {
 		file = "mapd_cfg", key = "mode", label = "运行模式",
@@ -350,7 +345,7 @@ local FIELDS = {
 }
 
 local FIELD_IDS = {
-	"role", "backhaul", "steer", "auto_bh", "ch_plan", "central_steer", "dhcp_ctl", "non_map_ap", "quick_ch", "netopt",
+	"backhaul", "steer", "auto_bh", "ch_plan", "central_steer", "non_map_ap", "quick_ch", "netopt
 	"ap_steer_rssi", "force_roam_rssi", "scan_th_2g", "scan_th_5g", "scan_th_6g", "metric_intv", "bh_steer_timeout",
 	"pref_ch_2g", "pref_ch_5g", "pref_ch_5gh", "pref_ch_6g", "chplan_r2", "chplan_timeout", "chplan_scan_valid", "divergent_chplan",
 	"bh_prio_2g", "bh_prio_5gl", "bh_prio_5gh", "bh_prio_6g", "bss_cfg_priority", "lowrssi_edge_re", "band_switch_time",
@@ -361,7 +356,7 @@ local FIELD_IDS = {
 	"bh0_valid", "bh0_ssid", "bh0_auth", "bh0_enc", "bh0_key", "bh0_raid",
 	"bh1_valid", "bh1_ssid", "bh1_auth", "bh1_enc", "bh1_key", "bh1_raid",
 	"bh2_valid", "bh2_ssid", "bh2_auth", "bh2_enc", "bh2_key", "bh2_raid",
-	"ctrl_alid", "agent_alid", "radio_band", "br_inf", "al_inf", "eth_dev_name", "decrypt_th", "gtk_rekey", "ob_wan_only", "map_ver",
+	"radio_band", "br_inf", "al_inf", "eth_dev_name", "decrypt_th", "gtk_rekey", "ob_wan_only",
 	"de_serial", "de_sw_ver", "de_exec_env", "de_chipset_vendor", "de_sta_event_path", "lan_if", "wan_if",
 	"lr_steer_edge_root",
 	"chplan_r2_bw", "chplan_idle_bytes", "chplan_idle_time",
@@ -567,256 +562,119 @@ local function proc_running(name)
 end
 
 local function service_states()
-	local states = {}
-	for _, s in ipairs(SERVICES) do
-		local initd = "/etc/init.d/" .. s
-		if fs.access(initd, "x") then
-			local code = sh(initd .. " running")
-			states[s] = { status = code == 0 and "running" or "stopped", exit_code = code }
-		elseif s == "mapd" then
-			if fs.access(MAP_DIR .. "/mapd_cfg") then
-				states[s] = { status = "config" }
-			else
-				states[s] = { status = "missing" }
-			end
-		else
-			local exe = bin(s)
-			if not exe then
-				states[s] = { status = "missing" }
-			else
-				local enabled = true
-				if s == "wapp" then
-					local _, uout = sh("uci -q show wireless 2>/dev/null")
-					enabled = tostring(uout or ""):match("%.wapp%s*=%s*['\"]?1") ~= nil
-				end
-				if proc_running(s) then
-					states[s] = { status = "running", installed = true, exe = exe, enabled = enabled }
-				else
-					states[s] = { status = (not enabled) and "disabled" or "stopped", installed = true, exe = exe, enabled = enabled }
-				end
-			end
-		end
+	local initd = "/etc/init.d/easymesh"
+	local installed = fs.access(initd, "x") ~= nil
+	local enabled = fs.access("/etc/rc.d/S99easymesh") ~= nil
+	local wapp = proc_running("wapp")
+	local p1905 = proc_running("p1905_managerd")
+	local mapd = proc_running("mapd")
+	local count = (wapp and 1 or 0) + (p1905 and 1 or 0) + (mapd and 1 or 0)
+	local status
+	if not installed then
+		status = "missing"
+	elseif count == 3 then
+		status = "running"
+	elseif count > 0 then
+		status = "partial"
+	elseif enabled then
+		status = "stopped"
+	else
+		status = "disabled"
 	end
-	return states
-end
-
-local ALID_FILE = "/etc/map/1905d.cfg"
-
-local function restore_alid()
-	local path = ALID_FILE
-	if not fs.access(path) then return nil end
-	local t = read(path)
-	if not t then return nil end
-	local saved = {}
-	for _, ln in ipairs(parse_file(t)) do
-		if ln.kind == "kv" and (ln.key:lower() == "map_controller_alid" or ln.key:lower() == "map_agent_alid") then
-			saved[#saved + 1] = { key = ln.key, value = stripq(ln.value) }
-		end
-	end
-	return saved
+	return {
+		easymesh = {
+			status = status,
+			installed = installed,
+			enabled = enabled,
+			components = { wapp = wapp, p1905_managerd = p1905, mapd = mapd },
+		},
+	}
 end
 
 local WAPP_CTRL_SOCKET = "/tmp/wapp_ctrl"
 
-local function wapp_radio_decision()
-	local ra0, rax0 = 0, 0
-	local function any_is(sections, opt, val)
-		for _, sec in ipairs(sections) do
-			local code, out = sh("uci -q get wireless." .. sec .. "." .. opt .. " 2>/dev/null")
-			if code == 0 and stripq(clean(tostring(out or ""))) == tostring(val) then return true end
-		end
-		return false
-	end
-	local function any_lt0(sections, opt)
-		for _, sec in ipairs(sections) do
-			local code, out = sh("uci -q get wireless." .. sec .. "." .. opt .. " 2>/dev/null")
-			if code == 0 then
-				local n = tonumber(stripq(clean(tostring(out or ""))))
-				if n and n < 0 then return true end
-			end
-		end
-		return false
-	end
-	if any_is({ "MT7981_1_1", "MT7986_1_1" }, "bandsteering", 1) then ra0, rax0 = 1, 1 end
-	if any_is({ "MT7981_1_1", "MT7986_1_1" }, "ieee80211r", 1) then ra0 = 1 end
-	if any_lt0({ "default_MT7981_1_2", "default_MT7986_1_2" }, "steeringthresold") then ra0 = 1 end
-	if any_is({ "default_MT7981_1_1", "default_MT7986_1_1" }, "disabled", 1) then ra0, rax0 = 0, 0 end
-	if any_is({ "MT7981_1_2", "MT7986_1_2" }, "ieee80211r", 1) then rax0 = 1 end
-	if any_lt0({ "default_MT7981_1_2", "default_MT7986_1_2" }, "steeringthresold") then rax0 = 1 end
-	if any_is({ "default_MT7981_1_2", "default_MT7986_1_2" }, "disabled", 1) then rax0 = 0 end
-	return ra0, rax0
-end
-
-local function mtwifi_devices()
-	local devs = {}
-	local _, out = sh("uci -q show wireless 2>/dev/null")
-	for line in tostring(out or ""):gmatch("[^\r\n]+") do
-		local sec = line:match("^wireless%.([^.]+)=wifi%-device$")
-		if sec then
-			local code, tout = sh("uci -q get wireless." .. sec .. ".type 2>/dev/null")
-			if code == 0 and stripq(clean(tostring(tout or ""))) == "mtwifi" then
-				local function optval(opt)
-					local c, o = sh("uci -q get wireless." .. sec .. "." .. opt .. " 2>/dev/null")
-					if c ~= 0 then return 0 end
-					return tonumber(stripq(clean(tostring(o or "")))) or 0
-				end
-				devs[#devs + 1] = {
-					section = sec,
-					wapp = optval("wapp"),
-					bandsteering = optval("bandsteering"),
-					ieee80211r = optval("ieee80211r"),
-					disabled = optval("disabled"),
-				}
-			end
-		end
-	end
-	return devs
-end
-
 local function wapp_diag()
-	local start_script = bin("startwapp.sh")
+	local initd = "/etc/init.d/easymesh"
+	local wrapper = bin("wapp-n60-wrapper")
 	local wapp_bin = bin("wapp")
-	local running = wapp_bin ~= nil and proc_running("wapp")
-	local sock = fs.access(WAPP_CTRL_SOCKET) ~= nil
-	local devs = mtwifi_devices()
-	local switch_on = false
-	for _, d in ipairs(devs) do
-		if d.wapp == 1 then switch_on = true break end
-	end
-	local ra0, rax0 = wapp_radio_decision()
-	local can_start = start_script ~= nil and wapp_bin ~= nil and switch_on and (ra0 == 1 or rax0 == 1)
+	local mapd_bin = bin("mapd")
+	local p1905_bin = bin("p1905_managerd")
+	local installed = fs.access(initd, "x") ~= nil
+	local wapp_running = proc_running("wapp")
+	local p1905_running = proc_running("p1905_managerd")
+	local mapd_running = proc_running("mapd")
+	local count = (wapp_running and 1 or 0) + (p1905_running and 1 or 0) + (mapd_running and 1 or 0)
+	local service_status = not installed and "missing" or (count == 3 and "running" or (count > 0 and "partial" or "stopped"))
 	local reasons = {}
-	if not start_script then
-		reasons[#reasons + 1] = "未找到 /sbin/startwapp.sh（固件缺少 mtwifi-cfg wapp 组件）"
-	end
-	if not wapp_bin then
-		reasons[#reasons + 1] = "未找到 wapp 二进制（固件缺少 mtwifi-wapp 组件）"
-	end
-	if not switch_on then
-		reasons[#reasons + 1] = "没有任何 mtwifi 无线设备开启 wapp=1（固件 wapp 开关未打开）"
-	end
-	if ra0 == 0 and rax0 == 0 then
-		reasons[#reasons + 1] = "ra0/rax0 判定不满足（bandsteering/ieee80211r/steeringthresold 均未触发，或对应设备被 disabled=1 清零）"
+	if not installed then reasons[#reasons + 1] = "未找到 /etc/init.d/easymesh" end
+	if not wrapper then reasons[#reasons + 1] = "未找到 N60 专用 wapp-n60-wrapper" end
+	if not wapp_bin then reasons[#reasons + 1] = "未找到 /usr/bin/wapp" end
+	if not mapd_bin then reasons[#reasons + 1] = "未找到 /usr/bin/mapd" end
+	if not p1905_bin then reasons[#reasons + 1] = "未找到 /usr/bin/p1905_managerd" end
+	for _, path in ipairs({
+		"/etc/wapp_ap.conf",
+		"/etc/wapp_ap_ra0.conf",
+		"/etc/wapp_ap_rax0.conf",
+		"/etc/map/mapd_cfg",
+		"/etc/map/1905d.cfg",
+		"/etc/map/wts_bss_info_config",
+	}) do
+		if not fs.access(path) then reasons[#reasons + 1] = "缺少配置文件 " .. path end
 	end
 	return {
 		ok = true,
-		startwapp = start_script,
+		service = initd,
+		service_enabled = fs.access("/etc/rc.d/S99easymesh") ~= nil,
+		service_status = service_status,
+		wrapper = wrapper,
 		wapp_bin = wapp_bin,
-		wapp_running = running,
-		wapp_ctrl_socket = sock,
-		devices = devs,
-		switch_on = switch_on,
-		ra0 = ra0 == 1,
-		rax0 = rax0 == 1,
-		can_start = can_start,
+		mapd_bin = mapd_bin,
+		p1905_bin = p1905_bin,
+		wapp_running = wapp_running,
+		p1905_running = p1905_running,
+		mapd_running = mapd_running,
+		wapp_ctrl_socket = fs.access(WAPP_CTRL_SOCKET) ~= nil,
+		can_start = installed and wrapper ~= nil and wapp_bin ~= nil and mapd_bin ~= nil and p1905_bin ~= nil and #reasons == 0,
 		reasons = reasons,
 	}
 end
 
 local function wapp_enable()
-	local results, warnings = {}, {}
-	local note
-	local start_script = bin("startwapp.sh")
-	if not start_script then
-		return { ok = false, error = "未找到 /sbin/startwapp.sh，固件缺少 mtwifi-cfg wapp 组件" }
+	local diag = wapp_diag()
+	if not diag.can_start then
+		return { ok = false, error = table.concat(diag.reasons, "; "), diag = diag }
 	end
-	if not bin("wapp") then
-		return { ok = false, error = "未找到 wapp 二进制，固件缺少 mtwifi-wapp 组件" }
+	local initd = "/etc/init.d/easymesh"
+	local results = {}
+	local code, out = sh(initd .. " enable")
+	results[#results + 1] = { command = initd .. " enable", exit_code = code, ok = code == 0, output = clean(out) }
+	if code ~= 0 then
+		return { ok = false, error = "启用 easymesh 开机服务失败", results = results, diag = diag }
 	end
-	local uci = bin("uci")
-	if not uci then return { ok = false, error = "未找到 uci 命令" } end
-	local q_uci = q(uci)
-
-	local devs = mtwifi_devices()
-	if #devs == 0 then
-		return { ok = false, error = "未检测到 type=mtwifi 的无线设备段，无法启用 wapp" }
+	if diag.wapp_running and diag.p1905_running and diag.mapd_running then
+		return { ok = true, results = results, diag = diag, note = "EasyMesh 三个核心进程已经运行；已确认开机自启。" }
 	end
-	local target
-	for _, d in ipairs(devs) do
-		if d.wapp == 1 then target = d break end
-	end
-	if not target then target = devs[1] end
-
-	if target.wapp ~= 1 then
-		local code, out = sh(q_uci .. " set wireless." .. target.section .. ".wapp=1")
-		results[#results + 1] = { command = "uci set wireless." .. target.section .. ".wapp=1", exit_code = code, ok = code == 0, output = clean(out) }
-		if code ~= 0 then return { ok = false, error = "设置 wapp=1 失败", results = results } end
-	end
-
-	local ra0, rax0 = wapp_radio_decision()
-	if ra0 == 0 and rax0 == 0 then
-		local bs_sec
-		for _, d in ipairs(devs) do
-			if d.section == "MT7981_1_1" or d.section == "MT7986_1_1" then bs_sec = d.section break end
-		end
-		if not bs_sec then
-			bs_sec = target.section
-			warnings[#warnings + 1] = "未找到固件硬编码 5G 段名（MT7981_1_1/MT7986_1_1），已改用段 " .. target.section .. "，请确认固件判定生效"
-		end
-		local code, out = sh(q_uci .. " set wireless." .. bs_sec .. ".bandsteering=1")
-		results[#results + 1] = { command = "uci set wireless." .. bs_sec .. ".bandsteering=1", exit_code = code, ok = code == 0, output = clean(out) }
-		if code ~= 0 then return { ok = false, error = "设置 bandsteering=1 失败", results = results } end
-		warnings[#warnings + 1] = "已开启 " .. bs_sec .. " 的 bandsteering=1 以满足固件 ra0/rax0 启动条件"
-	end
-
-	local code, out = sh(q_uci .. " commit wireless")
-	results[#results + 1] = { command = "uci commit wireless", exit_code = code, ok = code == 0, output = clean(out) }
-	if code ~= 0 then return { ok = false, error = "uci commit wireless 失败", results = results } end
-
-	local saved = restore_alid()
-	local code2, out2 = sh(q(start_script))
-	results[#results + 1] = { command = start_script, exit_code = code2, ok = code2 == 0, output = clean(out2) }
-
-	if saved and #saved > 0 then
-		local restored = 0
-		for _, a in ipairs(saved) do
-			local c3, _ = sh("sed -i " .. q("s/^" .. a.key .. "=.*/" .. a.key .. "=" .. a.value .. "/") .. " " .. q(ALID_FILE))
-			if c3 == 0 then restored = restored + 1 end
-		end
-		if restored < #saved then
-			note = "startwapp.sh 后 ALID 恢复不完整，请检查 /etc/map/1905d.cfg"
-		else
-			note = "startwapp.sh 已完成，已恢复脚本可能覆盖的 ALID 设置"
-		end
-	end
-
-	return { ok = code2 == 0, results = results, warnings = warnings, note = note, diag = wapp_diag() }
+	local code2, out2 = sh(initd .. " restart")
+	results[#results + 1] = { command = initd .. " restart", exit_code = code2, ok = code2 == 0, output = clean(out2) }
+	local after = wapp_diag()
+	return {
+		ok = code2 == 0,
+		results = results,
+		diag = after,
+		error = code2 ~= 0 and "easymesh 服务重启失败" or nil,
+		note = code2 == 0 and "已通过 N60 专用 easymesh 服务启动 WAPP、P1905 和 MAPD。" or nil,
+	}
 end
 
 local function reload_services()
-	local present = {}
-	for _, s in ipairs(SERVICES) do
-		if fs.access("/etc/init.d/" .. s, "x") then present[#present + 1] = s end
+	local initd = "/etc/init.d/easymesh"
+	if not fs.access(initd, "x") then
+		return false, { { service = "easymesh", exit_code = 127, ok = false, output = "缺少 /etc/init.d/easymesh" } }
 	end
-	if #present > 0 then
-		local results, all_ok = {}, true
-		for _, s in ipairs(present) do
-			local code, out = sh("/etc/init.d/" .. s .. " restart")
-			if code ~= 0 then all_ok = false end
-			results[#results + 1] = { service = s, exit_code = code, ok = code == 0, output = clean(out) }
-		end
-		return all_ok, results
-	end
-	local wifi = bin("wifi")
-	if wifi then
-		local saved = restore_alid()
-		local code, out = sh(q(wifi) .. " reload")
-		local note = nil
-		if code == 0 and saved and #saved > 0 then
-			local restored = 0
-			for _, a in ipairs(saved) do
-				local c2, o2 = sh("sed -i " .. q("s/^" .. a.key .. "=.*/" .. a.key .. "=" .. a.value .. "/") .. " " .. q(ALID_FILE))
-				if c2 == 0 then restored = restored + 1 end
-			end
-			if restored < #saved then
-				note = "wifi reload 后 ALID 恢复不完整，请检查 /etc/map/1905d.cfg"
-			else
-				note = "wifi reload 已完成（固件会重跑 startwapp.sh，已恢复用户 ALID 设置）"
-			end
-		end
-		return code == 0, { { command = "wifi reload", exit_code = code, ok = code == 0, output = clean(out) } }, note
-	end
-	return true, nil, "配置已写入，但未检测到 init.d 服务或 wifi 命令，无法热重载，建议手动执行 wifi reload"
+	local code, out = sh(initd .. " restart")
+	return code == 0, {
+		{ service = "easymesh", exit_code = code, ok = code == 0, output = clean(out) },
+	}
 end
 
 local function field_state(id)
@@ -868,7 +726,7 @@ local function status()
 end
 
 local FIELD_GROUPS = {
-	role = "角色与回程", backhaul = "角色与回程", auto_bh = "角色与回程",
+	backhaul = "角色与回程", auto_bh = "角色与回程",
 	bh0_valid = "回程配置 (BhProfile)", bh0_ssid = "回程配置 (BhProfile)", bh0_auth = "回程配置 (BhProfile)", bh0_enc = "回程配置 (BhProfile)", bh0_key = "回程配置 (BhProfile)", bh0_raid = "回程配置 (BhProfile)",
 	bh1_valid = "回程配置 (BhProfile)", bh1_ssid = "回程配置 (BhProfile)", bh1_auth = "回程配置 (BhProfile)", bh1_enc = "回程配置 (BhProfile)", bh1_key = "回程配置 (BhProfile)", bh1_raid = "回程配置 (BhProfile)",
 	bh2_valid = "回程配置 (BhProfile)", bh2_ssid = "回程配置 (BhProfile)", bh2_auth = "回程配置 (BhProfile)", bh2_enc = "回程配置 (BhProfile)", bh2_key = "回程配置 (BhProfile)", bh2_raid = "回程配置 (BhProfile)",
@@ -883,12 +741,12 @@ local FIELD_GROUPS = {
 	ntwrk_period = "网络优化", netopt_score_margin = "网络优化", netopt_pref5g = "网络优化", netopt_pref5g_retry = "网络优化",
 	netopt_user_priority = "网络优化", ntwrk_data_collect = "网络优化", ntwrk_postcac = "网络优化",
 	third_party = "网络优化", role_detect_ext = "网络优化",
-	dhcp_ctl = "其他 MAP 参数", non_map_ap = "其他 MAP 参数", bss_cfg_priority = "其他 MAP 参数",
+	non_map_ap = "其他 MAP 参数",
 	dual_bh = "其他 MAP 参数", max_scan = "其他 MAP 参数", setpsc_6g = "其他 MAP 参数",
 	cu_overload_2g = "其他 MAP 参数", cu_overload_5gl = "其他 MAP 参数", cu_overload_5gh = "其他 MAP 参数", cu_overload_6g = "其他 MAP 参数",
-	ctrl_alid = "1905d 链路配置", agent_alid = "1905d 链路配置", radio_band = "1905d 链路配置",
+	bss_cfg_priority = "1905d 链路配置", radio_band = "1905d 链路配置",
 	br_inf = "1905d 链路配置", al_inf = "1905d 链路配置", eth_dev_name = "1905d 链路配置",
-	decrypt_th = "1905d 链路配置", gtk_rekey = "1905d 链路配置", ob_wan_only = "1905d 链路配置", map_ver = "1905d 链路配置",
+	decrypt_th = "1905d 链路配置", gtk_rekey = "1905d 链路配置", ob_wan_only = "1905d 链路配置",
 	lowrssi_edge_re = "漫游与引导", band_switch_time = "漫游与引导",
 	lr_steer_edge_root = "漫游与引导",
 	chplan_r2_bw = "信道规划", chplan_idle_bytes = "信道规划", chplan_idle_time = "信道规划",
@@ -1047,7 +905,7 @@ local function set_field(args)
 		local raw = args.value
 		if type(raw) ~= "string" then return { ok = false, error = "缺少 value 参数" } end
 		raw = raw:gsub("^%s+", ""):gsub("%s+$", "")
-		if raw == "" or #raw > 64 then return { ok = false, error = "值需为 1-64 个字符" } end
+		if (raw == "" and not f.allow_empty) or #raw > 64 then return { ok = false, error = "值需为 1-64 个字符" } end
 		nv = raw
 	elseif f.type == "mac" then
 		local raw = args.value
@@ -1601,6 +1459,9 @@ end
 local function reset(args)
 	args = args or {}
 	local scope = tostring(args.scope or "")
+	if scope == "all" then
+		return { ok = false, error = "N60 Pro 专用 MAP 默认值尚未全部验证，已禁用全量重置；请按分组重置。" }
+	end
 	local per_file = {}
 	for _, id in ipairs(FIELD_IDS) do
 		local f = FIELDS[id]

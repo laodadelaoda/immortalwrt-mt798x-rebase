@@ -106,7 +106,6 @@ return view.extend({
 				advRow([E('label', {}, [_('频段：')]), ' ', advSel('band', ['2g', '5g'], d.band || '2g'), '　', E('label', {}, [_('TWT：')]), ' ', boolSetter('twt', d.twt), '　', E('label', {}, [_('MU 波束成形：')]), ' ', boolSetter('mu_beamformer', d.mu_beamformer)]),
 				advRow([E('label', {}, [_('频段引导 (BandSteering)：')]), ' ', boolSetter('bandsteering', d.bandsteering), '　', E('label', {}, [_('DBDC 主频段：')]), ' ', boolSetter('dbdc_main', d.dbdc_main), '　', E('label', {}, [_('关闭 40MHz 共存扫描：')]), ' ', boolSetter('noscan', d.noscan)]),
 				advRow([E('label', {}, [_('信标间隔：')]), ' ', advText('beacon_int', d.beacon_int, { maxlength: 4, placeholder: '20-1000', style: 'width:70px' }), '　', E('label', {}, [_('DTIM 周期：')]), ' ', advText('dtim_period', d.dtim_period, { maxlength: 3, placeholder: '1-255', style: 'width:70px' })]),
-				advRow([E('label', {}, [_('MAP wapp 服务：')]), ' ', boolSetter('wapp', d.wapp)]),
 				advRow([E('label', {}, [_('硬件加速卸载 (WHNAT)：')]), ' ', boolSetter('whnat', d.whnat), ' ', E('em', { 'class': 'alert-message warning' }, [_('变更需重装驱动，可能需要重启设备')])])
 			]);
 			var actions = E('td', {}, []);

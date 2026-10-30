@@ -26,20 +26,38 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Verify EasyMesh package binaries
+      - name: Verify N60 Pro EasyMesh package and configuration
         shell: bash
         run: |
           set -euo pipefail
-          PKG="package/mtk/applications/easymesh-n60/files/usr/bin"
-          for f in wapp mapd p1905_managerd; do
-            test -x "$PKG/$f" || { echo "::error::Missing or non-executable packaged binary: $PKG/$f"; exit 1; }
+          ROOT="package/mtk/applications/easymesh-n60/files"
+          BIN="$ROOT/usr/bin"
+          for f in wapp mapd p1905_managerd wapp-n60-wrapper; do
+            test -x "$BIN/$f" || { echo "::error::Missing or non-executable N60 EasyMesh file: $f"; exit 1; }
           done
-          test -s "$PKG/wappctrl" || { echo "::error::Missing required wappctrl utility: $PKG/wappctrl"; exit 1; }
-          grep -Fq '$(INSTALL_BIN) ./files/usr/bin/wappctrl $(1)/usr/bin/' package/mtk/applications/easymesh-n60/Makefile || {
-            echo "::error::wappctrl is present but not installed by easymesh-n60."
+          test -x "$ROOT/etc/init.d/easymesh" || { echo "::error::Missing easymesh init service"; exit 1; }
+          test -x "$ROOT/usr/sbin/generate-mapd-strng" || { echo "::error::Missing MAPD strength generator"; exit 1; }
+          for f in mapd_cfg 1905d.cfg mapd_user.cfg wts_bss_info_config; do
+            test -s "$ROOT/etc/map/$f" || { echo "::error::Missing MAP config: $f"; exit 1; }
+          done
+          grep -qx 'DeviceRole=1' "$ROOT/etc/map/mapd_cfg"
+          grep -qx 'DhcpCtl=0' "$ROOT/etc/map/mapd_cfg"
+          grep -qx 'map_root=1' "$ROOT/etc/map/1905d.cfg"
+          grep -qx 'map_agent=0' "$ROOT/etc/map/1905d.cfg"
+          grep -qx 'bh_type=eth' "$ROOT/etc/map/1905d.cfg"
+          grep -qx 'radio_band=24G;5GL;5GH;' "$ROOT/etc/map/1905d.cfg"
+          grep -qx 'al_inf=rax0' "$ROOT/etc/map/1905d.cfg"
+          grep -qx 'bss_config_priority=' "$ROOT/etc/map/1905d.cfg"
+          if grep -Eq '^map_(controller|agent)_alid=' "$ROOT/etc/map/1905d.cfg"; then
+            echo "::error::Fixed ALID must not be configured on N60 Pro."
             exit 1
-          }
-          ls -lh "$PKG"
+          fi
+          if test -s "$BIN/wappctrl"; then
+            echo "Optional diagnostic helper present: wappctrl"
+          else
+            echo "NOTICE: optional diagnostic helper wappctrl is absent."
+          fi
+          ls -lh "$BIN"
 
       - name: Free disk space
         run: |

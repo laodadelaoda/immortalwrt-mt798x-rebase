@@ -101,7 +101,7 @@ return view.extend({
 		/* overview */
 		var svcRows = Object.keys(state.services || {}).map(function(k) {
 			var s = state.services[k];
-			return [k, s.status == 'running' ? _('运行中') : (s.status == 'missing' ? _('未安装') : (s.status == 'config' ? _('配置就绪') : (s.status == 'disabled' ? _('未启用') : _('未运行'))))];
+			return [k, s.status == 'running' ? _('运行中') : (s.status == 'partial' ? _('部分运行') : (s.status == 'missing' ? _('未安装') : (s.status == 'config' ? _('配置就绪') : (s.status == 'disabled' ? _('未启用') : _('未运行')))))];
 		});
 		root.appendChild(section(_('运行状态'), table([_('服务'), _('状态')], svcRows)));
 
@@ -119,7 +119,7 @@ return view.extend({
 		var reloadMsg = E('div');
 		var reloadBtn = E('button', { 'class': 'cbi-button cbi-button-apply', 'click': function(ev) {
 			ev.preventDefault();
-			if (!window.confirm(_('确认重启 MAP 服务（mapd/wapp/bs20）？组网会短暂中断。'))) return;
+			if (!window.confirm(_('确认重启 N60 Pro EasyMesh 服务（WAPP/P1905/MAPD）？组网会短暂中断。'))) return;
 			msg(reloadMsg, 'notice', _('正在重启服务...'));
 			reloadSvc().then(function(r) {
 				if (r && r.ok) {
@@ -390,13 +390,13 @@ return view.extend({
 		}}, [_('发送引导')]);
 
 		var resetSel = E('select', { 'class': 'cbi-input-select' });
-		['角色与回程', '回程配置 (BhProfile)', '回程优先级', '漫游与引导', '信道规划', '网络优化', '设备信息', '其他 MAP 参数', '1905d 链路配置', '运行模式', '流量分离 (Traffic Separation)', 'Hotspot 2.0 (Passpoint)', 'all'].forEach(function(s) {
-			resetSel.appendChild(E('option', { 'value': s }, [s === 'all' ? _('全部重置 (all)') : _(s)]));
+		['角色与回程', '回程配置 (BhProfile)', '回程优先级', '漫游与引导', '信道规划', '网络优化', '设备信息', '其他 MAP 参数', '1905d 链路配置', '运行模式', '流量分离 (Traffic Separation)', 'Hotspot 2.0 (Passpoint)'].forEach(function(s) {
+			resetSel.appendChild(E('option', { 'value': s }, [_(s)]));
 		});
 		var resetBtn = E('button', { 'class': 'cbi-button cbi-button-negative', 'click': function(ev) {
 			ev.preventDefault();
 			var scope = resetSel.value;
-			if (!window.confirm(_('确认将「%s」恢复为默认值？所有相关配置将被覆盖并重载 MAP 服务，此操作不可撤销。').format(scope === 'all' ? _('全部配置') : scope))) return;
+			if (!window.confirm(_('确认将「%s」恢复为 N60 Pro 对应分组默认值并重载 EasyMesh 服务？此操作不可撤销。').format(scope))) return;
 			msg(opMsg, 'notice', _('正在执行重置...'));
 			doReset(scope).then(function(r) {
 				if (r && r.ok) {

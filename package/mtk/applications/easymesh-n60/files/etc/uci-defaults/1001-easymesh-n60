@@ -1,18 +1,39 @@
 #!/bin/sh
+set -eu
 
 DAT0=/etc/wireless/mediatek/mt7986-ax6000.dbdc.b0.dat
 DAT1=/etc/wireless/mediatek/mt7986-ax6000.dbdc.b1.dat
+MAPD=/etc/map/mapd_cfg
+P1905=/etc/map/1905d.cfg
+
 for f in "$DAT0" "$DAT1"; do
     [ -f "$f" ] || continue
-    sed -i 's/^MapMode=0/MapMode=1/' "$f"
+    sed -i 's/^MapMode=0$/MapMode=1/' "$f"
 done
 
-[ -f /etc/map/mapd_cfg ] || cp /etc/map/mapd.cfg /etc/map/mapd_cfg
-grep -q '^DeviceRole=1$' /etc/map/mapd_cfg || sed -i 's/^DeviceRole=.*/DeviceRole=1/' /etc/map/mapd_cfg
-grep -q '^map_root=1' /etc/map/1905d.cfg || sed -i 's/^map_root=.*/map_root=1/' /etc/map/1905d.cfg
-grep -q '^map_agent=0' /etc/map/1905d.cfg || sed -i 's/^map_agent=.*/map_agent=0/' /etc/map/1905d.cfg
+# These files are installed by easymesh-n60. Fail visibly instead of
+# attempting the obsolete /etc/map/mapd.cfg fallback.
+if [ ! -f "$MAPD" ] || [ ! -f "$P1905" ]; then
+    logger -t easymesh "required MAP configuration missing: $MAPD or $P1905"
+    exit 1
+fi
 
-# Register the package-managed EasyMesh service for subsequent boots.
+set_value() {
+    file="$1"
+    key="$2"
+    value="$3"
+    if grep -q "^${key}=" "$file"; then
+        sed -i "s|^${key}=.*|${key}=${value}|" "$file"
+    else
+        printf '%s=%s\n' "$key" "$value" >> "$file"
+    fi
+}
+
+# N60 Pro is provisioned as the wired EasyMesh Root / Controller.
+set_value "$MAPD" DeviceRole 1
+set_value "$P1905" map_root 1
+set_value "$P1905" map_agent 0
+
 /etc/init.d/easymesh enable
 
 exit 0
