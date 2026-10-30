@@ -32,8 +32,13 @@ jobs:
           set -euo pipefail
           PKG="package/mtk/applications/easymesh-n60/files/usr/bin"
           for f in wapp mapd p1905_managerd; do
-            test -f "$PKG/$f" || { echo "::error::Missing packaged binary: $PKG/$f"; exit 1; }
+            test -x "$PKG/$f" || { echo "::error::Missing or non-executable packaged binary: $PKG/$f"; exit 1; }
           done
+          test -s "$PKG/wappctrl" || { echo "::error::Missing required wappctrl utility: $PKG/wappctrl"; exit 1; }
+          grep -Fq '$(INSTALL_BIN) ./files/usr/bin/wappctrl $(1)/usr/bin/' package/mtk/applications/easymesh-n60/Makefile || {
+            echo "::error::wappctrl is present but not installed by easymesh-n60."
+            exit 1
+          }
           ls -lh "$PKG"
 
       - name: Free disk space
