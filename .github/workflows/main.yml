@@ -116,9 +116,14 @@ jobs:
           make defconfig
 
           echo "===== MTK driver feature selection ====="
+          echo "Resolved MTK feature values after make defconfig:"
+          grep -E '^(CONFIG_MTK_(WIFI_MODE_AP|MT_AP_SUPPORT|BAND_STEERING|MBO_SUPPORT|MAP_SUPPORT)=|# CONFIG_MTK_(WIFI_MODE_AP|MT_AP_SUPPORT|BAND_STEERING|MBO_SUPPORT|MAP_SUPPORT) is not set)' .config || true
+
+          # AP mode and AP support are tristate symbols under the kmod-mt_wifi
+          # package menu, so the valid module value is m (not y).
           for option in \
-            CONFIG_MTK_WIFI_MODE_AP=y \
-            CONFIG_MTK_MT_AP_SUPPORT=y \
+            CONFIG_MTK_WIFI_MODE_AP=m \
+            CONFIG_MTK_MT_AP_SUPPORT=m \
             CONFIG_MTK_BAND_STEERING=y \
             CONFIG_MTK_MBO_SUPPORT=y \
             CONFIG_MTK_MAP_SUPPORT=y
@@ -128,7 +133,7 @@ jobs:
               exit 1
             fi
           done
-          echo "PASS: AP mode, Band Steering, MBO and MAP are enabled."
+          echo "PASS: AP module mode, Band Steering, MBO and MAP are enabled."
 
           echo "===== Save minimal Kconfig for audit ====="
           KCONFIG_CONFIG=.config ./scripts/config/conf --savedefconfig="artifacts/$DEVICE/$PROFILE/config.savedefconfig" Config.in
