@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=easymesh-n60
 PKG_VERSION:=7.6.7.3
-PKG_RELEASE:=5
+PKG_RELEASE:=6
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -40,7 +40,6 @@ endef
 define Package/easymesh-n60/install
 	$(INSTALL_DIR) $(1)/usr/bin $(1)/usr/sbin $(1)/usr/lib $(1)/etc $(1)/etc/map $(1)/etc/init.d $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/usr/bin/wapp $(1)/usr/bin/
-	$(INSTALL_BIN) ./files/usr/bin/wappctrl $(1)/usr/bin/
 	$(INSTALL_BIN) ./files/usr/bin/mapd $(1)/usr/bin/
 	$(INSTALL_BIN) ./files/usr/bin/p1905_managerd $(1)/usr/bin/
 	$(INSTALL_BIN) ./files/usr/bin/wapp-n60-wrapper $(1)/usr/bin/

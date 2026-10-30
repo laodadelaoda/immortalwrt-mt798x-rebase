@@ -1,40 +1,9 @@
-name: Build ImmortalWrt 25.12 (MT798x filogic)
+name: Build N60 Pro - ImmortalWrt 25.12 (Standard Only)
 
 on:
   push:
     branches: ["n60pro-mtk-closed-driver"]
   workflow_dispatch:
-    inputs:
-      device:
-        description: 'Target device'
-        required: true
-        default: 'netcore_n60-pro'
-        type: choice
-        options:
-          - netcore_n60-pro
-          - netcore_n60
-          - cudy_tr3000-v1
-          - cmcc_rax3000m
-          - xiaomi_redmi-router-ax6000-stock
-          - xiaomi_mi-router-ax3000t
-          - jdcloud_re-cp-03
-          - glinet_gl-mt3000
-          - bananapi_bpi-r3
-          - bananapi_bpi-r4
-      profile:
-        description: 'Config profile'
-        required: true
-        default: 'standard'
-        type: choice
-        options:
-          - standard
-          - minimal
-          - full
-      quick_wifi_only:
-        description: 'Quick WiFi only (skip full firmware)'
-        required: false
-        default: 'false'
-        type: boolean
 
 permissions:
   contents: read
@@ -48,8 +17,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
-      DEVICE: ${{ inputs.device || 'netcore_n60-pro' }}
-      PROFILE: ${{ inputs.profile || 'standard' }}
+      DEVICE: netcore_n60-pro
+      PROFILE: standard
 
     steps:
       - name: Checkout source
@@ -117,13 +86,7 @@ jobs:
           ccache --max-size=5G
           ccache --set-config=compiler_check=content
 
-          # 选择基础 config
-          case "$PROFILE" in
-            standard) BASE_CONFIG="config/n60pro-1001.config" ;;
-            minimal)  BASE_CONFIG="config/n60pro-minimal.config" ;;
-            full)     BASE_CONFIG="config/n60pro-full.config" ;;
-            *) echo "::error::Unknown profile: $PROFILE"; exit 1 ;;
-          esac
+          BASE_CONFIG="config/n60pro-1001.config"
 
           if [ ! -f "$BASE_CONFIG" ]; then
             echo "::error::Config not found: $BASE_CONFIG"
@@ -192,44 +155,24 @@ jobs:
           echo "===== Step 1: clean MT Wi-Fi package ====="
           make package/mtk/drivers/mt_wifi/clean V=s
 
-          echo "===== Step 2: remove 042~077, keep 001~041 + 091 + 093 + 094 ====="
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/042-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/050-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/051-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/052-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/053-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/054-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/055-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/057-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/058-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/059-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/060-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/061-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/062-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/063-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/064-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/065-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/066-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/067-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/068-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/069-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/070-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/071-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/072-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/073-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/074-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/075-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/076-*.patch
-          rm -f package/mtk/drivers/mt_wifi/patches-7673/077-*.patch
+          echo "===== Step 2: retain upstream driver baseline and N60 WNM fixes ====="
+          PATCH_DIR="package/mtk/drivers/mt_wifi/patches-7673"
+          for patch in \
+            094-fix-wnm-fortify.patch \
+            095-fix-wnm-fortify-rsp.patch \
+            096-wnm-fix-send-btm-req-fortify.patch
+          do
+            test -s "$PATCH_DIR/$patch" || { echo "::error::Missing required patch: $patch"; exit 1; }
+          done
 
           echo "===== Step 3: prepare mt_wifi ====="
           PREPARE_LOG="artifacts/$DEVICE/$PROFILE/mtwifi-prepare.log"
           make package/mtk/drivers/mt_wifi/prepare V=s 2>&1 | tee "$PREPARE_LOG"
 
           for patch in \
-            091-fix-gpl-license.patch \
-            093-debug-probe.patch \
-            094-fix-wnm-fortify.patch
+            094-fix-wnm-fortify.patch \
+            095-fix-wnm-fortify-rsp.patch \
+            096-wnm-fix-send-btm-req-fortify.patch
           do
             if ! grep -Fq "$patch" "$PREPARE_LOG"; then
               echo "::error::Prepare log does not show $patch being applied."
@@ -242,7 +185,7 @@ jobs:
             exit 1
           fi
 
-          echo "PASS: 091, 093, 094 applied."
+          echo "PASS: 094, 095, 096 applied."
 
           echo "===== Step 4: full build ====="
           BUILD_LOG="artifacts/$DEVICE/$PROFILE/FULL-BUILD-VS-LOG.txt"
