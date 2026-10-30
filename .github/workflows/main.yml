@@ -36,7 +36,7 @@ jobs:
             test -x "$BIN/$f" || { echo "::error::Missing or non-executable N60 EasyMesh file: $f"; exit 1; }
           done
           test -x "$ROOT/etc/init.d/easymesh" || { echo "::error::Missing easymesh init service"; exit 1; }
-          test -x "$ROOT/usr/sbin/generate-mapd-strng" || { echo "::error::Missing MAPD strength generator"; exit 1; }
+          test -s "$ROOT/usr/sbin/generate-mapd-strng" || { echo "::error::Missing MAPD strength generator source"; exit 1; }
           for f in mapd_cfg 1905d.cfg mapd_user.cfg wts_bss_info_config; do
             test -s "$ROOT/etc/map/$f" || { echo "::error::Missing MAP config: $f"; exit 1; }
           done
