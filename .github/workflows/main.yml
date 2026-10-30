@@ -110,6 +110,21 @@ jobs:
 
           make defconfig
 
+          echo "===== MTK driver feature selection ====="
+          for option in \
+            CONFIG_MTK_WIFI_MODE_AP=y \
+            CONFIG_MTK_MT_AP_SUPPORT=y \
+            CONFIG_MTK_BAND_STEERING=y \
+            CONFIG_MTK_MBO_SUPPORT=y \
+            CONFIG_MTK_MAP_SUPPORT=y
+          do
+            if ! grep -qx "$option" .config; then
+              echo "::error::Required MTK driver option missing after defconfig: $option"
+              exit 1
+            fi
+          done
+          echo "PASS: AP mode, Band Steering, MBO and MAP are enabled."
+
           echo "===== DEVICE 选择 ====="
           grep -E "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_${DEVICE}" .config || {
             echo "::error::Target device ${DEVICE} not selected after defconfig"
