@@ -144,19 +144,14 @@ jobs:
           cp .config "artifacts/$DEVICE/$PROFILE/config.buildinfo"
           echo "PASS: $DEVICE / $PROFILE config loaded."
 
-      - name: Download MTK closed-source packages
+      - name: Download required MTK package sources
         run: |
           mkdir -p dl
           REL="https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3"
           for f in \
             mt79xx_20250408-705eb4.tar.xz \
             mapfilter-96f2afed.tar.bz2 \
-            wappd-80ca5724.tar.bz2 \
-            mapd-6eca4331.tar.bz2 \
-            libmapd-0132d199.tar.bz2 \
-            1905daemon-35234223.tar.bz2 \
-            bndstrg_plus-8350508d.tar.bz2 \
-            fwdd-bcbae0e4.tar.bz2
+            wappd-80ca5724.tar.bz2
           do
             wget -q -P dl "$REL/$f" || { echo "::error::download $f failed"; exit 1; }
           done
