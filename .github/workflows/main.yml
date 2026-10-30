@@ -130,6 +130,14 @@ jobs:
           done
           echo "PASS: AP mode, Band Steering, MBO and MAP are enabled."
 
+          echo "===== Save minimal Kconfig for audit ====="
+          KCONFIG_CONFIG=.config ./scripts/config/conf --savedefconfig="artifacts/$DEVICE/$PROFILE/config.savedefconfig" Config.in
+          test -s "artifacts/$DEVICE/$PROFILE/config.savedefconfig" || {
+            echo "::error::Kconfig savedefconfig output is missing."
+            exit 1
+          }
+          echo "PASS: generated minimal Kconfig snapshot."
+
           echo "===== DEVICE 选择 ====="
           grep -E "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_${DEVICE}" .config || {
             echo "::error::Target device ${DEVICE} not selected after defconfig"
