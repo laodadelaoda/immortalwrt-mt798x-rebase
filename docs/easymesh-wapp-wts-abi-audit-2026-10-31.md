@@ -110,7 +110,7 @@ WAPP's DPP configurator startup path can read WTS when DPP configurator support 
 ## 5. WAPP interface registration and event transport
 
 - `wapp_get_wireless_interfaces()` reads `bss_config_priority` from MAP configuration. If non-empty, it treats the value as a static semicolon-separated interface list, validates each name with `SIOCGIWNAME`, obtains its MAC and creates a WAPP device. Only when the list is empty does it scan `/proc/net/dev` dynamically.
-- The current N60 configuration fixes `bss_config_priority=ra0;rax0;apclix0`; this is an N60 adapter setting, not generic interface discovery.
+- WAPP receives `/etc/map/mapd_cfg` via `-F`, where N60 fixes `bss_config_priority=ra0;rax0`. The separate P1905 `/etc/map/1905d.cfg` retains `bss_config_priority=ra0;rax0;apclix0`; these are distinct consumers and their lists must not be treated as interchangeable.
 - WAPP's binary user-interface server binds `/tmp/wapp_server`. MAPD's `wapp_usr_intf_ctrl_open("mapd", ...)` client binds an abstract-namespace local socket, connects to `/tmp/wapp_server`, and sends `ATTACH:mapd`.
 - MAPD registers event IDs with the binary `SET_REGITER_EVENT` command (type `0x01`). WAPP stores the event IDs in the client's registration bitmap; `send_event_dispatch()` uses that bitmap to deliver asynchronous events.
 - MAPD's event list includes `WAPP_MAP_RENEW`. `WAPP_WTS_CONFIG` is not an unsolicited registered event; it is the synchronous response to `WAPP_USER_GET_WTS_CONFIG`.
