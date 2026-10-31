@@ -58,19 +58,25 @@ log_msg "WAPP event socket and control socket ready: /tmp/wapp_server /tmp/wapp_
 
 # Verify both wireless interfaces are registered with WAPP before MAPD/P1905.
 # drv_version is a read-only WAPP control command.
-if ! /usr/bin/wappctrl ra0 drv_version >/dev/null 2>&1 ||
-   ! /usr/bin/wappctrl rax0 drv_version >/dev/null 2>&1; then
-    log_msg "ERROR: WAPP driver interface registration check failed"
+ra_version="$(/usr/bin/wappctrl ra0 drv_version 2>&1)" || {
+    log_msg "ERROR: WAPP driver registration check failed on ra0: $ra_version"
     killall wapp 2>/dev/null || true
     wait "$wapp_pid" 2>/dev/null || true
     exit 1
-fi
+}
+rax_version="$(/usr/bin/wappctrl rax0 drv_version 2>&1)" || {
+    log_msg "ERROR: WAPP driver registration check failed on rax0: $rax_version"
+    killall wapp 2>/dev/null || true
+    wait "$wapp_pid" 2>/dev/null || true
+    exit 1
+}
+log_msg "WAPP driver versions: ra0=$ra_version; rax0=$rax_version"
 
 # Apply the vendor WAPP MBO defaults on both radios. This is the same
 # v3.0.2.0 command used by the vendor startup reference; it is required for
 # the MBO/11v request path and is safe to run after WAPP's control socket exists.
-if ! /usr/bin/wappctrl ra0 mbo reset_default ||
-   ! /usr/bin/wappctrl rax0 mbo reset_default; then
+if ! /usr/bin/wappctrl ra0 mbo reset_default >/dev/null 2>&1 ||
+   ! /usr/bin/wappctrl rax0 mbo reset_default >/dev/null 2>&1; then
     log_msg "ERROR: WAPP MBO default initialization failed on ra0/rax0"
     killall wapp 2>/dev/null || true
     wait "$wapp_pid" 2>/dev/null || true
