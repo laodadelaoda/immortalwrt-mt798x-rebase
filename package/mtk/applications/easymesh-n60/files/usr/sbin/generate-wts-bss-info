@@ -2,6 +2,7 @@
 # Generate the MTK WTS BSS profile from the router's own N60 Pro DAT files.
 # Credentials remain on the router; no real SSID/PSK is stored in Git.
 set -eu
+umask 077
 LC_ALL=C
 export LC_ALL
 
@@ -29,7 +30,8 @@ dat_value() {
             value = substr($0, index($0, "=") + 1)
             sub(/\r$/, "", value)
             split(value, parts, ";")
-            gsub(/^["'\''"]|["'\''"]$/, "", parts[1])
+            gsub(/^"/, "", parts[1])
+            gsub(/"$/, "", parts[1])
             print parts[1]
             exit
         }
@@ -55,10 +57,17 @@ read_radio() {
 
     [ -r "$file" ] || die "$label DAT file is missing: $file"
 
+    bssid_num="$(first_dat_value "$file" BssidNum || true)"
+    if [ -n "$bssid_num" ] && [ "$bssid_num" != "1" ]; then
+        die "$label DAT BssidNum is $bssid_num; this generator only maps the single active N60 BSS"
+    fi
+
     ssid="$(first_dat_value "$file" SSID1 SSID)" ||
         die "$label DAT has no SSID1/SSID"
     auth="$(first_dat_value "$file" AuthMode)" ||
         die "$label DAT has no AuthMode"
+    rrm="$(first_dat_value "$file" RRMEnable)" ||
+        die "$label DAT has no RRMEnable"
     cipher="$(first_dat_value "$file" EncrypType)" ||
         die "$label DAT has no EncrypType"
     key="$(first_dat_value "$file" WPAPSK1 WPAPSK)" ||
@@ -66,6 +75,8 @@ read_radio() {
     hidden="$(first_dat_value "$file" HideSSID1 HideSSID)" ||
         die "$label DAT has no HideSSID1/HideSSID"
 
+    [ "$rrm" = "1" ] ||
+        die "$label RRMEnable must be 1 for 802.11k; refusing to start with RRM disabled"
     [ "$auth" = "WPA2PSK" ] ||
         die "$label AuthMode must be WPA2PSK; refusing to guess a WTS auth value"
     [ "$cipher" = "AES" ] ||
@@ -116,7 +127,8 @@ hidden5="$(printf '%s\n' "$radio5" | sed -n '3p')"
 
 {
     printf '#ucc_bss_info\n'
-    # BSSID ff:ff:ff:ff:ff:ff is the vendor WTS wildcard used for profiles.
+    # Vendor WTS syntax: index, wildcard BSSID, operating class, SSID,
+    # auth/encryption/key, BH/FH flags, hidden flag, then VLAN fields.
     # AuthMode 0x0020 = WPA2-PSK; EncrypType 0x0008 = AES.
     # 1 1 = Backhaul + Fronthaul; 4095 N/A N/A = no VLAN override.
     printf '1,ff:ff:ff:ff:ff:ff 8x %s 0x0020 0x0008 %s 1 1 hidden-%s 4095 N/A N/A\n' "$ssid24" "$key24" "$hidden24"
