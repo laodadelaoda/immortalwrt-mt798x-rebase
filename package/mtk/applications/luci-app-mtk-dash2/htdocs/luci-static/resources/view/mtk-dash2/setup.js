@@ -14,7 +14,7 @@ var reloadSvc = rpc.declare({ object: 'map-easymesh', method: 'reload' });
 var getWappDiag = rpc.declare({ object: 'map-easymesh', method: 'wapp_diag' });
 var enableWapp = rpc.declare({ object: 'map-easymesh', method: 'wapp_enable' });
 
-var ROLE_OPTS = [['1', _('Controller / Root（控制器 / 根节点）']]];
+var ROLE_OPTS = [['1', _('Controller / Root（控制器 / 根节点）')]];
 var AUTH_OPTS = [
 	['OPEN', 'OPEN'],
 	['WPAPSK', 'WPAPSK'],
