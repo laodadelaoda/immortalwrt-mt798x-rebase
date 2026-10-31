@@ -92,10 +92,13 @@ read_radio() {
     esac
 
     case "$ssid" in
-        ""|*[! -~]*|*[[:space:]]*|*,*|*";"*)
+        ""|*[[:space:]]*|*,*|*';'*)
             die "$label SSID is empty or cannot be represented safely in WTS"
             ;;
     esac
+    if printf '%s' "$ssid" | grep -q '[^ -~]'; then
+        die "$label SSID contains non-printable or non-ASCII bytes"
+    fi
     [ "${#ssid}" -le 32 ] || die "$label SSID exceeds 32 bytes"
 
     case "$key" in
