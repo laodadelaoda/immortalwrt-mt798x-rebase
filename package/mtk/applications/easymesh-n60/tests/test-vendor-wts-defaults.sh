@@ -5,6 +5,7 @@ ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 WTS="$ROOT/files/etc/map/wts_bss_info_config"
 INIT="$ROOT/files/etc/init.d/easymesh"
 WRAPPER="$ROOT/files/usr/bin/wapp-n60-wrapper"
+DIAG="$ROOT/files/usr/sbin/easymesh-n60-diagnose"
 MAKEFILE="$ROOT/Makefile"
 
 EXPECTED="$(mktemp)"
@@ -40,9 +41,16 @@ grep -Fq 'Multi-AP-5HG-2' "$WTS"
 ! grep -Eq '(^| )13x |Multi-AP-6G-' "$WTS"
 ! grep -Eq '(^| )13x |Multi-AP-6G-' "$WRAPPER"
 
+# WAPP must preserve its own startup output for diagnosing failures hidden by procd.
+grep -Fq 'WAPP_LOG=/tmp/wapp-n60-startup.log' "$WRAPPER"
+grep -Fq 'umask 077' "$WRAPPER"
+grep -Fq '>>"$WAPP_LOG" 2>&1 &' "$WRAPPER"
+grep -Fq 'WAPP startup log (credentials redacted)' "$DIAG"
+grep -Fq 'tail -n 120 "$WAPP_LOG"' "$DIAG"
+
 if grep -Fq 'generate-wts-bss-info' "$INIT" "$WRAPPER" "$MAKEFILE"; then
     echo "FAIL: runtime WTS/SSID generator is still wired into the package" >&2
     exit 1
 fi
 
-echo "PASS: original 12 vendor N60 dual-band WTS profiles validated by init and WAPP wrapper"
+echo "PASS: original 12 vendor N60 dual-band WTS profiles and WAPP startup-log privacy checks"
