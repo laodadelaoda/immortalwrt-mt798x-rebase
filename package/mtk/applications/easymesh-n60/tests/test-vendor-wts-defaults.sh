@@ -23,7 +23,6 @@ cat > "$EXPECTED" <<'EOF'
 10,ff:ff:ff:ff:ff:ff 12x Multi-AP-5HG-2 0x0060 0x0008 maprocks2 0 1 hidden-N 4095 N/A N/A
 11,ff:ff:ff:ff:ff:ff 12x Multi-AP-5HG-3 0x0060 0x0008 maprocks3 0 1 hidden-N 4095 N/A N/A
 12,ff:ff:ff:ff:ff:ff 12x Multi-AP-5HG-4 0x0060 0x0008 maprocks4 0 1 hidden-N 4095 N/A N/A
-
 EOF
 
 cmp -s "$EXPECTED" "$WTS" || {
