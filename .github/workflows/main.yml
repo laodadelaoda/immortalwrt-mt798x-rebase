@@ -32,7 +32,7 @@ jobs:
           set -euo pipefail
           ROOT="package/mtk/applications/easymesh-n60/files"
           BIN="$ROOT/usr/bin"
-          for f in wapp mapd p1905_managerd wapp-n60-wrapper; do
+          for f in wapp mapd p1905_managerd wapp-n60-wrapper wappctrl; do
             test -x "$BIN/$f" || { echo "::error::Missing or non-executable N60 EasyMesh file: $f"; exit 1; }
           done
 
@@ -124,6 +124,10 @@ jobs:
               exit 1
             }
           done
+          strings -a "$BIN/wapp" | grep -Fq 'reset_default' || {
+            echo "::error::WAPP is missing the MBO reset-default handler."
+            exit 1
+          }
           for symbol in STEER_FSM "BTM Success" "BTM Fail" "topo_srv_handle_topology_event" steer_fsm_trigger chan_mon_handle_steering_req parse_client_steering_btm_report_message; do
             strings -a "$BIN/mapd" | grep -Fq "$symbol" || {
               echo "::error::MAPD is missing required steering/topology path: $symbol"
@@ -137,7 +141,7 @@ jobs:
             }
           done
           if test -s "$BIN/wappctrl"; then
-            for symbol in btmreq /tmp/wapp_ctrl EVENT_REGISTER; do
+            for symbol in btmreq drv_version /tmp/wapp_ctrl EVENT_REGISTER "mbo cmd [arg1] [arg2]"; do
               strings -a "$BIN/wappctrl" | grep -Fq "$symbol" || {
                 echo "::error::wappctrl is missing required BTM/event diagnostic command: $symbol"
                 exit 1
