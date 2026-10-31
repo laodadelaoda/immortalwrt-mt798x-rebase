@@ -32,6 +32,14 @@ jobs:
           tar -xjf wappd-80ca5724.tar.bz2 -C source
           echo "===== EXTRACTED FILE COUNT ====="
           find source -type f | wc -l
+          mkdir -p binaries
+          for name in wapp mapd p1905_managerd; do
+            cp "$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/files/usr/bin/$name" "binaries/$name"
+            file "binaries/$name"
+            readelf -h "binaries/$name" | grep -E "Class:|Machine:" || true
+            echo "===== STRINGS: $name ====="
+            strings -a "binaries/$name" | grep -iE "WAPP_USER_GET_WTS_CONFIG|WAPP_WTS_CONFIG|wts_bss_info_config|wapp_read_wts_map_config|EVENT_REGISTER|/tmp/wapp_server|map_handler" | head -100 || true
+          done
 
       - name: Audit WTS parser, events, interface registration and WTS writers
         shell: bash
@@ -65,28 +73,37 @@ jobs:
                   if count >= 180: break
               print("MATCHES PRINTED:", count)
           print("\n===== COMPLETE WTS PARSER FUNCTION =====")
-          found = False
-          for p in files:
-              try: s = p.read_text(errors="replace")
-              except Exception: continue
-              m = re.search(r"\\b(?:static\\s+)?(?:int|void|BOOLEAN|bool|CHAR\\s*\\*)\\s+wapp_read_wts_map_config\\s*\\([^;]*?\\)\\s*\\{", s, re.S)
-              if not m: continue
-              start = m.start()
-              brace = s.find("{", m.start())
+          def print_function(filename, signature, label):
+              p = root / filename
+              s = p.read_text(errors="replace")
+              start = s.index(signature)
+              brace = s.index("{", start)
               depth = 0
-              end = brace
               for i in range(brace, len(s)):
                   if s[i] == "{": depth += 1
                   elif s[i] == "}":
                       depth -= 1
                       if depth == 0:
-                          end = i + 1
-                          break
-              print("FILE:", p)
-              print(s[start:min(end, start+30000)])
-              found = True
-              break
-          if not found: print("Parser function definition not found by C signature matcher; inspect occurrence list above.")
+                          print("\\n===== " + label + " (" + filename + ") =====")
+                          print(s[start:i+1])
+                          return
+              raise RuntimeError("unterminated function " + signature)
+          print_function("wappd/common/main.c", "int wapp_read_wts_map_config(", "WTS PARSER")
+          print_function("wappd/common/wdev.c", "void wdev_wps_configuration_handle(", "WTS WRITER")
+          print_function("wappd/map/map_1905.c", "int map_handle_get_wts_config(", "WTS GET EVENT")
+          print_function("wappd/map/map_1905.c", "int map_build_wts_config(", "WTS EVENT BUILDER")
+          print_function("wappd/wapp_usr_intf/wapp_usr_intf.c", "int wapp_iface_process(", "USER SOCKET COMMAND DISPATCH")
+          print_function("wappd/wapp_usr_intf/wapp_usr_intf.c", "void send_event_dispatch(", "USER EVENT DISPATCH")
+          print("\\n===== WPS EVENT ROUTING =====")
+          p = root / "wappd/common/wapp_cmm.c"
+          lines = p.read_text(errors="replace").splitlines()
+          for n in range(1498, 1523):
+              print(f"{p}:{n+1}:{lines[n]}")
+          print("\\n===== WAPP STARTUP / INTERFACE INIT REFERENCES =====")
+          for p in files:
+              for n,line in enumerate(p.read_text(errors="replace").splitlines(),1):
+                  if "wapp_iface_init(wapp)" in line or "wapp_get_wireless_interfaces(wapp)" in line:
+                      print(f"{p}:{n}:{line}")
           PY
 
       - name: Upload verified source archive and audit inventory
@@ -96,5 +113,6 @@ jobs:
           path: |
             ${{ runner.temp }}/wapp-audit/wappd-80ca5724.tar.bz2
             ${{ runner.temp }}/wapp-audit/archive-files.txt
+            ${{ runner.temp }}/wapp-audit/binaries/*
           if-no-files-found: error
           retention-days: 7
