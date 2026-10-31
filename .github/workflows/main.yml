@@ -58,8 +58,12 @@ jobs:
             echo "::error::Fixed ALID must not be configured on N60 Pro."
             exit 1
           fi
+          if ! grep -Eq '^[0-9]+,' "$ROOT/etc/map/wts_bss_info_config"; then
+            echo "::error::WTS BSS config has no BSS profiles. Add N60 runtime BSS settings before building a flashable firmware."
+            exit 1
+          fi
           if grep -Eiq 'maprocks[0-9]+' "$ROOT/etc/map/wts_bss_info_config"; then
-            echo "::error::WTS BSS config still contains vendor test SSIDs. Replace it with N60 runtime BSS settings before building a flashable firmware."
+            echo "::error::WTS BSS config still contains vendor test SSIDs."
             exit 1
           fi
           if test -s "$BIN/wappctrl"; then
