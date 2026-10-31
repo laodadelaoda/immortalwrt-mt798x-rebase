@@ -67,7 +67,7 @@ section "Recent EasyMesh / 11k / 11v events (credentials redacted)"
 if command -v logread >/dev/null 2>&1; then
     logread -l 400 2>/dev/null |
         grep -iE 'wapp|p1905|mapd|wts|bss|topology|btm|rrm|steer|mbo|neighbor' |
-        sed -E 's/(key=)[^ ,;]+/\1<redacted>/Ig; s/(WPAKey[=:])[^	 ,;]+/\1<redacted>/Ig; s/(WPAPSK[0-9]*=)[^	 ;]+/\1<redacted>/Ig' |
+        sed -r 's/(key=)[^ ,;]+/\1<redacted>/Ig; s/(WPAKey[=:])[^	 ,;]+/\1<redacted>/Ig; s/(WPAPSK[0-9]*=)[^	 ;]+/\1<redacted>/Ig' |
         tail -n 160 || true
 else
     echo "logread unavailable"
