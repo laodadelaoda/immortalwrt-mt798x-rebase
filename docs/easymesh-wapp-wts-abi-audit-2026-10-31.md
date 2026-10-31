@@ -152,15 +152,39 @@ P1905 loads WTS during initialization. An empty file can produce a zero-entry co
 
 ## 7. Decision for the N60 repository
 
-The current repository template contains only `#ucc_bss_info`. WAPP does not generate the initial local BSS profile set. Its normal path reads WTS; its WPS path only rewrites an existing record; the optional DPP/UCC Lua path requires externally supplied provisioning data and is not installed in this package.
+The N60 package restores the original vendor `wts_bss_info_config` from the
+earlier N60 EasyMesh defaults. It contains 16 fixed vendor test records:
+`Multi-AP-*` SSIDs and `maprocks1` through `maprocks4` test keys, covering
+the vendor `8x`, `11x`, `12x` and `13x` operating-class groups. These are
+intentional vendor test profiles, not the live router's SSID/PSK credentials.
 
-Therefore:
+The N60 Pro hardware remains dual-band only. Restoring the original vendor
+profile set does not add a 6 GHz PHY and does not change the actual radio
+inventory in `1905d.cfg` (`24G;5GL;5GH;`). The 6 GHz entries are retained as
+part of the requested vendor test defaults; they must not be interpreted as
+evidence that N60 can transmit on 6 GHz.
 
-1. Keep the fail-closed CI check. Do not allow an empty WTS template to pass merely to make the firmware build green.
-2. Add a generic runtime WTS generator and validator, with MTK-specific radio/interface discovery isolated in an adapter. The generator must read live UCI/runtime state, not commit SSIDs, keys or BSSIDs.
-3. Run generation and validation after wireless interfaces are ready but before WAPP's DPP configurator can read WTS and before P1905 starts.
-4. Write to a temporary file, validate every record and required radio group, then atomically rename it into place. Any failure must block P1905/MAPD startup.
-5. Fix or replace the upstream WPS writer behavior (or deliberately disable that path if WPS provisioning is not used); otherwise it can rewrite roles/opclasses and truncate the WTS file non-atomically.
-6. Preserve matching WAPP/MAPD/P1905 compile-time MAP 6E settings. For N60, the target config has MAP 6E disabled.
+There is no runtime WTS/SSID generator in the package. The init service
+validates that the fixed WTS file exists and contains all 16 records, then
+starts WAPP and P1905 with that same file. The WAPP wrapper repeats the
+profile-count and vendor-profile checks before launching WAPP. The package
+Makefile does not install a WTS generator, and CI byte-compares the checked-in
+file against the complete expected vendor profile set.
 
-The current CI preflight correctly rejects the missing runtime generator. The remaining implementation blocker is not the WAPP parser: it is the absence of a tested runtime generator/validator and the unsafe WPS record updater. Do not rerun the full firmware build until those files and synthetic tests are committed.
+The WAPP WPS configuration event handler remains an upstream record updater,
+not a startup generator. It can rewrite an existing record after a WPS
+configuration event; it is not invoked by the N60 startup path. Its existing
+limitations (record-index assumptions, role/opclass rewriting and
+non-atomic file update) remain relevant if WPS provisioning is later enabled.
+
+The acceptance boundary is:
+
+1. Preserve the exact vendor WTS test profile set as a static package default.
+2. Do not generate WTS from DAT values or copy the live router's credentials
+   into the repository or WTS file at boot.
+3. Keep the N60 hardware declaration dual-band; do not infer a 6 GHz radio from
+   the vendor's generic test profile records.
+4. Validate the WTS file's exact contents in CI before firmware compilation.
+5. On the router, confirm P1905 actually parses the vendor WTS records and
+   proceeds to topology discovery. A successful static check alone does not
+   prove runtime interoperability.
