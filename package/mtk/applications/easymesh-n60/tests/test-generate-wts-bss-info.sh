@@ -9,6 +9,7 @@ cat > "$TMPDIR_TEST/2g.dat" <<'EOF'
 BssidNum=1
 SSID1=n60-test-24
 AuthMode=WPA2PSK
+RRMEnable=1
 EncrypType=AES
 WPAPSK1=TestKey24G
 HideSSID=0
@@ -18,6 +19,7 @@ cat > "$TMPDIR_TEST/5g.dat" <<'EOF'
 BssidNum=1
 SSID1=n60-test-5g
 AuthMode=WPA2PSK
+RRMEnable=1
 EncrypType=AES
 WPAPSK1=TestKey5GHz
 HideSSID=1
@@ -37,7 +39,8 @@ grep -qx '3,ff:ff:ff:ff:ff:ff 12x n60-test-5g 0x0020 0x0008 TestKey5GHz 1 1 hidd
 ! grep -Eiq 'maprocks|Multi-AP-|13x|6G' "$WTS"
 test "$(stat -c '%a' "$WTS")" = 600
 
-# Unsupported security profiles must fail closed and must not replace output.
+# Unsupported auth modes and disabled 11k RRM must fail closed and preserve
+# the previously generated file without printing or committing real secrets.
 cp "$WTS" "$TMPDIR_TEST/wts.before"
 sed -i 's/AuthMode=WPA2PSK/AuthMode=SAE/' "$TMPDIR_TEST/5g.dat"
 if N60_WTS_DAT_24G="$TMPDIR_TEST/2g.dat" \
@@ -48,4 +51,13 @@ if N60_WTS_DAT_24G="$TMPDIR_TEST/2g.dat" \
 fi
 cmp -s "$TMPDIR_TEST/wts.before" "$WTS"
 
-echo "PASS: WTS generation, field mapping, privacy and fail-closed tests"
+sed -i 's/AuthMode=SAE/AuthMode=WPA2PSK/; s/RRMEnable=1/RRMEnable=0/' "$TMPDIR_TEST/5g.dat"
+if N60_WTS_DAT_24G="$TMPDIR_TEST/2g.dat" \
+   N60_WTS_DAT_5G="$TMPDIR_TEST/5g.dat" \
+   N60_WTS_OUTPUT="$WTS" sh "$GEN" 2>/dev/null; then
+    echo "FAIL: RRMEnable=0 was accepted" >&2
+    exit 1
+fi
+cmp -s "$TMPDIR_TEST/wts.before" "$WTS"
+
+echo "PASS: WTS generation, 11k gate, field mapping, privacy and fail-closed tests"
