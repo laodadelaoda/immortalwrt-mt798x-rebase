@@ -1,7 +1,6 @@
 #!/bin/sh
-# N60 Pro adaptation of MediaTek's wapp_openwrt.sh startup model.
-# Keep the existing ra0/rax0 configuration intact; do not regenerate it
-# from l1dat, overwrite wapp_ap.conf, or remove /tmp/wapp* files.
+# N60 Pro adaptation of MediaTek's WAPP startup model.
+# WAPP is not considered ready until its expected control socket exists.
 
 LOG_TAG="wapp-n60"
 
@@ -9,7 +8,6 @@ log_msg() {
     logger -t "$LOG_TAG" "$*"
 }
 
-# A single WAPP instance is intended for the two N60 Pro radio interfaces.
 killall wapp 2>/dev/null || true
 sleep 2
 
@@ -27,13 +25,41 @@ if [ ! -s /etc/wapp_ap.conf ] ||
     exit 1
 fi
 
-log_msg "Starting WAPP for ra0 and rax0"
-# Run in the foreground first. If this WAPP build daemonizes and returns,
-# keep this wrapper alive while its WAPP process(es) remain, so procd tracks
-# the actual service lifetime instead of restarting a short-lived parent.
-/usr/bin/wapp -m OPMODE_AP -i RA_WEXT -d 1 -v 2 -f /etc/wapp_ap.conf -F /etc/map/mapd_cfg -u /etc/map/mapd_user.cfg -e br-lan -w br-lan -c ra0 -c rax0
-wapp_rc=$?
+if [ ! -s /etc/map/wts_bss_info_config ] ||
+   ! grep -qx '#ucc_bss_info' /etc/map/wts_bss_info_config ||
+   [ "$(grep -c '^[1-3],ff:ff:ff:ff:ff:ff ' /etc/map/wts_bss_info_config)" -ne 3 ]; then
+    log_msg "ERROR: runtime WTS does not contain the three N60 Pro BSS profiles"
+    exit 1
+fi
 
+log_msg "Starting WAPP for ra0 and rax0"
+/usr/bin/wapp -m OPMODE_AP -i RA_WEXT -d 1 -v 2 -f /etc/wapp_ap.conf -F /etc/map/mapd_cfg -u /etc/map/mapd_user.cfg -e br-lan -w br-lan -c ra0 -c rax0 &
+wapp_pid=$!
+
+# WAPP's own control/event endpoint is /tmp/wapp_server. A live PID alone
+# does not prove interface registration or event-dispatch initialization.
+waited=0
+while [ ! -S /tmp/wapp_server ] && [ "$waited" -lt 30 ]; do
+    if ! kill -0 "$wapp_pid" 2>/dev/null && ! pidof wapp >/dev/null 2>&1; then
+        break
+    fi
+    sleep 1
+    waited=$((waited + 1))
+done
+
+if [ ! -S /tmp/wapp_server ]; then
+    log_msg "ERROR: WAPP did not create /tmp/wapp_server within 30 seconds"
+    killall wapp 2>/dev/null || true
+    wait "$wapp_pid" 2>/dev/null || true
+    exit 1
+fi
+
+log_msg "WAPP control/event socket ready: /tmp/wapp_server"
+
+wapp_rc=0
+wait "$wapp_pid" || wapp_rc=$?
+# Some vendor builds daemonize after the parent exits; keep procd attached
+# until the complete WAPP process set exits.
 while pidof wapp >/dev/null 2>&1; do
     sleep 2
 done
