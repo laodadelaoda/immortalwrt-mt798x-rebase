@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=easymesh-n60
 PKG_VERSION:=7.6.7.3
-PKG_RELEASE:=9
+PKG_RELEASE:=10
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -47,7 +47,6 @@ define Package/easymesh-n60/install
 	$(INSTALL_BIN) ./files/usr/bin/p1905_managerd $(1)/usr/bin/
 	$(INSTALL_BIN) ./files/usr/bin/wapp-n60-wrapper $(1)/usr/bin/
 	$(INSTALL_BIN) ./files/usr/sbin/generate-mapd-strng $(1)/usr/sbin/
-	$(INSTALL_BIN) ./files/usr/sbin/generate-wts-bss-info $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/usr/sbin/easymesh-n60-diagnose $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/usr/lib/libeth_1905ops.so $(1)/usr/lib/
 	$(INSTALL_BIN) ./files/usr/lib/libmapd_interface_client.so $(1)/usr/lib/
