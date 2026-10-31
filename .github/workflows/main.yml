@@ -81,6 +81,21 @@ jobs:
           grep -qx 'radio_band=24G;5GL;5GH;' "$ROOT/etc/map/1905d.cfg"
           grep -qx 'al_inf=rax0' "$ROOT/etc/map/1905d.cfg"
           grep -qx 'bss_config_priority=ra0;rax0;apclix0' "$ROOT/etc/map/1905d.cfg"
+
+          # Verify mtwifi-cfg writes the actual UCI BSS security/SSID and 11k
+          # setting into the local DAT profile before it brings AP VIFs up.
+          MTWIFI_CFG="package/mtk/applications/mtwifi-cfg/files/mtwifi-cfg/mtwifi_cfg"
+          for source_contract in \
+            'set_idx_dat(dats, apidx, "SSID", v.config.ssid)' \
+            'set_idx_dat(dats, apidx, "WPAPSK", v.config.key or "")' \
+            'set_dat(dats, apidx, "RRMEnable", v.config.ieee80211k)' \
+            'save_profile(dats, profile)'
+          do
+            grep -Fq "$source_contract" "$MTWIFI_CFG" || {
+              echo "::error::mtwifi-cfg no longer writes required runtime DAT field: $source_contract"
+              exit 1
+            }
+          done
           if grep -Eq '^map_(controller|agent)_alid=' "$ROOT/etc/map/1905d.cfg"; then
             echo "::error::Fixed ALID must not be configured on N60 Pro."
             exit 1
