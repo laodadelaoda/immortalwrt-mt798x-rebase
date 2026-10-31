@@ -102,8 +102,11 @@ read_radio() {
     [ "${#ssid}" -le 32 ] || die "$label SSID exceeds 32 bytes"
 
     case "$key" in
-        *[! -~]*|*[[:space:]]*) die "$label PSK contains unsupported characters" ;;
+        *[[:space:]]*) die "$label PSK contains unsupported characters" ;;
     esac
+    if printf '%s' "$key" | grep -q '[^ -~]'; then
+        die "$label PSK contains non-printable or non-ASCII bytes"
+    fi
     key_len="${#key}"
     if [ "$key_len" -lt 8 ] || [ "$key_len" -gt 64 ]; then
         die "$label PSK length must be 8..63 ASCII or 64 hexadecimal characters"
