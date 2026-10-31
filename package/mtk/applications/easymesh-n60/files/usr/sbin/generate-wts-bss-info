@@ -114,6 +114,17 @@ read_radio() {
     printf '%s\n%s\n%s\n' "$ssid" "$key" "$hidden_flag"
 }
 
+read_live_ssid() {
+    iface="$1"
+    info="$(iwconfig "$iface" 2>/dev/null)" ||
+        die "cannot read live wireless state for $iface"
+    printf '%s\n' "$info" | grep -q 'Mode:Master' ||
+        die "$iface is not in AP Master mode"
+    live_ssid="$(printf '%s\n' "$info" | sed -n 's/.*ESSID:"\\([^"]*\\)".*/\\1/p' | sed -n '1p')"
+    [ -n "$live_ssid" ] || die "$iface has no active SSID"
+    printf '%s\n' "$live_ssid"
+}
+
 mkdir -p "$(dirname "$OUTPUT")"
 
 # N60 Pro has one 2.4 GHz radio and one 5 GHz radio, and has no 6 GHz PHY.
@@ -128,6 +139,12 @@ hidden24="$(printf '%s\n' "$radio24" | sed -n '3p')"
 ssid5="$(printf '%s\n' "$radio5" | sed -n '1p')"
 key5="$(printf '%s\n' "$radio5" | sed -n '2p')"
 hidden5="$(printf '%s\n' "$radio5" | sed -n '3p')"
+
+# Do not publish a profile from a DAT file that does not match the live AP.
+live24="$(read_live_ssid ra0)"
+live5="$(read_live_ssid rax0)"
+[ "$live24" = "$ssid24" ] || die "ra0 live SSID does not match its DAT profile"
+[ "$live5" = "$ssid5" ] || die "rax0 live SSID does not match its DAT profile"
 
 {
     printf '#ucc_bss_info\n'
