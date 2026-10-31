@@ -126,12 +126,10 @@ jobs:
               exit 1
             }
           done
-          for symbol in mbo_default_assoc_retry_delay mbo_ap_transition_reason_code; do
-            strings -a "$BIN/wapp" | grep -Fq "$symbol" || {
-              echo "::error::WAPP is missing MBO default parameter support: $symbol"
-              exit 1
-            }
-          done
+          strings -a "$BIN/wapp" | grep -Fq 'mbo_default_assoc_retry_delay' || {
+            echo "::error::WAPP is missing MBO default retry-delay support."
+            exit 1
+          }
           for symbol in STEER_FSM "BTM Success" "BTM Fail" "topo_srv_handle_topology_event" steer_fsm_trigger chan_mon_handle_steering_req parse_client_steering_btm_report_message; do
             strings -a "$BIN/mapd" | grep -Fq "$symbol" || {
               echo "::error::MAPD is missing required steering/topology path: $symbol"
@@ -145,7 +143,7 @@ jobs:
             }
           done
           if test -s "$BIN/wappctrl"; then
-            for symbol in btmreq drv_version wapp_cli_cmd_btmreq wapp_cli_cmd_drv_version /tmp/wapp_ctrl EVENT_REGISTER "mbo cmd [arg1] [arg2]"; do
+            for symbol in btmreq drv_version wapp_cli_cmd_btmreq wapp_cli_cmd_drv_version /tmp/wapp_ctrl EVENT_REGISTER "mbo cmd [arg1] [arg2]" mbo_ap_transition_reason_code; do
               strings -a "$BIN/wappctrl" | grep -Fq "$symbol" || {
                 echo "::error::wappctrl is missing required BTM/event diagnostic command: $symbol"
                 exit 1
