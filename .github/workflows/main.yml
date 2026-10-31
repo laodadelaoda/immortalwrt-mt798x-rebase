@@ -61,12 +61,15 @@ jobs:
           }
           test -x "$ROOT/etc/init.d/easymesh" || { echo "::error::Missing easymesh init service"; exit 1; }
           test -s "$ROOT/usr/sbin/generate-mapd-strng" || { echo "::error::Missing MAPD strength generator source"; exit 1; }
+          test -x "$ROOT/usr/sbin/generate-wts-bss-info" || { echo "::error::Missing executable runtime WTS generator"; exit 1; }
+          test -s "package/mtk/applications/easymesh-n60/tests/test-generate-wts-bss-info.sh" || { echo "::error::Missing WTS generator regression test"; exit 1; }
           for f in mapd_cfg 1905d.cfg mapd_user.cfg wts_bss_info_config; do
             test -s "$ROOT/etc/map/$f" || { echo "::error::Missing MAP config: $f"; exit 1; }
           done
-          for f in "$ROOT/etc/init.d/easymesh" "$ROOT/etc/uci-defaults/1001-easymesh-n60" "$BIN/wapp-n60-wrapper" "$ROOT/usr/sbin/generate-mapd-strng"; do
+          for f in "$ROOT/etc/init.d/easymesh" "$ROOT/etc/uci-defaults/1001-easymesh-n60" "$BIN/wapp-n60-wrapper" "$ROOT/usr/sbin/generate-mapd-strng" "$ROOT/usr/sbin/generate-wts-bss-info" "package/mtk/applications/easymesh-n60/tests/test-generate-wts-bss-info.sh"; do
             sh -n "$f"
           done
+          sh "package/mtk/applications/easymesh-n60/tests/test-generate-wts-bss-info.sh"
           for f in package/mtk/applications/luci-app-mtk-dash2/htdocs/luci-static/resources/view/mtk-dash2/map.js package/mtk/applications/luci-app-mtk-dash2/htdocs/luci-static/resources/view/mtk-dash2/setup.js package/mtk/applications/luci-app-mtk-dash2/htdocs/luci-static/resources/view/mtk-dash2/wireless.js; do
             node --check "$f"
           done
@@ -82,18 +85,42 @@ jobs:
             echo "::error::Fixed ALID must not be configured on N60 Pro."
             exit 1
           fi
-          # WTS initialization is sourced from this package's static config file.
-          # Keep the required header and reject only known vendor test SSIDs.
-          # Do not require separate runtime generator/validator executables.
+          # Git stores only the WTS header. Runtime credentials are generated
+          # locally from the two N60 DAT files and must never enter the repository.
           WTS="$ROOT/etc/map/wts_bss_info_config"
           if ! grep -qx '#ucc_bss_info' "$WTS"; then
-            echo "::error::WTS config must contain the exact #ucc_bss_info marker."
+            echo "::error::WTS template must contain the exact #ucc_bss_info marker."
             exit 1
           fi
-          if grep -Eiq 'maprocks[0-9]*' "$WTS"; then
-            echo "::error::Vendor test SSID found in WTS config."
+          if grep -Ev '^(#|[[:space:]]*$)' "$WTS" | grep -q .; then
+            echo "::error::Static WTS records are forbidden; runtime generator owns real BSS values."
             exit 1
           fi
+          if grep -Eiq 'maprocks[0-9]*|Multi-AP-' "$WTS"; then
+            echo "::error::Vendor test SSID found in WTS template."
+            exit 1
+          fi
+
+          # Static binary audit: the shipped 7.6.7.3 daemons must contain the
+          # WAPP event/socket, 11k/11v, MAP steering and P1905 topology paths.
+          for symbol in wapp_socket_and_ctrl_inf_init wapp_ctrl_iface_event_register /tmp/wapp_server driver_rrm_onoff driver_wnm_btm_onoff wapp_send_btm_req_11kv_api event_btm_query event_neighbor_report_pool_update; do
+            strings -a "$BIN/wapp" | grep -Fq "$symbol" || {
+              echo "::error::WAPP is missing required runtime path: $symbol"
+              exit 1
+            }
+          done
+          for symbol in STEER_FSM "BTM Success" "BTM Fail" "topo_srv_handle_topology_event" "map_trigger_btm_req"; do
+            strings -a "$BIN/mapd" | grep -Fq "$symbol" || {
+              echo "::error::MAPD is missing required steering/topology path: $symbol"
+              exit 1
+            }
+          done
+          for symbol in "read wts_bss_info_config to ctx->bss_config" "send topology discovery data" "Topology Discovery"; do
+            strings -a "$BIN/p1905_managerd" | grep -Fq "$symbol" || {
+              echo "::error::P1905 is missing required WTS/topology path: $symbol"
+              exit 1
+            }
+          done
           if test -s "$BIN/wappctrl"; then
             echo "Optional diagnostic helper present: wappctrl"
           else
