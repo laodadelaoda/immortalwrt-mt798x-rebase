@@ -31,10 +31,12 @@ start_service() {
         return 1
     fi
 
-    # Generate real local profiles before either WAPP or P1905 reads WTS.
-    # The script reads the two local DAT files; it never stores credentials in Git.
-    if ! /usr/sbin/generate-wts-bss-info; then
-        logger -t easymesh "ERROR: WTS generation failed; refusing to start EasyMesh"
+    # Use the checked-in vendor WTS test profiles unchanged. Do not derive
+    # or rewrite SSIDs/PSKs from DAT files at boot.
+    if [ ! -s /etc/map/wts_bss_info_config ] ||
+       ! grep -qx '#ucc_bss_info' /etc/map/wts_bss_info_config ||
+       [ "$(grep -c '^[0-9][0-9]*,ff:ff:ff:ff:ff:ff ' /etc/map/wts_bss_info_config)" -ne 16 ]; then
+        logger -t easymesh "ERROR: vendor WTS profile set is missing or incomplete; refusing to start EasyMesh"
         return 1
     fi
 
