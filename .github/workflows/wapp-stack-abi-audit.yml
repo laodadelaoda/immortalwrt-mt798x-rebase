@@ -1,0 +1,112 @@
+name: Audit WAPP MAPD P1905 and MTK driver source
+
+on:
+  push:
+    branches: ["audit/wapp-mapd-1905-driver-source"]
+    paths:
+      - ".github/workflows/wapp-stack-abi-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  source-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout target firmware branch for exact runtime binaries
+        uses: actions/checkout@v4
+        with:
+          ref: n60pro-mtk-closed-driver
+          fetch-depth: 1
+
+      - name: Download and verify matching vendor source archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/vendor-audit"
+          cd "$RUNNER_TEMP/vendor-audit"
+          base="https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3"
+          curl -fL --retry 3 "$base/wappd-80ca5724.tar.bz2" -o wappd.tar.bz2
+          curl -fL --retry 3 "$base/mapd-6eca4331.tar.bz2" -o mapd.tar.bz2
+          curl -fL --retry 3 "$base/1905daemon-35234223.tar.bz2" -o 1905daemon.tar.bz2
+          curl -fL --retry 3 "$base/mt79xx_20250408-705eb4.tar.xz" -o mt_wifi.tar.xz
+          printf '%s  %s\n' \
+            '73fa8995533e701d3d5774faa92d274497f99e1a37c81ce445f25a959b4b7462' wappd.tar.bz2 \
+            '39ab37cb347d372e352ade03181bc9c23429d4d849d32acbdff00973547d7e18' mapd.tar.bz2 \
+            '82f7cc4ad5731e750f87c9a4ad19a39d2456bb8fec0cf79bf4b3f3ccb4f14795' 1905daemon.tar.bz2 \
+            'b029d7b43c498193092dc6a3c857361c8835ce34bb306561c550ac0539784a78' mt_wifi.tar.xz | sha256sum -c -
+          mkdir wappd mapd 1905daemon mt_wifi
+          tar -xjf wappd.tar.bz2 -C wappd
+          tar -xjf mapd.tar.bz2 -C mapd
+          tar -xjf 1905daemon.tar.bz2 -C 1905daemon
+          tar -xJf mt_wifi.tar.xz -C mt_wifi
+          echo "WAPP files: $(find wappd -type f | wc -l)"
+          echo "MAPD files: $(find mapd -type f | wc -l)"
+          echo "P1905 files: $(find 1905daemon -type f | wc -l)"
+          echo "MT_WIFI files: $(find mt_wifi -type f | wc -l)"
+
+      - name: Trace WTS call chain and driver event producer
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/vendor-audit"
+          python3 - <<'PY'
+          import pathlib, re
+          roots = {
+              "WAPP": pathlib.Path("wappd"),
+              "MAPD": pathlib.Path("mapd"),
+              "P1905": pathlib.Path("1905daemon"),
+              "MT_WIFI": pathlib.Path("mt_wifi"),
+          }
+          patterns = {
+              "WAPP": re.compile(r"WAPP_USER_GET_WTS_CONFIG|WAPP_WTS_CONFIG|WAPP_MAP_RENEW|wts_bss_info_config|WAPP_1905_READ_BSS_CONF_REQUEST|WAPP_CONFIG_WPS_EVENT|wdev_wps_configuration_handle|map_wps_conf_done_send_map_renew|wapp_read_wts_map_config", re.I),
+              "MAPD": re.compile(r"WAPP_USER_GET_WTS_CONFIG|WAPP_WTS_CONFIG|WAPP_MAP_RENEW|wts_bss_info_config|/tmp/wapp_server|wapp_usr_intf_ctrl_open|WAPP_1905_READ_BSS_CONF_REQUEST|dev_set_config", re.I),
+              "P1905": re.compile(r"WAPP_USER_GET_WTS_CONFIG|WAPP_WTS_CONFIG|WAPP_MAP_RENEW|wts_bss_info_config|/tmp/wapp_server|WAPP_1905_READ_BSS_CONF_REQUEST|dev_set_config|read wts", re.I),
+              "MT_WIFI": re.compile(r"WAPP_CONFIG_WPS_EVENT|wps_conf_info|WPS_UNCONFIG|WAPP_EVENT_ID", re.I),
+          }
+          exts={".c",".h",".cc",".cpp",".hpp",".lua",".sh",".mk"}
+          report=[]
+          for group,root in roots.items():
+              report.append("\\n========== "+group+" MATCHES ==========")
+              count=0
+              for p in root.rglob("*"):
+                  if not p.is_file() or p.suffix.lower() not in exts: continue
+                  try: lines=p.read_text(errors="replace").splitlines()
+                  except Exception: continue
+                  for n,line in enumerate(lines):
+                      if patterns[group].search(line):
+                          lo=max(0,n-4); hi=min(len(lines),n+5)
+                          report.append(f"--- {p}:{n+1} ---")
+                          report.extend(f"{k+1}: {lines[k][:260]}" for k in range(lo,hi))
+                          count+=1
+                          if count>=180: break
+                  if count>=180: break
+              report.append("MATCHES PRINTED: "+str(count))
+          # Include exact package binary identities and selected embedded strings.
+          import subprocess
+          for name in ["wapp","mapd","p1905_managerd","wappctrl"]:
+              p=pathlib.Path("package/mtk/applications/easymesh-n60/files/usr/bin")/name
+              report.append("\\n========== BINARY "+name+" ==========")
+              if not p.exists():
+                  report.append("NOT PRESENT IN TARGET BRANCH CHECKOUT")
+                  continue
+              report.append(subprocess.run(["file",str(p)],capture_output=True,text=True).stdout.strip())
+              report.append(subprocess.run(["readelf","-h",str(p)],capture_output=True,text=True).stdout)
+              ss=subprocess.run(["strings","-a",str(p)],capture_output=True,text=True).stdout.splitlines()
+              rx=re.compile(r"WAPP_USER_GET_WTS_CONFIG|WAPP_WTS_CONFIG|WAPP_MAP_RENEW|wts_bss_info_config|/tmp/wapp_server|dev_set_config|read wts|renew procedure|WAPP_CONFIG_WPS_EVENT",re.I)
+              report.extend(x for x in ss if rx.search(x))
+          pathlib.Path("audit-report.txt").write_text("\\n".join(report)+"\\n")
+          print(pathlib.Path("audit-report.txt").read_text())
+          PY
+
+      - name: Upload complete source trace report and verified archives
+        uses: actions/upload-artifact@v4
+        with:
+          name: wapp-mapd-1905-driver-source-audit
+          path: |
+            ${{ runner.temp }}/vendor-audit/audit-report.txt
+            ${{ runner.temp }}/vendor-audit/*.tar.bz2
+            ${{ runner.temp }}/vendor-audit/*.tar.xz
+          if-no-files-found: error
+          retention-days: 7
