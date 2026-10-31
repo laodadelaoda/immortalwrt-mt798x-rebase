@@ -29,7 +29,11 @@ dat_value() {
         $1 == wanted {
             value = substr($0, index($0, "=") + 1)
             sub(/\r$/, "", value)
-            split(value, parts, ";")
+            if (wanted == "WPAPSK1" || wanted == "WPAPSK") {
+                parts[1] = value
+            } else {
+                split(value, parts, ";")
+            }
             gsub(/^"/, "", parts[1])
             gsub(/"$/, "", parts[1])
             print parts[1]
@@ -88,7 +92,7 @@ read_radio() {
     esac
 
     case "$ssid" in
-        ""|*[! -~]*|*[[:space:]]*|*,*)
+        ""|*[! -~]*|*[[:space:]]*|*,*|*;*)
             die "$label SSID is empty or cannot be represented safely in WTS"
             ;;
     esac
