@@ -31,8 +31,7 @@ start_service() {
         return 1
     fi
 
-    # Use the checked-in N60-supported vendor WTS template unchanged. Do not derive
-    # or rewrite SSIDs/PSKs from DAT files at boot.
+    # Use the checked-in N60-supported vendor WTS template unchanged.
     if [ ! -s /etc/map/wts_bss_info_config ] ||
        ! grep -qx '#ucc_bss_info' /etc/map/wts_bss_info_config ||
        [ "$(grep -c '^[0-9][0-9]*,ff:ff:ff:ff:ff:ff ' /etc/map/wts_bss_info_config)" -ne 12 ]; then
@@ -47,14 +46,15 @@ start_service() {
 
     modprobe mapfilter 2>/dev/null
 
-    # The wrapper reports ready only after WAPP creates its real control socket.
+    # Match Action #338: do not add procd respawn to the WAPP wrapper.
+    # The wrapper remains attached to the vendor daemon's parent/child lifetime.
     procd_open_instance wapp
     procd_set_param command /usr/bin/wapp-n60-wrapper
-    procd_set_param respawn
     procd_close_instance
 
     sleep 2
 
+    # P1905 starts only after WAPP has created both real Unix sockets.
     procd_open_instance p1905
     procd_set_param command /bin/sh -c '
         waited=0
