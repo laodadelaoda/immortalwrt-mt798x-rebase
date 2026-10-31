@@ -1,6 +1,8 @@
 #!/bin/sh
-# N60 Pro adaptation of MediaTek's WAPP startup model.
-# Capture the daemon's own diagnostics: procd otherwise hides its stdout/stderr.
+# N60 Pro WAPP startup: retain the known-good Action #338 lifecycle.
+# The only added CLI selections are the WAPP binary's supported AP/WEXT modes.
+# Do not pass unverified -f/-F/-u/-e/-w overrides: the vendor binary has its
+# own WTS path (/etc/map/wts_bss_info_config) and default AP config discovery.
 
 LOG_TAG="wapp-n60"
 WAPP_LOG=/tmp/wapp-n60-startup.log
@@ -14,6 +16,7 @@ umask 077
 : > "$WAPP_LOG"
 chmod 600 "$WAPP_LOG"
 
+# Match the previously successful N60 process lifecycle.
 killall wapp 2>/dev/null || true
 sleep 2
 
@@ -31,9 +34,8 @@ if [ ! -s /etc/wapp_ap.conf ] ||
     exit 1
 fi
 
-# N60 Pro is a dual-band 2.4/5 GHz device: retain the vendor template's
-# 12 records for 8x (2.4 GHz), 11x (5 GHz low), and 12x (5 GHz high).
-# The generic 16-record profile includes a 6 GHz group unsupported by N60.
+# Keep the checked-in vendor WTS template unchanged. This is a validation
+# only; WAPP and P1905 perform their own native WTS reads.
 if [ ! -s /etc/map/wts_bss_info_config ] ||
    ! grep -qx '#ucc_bss_info' /etc/map/wts_bss_info_config ||
    [ "$(grep -c '^[0-9][0-9]*,ff:ff:ff:ff:ff:ff ' /etc/map/wts_bss_info_config)" -ne 12 ] ||
@@ -45,68 +47,15 @@ if [ ! -s /etc/map/wts_bss_info_config ] ||
     exit 1
 fi
 
-log_msg "Starting WAPP for ra0 and rax0; stdout/stderr: $WAPP_LOG"
-/usr/bin/wapp -m OPMODE_AP -i RA_WEXT -d 1 -v 2 -f /etc/wapp_ap.conf -F /etc/map/mapd_cfg -u /etc/map/mapd_user.cfg -e br-lan -w br-lan -c ra0 -c rax0 >>"$WAPP_LOG" 2>&1 &
-wapp_pid=$!
+log_msg "Starting WAPP for ra0 and rax0 in OPMODE_AP / RA_WEXT; stdout/stderr: $WAPP_LOG"
 
-# WAPP's own control/event endpoint is /tmp/wapp_server. A live PID alone
-# does not prove interface registration or event-dispatch initialization.
-waited=0
-while { [ ! -S /tmp/wapp_server ] || [ ! -S /tmp/wapp_ctrl ]; } && [ "$waited" -lt 30 ]; do
-    if ! kill -0 "$wapp_pid" 2>/dev/null && ! pidof wapp >/dev/null 2>&1; then
-        break
-    fi
-    sleep 1
-    waited=$((waited + 1))
-done
+# Action #338's proven foreground invocation, with explicit AP mode and
+# WEXT IPC selections supported by this exact WAPP CLI ABI.
+# Keep the daemon's original parent/child lifecycle attached to procd.
+ /usr/bin/wapp -m OPMODE_AP -i RA_WEXT -d1 -v2 -cra0 -crax0 >> "$WAPP_LOG" 2>&1
+wapp_rc=$?
 
-if [ ! -S /tmp/wapp_server ] || [ ! -S /tmp/wapp_ctrl ]; then
-    log_msg "ERROR: WAPP did not create both /tmp/wapp_server and /tmp/wapp_ctrl within 30 seconds; inspect $WAPP_LOG"
-    {
-        echo "===== WAPP wrapper timeout snapshot ====="
-        echo "waited_seconds=$waited"
-        echo "wrapper_child_pid=$wapp_pid"
-        ps w 2>&1
-        echo "===== end snapshot ====="
-    } >> "$WAPP_LOG"
-    killall wapp 2>/dev/null || true
-    wait "$wapp_pid" 2>/dev/null || true
-    exit 1
-fi
-
-log_msg "WAPP event socket and control socket ready: /tmp/wapp_server /tmp/wapp_ctrl"
-
-# Verify both wireless interfaces are registered with WAPP before MAPD/P1905.
-# drv_version is a read-only WAPP control command.
-ra_version="$(/usr/bin/wappctrl ra0 drv_version 2>&1)" || {
-    log_msg "ERROR: WAPP driver registration check failed on ra0: $ra_version"
-    killall wapp 2>/dev/null || true
-    wait "$wapp_pid" 2>/dev/null || true
-    exit 1
-}
-rax_version="$(/usr/bin/wappctrl rax0 drv_version 2>&1)" || {
-    log_msg "ERROR: WAPP driver registration check failed on rax0: $rax_version"
-    killall wapp 2>/dev/null || true
-    wait "$wapp_pid" 2>/dev/null || true
-    exit 1
-}
-log_msg "WAPP driver versions: ra0=$ra_version; rax0=$rax_version"
-
-# Apply the vendor WAPP MBO defaults on both radios. This is the same
-# v3.0.2.0 command used by the vendor startup reference; it is required for
-# the MBO/11v request path and is safe to run after WAPP's control socket exists.
-if ! /usr/bin/wappctrl ra0 mbo reset_default >/dev/null 2>&1 ||
-   ! /usr/bin/wappctrl rax0 mbo reset_default >/dev/null 2>&1; then
-    log_msg "ERROR: WAPP MBO default initialization failed on ra0/rax0"
-    killall wapp 2>/dev/null || true
-    wait "$wapp_pid" 2>/dev/null || true
-    exit 1
-fi
-log_msg "WAPP driver registration and MBO defaults initialized on both radios"
-
-wapp_rc=0
-wait "$wapp_pid" || wapp_rc=$?
-# Some vendor builds daemonize after the parent exits; keep procd attached
+# Some vendor builds daemonize after the parent exits. Keep procd attached
 # until the complete WAPP process set exits.
 while pidof wapp >/dev/null 2>&1; do
     sleep 2
