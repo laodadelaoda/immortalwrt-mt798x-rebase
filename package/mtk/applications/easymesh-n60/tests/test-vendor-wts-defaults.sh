@@ -33,6 +33,7 @@ cmp -s "$EXPECTED" "$WTS" || {
 }
 
 test "$(grep -c '^[0-9][0-9]*,ff:ff:ff:ff:ff:ff ' "$WTS")" -eq 12
+grep -Fq -- '-ne 12' "$INIT" || { echo "FAIL: init service does not validate the N60 12-row WTS template" >&2; exit 1; }
 grep -Fq 'Multi-AP-24G-2' "$WTS"
 grep -Fq 'Multi-AP-5LG-2' "$WTS"
 grep -Fq 'Multi-AP-5HG-2' "$WTS"
