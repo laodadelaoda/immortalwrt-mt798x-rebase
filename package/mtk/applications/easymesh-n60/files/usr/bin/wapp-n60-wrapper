@@ -1,8 +1,9 @@
 #!/bin/sh
 # N60 Pro WAPP startup: retain the known-good Action #338 lifecycle.
 # The only added CLI selections are the WAPP binary's supported AP/WEXT modes.
-# Do not pass unverified -f/-F/-u/-e/-w overrides: the vendor binary has its
-# own WTS path (/etc/map/wts_bss_info_config) and default AP config discovery.
+# Omit redundant path/interface overrides: source confirms the compiled
+# defaults are /etc/wapp_ap.conf, /etc/map/mapd_cfg, /etc/map/mapd_user.cfg,
+# and br-lan/br-lan. WTS is independently read from its native fixed path.
 
 LOG_TAG="wapp-n60"
 WAPP_LOG=/tmp/wapp-n60-startup.log
