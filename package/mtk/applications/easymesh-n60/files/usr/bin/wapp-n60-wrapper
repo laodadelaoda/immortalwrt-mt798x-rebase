@@ -27,8 +27,12 @@ fi
 
 if [ ! -s /etc/map/wts_bss_info_config ] ||
    ! grep -qx '#ucc_bss_info' /etc/map/wts_bss_info_config ||
-   [ "$(grep -c '^[1-3],ff:ff:ff:ff:ff:ff ' /etc/map/wts_bss_info_config)" -ne 3 ]; then
-    log_msg "ERROR: runtime WTS does not contain the three N60 Pro BSS profiles"
+   [ "$(grep -c '^[0-9][0-9]*,ff:ff:ff:ff:ff:ff ' /etc/map/wts_bss_info_config)" -ne 16 ] ||
+   ! grep -Fq 'Multi-AP-24G-2' /etc/map/wts_bss_info_config ||
+   ! grep -Fq 'Multi-AP-5LG-2' /etc/map/wts_bss_info_config ||
+   ! grep -Fq 'Multi-AP-5HG-2' /etc/map/wts_bss_info_config ||
+   ! grep -Fq 'Multi-AP-6G-2' /etc/map/wts_bss_info_config; then
+    log_msg "ERROR: vendor WTS file does not contain the complete 16-record EasyMesh test profile set"
     exit 1
 fi
 
