@@ -61,7 +61,7 @@ These are distinct mechanisms:
 2. WAPP radio-device discovery is performed by `wapp_get_wireless_interfaces()`. It reads `bss_config_priority` from the MAP configuration; if that value is empty, the source falls back to dynamic enumeration of `/proc/net/dev` and tests wireless interfaces with `SIOCGIWNAME`.
 3. AP configuration loading is a third path: `-f /etc/wapp_ap.conf` opens the file, and `wapp_init_all_config()` parses its `conf_list` and invokes AP configuration initialization for each listed band file.
 
-Consequently, the repeated `-c` options must not be described as setting WAPP's MAP radio-discovery list. The existing `mapd_cfg` value and the generated `conf_list` remain unchanged by this CLI correction.
+Consequently, the repeated `-c` options must not be described as setting WAPP's MAP radio-discovery list. The WAPP `-F` input is `/etc/map/mapd_cfg`; its deterministic N60 radio list is `bss_config_priority=ra0;rax0`. The separate P1905 `1905d.cfg` retains its own independently consumed list.
 
 ## Corrected N60 Pro invocation
 
