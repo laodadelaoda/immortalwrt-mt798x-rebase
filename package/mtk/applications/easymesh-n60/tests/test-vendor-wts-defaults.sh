@@ -26,21 +26,23 @@ cat > "$EXPECTED" <<'EOF'
 EOF
 
 cmp -s "$EXPECTED" "$WTS" || {
-    echo "FAIL: WTS differs from the original vendor N60 EasyMesh default profiles" >&2
+    echo "FAIL: WTS differs from the original vendor N60 dual-band profiles" >&2
     diff -u "$EXPECTED" "$WTS" >&2 || true
     exit 1
 }
 
 test "$(grep -c '^[0-9][0-9]*,ff:ff:ff:ff:ff:ff ' "$WTS")" -eq 12
 grep -Fq -- '-ne 12' "$INIT" || { echo "FAIL: init service does not validate the N60 12-row WTS template" >&2; exit 1; }
+grep -Fq -- '-ne 12' "$WRAPPER" || { echo "FAIL: WAPP wrapper does not validate the N60 12-row WTS template" >&2; exit 1; }
 grep -Fq 'Multi-AP-24G-2' "$WTS"
 grep -Fq 'Multi-AP-5LG-2' "$WTS"
 grep -Fq 'Multi-AP-5HG-2' "$WTS"
 ! grep -Eq '(^| )13x |Multi-AP-6G-' "$WTS"
+! grep -Eq '(^| )13x |Multi-AP-6G-' "$WRAPPER"
 
 if grep -Fq 'generate-wts-bss-info' "$INIT" "$WRAPPER" "$MAKEFILE"; then
     echo "FAIL: runtime WTS/SSID generator is still wired into the package" >&2
     exit 1
 fi
 
-echo "PASS: original 16 vendor EasyMesh WTS test profiles restored; no SSID generator"
+echo "PASS: original 12 vendor N60 dual-band WTS profiles validated by init and WAPP wrapper"
