@@ -119,16 +119,18 @@ jobs:
 
           # Static binary audit: the shipped 7.6.7.3 daemons must contain the
           # WAPP event/socket, 11k/11v, MAP steering and P1905 topology paths.
-          for symbol in wapp_socket_and_ctrl_inf_init wapp_ctrl_iface_init wapp_ctrl_iface_event_register /tmp/wapp_server /tmp/wapp_ctrl driver_rrm_onoff driver_wnm_btm_onoff wapp_send_btm_req_11kv_api event_btm_query event_neighbor_report_pool_update; do
+          for symbol in wapp_socket_and_ctrl_inf_init wapp_ctrl_iface_init wapp_ctrl_iface_event_register /tmp/wapp_server /tmp/wapp_ctrl driver_rrm_onoff driver_wnm_btm_onoff wapp_send_btm_req_11kv_api event_btm_req event_btm_rsp event_btm_query event_neighbor_report_pool_update; do
             strings -a "$BIN/wapp" | grep -Fq "$symbol" || {
               echo "::error::WAPP is missing required runtime path: $symbol"
               exit 1
             }
           done
-          strings -a "$BIN/wapp" | grep -Fq 'reset_default' || {
-            echo "::error::WAPP is missing the MBO reset-default handler."
-            exit 1
-          }
+          for symbol in mbo_default_assoc_retry_delay mbo_ap_transition_reason_code; do
+            strings -a "$BIN/wapp" | grep -Fq "$symbol" || {
+              echo "::error::WAPP is missing MBO default parameter support: $symbol"
+              exit 1
+            }
+          done
           for symbol in STEER_FSM "BTM Success" "BTM Fail" "topo_srv_handle_topology_event" steer_fsm_trigger chan_mon_handle_steering_req parse_client_steering_btm_report_message; do
             strings -a "$BIN/mapd" | grep -Fq "$symbol" || {
               echo "::error::MAPD is missing required steering/topology path: $symbol"
@@ -142,7 +144,7 @@ jobs:
             }
           done
           if test -s "$BIN/wappctrl"; then
-            for symbol in btmreq drv_version /tmp/wapp_ctrl EVENT_REGISTER "mbo cmd [arg1] [arg2]"; do
+            for symbol in btmreq drv_version wapp_cli_cmd_btmreq wapp_cli_cmd_drv_version /tmp/wapp_ctrl EVENT_REGISTER "mbo cmd [arg1] [arg2]"; do
               strings -a "$BIN/wappctrl" | grep -Fq "$symbol" || {
                 echo "::error::wappctrl is missing required BTM/event diagnostic command: $symbol"
                 exit 1
