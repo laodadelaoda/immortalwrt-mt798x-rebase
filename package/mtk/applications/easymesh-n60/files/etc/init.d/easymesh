@@ -56,12 +56,12 @@ start_service() {
     procd_open_instance p1905
     procd_set_param command /bin/sh -c '
         waited=0
-        while [ ! -S /tmp/wapp_server ] && [ "$waited" -lt 30 ]; do
+        while { [ ! -S /tmp/wapp_server ] || [ ! -S /tmp/wapp_ctrl ]; } && [ "$waited" -lt 30 ]; do
             sleep 1
             waited=$((waited + 1))
         done
-        if [ ! -S /tmp/wapp_server ]; then
-            logger -t easymesh "ERROR: WAPP control socket /tmp/wapp_server is not ready; P1905 will not start"
+        if [ ! -S /tmp/wapp_server ] || [ ! -S /tmp/wapp_ctrl ]; then
+            logger -t easymesh "ERROR: WAPP event/control sockets are not ready; P1905 will not start"
             exit 1
         fi
         role=$(grep "^map_root=" /etc/map/1905d.cfg | cut -d= -f2)
