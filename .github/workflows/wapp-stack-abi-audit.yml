@@ -86,7 +86,7 @@ jobs:
           # Include exact package binary identities and selected embedded strings.
           import subprocess
           for name in ["wapp","mapd","p1905_managerd","wappctrl"]:
-              p=pathlib.Path("package/mtk/applications/easymesh-n60/files/usr/bin")/name
+              p=pathlib.Path("binaries")/name
               report.append("\\n========== BINARY "+name+" ==========")
               if not p.exists():
                   report.append("NOT PRESENT IN TARGET BRANCH CHECKOUT")
