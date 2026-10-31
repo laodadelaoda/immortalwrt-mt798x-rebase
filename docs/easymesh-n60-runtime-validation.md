@@ -58,9 +58,13 @@ The init service now:
 3. Starts WAPP and requires both expected Unix sockets:
    - `/tmp/wapp_server` — WAPP event/server endpoint.
    - `/tmp/wapp_ctrl` — WAPP control endpoint used by `wappctrl`.
-4. Starts P1905 only after both WAPP sockets exist, passing the generated WTS
-   file through `-F`.
-5. Starts MAPD after P1905, preserving the existing MAPD configuration and
+4. Uses `wappctrl ra0 drv_version` and `wappctrl rax0 drv_version` to verify
+   that WAPP registered both driver interfaces.
+5. Runs the vendor WAPP v3.0.2.0 `mbo reset_default` command on both radios
+   after the control socket is ready. Failure is fatal to WAPP startup.
+6. Starts P1905 only after both WAPP sockets and both interface checks succeed,
+   passing the generated WTS file through `-F`.
+7. Starts MAPD after P1905, preserving the existing MAPD configuration and
    generated `/etc/mapd_strng.conf`.
 
 A running PID without these sockets is not treated as a ready WAPP service.
@@ -104,6 +108,14 @@ are present:
   request issuance, a BTM response/report, and the corresponding steering
   completion or failure. Receiving a BTM Query alone is not proof that BTM
   requests work.
+
+The historical `hanwckf/immortalwrt-mt798x` PR #205 targeted OpenWrt
+21.02/MAP R1 and started the separate `bs20` daemon. It also disabled MAP R2
+and R3 before setting `mapEnable=2`. Those legacy settings are **not** copied:
+this N60 Pro uses MAP R3, P1905 Controller/Root and MAPD's centralized
+Steering FSM, so a separate `bs20` instance or disabling MAP R3 would be the
+wrong control plane. The portable WAPP v3.0.2.0 MBO reset-default operation is
+retained after driver-interface registration.
 
 The current configuration already enables `SteerEnable=1` and
 `CentralizedSteering=1`; the workflow also requires
