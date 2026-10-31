@@ -43,8 +43,8 @@ The init service now:
 1. Waits for `ra0` and `rax0` to report AP mode and a non-empty SSID in
    three consecutive samples; interface-directory existence alone is not
    considered ready.
-2. Generates WTS from the two local DAT files before starting any EasyMesh
-   daemon.
+2. Validates the checked-in 16-record vendor WTS file; it does not generate
+   SSIDs or rewrite WTS from DAT files.
 3. Starts WAPP and requires both expected Unix sockets:
    - `/tmp/wapp_server` — WAPP event/server endpoint.
    - `/tmp/wapp_ctrl` — WAPP control endpoint used by `wappctrl`.
@@ -85,8 +85,8 @@ received and acted on a BTM request.
 The router-side validation is complete only when all applicable observations
 are present:
 
-- WTS has three generated records, correct live SSID values, no test SSIDs,
-  and permissions `0600`.
+- WTS contains the original 16 vendor test profiles (`Multi-AP-*` and
+  `maprocks1`–`maprocks4`) exactly as committed; no runtime SSID generator runs.
 - Both WAPP sockets exist and remain present while WAPP runs.
 - P1905 logs successful WTS parsing (16 vendor test records) and sends topology
   discovery; when an EasyMesh peer is connected, its neighbor/AL-MAC entry
