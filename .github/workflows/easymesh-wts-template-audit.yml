@@ -1,0 +1,103 @@
+name: Audit EasyMesh WTS template and runtime MAC binding
+
+on:
+  push:
+    branches: ["n60pro-mtk-closed-driver"]
+    paths:
+      - ".github/workflows/easymesh-wts-template-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Download and verify vendor MAPD and P1905 sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wts-audit"/{archives,mapd,1905}
+          cd "$RUNNER_TEMP/wts-audit/archives"
+          curl -fL --retry 3 https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3/mapd-6eca4331.tar.bz2 -o mapd.tar.bz2
+          echo "39ab37cb347d372e352ade03181bc9c23429d4d849d32acbdff00973547d7e18  mapd.tar.bz2" | sha256sum -c -
+          curl -fL --retry 3 https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3/1905daemon-35234223.tar.bz2 -o 1905daemon.tar.bz2
+          echo "82f7cc4ad5731e750f87c9a4ad19a39d2456bb8fec0cf79bf4b3f3ccb4f14795  1905daemon.tar.bz2" | sha256sum -c -
+          tar -xjf mapd.tar.bz2 -C "$RUNNER_TEMP/wts-audit/mapd"
+          tar -xjf 1905daemon.tar.bz2 -C "$RUNNER_TEMP/wts-audit/1905"
+          echo "MAPD source files: $(find "$RUNNER_TEMP/wts-audit/mapd" -type f | wc -l)"
+          echo "P1905 source files: $(find "$RUNNER_TEMP/wts-audit/1905" -type f | wc -l)"
+
+      - name: Trace WTS template semantics and device-specific MAC registration
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/wts-audit"
+          python3 - <<'PY'
+          import pathlib, re
+          out = []
+          roots = {"MAPD": pathlib.Path("mapd"), "P1905": pathlib.Path("1905")}
+          patterns = re.compile(
+              r"wts_bss_info_config|wts.?bss|bss_config_num|bss_config_priority|"
+              r"temp.?bssid|bssid|al_inf|al.?mac|own.?mac|read_bss_conf|"
+              r"get_wireless_interfaces|need_to_update_wts|WAPP_OPERBSS_REPORT|"
+              r"topo_srv_update_wts_config|topo_srv_parse_wts_config",
+              re.I
+          )
+          for label, root in roots.items():
+              files = [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in {".c",".h",".cc",".cpp",".hpp"}]
+              out.append(f"===== {label}: {len(files)} C/C++ source files =====")
+              matches = 0
+              for p in files:
+                  lines = p.read_text(errors="replace").splitlines()
+                  for n, line in enumerate(lines, 1):
+                      if patterns.search(line):
+                          out.append(f"{p}:{n}:{line[:260]}")
+                          matches += 1
+                          if matches >= 500:
+                              out.append("MATCH LIMIT REACHED")
+                              break
+                  if matches >= 500:
+                      break
+              out.append(f"{label} MATCHES: {matches}")
+          out.append("\n===== FUNCTION BODIES: WTS / BSS / MAC / INTERFACE =====")
+          name_rx = re.compile(r"(wts|bss.*conf|conf.*bss|wireless_interfaces|al.?mac|own.*mac|mac.*addr|oper.*bss)", re.I)
+          for label, root in roots.items():
+              for p in root.rglob("*"):
+                  if not p.is_file() or p.suffix.lower() not in {".c",".h"}:
+                      continue
+                  try: s = p.read_text(errors="replace")
+                  except Exception: continue
+                  lines = s.splitlines()
+                  for i, line in enumerate(lines):
+                      if name_rx.search(line) and re.search(r"\)\s*\{\s*$", line):
+                          depth = 0
+                          started = False
+                          body = []
+                          for j in range(i, min(len(lines), i+500)):
+                              body.append(f"{p}:{j+1}:{lines[j]}")
+                              depth += lines[j].count("{") - lines[j].count("}")
+                              if "{" in lines[j]: started = True
+                              if started and depth == 0:
+                                  break
+                          out.append("\n--- " + label + " " + line.strip() + " ---")
+                          out.extend(body)
+          report = "\n".join(out)
+          pathlib.Path("wts-template-mac-audit.txt").write_text(report)
+          print(report[:120000])
+          PY
+
+      - name: Upload source audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: easymesh-wts-template-mac-audit
+          path: ${{ runner.temp }}/wts-audit/wts-template-mac-audit.txt
+          if-no-files-found: error
+          retention-days: 7
