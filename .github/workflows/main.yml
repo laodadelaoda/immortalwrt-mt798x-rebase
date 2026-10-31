@@ -59,7 +59,7 @@ jobs:
             exit 1
           fi
           if ! grep -Eq '^[0-9]+,' "$ROOT/etc/map/wts_bss_info_config"; then
-            echo "::error::WTS BSS config has no BSS profiles. Add N60 runtime BSS settings before building a flashable firmware."
+            echo "::error::WTS has no valid BSS profiles. P1905 requires populated WTS at startup; a tested runtime WTS generator is not implemented. Do not add static SSIDs or credentials to the repository."
             exit 1
           fi
           if grep -Eiq 'maprocks[0-9]+' "$ROOT/etc/map/wts_bss_info_config"; then
