@@ -52,7 +52,7 @@ log_msg "Starting WAPP for ra0 and rax0 in OPMODE_AP / RA_WEXT; stdout/stderr: $
 # Action #338's proven foreground invocation, with explicit AP mode and
 # WEXT IPC selections supported by this exact WAPP CLI ABI.
 # Keep the daemon's original parent/child lifecycle attached to procd.
- /usr/bin/wapp -m OPMODE_AP -i RA_WEXT -d1 -v2 -cra0 -crax0 >> "$WAPP_LOG" 2>&1
+/usr/bin/wapp -m OPMODE_AP -i RA_WEXT -d1 -v2 -cra0 -crax0 >> "$WAPP_LOG" 2>&1
 wapp_rc=$?
 
 # Some vendor builds daemonize after the parent exits. Keep procd attached
