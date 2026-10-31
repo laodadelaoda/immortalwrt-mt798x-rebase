@@ -50,7 +50,7 @@ jobs:
               "interface registration": re.compile(r"register.{0,50}(interface|ifname|netdev)|(?:interface|ifname|netdev).{0,50}register", re.I),
           }
           for label, rx in patterns.items():
-              print("\\n===== " + label + " =====")
+              print("\n===== " + label + " =====")
               count = 0
               for p in files:
                   try: lines = p.read_text(errors="replace").splitlines()
@@ -64,7 +64,7 @@ jobs:
                               break
                   if count >= 180: break
               print("MATCHES PRINTED:", count)
-          print("\\n===== COMPLETE WTS PARSER FUNCTION =====")
+          print("\n===== COMPLETE WTS PARSER FUNCTION =====")
           found = False
           for p in files:
               try: s = p.read_text(errors="replace")
