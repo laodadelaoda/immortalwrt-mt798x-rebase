@@ -92,7 +92,7 @@ read_radio() {
     esac
 
     case "$ssid" in
-        ""|*[! -~]*|*[[:space:]]*|*,*|*;*)
+        ""|*[! -~]*|*[[:space:]]*|*,*|*";"*)
             die "$label SSID is empty or cannot be represented safely in WTS"
             ;;
     esac
