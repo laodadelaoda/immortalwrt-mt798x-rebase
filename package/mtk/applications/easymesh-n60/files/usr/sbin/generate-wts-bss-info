@@ -120,7 +120,7 @@ read_live_ssid() {
         die "cannot read live wireless state for $iface"
     printf '%s\n' "$info" | grep -q 'Mode:Master' ||
         die "$iface is not in AP Master mode"
-    live_ssid="$(printf '%s\n' "$info" | sed -n 's/.*ESSID:"\\([^"]*\\)".*/\\1/p' | sed -n '1p')"
+    live_ssid="$(printf '%s\n' "$info" | sed -n 's/.*ESSID:"\([^"]*\)".*/\1/p' | sed -n '1p')"
     [ -n "$live_ssid" ] || die "$iface has no active SSID"
     printf '%s\n' "$live_ssid"
 }
