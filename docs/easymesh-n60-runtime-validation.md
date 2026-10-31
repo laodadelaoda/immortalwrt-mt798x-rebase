@@ -10,13 +10,12 @@ runtime event exchange.
 The repository stores only the one-line `#ucc_bss_info` WTS template. It must
 not contain real SSIDs, PSKs, factory test SSIDs, or static test BSS records.
 
-At boot, `mtwifi-cfg` first maps the active `wireless` UCI AP sections into
+At boot, the selected `mtwifi-cfg-ucode` backend first maps the active `wireless` UCI AP sections into
 the two local DAT profiles. Its source writes `SSID1`, `WPAPSK1`,
 `AuthMode`, `EncrypType`, `HideSSID` and `RRMEnable`, then calls
 `save_profile(dats, profile)` before bringing the AP VIFs up. The EasyMesh
 service waits for both AP interfaces to report stable Master mode before it
-reads those profiles. GitHub Actions checks these source-level contracts so
-a future mtwifi-cfg change cannot silently break WTS input generation.
+reads those profiles. GitHub Actions checks the selected ucode backend and verifies that unchanged DAT input does not down an already-UP VIF.
 
 At boot, `generate-wts-bss-info` reads the router-local files:
 
@@ -66,8 +65,10 @@ The init service now:
    after the control socket is ready. Failure is fatal to WAPP startup.
 6. Starts P1905 only after both WAPP sockets and both interface checks succeed,
    passing the generated WTS file through `-F`.
-7. Starts MAPD after P1905, preserving the existing MAPD configuration and
-   generated `/etc/mapd_strng.conf`.
+7. Starts MAPD after launching P1905, preserving the existing MAPD configuration and
+   generated `/etc/mapd_strng.conf`. The current two-second delay is only a
+   launch-order cushion, not proof that P1905 completed initialization; a
+   source-verified P1905 ready signal remains outstanding.
 
 A running PID without these sockets is not treated as a ready WAPP service.
 
@@ -87,7 +88,9 @@ GitHub Actions now:
   discovery symbols.
 
 These checks prove that the binaries contain the expected code paths and that
-the package wiring is syntactically consistent. They do **not** prove that the
+the package wiring is syntactically consistent. CI also checks the active
+`mtwifi-cfg-ucode` setup path: identical DAT input must not trigger VIF down,
+while changed DAT input retains the existing restart path. They do **not** prove that the
 live driver accepted event registration, that a neighbor was discovered, or
 that a real client received and acted on a BTM request.
 
@@ -118,6 +121,11 @@ this N60 Pro uses MAP R3, P1905 Controller/Root and MAPD's centralized
 Steering FSM, so a separate `bs20` instance or disabling MAP R3 would be the
 wrong control plane. The portable WAPP v3.0.2.0 MBO reset-default operation is
 retained after driver-interface registration.
+
+WAPP receives `/etc/map/mapd_cfg` through its `-F` option, so its deterministic
+radio discovery list is `bss_config_priority=ra0;rax0` in that file. The
+separate `1905d.cfg` retains its own existing `ra0;rax0;apclix0` list; the two
+consumers must not be conflated.
 
 The current configuration already enables `SteerEnable=1` and
 `CentralizedSteering=1`; the workflow also requires
