@@ -39,7 +39,7 @@ wapp_pid=$!
 # WAPP's own control/event endpoint is /tmp/wapp_server. A live PID alone
 # does not prove interface registration or event-dispatch initialization.
 waited=0
-while [ ! -S /tmp/wapp_server ] && [ "$waited" -lt 30 ]; do
+while { [ ! -S /tmp/wapp_server ] || [ ! -S /tmp/wapp_ctrl ]; } && [ "$waited" -lt 30 ]; do
     if ! kill -0 "$wapp_pid" 2>/dev/null && ! pidof wapp >/dev/null 2>&1; then
         break
     fi
@@ -47,14 +47,14 @@ while [ ! -S /tmp/wapp_server ] && [ "$waited" -lt 30 ]; do
     waited=$((waited + 1))
 done
 
-if [ ! -S /tmp/wapp_server ]; then
-    log_msg "ERROR: WAPP did not create /tmp/wapp_server within 30 seconds"
+if [ ! -S /tmp/wapp_server ] || [ ! -S /tmp/wapp_ctrl ]; then
+    log_msg "ERROR: WAPP did not create both /tmp/wapp_server and /tmp/wapp_ctrl within 30 seconds"
     killall wapp 2>/dev/null || true
     wait "$wapp_pid" 2>/dev/null || true
     exit 1
 fi
 
-log_msg "WAPP control/event socket ready: /tmp/wapp_server"
+log_msg "WAPP event socket and control socket ready: /tmp/wapp_server /tmp/wapp_ctrl"
 
 wapp_rc=0
 wait "$wapp_pid" || wapp_rc=$?
