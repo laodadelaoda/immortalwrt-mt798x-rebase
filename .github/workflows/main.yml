@@ -63,11 +63,12 @@ jobs:
           test -x "$ROOT/etc/init.d/easymesh" || { echo "::error::Missing easymesh init service"; exit 1; }
           test -s "$ROOT/usr/sbin/generate-mapd-strng" || { echo "::error::Missing MAPD strength generator source"; exit 1; }
           test -s "$ROOT/usr/sbin/generate-wts-bss-info" || { echo "::error::Missing runtime WTS generator source"; exit 1; }
+          test -s "$ROOT/usr/sbin/easymesh-n60-diagnose" || { echo "::error::Missing read-only EasyMesh diagnostic utility"; exit 1; }
           test -s "package/mtk/applications/easymesh-n60/tests/test-generate-wts-bss-info.sh" || { echo "::error::Missing WTS generator regression test"; exit 1; }
           for f in mapd_cfg 1905d.cfg mapd_user.cfg wts_bss_info_config; do
             test -s "$ROOT/etc/map/$f" || { echo "::error::Missing MAP config: $f"; exit 1; }
           done
-          for f in "$ROOT/etc/init.d/easymesh" "$ROOT/etc/uci-defaults/1001-easymesh-n60" "$BIN/wapp-n60-wrapper" "$ROOT/usr/sbin/generate-mapd-strng" "$ROOT/usr/sbin/generate-wts-bss-info" "package/mtk/applications/easymesh-n60/tests/test-generate-wts-bss-info.sh"; do
+          for f in "$ROOT/etc/init.d/easymesh" "$ROOT/etc/uci-defaults/1001-easymesh-n60" "$BIN/wapp-n60-wrapper" "$ROOT/usr/sbin/generate-mapd-strng" "$ROOT/usr/sbin/generate-wts-bss-info" "$ROOT/usr/sbin/easymesh-n60-diagnose" "package/mtk/applications/easymesh-n60/tests/test-generate-wts-bss-info.sh"; do
             sh -n "$f"
           done
           sh "package/mtk/applications/easymesh-n60/tests/test-generate-wts-bss-info.sh"
