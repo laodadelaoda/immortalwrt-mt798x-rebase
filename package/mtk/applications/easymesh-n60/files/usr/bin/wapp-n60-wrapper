@@ -1,12 +1,18 @@
 #!/bin/sh
 # N60 Pro adaptation of MediaTek's WAPP startup model.
-# WAPP is not considered ready until its expected control socket exists.
+# Capture the daemon's own diagnostics: procd otherwise hides its stdout/stderr.
 
 LOG_TAG="wapp-n60"
+WAPP_LOG=/tmp/wapp-n60-startup.log
 
 log_msg() {
     logger -t "$LOG_TAG" "$*"
 }
+
+# WAPP diagnostics can contain vendor BSS credentials. Keep the file private.
+umask 077
+: > "$WAPP_LOG"
+chmod 600 "$WAPP_LOG"
 
 killall wapp 2>/dev/null || true
 sleep 2
@@ -39,8 +45,8 @@ if [ ! -s /etc/map/wts_bss_info_config ] ||
     exit 1
 fi
 
-log_msg "Starting WAPP for ra0 and rax0"
-/usr/bin/wapp -m OPMODE_AP -i RA_WEXT -d 1 -v 2 -f /etc/wapp_ap.conf -F /etc/map/mapd_cfg -u /etc/map/mapd_user.cfg -e br-lan -w br-lan -c ra0 -c rax0 &
+log_msg "Starting WAPP for ra0 and rax0; stdout/stderr: $WAPP_LOG"
+/usr/bin/wapp -m OPMODE_AP -i RA_WEXT -d 1 -v 2 -f /etc/wapp_ap.conf -F /etc/map/mapd_cfg -u /etc/map/mapd_user.cfg -e br-lan -w br-lan -c ra0 -c rax0 >>"$WAPP_LOG" 2>&1 &
 wapp_pid=$!
 
 # WAPP's own control/event endpoint is /tmp/wapp_server. A live PID alone
@@ -55,7 +61,14 @@ while { [ ! -S /tmp/wapp_server ] || [ ! -S /tmp/wapp_ctrl ]; } && [ "$waited" -
 done
 
 if [ ! -S /tmp/wapp_server ] || [ ! -S /tmp/wapp_ctrl ]; then
-    log_msg "ERROR: WAPP did not create both /tmp/wapp_server and /tmp/wapp_ctrl within 30 seconds"
+    log_msg "ERROR: WAPP did not create both /tmp/wapp_server and /tmp/wapp_ctrl within 30 seconds; inspect $WAPP_LOG"
+    {
+        echo "===== WAPP wrapper timeout snapshot ====="
+        echo "waited_seconds=$waited"
+        echo "wrapper_child_pid=$wapp_pid"
+        ps w 2>&1
+        echo "===== end snapshot ====="
+    } >> "$WAPP_LOG"
     killall wapp 2>/dev/null || true
     wait "$wapp_pid" 2>/dev/null || true
     exit 1
@@ -99,5 +112,5 @@ while pidof wapp >/dev/null 2>&1; do
     sleep 2
 done
 
-log_msg "WAPP process set exited (rc=$wapp_rc)"
+log_msg "WAPP process set exited (rc=$wapp_rc); diagnostics: $WAPP_LOG"
 exit "$wapp_rc"
