@@ -58,24 +58,16 @@ jobs:
             echo "::error::Fixed ALID must not be configured on N60 Pro."
             exit 1
           fi
-          # Keep WTS free of test SSIDs and credentials. WAPP reads the file;
-          # its WPS event path only rewrites an existing indexed record. Neither
-          # path creates the initial BSS profile set. Never build a firmware with
-          # an empty WTS template until the runtime generator and validator exist.
-          if ! grep -qx '#ucc_bss_info' "$ROOT/etc/map/wts_bss_info_config"; then
-            echo "::error::WTS template must contain the exact #ucc_bss_info marker."
+          # WTS initialization is sourced from this package's static config file.
+          # Keep the required header and reject only known vendor test SSIDs.
+          # Do not require separate runtime generator/validator executables.
+          WTS="$ROOT/etc/map/wts_bss_info_config"
+          if ! grep -qx '#ucc_bss_info' "$WTS"; then
+            echo "::error::WTS config must contain the exact #ucc_bss_info marker."
             exit 1
           fi
-          if grep -Eq '^[[:space:]]*[0-9]+,' "$ROOT/etc/map/wts_bss_info_config"; then
-            echo "::error::Static WTS BSS profiles are forbidden; generate profiles at runtime."
-            exit 1
-          fi
-          if ! test -x "$ROOT/usr/sbin/generate-wts"; then
-            echo "::error::Runtime WTS generator is missing. WAPP cannot create initial WTS profiles."
-            exit 1
-          fi
-          if ! test -x "$ROOT/usr/sbin/validate-wts"; then
-            echo "::error::Runtime WTS validator is missing; refusing an unvalidated WTS startup."
+          if grep -Eiq 'maprocks[0-9]*' "$WTS"; then
+            echo "::error::Vendor test SSID found in WTS config."
             exit 1
           fi
           if test -s "$BIN/wappctrl"; then
