@@ -36,7 +36,17 @@ jobs:
             '39ab37cb347d372e352ade03181bc9c23429d4d849d32acbdff00973547d7e18' mapd.tar.bz2 \
             '82f7cc4ad5731e750f87c9a4ad19a39d2456bb8fec0cf79bf4b3f3ccb4f14795' 1905daemon.tar.bz2 \
             'b029d7b43c498193092dc6a3c857361c8835ce34bb306561c550ac0539784a78' mt_wifi.tar.xz | sha256sum -c -
-          mkdir wappd mapd 1905daemon mt_wifi
+          mkdir wappd mapd 1905daemon mt_wifi binaries
+          for name in wapp mapd p1905_managerd wappctrl; do
+            src="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/files/usr/bin/$name"
+            if [ -s "$src" ]; then
+              cp "$src" "binaries/$name"
+              file "binaries/$name"
+            elif [ "$name" != "wappctrl" ]; then
+              echo "::error::Required packaged binary missing: $src"
+              exit 1
+            fi
+          done
           tar -xjf wappd.tar.bz2 -C wappd
           tar -xjf mapd.tar.bz2 -C mapd
           tar -xjf 1905daemon.tar.bz2 -C 1905daemon
