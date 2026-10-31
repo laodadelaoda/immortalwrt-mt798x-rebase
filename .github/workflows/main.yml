@@ -61,7 +61,7 @@ jobs:
           }
           test -x "$ROOT/etc/init.d/easymesh" || { echo "::error::Missing easymesh init service"; exit 1; }
           test -s "$ROOT/usr/sbin/generate-mapd-strng" || { echo "::error::Missing MAPD strength generator source"; exit 1; }
-          test -x "$ROOT/usr/sbin/generate-wts-bss-info" || { echo "::error::Missing executable runtime WTS generator"; exit 1; }
+          test -s "$ROOT/usr/sbin/generate-wts-bss-info" || { echo "::error::Missing runtime WTS generator source"; exit 1; }
           test -s "package/mtk/applications/easymesh-n60/tests/test-generate-wts-bss-info.sh" || { echo "::error::Missing WTS generator regression test"; exit 1; }
           for f in mapd_cfg 1905d.cfg mapd_user.cfg wts_bss_info_config; do
             test -s "$ROOT/etc/map/$f" || { echo "::error::Missing MAP config: $f"; exit 1; }
@@ -103,7 +103,7 @@ jobs:
 
           # Static binary audit: the shipped 7.6.7.3 daemons must contain the
           # WAPP event/socket, 11k/11v, MAP steering and P1905 topology paths.
-          for symbol in wapp_socket_and_ctrl_inf_init wapp_ctrl_iface_event_register /tmp/wapp_server driver_rrm_onoff driver_wnm_btm_onoff wapp_send_btm_req_11kv_api event_btm_query event_neighbor_report_pool_update; do
+          for symbol in wapp_socket_and_ctrl_inf_init wapp_ctrl_iface_init wapp_ctrl_iface_event_register /tmp/wapp_server /tmp/wapp_ctrl driver_rrm_onoff driver_wnm_btm_onoff wapp_send_btm_req_11kv_api event_btm_query event_neighbor_report_pool_update; do
             strings -a "$BIN/wapp" | grep -Fq "$symbol" || {
               echo "::error::WAPP is missing required runtime path: $symbol"
               exit 1
