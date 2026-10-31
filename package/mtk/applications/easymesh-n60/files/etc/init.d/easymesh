@@ -4,18 +4,37 @@ START=99
 STOP=10
 USE_PROCD=1
 
+radio_is_ready() {
+    iface="$1"
+    info="$(iwconfig "$iface" 2>/dev/null)" || return 1
+    printf '%s\n' "$info" | grep -q 'Mode:Master' &&
+        printf '%s\n' "$info" | grep -Eq 'ESSID:"[^"]+"'
+}
+
 start_service() {
-    # Wait for both N60 Pro radios, but avoid a fixed 60-second delay when ready.
+    # Wait for both radios to finish AP setup, not merely for netdev creation.
+    # Require three consecutive ready samples to avoid racing mtwifi-cfg startup.
     waited=0
-    while [ "$waited" -lt 60 ]; do
-        if [ -d /sys/class/net/ra0 ] && [ -d /sys/class/net/rax0 ]; then
-            break
+    stable=0
+    while [ "$waited" -lt 120 ]; do
+        if radio_is_ready ra0 && radio_is_ready rax0; then
+            stable=$((stable + 1))
+        else
+            stable=0
         fi
-        sleep 1
-        waited=$((waited + 1))
+        [ "$stable" -ge 3 ] && break
+        sleep 5
+        waited=$((waited + 5))
     done
-    if [ ! -d /sys/class/net/ra0 ] || [ ! -d /sys/class/net/rax0 ]; then
-        logger -t easymesh "ERROR: ra0/rax0 did not appear within 60 seconds"
+    if [ "$stable" -lt 3 ]; then
+        logger -t easymesh "ERROR: ra0/rax0 did not reach stable AP mode within 120 seconds"
+        return 1
+    fi
+
+    # Generate real local profiles before either WAPP or P1905 reads WTS.
+    # The script reads the two local DAT files; it never stores credentials in Git.
+    if ! /usr/sbin/generate-wts-bss-info; then
+        logger -t easymesh "ERROR: WTS generation failed; refusing to start EasyMesh"
         return 1
     fi
 
@@ -26,8 +45,7 @@ start_service() {
 
     modprobe mapfilter 2>/dev/null
 
-    # The wrapper stays alive while daemonized WAPP children exist. Respawn
-    # the wrapper only after the complete WAPP process set exits unexpectedly.
+    # The wrapper reports ready only after WAPP creates its real control socket.
     procd_open_instance wapp
     procd_set_param command /usr/bin/wapp-n60-wrapper
     procd_set_param respawn
@@ -37,6 +55,15 @@ start_service() {
 
     procd_open_instance p1905
     procd_set_param command /bin/sh -c '
+        waited=0
+        while [ ! -S /tmp/wapp_server ] && [ "$waited" -lt 30 ]; do
+            sleep 1
+            waited=$((waited + 1))
+        done
+        if [ ! -S /tmp/wapp_server ]; then
+            logger -t easymesh "ERROR: WAPP control socket /tmp/wapp_server is not ready; P1905 will not start"
+            exit 1
+        fi
         role=$(grep "^map_root=" /etc/map/1905d.cfg | cut -d= -f2)
         if [ "$role" = "1" ]; then
             exec /usr/bin/p1905_managerd -r0 -f /etc/map/1905d.cfg -F /etc/map/wts_bss_info_config
