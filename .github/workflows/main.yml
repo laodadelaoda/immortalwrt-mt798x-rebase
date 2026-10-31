@@ -109,7 +109,7 @@ jobs:
               exit 1
             }
           done
-          for symbol in STEER_FSM "BTM Success" "BTM Fail" "topo_srv_handle_topology_event" "map_trigger_btm_req"; do
+          for symbol in STEER_FSM "BTM Success" "BTM Fail" "topo_srv_handle_topology_event" steer_fsm_trigger chan_mon_handle_steering_req parse_client_steering_btm_report_message; do
             strings -a "$BIN/mapd" | grep -Fq "$symbol" || {
               echo "::error::MAPD is missing required steering/topology path: $symbol"
               exit 1
