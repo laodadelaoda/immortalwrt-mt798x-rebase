@@ -137,7 +137,13 @@ jobs:
             }
           done
           if test -s "$BIN/wappctrl"; then
-            echo "Optional diagnostic helper present: wappctrl"
+            for symbol in btmreq /tmp/wapp_ctrl EVENT_REGISTER; do
+              strings -a "$BIN/wappctrl" | grep -Fq "$symbol" || {
+                echo "::error::wappctrl is missing required BTM/event diagnostic command: $symbol"
+                exit 1
+              }
+            done
+            echo "Optional diagnostic helper present: wappctrl (BTM/event CLI verified)"
           else
             echo "NOTICE: optional diagnostic helper wappctrl is absent."
           fi
