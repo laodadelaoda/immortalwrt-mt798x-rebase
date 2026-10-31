@@ -58,12 +58,20 @@ jobs:
             echo "::error::Fixed ALID must not be configured on N60 Pro."
             exit 1
           fi
-          if ! grep -Eq '^[0-9]+,' "$ROOT/etc/map/wts_bss_info_config"; then
-            echo "::error::WTS has no valid BSS profiles. P1905 requires populated WTS at startup; a tested runtime WTS generator is not implemented. Do not add static SSIDs or credentials to the repository."
+          # WTS is intentionally a runtime configuration file. Keep only the
+          # vendor marker in Git; do not bake test SSIDs, BSSIDs or credentials
+          # into the firmware. WAPP's native WTS parser/event path consumes the
+          # file, while UCC dev_set_config and WPS configuration events update it.
+          if ! grep -qx '#ucc_bss_info' "$ROOT/etc/map/wts_bss_info_config"; then
+            echo "::error::WTS template must contain the exact #ucc_bss_info marker."
+            exit 1
+          fi
+          if grep -Eq '^[[:space:]]*[0-9]+,' "$ROOT/etc/map/wts_bss_info_config"; then
+            echo "::error::Repository WTS template must not contain static BSS profiles."
             exit 1
           fi
           if grep -Eiq 'maprocks[0-9]+' "$ROOT/etc/map/wts_bss_info_config"; then
-            echo "::error::WTS BSS config still contains vendor test SSIDs."
+            echo "::error::WTS template still contains vendor test SSIDs."
             exit 1
           fi
           if test -s "$BIN/wappctrl"; then
