@@ -16,6 +16,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
+      - name: Checkout repository binaries
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
       - name: Download and verify exact WAPP source archive
         shell: bash
         run: |
