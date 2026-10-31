@@ -1,0 +1,136 @@
+#!/bin/sh
+# Generate the MTK WTS BSS profile from the router's own N60 Pro DAT files.
+# Credentials remain on the router; no real SSID/PSK is stored in Git.
+set -eu
+LC_ALL=C
+export LC_ALL
+
+DAT_24G="${N60_WTS_DAT_24G:-/etc/wireless/mediatek/mt7986-ax6000.dbdc.b0.dat}"
+DAT_5G="${N60_WTS_DAT_5G:-/etc/wireless/mediatek/mt7986-ax6000.dbdc.b1.dat}"
+OUTPUT="${N60_WTS_OUTPUT:-/etc/map/wts_bss_info_config}"
+TMP="${OUTPUT}.tmp.$$"
+
+cleanup() {
+    rm -f "$TMP"
+}
+trap cleanup EXIT HUP INT TERM
+
+die() {
+    echo "generate-wts-bss-info: $*" >&2
+    exit 1
+}
+
+# Read the first semicolon-delimited value for a DAT key.
+dat_value() {
+    file="$1"
+    key="$2"
+    awk -F= -v wanted="$key" '
+        $1 == wanted {
+            value = substr($0, index($0, "=") + 1)
+            sub(/\r$/, "", value)
+            split(value, parts, ";")
+            gsub(/^["'\''"]|["'\''"]$/, "", parts[1])
+            print parts[1]
+            exit
+        }
+    ' "$file"
+}
+
+first_dat_value() {
+    file="$1"
+    shift
+    for key do
+        value="$(dat_value "$file" "$key")"
+        if [ -n "$value" ]; then
+            printf '%s\n' "$value"
+            return 0
+        fi
+    done
+    return 1
+}
+
+read_radio() {
+    label="$1"
+    file="$2"
+
+    [ -r "$file" ] || die "$label DAT file is missing: $file"
+
+    ssid="$(first_dat_value "$file" SSID1 SSID)" ||
+        die "$label DAT has no SSID1/SSID"
+    auth="$(first_dat_value "$file" AuthMode)" ||
+        die "$label DAT has no AuthMode"
+    cipher="$(first_dat_value "$file" EncrypType)" ||
+        die "$label DAT has no EncrypType"
+    key="$(first_dat_value "$file" WPAPSK1 WPAPSK)" ||
+        die "$label DAT has no WPAPSK1/WPAPSK"
+    hidden="$(first_dat_value "$file" HideSSID1 HideSSID)" ||
+        die "$label DAT has no HideSSID1/HideSSID"
+
+    [ "$auth" = "WPA2PSK" ] ||
+        die "$label AuthMode must be WPA2PSK; refusing to guess a WTS auth value"
+    [ "$cipher" = "AES" ] ||
+        die "$label EncrypType must be AES; refusing to guess a WTS cipher value"
+    case "$hidden" in
+        0) hidden_flag=N ;;
+        1) hidden_flag=Y ;;
+        *) die "$label HideSSID must be 0 or 1" ;;
+    esac
+
+    case "$ssid" in
+        ""|*[! -~]*|*[[:space:]]*|*,*)
+            die "$label SSID is empty or cannot be represented safely in WTS"
+            ;;
+    esac
+    [ "${#ssid}" -le 32 ] || die "$label SSID exceeds 32 bytes"
+
+    case "$key" in
+        *[! -~]*|*[[:space:]]*) die "$label PSK contains unsupported characters" ;;
+    esac
+    key_len="${#key}"
+    if [ "$key_len" -lt 8 ] || [ "$key_len" -gt 64 ]; then
+        die "$label PSK length must be 8..63 ASCII or 64 hexadecimal characters"
+    fi
+    if [ "$key_len" -eq 64 ]; then
+        case "$key" in
+            *[!0123456789A-Fa-f]*) die "$label 64-character PSK is not hexadecimal" ;;
+        esac
+    fi
+
+    printf '%s\n%s\n%s\n' "$ssid" "$key" "$hidden_flag"
+}
+
+mkdir -p "$(dirname "$OUTPUT")"
+
+# N60 Pro has one 2.4 GHz radio and one 5 GHz radio, and has no 6 GHz PHY.
+# The 5 GHz radio can use either the low or high 5 GHz operating-class range,
+# so provide both 11x and 12x profiles from the same real 5 GHz DAT settings.
+radio24="$(read_radio 2.4G "$DAT_24G")"
+radio5="$(read_radio 5G "$DAT_5G")"
+
+ssid24="$(printf '%s\n' "$radio24" | sed -n '1p')"
+key24="$(printf '%s\n' "$radio24" | sed -n '2p')"
+hidden24="$(printf '%s\n' "$radio24" | sed -n '3p')"
+ssid5="$(printf '%s\n' "$radio5" | sed -n '1p')"
+key5="$(printf '%s\n' "$radio5" | sed -n '2p')"
+hidden5="$(printf '%s\n' "$radio5" | sed -n '3p')"
+
+{
+    printf '#ucc_bss_info\n'
+    # BSSID ff:ff:ff:ff:ff:ff is the vendor WTS wildcard used for profiles.
+    # AuthMode 0x0020 = WPA2-PSK; EncrypType 0x0008 = AES.
+    # 1 1 = Backhaul + Fronthaul; 4095 N/A N/A = no VLAN override.
+    printf '1,ff:ff:ff:ff:ff:ff 8x %s 0x0020 0x0008 %s 1 1 hidden-%s 4095 N/A N/A\n' "$ssid24" "$key24" "$hidden24"
+    printf '2,ff:ff:ff:ff:ff:ff 11x %s 0x0020 0x0008 %s 1 1 hidden-%s 4095 N/A N/A\n' "$ssid5" "$key5" "$hidden5"
+    printf '3,ff:ff:ff:ff:ff:ff 12x %s 0x0020 0x0008 %s 1 1 hidden-%s 4095 N/A N/A\n' "$ssid5" "$key5" "$hidden5"
+} > "$TMP"
+
+[ "$(grep -c '^[1-3],ff:ff:ff:ff:ff:ff ' "$TMP")" -eq 3 ] ||
+    die "generated WTS record count is not three"
+if grep -Eiq 'maprocks[0-9]*|Multi-AP-' "$TMP"; then
+    die "test SSID found in generated WTS"
+fi
+
+chmod 0600 "$TMP"
+mv -f "$TMP" "$OUTPUT"
+trap - EXIT HUP INT TERM
+logger -t easymesh "Generated 3 local WTS BSS profiles (2.4G, 5G-low, 5G-high)"
