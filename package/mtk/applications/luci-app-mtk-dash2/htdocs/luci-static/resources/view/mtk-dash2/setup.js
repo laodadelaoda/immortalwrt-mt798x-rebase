@@ -5,6 +5,7 @@
 var getStatus = rpc.declare({ object: 'map-easymesh', method: 'status' });
 var getCaps = rpc.declare({ object: 'map-easymesh', method: 'capabilities' });
 var setField = rpc.declare({ object: 'map-easymesh', method: 'set_field', params: ['field', 'value', 'reload'] });
+var setRole = rpc.declare({ object: 'map-easymesh', method: 'set_role', params: ['value', 'reload'] });
 var setBhType = rpc.declare({ object: 'map-easymesh', method: 'set_bh_type', params: ['type'] });
 var bhStatus = rpc.declare({ object: 'map-easymesh', method: 'bh_status' });
 var bhScan = rpc.declare({ object: 'map-easymesh', method: 'bh_scan', params: ['iface'] });
@@ -157,7 +158,7 @@ return view.extend({
 				rows.push([_('P1905 进程'), wd.p1905_running ? _('运行中') : _('未运行')]);
 				rows.push([_('MAPD 进程'), wd.mapd_running ? _('运行中') : _('未运行')]);
 				rows.push([_('WAPP 控制套接字'), wd.wapp_ctrl_socket ? _('存在') : _('不存在')]);
-				(wd.reasons || []).forEach(function(r) { wappReasons.push(_('wapp 启动条件：%s').format(r)); });
+				(wd.reasons || []).forEach(function(r) { wappReasons.push(_('EasyMesh 启动条件：%s').format(r)); });
 				if (!wd.can_start) wappReasons.push(_('N60 EasyMesh 服务或配置文件未就绪；下方按钮将通过 easymesh 服务启动，不会改写无线 UCI 参数。'));
 			} else if (wd && wd.unavailable) {
 				wappReasons.push(_('当前后端不支持 wapp 诊断，请升级插件后端。'));
@@ -379,7 +380,7 @@ return view.extend({
 				if (!window.confirm(_('确认应用以上全部 EasyMesh 配置？无线可能短暂中断，失败自动回滚。'))) return;
 				runOut.innerHTML = '';
 				var tasks = [];
-				tasks.push(function() { return setField('role', String(roleSel.value), false); });
+				tasks.push(function() { return setRole(String(roleSel.value), false); });
 				SWITCH_FIELDS.forEach(function(f) {
 					var v = String(paramInputs[f.id].value || '');
 					if (f.type === 'int') v = String(Number(v) || 0);

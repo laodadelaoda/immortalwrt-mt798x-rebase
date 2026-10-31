@@ -21,9 +21,9 @@ local REDACTED = "__mtk_redacted__"
 local FIELDS = {
 	role = {
 		file = "mapd_cfg", key = "DeviceRole", label = "设备角色",
-		type = "enum", map = { agent = "0", controller = "1", both = "2", ["0"] = "0", ["1"] = "1", ["2"] = "2" },
-		labels = { ["0"] = "Agent", ["1"] = "Controller", ["2"] = "Controller+Agent" },
-		enum_sort = { "0", "1", "2" },
+		type = "enum", map = { controller = "1", ["1"] = "1" },
+		labels = { ["1"] = "Controller / Root" },
+		enum_sort = { "1" },
 		d = "1",
 	},
 	backhaul = {
@@ -55,7 +55,7 @@ local FIELDS = {
 	},
 	dhcp_ctl = {
 		file = "mapd_cfg", key = "DhcpCtl", label = "DHCP 控制",
-		type = "enum", map = { ["0"] = "0", ["1"] = "1", disable = "0", enable = "1" },
+		type = "enum", map = { ["0"] = "0", disable = "0" },
 		d = "0",
 	},
 	non_map_ap = {
@@ -150,8 +150,8 @@ local FIELDS = {
 	bh_prio_6g = { file = "mapd_cfg", key = "BhPriority6G", label = "回程优先级 6G", type = "int", min = 0, max = 3, d = "1" },
 	bss_cfg_priority = {
 		file = "1905d.cfg", key = "bss_config_priority", label = "BSS 配置优先级",
-		type = "string", allow_empty = true,
-		d = "",
+		type = "string",
+		d = "ra0;rax0;apclix0",
 	},
 	lowrssi_edge_re = {
 		file = "mapd_cfg", key = "LowRSSIAPSteerEdge_RE", label = "低 RSSI 引导边缘 (RE)",
@@ -854,6 +854,7 @@ local function set_field(args)
 	local id = args.field
 	local f = id and FIELDS[id]
 	if not f then return { ok = false, error = "未知字段: " .. tostring(id) } end
+	if id == "role" then return { ok = false, error = "N60 Pro Root 角色请通过 set_role 同步设置 DeviceRole/map_root/map_agent" } end
 	local path = FILE_PATHS[f.file] or (MAP_DIR .. "/" .. f.file)
 	local text = read(path)
 	if not text then return { ok = false, error = "配置文件缺失: " .. path } end
@@ -916,7 +917,7 @@ local function set_field(args)
 	else
 		return { ok = false, error = "不支持的字段类型" }
 	end
-	if not f.secret and cur == nv then return { ok = false, error = "值未变化（当前: " .. cur .. "）" } end
+	if not f.secret and cur == nv then return { ok = true, unchanged = true, field = id, value = nv, note = "值未变化" } end
 	-- keep original quoting style (mapd files are unquoted key=value)
 	local openq, closeq = "", ""
 	if cur_line and cur_line.value:sub(1, 1) == '"' then openq, closeq = '"', '"' end
@@ -1504,7 +1505,54 @@ local function reset(args)
 end
 
 -- compatibility wrappers (map.js legacy calls)
-local function set_role(a) return set_field({ field = "role", value = a and a.value, reload = a and a.reload }) end
+local function set_role(a)
+	a = a or {}
+	if tostring(a.value or "") ~= "1" then
+		return { ok = false, error = "N60 Pro 仅支持 Root / Controller 角色" }
+	end
+
+	local role_path = MAP_DIR .. "/mapd_cfg"
+	local p1905_path = MAP_DIR .. "/1905d.cfg"
+	local role_before = read(role_path)
+	local p1905_before = read(p1905_path)
+	if not role_before or not p1905_before then
+		return { ok = false, error = "缺少 mapd_cfg 或 1905d.cfg，拒绝部分写入" }
+	end
+
+	local role_result = apply_kv("mapd_cfg", { DeviceRole = "1" })
+	if not role_result.ok then return role_result end
+
+	local p1905_result = apply_kv("1905d.cfg", { map_root = "1", map_agent = "0" })
+	if not p1905_result.ok then
+		local rollback_ok = write_atomic(role_path, role_before)
+		return { ok = false, error = "写入 1905d Root 角色失败；已尝试回滚 DeviceRole", rollback_ok = rollback_ok }
+	end
+
+	if a.reload == true then
+		local okr, results, warn = reload_services()
+		if not okr then
+			local rb_role = write_atomic(role_path, role_before)
+			local rb_p1905 = write_atomic(p1905_path, p1905_before)
+			return {
+				ok = false,
+				error = "EasyMesh 重载失败；已尝试恢复原角色配置",
+				results = results,
+				warn = warn,
+				rollback_ok = rb_role and rb_p1905,
+			}
+		end
+		return { ok = true, role = "1", map_root = "1", map_agent = "0", results = results, warn = warn }
+	end
+
+	return {
+		ok = true,
+		role = "1",
+		map_root = "1",
+		map_agent = "0",
+		role_result = role_result,
+		p1905_result = p1905_result,
+	}
+end
 local function set_backhaul(a) return set_field({ field = "backhaul", value = a and a.value, reload = a and a.reload }) end
 local function set_policy(a) return set_field({ field = "steer", value = a and a.value, reload = a and a.reload }) end
 
