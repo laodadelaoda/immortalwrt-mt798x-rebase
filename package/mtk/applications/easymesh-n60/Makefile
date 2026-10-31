@@ -47,6 +47,7 @@ define Package/easymesh-n60/install
 	$(INSTALL_BIN) ./files/usr/bin/p1905_managerd $(1)/usr/bin/
 	$(INSTALL_BIN) ./files/usr/bin/wapp-n60-wrapper $(1)/usr/bin/
 	$(INSTALL_BIN) ./files/usr/sbin/generate-mapd-strng $(1)/usr/sbin/
+	$(INSTALL_BIN) ./files/usr/sbin/generate-wts-bss-info $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/usr/lib/libeth_1905ops.so $(1)/usr/lib/
 	$(INSTALL_BIN) ./files/usr/lib/libmapd_interface_client.so $(1)/usr/lib/
 	$(INSTALL_DATA) ./files/usr/lib/libssl.so.1.1 $(1)/usr/lib/
