@@ -43,7 +43,9 @@ radio can operate in either the low or high 5 GHz channel range; both WTS
 operating-class profiles use the same live 5 GHz SSID/security settings.
 The BSSID wildcard, WPA2-PSK/AES values, Backhaul/Fronthaul flags, hidden
 marker and untagged VLAN tail follow the audited N60/vendor WTS record
-layout. Each record is generated locally, and the resulting file is mode
+layout. Before writing, the generator also reads live `iwconfig` state and
+requires the AP SSID on `ra0` and `rax0` to match the corresponding DAT
+profile. Each record is generated locally, and the resulting file is mode
 `0600`.
 
 ## Startup ordering and readiness gates
