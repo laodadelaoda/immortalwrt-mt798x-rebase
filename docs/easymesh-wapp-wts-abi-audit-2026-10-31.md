@@ -2,12 +2,20 @@
 
 Audit date: 2026-10-31  
 Target branch: `n60pro-mtk-closed-driver`  
-WAPP source archive: `wappd-80ca5724.tar.bz2`  
-Archive SHA-256: `73fa8995533e701d3d5774faa92d274497f99e1a37c81ce445f25a959b4b7462`
+Release tag: `dl-sources-7.6.7.3`
 
-The source archive was downloaded by GitHub Actions, SHA-256 verified, and extracted. The source audit workflow is `.github/workflows/wapp-source-audit.yml`.
+## 1. Audited source archives
 
-## 1. WTS parser: `wapp_read_wts_map_config()`
+| Component | Release asset | SHA-256 |
+|---|---|---|
+| WAPP | `wappd-80ca5724.tar.bz2` | `73fa8995533e701d3d5774faa92d274497f99e1a37c81ce445f25a959b4b7462` |
+| MAPD | `mapd-6eca4331.tar.bz2` | `39ab37cb347d372e352ade03181bc9c23429d4d849d32acbdff00973547d7e18` |
+| P1905 | `1905daemon-35234223.tar.bz2` | `82f7cc4ad5731e750f87c9a4ad19a39d2456bb8fec0cf79bf4b3f3ccb4f14795` |
+| MTK driver | `mt79xx_20250408-705eb4.tar.xz` | `b029d7b43c498193092dc6a3c857361c8835ce34bb306561c550ac0539784a78` |
+
+The WAPP archive was downloaded and SHA-256 verified by the GitHub Actions source-audit workflow. The MAPD, P1905 and driver archives were also extracted and inspected for this audit. The audit workflow is `.github/workflows/wapp-source-audit.yml`.
+
+## 2. WTS parser: `wapp_read_wts_map_config()`
 
 Source: `wappd/common/main.c`, function beginning at line 258.
 
@@ -17,17 +25,16 @@ The parser accepts records with this token order:
 <index>,<mac> <opclass> <ssid> <authmode> <encryptype> <key> <resv1> <resv2> [hidden-<Y|N> ...]
 ```
 
-- The record index ends at the first comma.
+- The record index ends at the first comma. WAPP parses it but does not store it in `set_config_bss_info`; records are copied into the array in file order.
 - MAC is six colon-separated hexadecimal octets.
-- Operating class prefixes map as: `8x` -> 2.4 GHz, `11x` -> 5 GHz low, `12x` -> 5 GHz high; `13x` is recognized only when `MAP_6E_SUPPORT` is compiled.
-- Auth mode and encryption type are parsed as hexadecimal values with a `0x` prefix.
-- SSID and key are whitespace-delimited. A backslash-space sequence represents a literal SSID space; a doubled backslash represents a literal backslash. The parser converts escaped spaces to SUB (0x1a) during tokenization and restores them afterward.
+- Operating-class prefixes map as: `8x` -> 2.4 GHz, `11x` -> 5 GHz low, `12x` -> 5 GHz high; `13x` is recognized only when `MAP_6E_SUPPORT` is compiled.
+- Auth mode and encryption type are hexadecimal WPS bitfields. The source defines WPA2-PSK as `0x0020`, SAE as `0x0040`, and AES as `0x0008`.
+- SSID and key are whitespace-delimited. A backslash-space sequence represents a literal space; a doubled backslash represents a literal backslash. The parser converts escaped spaces to SUB (0x1a) during tokenization and restores them in the SSID/key.
 - `resv1 & 1` maps to the BH BSS flag (bit 6); `resv2 & 1` maps to the FH BSS flag (bit 5).
 - If a `hidden-` token exists, its following character controls hidden SSID (`Y` or `N`). If absent, hidden SSID defaults to `N`.
-- Trailing text after the hidden token is not interpreted by this WAPP parser; other daemons may still consume those trailing WTS fields.
-- The parser returns the number of records through `config_bss_num`; it can return success with zero records. The empty `#ucc_bss_info` template therefore parses as zero BSS entries, not as a usable configuration.
+- Trailing VLAN/PVID/PCP fields are not interpreted by this WAPP parser. P1905 parses the same text file independently and does consume trailing VLAN fields.
 
-Capacity is `WTS_FILE_READ_LINE * max_bss_num`, with `WTS_FILE_READ_LINE=100`. `MAX_SET_BSS_INFO_NUM` is 58 without `MAP_6E_SUPPORT`, or 99 with it. The parser also emits warnings when 2.4 GHz, 5 GHz low, or 5 GHz high operating classes are absent; those warnings are not equivalent to a parse failure.
+Capacity is `WTS_FILE_READ_LINE * max_bss_num`, with `WTS_FILE_READ_LINE=100`. `MAX_SET_BSS_INFO_NUM` is 58 without `MAP_6E_SUPPORT`, or 99 with it. The parser emits warnings when operating-class groups are absent, but those warnings are not equivalent to a parse failure.
 
 ### Parser robustness defects observed upstream
 
@@ -35,43 +42,125 @@ Capacity is `WTS_FILE_READ_LINE * max_bss_num`, with `WTS_FILE_READ_LINE=100`. `
 - Most `sscanf` results are checked only against `EOF`, not against the expected conversion count; malformed fields can therefore be accepted.
 - Several parse variables are reused between records rather than reset for each record.
 - Unknown operating-class prefixes are not rejected explicitly.
-- The parser's success return does not require any BSS record.
+- The parser can return success with zero records.
+- If the WTS file cannot be opened, the parser returns before zeroing the caller's output array.
 
-These are findings in the supplied vendor source. The repository currently packages a prebuilt WAPP binary, so changing the C source alone would not change the installed binary.
+These are findings in the supplied vendor source. The repository packages a prebuilt WAPP binary, so changing the C source alone would not change the installed binary.
 
-## 2. WTS generation and update paths
+## 3. WAPP WTS read path and MAPD boot trigger
 
-A full automatic WTS generator from local UCI/driver BSS state at daemon startup was **not found** in this source archive.
+The MAPD controller boot path is:
 
-Two update paths were found:
+1. `topo_srv_init_own_info()` sets `need_to_update_wts = 1`.
+2. MAPD queries operational BSS information for each discovered radio with `WAPP_USER_GET_OPERATIONAL_BSS`.
+3. The resulting `WAPP_OPERBSS_REPORT` is handled by `wlanif_handle_oper_bss_report()`.
+4. Only when `device_role == DEVICE_ROLE_CONTROLLER` and `need_to_update_wts` is still set does MAPD call `topo_srv_update_wts_config()`.
+5. That function issues `WAPP_USER_GET_WTS_CONFIG` and waits for `WAPP_WTS_CONFIG`.
+6. WAPP's `map_handler()` dispatches the command to `map_handle_get_wts_config()`, which calls `wapp_read_wts_map_config()` and serializes a fixed-size BSS array.
+7. MAPD's `topo_srv_parse_wts_config()` clears its array, copies the returned payload, and sets `need_to_update_wts = 0`.
 
-1. **Controller-provided configuration:** `wappd/dpp_config_agent_impl.lua:533`, `DevSetConfigMediatek(cmd)`, truncates and rebuilds `/etc/map/wts_bss_info_config` from incoming `dev_set_config,bss_info1...` fields, then invokes `1905ctrl controller dev_set_config <file>`. Its caller handles incoming `dev_set_config,` messages. This is a provisioning path driven by received configuration, not local startup discovery.
-2. **WPS configuration event:** `wappd/common/wapp_cmm.c` dispatches `WAPP_CONFIG_WPS_EVENT` to `wdev_wps_configuration_handle()` in `wappd/common/wdev.c`. The handler is compiled under `WPS_UNCONFIG_FEATURE_SUPPORT` (enabled by this source Makefile). It updates an existing WTS record using WPS event SSID/key/auth/encryption/channel/index, writes the file, then sends `WAPP_MAP_RENEW` to MAPD.
+This is a read-and-transfer path, not a WTS generator. The request is controller-only and is normally initiated by the first operational-BSS report after MAPD initialization.
 
-The WPS update path is not a general generator: it requires the target record and its next sequential index to exist, only handles the 2.4 GHz / 5 GHz low / 5 GHz high classes, and rewrites the file in place. It cannot safely bootstrap the current empty template.
+### Empty/missing WTS behavior is unsafe
 
-The WAPP reader and `WAPP_USER_GET_WTS_CONFIG` handler only read and serialize the current file; they do not generate it.
+- With the current empty `#ucc_bss_info` template, WAPP opens the file, zeroes the output array, returns a record count of zero, and still serializes the full fixed-size array.
+- `map_handle_get_wts_config()` ignores both the parser return value and `config_bss_num`.
+- MAPD copies the payload and clears `need_to_update_wts` without checking that any BSS record exists. It therefore treats an empty WTS as synchronized and does not retry until a later renew.
+- If the file is missing, WAPP returns before zeroing the stack array; the caller ignores the error and can serialize uninitialized stack contents.
+- MAPD's `topo_srv_parse_wts_config()` copies `config_length` without checking it against the destination array size. A WAPP/MAPD capacity mismatch could therefore overflow the MAPD buffer.
 
-## 3. WAPP event and client registration
+## 4. WTS update triggers: exact conditions
 
-- WAPP opens a Unix datagram server at `/tmp/wapp_server` in `wapp_iface_init()`.
-- Clients attach through the WAPP user-interface attach path; the peer socket address and daemon name are stored in the client list.
-- `SET_REGITER_EVENT` (command type 0x01) accepts a 16-bit event ID and sets the corresponding bit in a 256-event registration bitmap.
-- User commands in the `WAPP_USER_MIN_CMD < type < WAPP_USER_MAX_CMD` range are dispatched to `map_handler()`.
-- `send_event_dispatch()` sends events to an explicitly named daemon, to clients that registered the event ID, or to a client with a matching pending asynchronous command.
-- The driver event path reaches `wapp_event_handle()`; `WAPP_CONFIG_WPS_EVENT` is the WPS-to-WTS update trigger.
-- The separate WAPP control socket supports `EVENT_REGISTER` / `EVENT_UNREGISTER`; this is not the same wire message as the binary WAPP user-command/event protocol.
+### 4.1 WPS configuration event
 
-## 4. WAPP / MAPD / P1905 compatibility evidence
+The driver source shows this is not a generic UCI-change notification.
 
-The packaged `wapp`, `mapd`, and `p1905_managerd` are all AArch64 ELF executables using the musl dynamic loader. Their strings show the expected WAPP Unix socket path and attach/detach protocol. MAPD contains the message `wts_bss_info_config file has been updated. do renew procedure`. P1905 contains `/etc/map/wts_bss_info_config` and the failure message `read wts_bss_info_config fail or no valid bss info`.
+1. `WscUpdatePortCfgTimeout()` compares the incoming WPS credential with the active BSS: AKM/auth mode, pairwise cipher, SSID and PSK.
+2. If all are unchanged, it returns without sending a WAPP event.
+3. If the configuration changed, it calls `WscWriteConfToPortCfg()`.
+4. Under `CONFIG_MAP_SUPPORT && WPS_UNCONFIG_FEATURE_SUPPORT`, the driver calls `wapp_send_wps_config()`.
+5. The driver sends `WAPP_CONFIG_WPS_EVENT` through the WEXT custom event `OID_WAPP_EVENT`.
+6. WAPP's `wapp_event_handle()` dispatches `WAPP_CONFIG_WPS_EVENT` to `wdev_wps_configuration_handle()`.
+7. The handler reads the existing WTS file, replaces one existing indexed record, writes the file, and sends `WAPP_MAP_RENEW`.
+8. MAPD receives the registered `WAPP_MAP_RENEW` event; `wlanif_handle_mapd_renew()` calls `mapd_renew()`.
+9. `mapd_renew()` sets `need_to_update_wts = 1`, requests WAPP radio renewal, and calls `map_1905_Set_Read_Bss_Conf_and_Renew_v2()`. The next operational-BSS report can trigger another WTS read.
 
-The WAPP source defines a packed `set_config_bss_info` structure containing MAC, operating class, SSID, auth mode, encryption type, key, BH/FH flags, hidden flag and local radio/use fields. The WAPP `WAPP_WTS_CONFIG` event copies a fixed `MAX_SET_BSS_INFO_NUM * sizeof(struct set_config_bss_info)` payload. This is an ABI-sensitive fixed-layout message.
+The WAPP and driver Makefiles define `WPS_UNCONFIG_FEATURE_SUPPORT` for the MAP path, so this is a real compiled source path when MAP support is enabled.
 
-**Compatibility conclusion:** socket naming, attach/detach strings, WAPP event vocabulary, and MAPD's WTS-renew behavior are consistent with this WAPP implementation. However, the packaged MAPD and P1905 binaries are stripped and do not expose enough build metadata or structure symbols to prove exact compile-time ABI identity (including whether their BSS array was compiled with the same `MAP_6E_SUPPORT` capacity). Do not claim full ABI verification until their build provenance or matching headers are confirmed.
+### 4.2 Limitations of the WPS writer
 
-## 5. Consequence for this N60 build
+The WPS handler is a record updater, not a bootstrap generator:
 
-The current repository template contains only `#ucc_bss_info`. The P1905 binary explicitly reports failure when the WTS file is absent or contains no valid BSS information. The current startup script passes that empty template directly to `p1905_managerd`; it does not create WTS first.
+- It requires the target index and the next sequential index to exist. It cannot create the initial WTS file or safely update the final record.
+- It always marks the first record in a band as BH and later records as FH; it logs the incoming `bss_role` but does not use it to preserve the existing role.
+- It writes `hidden-N` and vendor-specific VLAN/PVID text rather than deriving those fields from the live wireless configuration.
+- It writes the file in place with `fopen(..., "w+")`; there is no temporary file plus atomic rename.
+- It does not escape SSID/key spaces or backslashes before writing.
+- Its 5 GHz high-band branch requires both `radio_num >= 3` and a high channel. N60 has two radios, so a 5 GHz channel >=100 can be written as `11x` rather than `12x`.
+- It handles `8x`, `11x`, and `12x`; it has no corresponding `13x` update branch.
 
-Therefore the existing CI preflight rejection is correct and must not be weakened merely to make the firmware build green. The remaining implementation blocker is a tested runtime generator that reads the live wireless configuration/driver state, produces the exact WTS record semantics required by both P1905 and WAPP, validates it, and atomically installs it before P1905 starts. The auth-mode/encryption numeric mapping and all trailing WTS fields must be established from matching vendor code or verified runtime data, not guessed.
+Do not use this upstream writer as the generic runtime generator.
+
+### 4.3 DPP/UCC provisioning path
+
+The source archive also contains `dpp_config_agent_impl.lua`, whose `DevSetConfigMediatek(cmd)` path truncates and rebuilds WTS from incoming `dev_set_config,bss_info...` fields. This is externally supplied provisioning data, not local startup discovery. The current WAPP package install rules and the current `easymesh-n60` package do not install that Lua agent, so it is not an active initial-WTS mechanism in the current N60 package.
+
+WAPP's DPP configurator startup path can read WTS when DPP configurator support is enabled; that path also reads existing WTS and does not generate it.
+
+## 5. WAPP interface registration and event transport
+
+- `wapp_get_wireless_interfaces()` reads `bss_config_priority` from MAP configuration. If non-empty, it treats the value as a static semicolon-separated interface list, validates each name with `SIOCGIWNAME`, obtains its MAC and creates a WAPP device. Only when the list is empty does it scan `/proc/net/dev` dynamically.
+- The current N60 configuration fixes `bss_config_priority=ra0;rax0;apclix0`; this is an N60 adapter setting, not generic interface discovery.
+- WAPP's binary user-interface server binds `/tmp/wapp_server`. MAPD's `wapp_usr_intf_ctrl_open("mapd", ...)` client binds an abstract-namespace local socket, connects to `/tmp/wapp_server`, and sends `ATTACH:mapd`.
+- MAPD registers event IDs with the binary `SET_REGITER_EVENT` command (type `0x01`). WAPP stores the event IDs in the client's registration bitmap; `send_event_dispatch()` uses that bitmap to deliver asynchronous events.
+- MAPD's event list includes `WAPP_MAP_RENEW`. `WAPP_WTS_CONFIG` is not an unsolicited registered event; it is the synchronous response to `WAPP_USER_GET_WTS_CONFIG`.
+- The WAPP filesystem control socket `/tmp/wapp_ctrl` handles text CLI commands such as `EVENT_REGISTER` / `EVENT_UNREGISTER`. It is distinct from MAPD's abstract local socket name and the binary `/tmp/wapp_server` protocol.
+
+## 6. WAPP / MAPD / P1905 ABI compatibility
+
+### WAPP <-> MAPD
+
+The source definitions of `struct GNU_PACKED set_config_bss_info` in WAPP `include/wapp_cmm.h` and MAPD `mapd_i.h` have identical field order and types:
+
+```c
+unsigned char mac[ETH_ALEN];
+char oper_class[4];
+char ssid[33];
+unsigned short authmode;
+unsigned short encryptype;
+char key[65];
+unsigned char wfa_vendor_extension;
+unsigned char hidden_ssid;
+unsigned char operating_chan;
+unsigned char is_used;
+```
+
+The packed size is 116 bytes. The event/command enum positions also match in the two headers:
+
+- `WAPP_WTS_CONFIG = 0x5A`
+- `WAPP_USER_GET_WTS_CONFIG = 0xD4`
+
+The array capacity is conditional in all three source components: 58 without `MAP_6E_SUPPORT`, 99 with it. The N60 config explicitly disables `CONFIG_MTK_MAP_R2_6E_SUPPORT`, so the intended build capacity is 58. The source Makefiles enable `MAP_6E_SUPPORT` only when that Kconfig option is selected.
+
+**Source-level WAPP/MAPD ABI is therefore confirmed.** The remaining binary-level caveat is that the checked-in WAPP/MAPD executables are prebuilt and stripped; their exact compile-time `MAP_6E_SUPPORT` setting is not recorded. It must match, because MAPD copies the event's supplied length without a destination-size check.
+
+### P1905 is a separate text-file consumer
+
+P1905 does not receive the WAPP packed structure over this MAPD socket. Its `struct set_config_bss_info` is a separate, unpacked internal structure with additional fields such as `band_support`, `pvid`, `pcp`, `ssid_len`, and `vid`. P1905 independently parses the WTS text file. Therefore the P1905 structure must not be compared as if it were the WAPP/MAPD IPC payload.
+
+P1905 loads WTS during initialization. An empty file can produce a zero-entry configuration without making the daemon's initial file-read call fail. The explicit `read_bss_conf_and_renew()` and `read_bss_conf_and_renew_v2()` paths reject `bss_config_num == 0`. The P1905 log string about "fail or no valid bss info" belongs to those configuration/renew paths; it does not prove that the daemon necessarily exits at initial startup.
+
+## 7. Decision for the N60 repository
+
+The current repository template contains only `#ucc_bss_info`. WAPP does not generate the initial local BSS profile set. Its normal path reads WTS; its WPS path only rewrites an existing record; the optional DPP/UCC Lua path requires externally supplied provisioning data and is not installed in this package.
+
+Therefore:
+
+1. Keep the fail-closed CI check. Do not allow an empty WTS template to pass merely to make the firmware build green.
+2. Add a generic runtime WTS generator and validator, with MTK-specific radio/interface discovery isolated in an adapter. The generator must read live UCI/runtime state, not commit SSIDs, keys or BSSIDs.
+3. Run generation and validation after wireless interfaces are ready but before WAPP's DPP configurator can read WTS and before P1905 starts.
+4. Write to a temporary file, validate every record and required radio group, then atomically rename it into place. Any failure must block P1905/MAPD startup.
+5. Fix or replace the upstream WPS writer behavior (or deliberately disable that path if WPS provisioning is not used); otherwise it can rewrite roles/opclasses and truncate the WTS file non-atomically.
+6. Preserve matching WAPP/MAPD/P1905 compile-time MAP 6E settings. For N60, the target config has MAP 6E disabled.
+
+The current CI preflight correctly rejects the missing runtime generator. The remaining implementation blocker is not the WAPP parser: it is the absence of a tested runtime generator/validator and the unsafe WPS record updater. Do not rerun the full firmware build until those files and synthetic tests are committed.
