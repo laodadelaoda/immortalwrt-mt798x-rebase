@@ -18,6 +18,16 @@ for socket in /tmp/wapp_server /tmp/wapp_ctrl /tmp/mapd_ctrl; do
     fi
 done
 
+section "WAPP startup log (credentials redacted)"
+WAPP_LOG=/tmp/wapp-n60-startup.log
+if [ -r "$WAPP_LOG" ]; then
+    ls -l "$WAPP_LOG"
+    tail -n 120 "$WAPP_LOG" |
+        sed -r 's/((key|psk|passphrase|password)=)[^ ,;]+/\1<redacted>/Ig; s/(WPAPSK[0-9]*=)[^\t ,;]+/\1<redacted>/Ig; s/(WPAKey[=:])[^\t ,;]+/\1<redacted>/Ig'
+else
+    echo "MISSING: $WAPP_LOG"
+fi
+
 section "WAPP driver registration"
 if [ -x /usr/bin/wappctrl ]; then
     for iface in ra0 rax0; do
@@ -49,7 +59,7 @@ for file in /etc/map/mapd_cfg /etc/map/1905d.cfg; do
     if [ -r "$file" ]; then
         grep -E '^(DeviceRole|SteerEnable|CentralizedSteering|APSteerRssiTh|BhPriority|map_agent|map_root|map_ver|radio_band|bh_type|br_inf|lan|al_inf|bss_config_priority)=' "$file" || true
     else
-        echo "MISSING"
+        echo "MISSING: $file"
     fi
 done
 
@@ -59,7 +69,7 @@ for file in /etc/wireless/mediatek/mt7986-ax6000.dbdc.b0.dat /etc/wireless/media
     if [ -r "$file" ]; then
         grep -E '^(BssidNum|SSID1|AuthMode|RRMEnable|EncrypType|HideSSID)=' "$file" || true
     else
-        echo "MISSING"
+        echo "MISSING: $file"
     fi
 done
 
@@ -67,7 +77,7 @@ section "Recent EasyMesh / 11k / 11v events (credentials redacted)"
 if command -v logread >/dev/null 2>&1; then
     logread -l 400 2>/dev/null |
         grep -iE 'wapp|p1905|mapd|wts|bss|topology|btm|rrm|steer|mbo|neighbor' |
-        sed -r 's/(key=)[^ ,;]+/\1<redacted>/Ig; s/(WPAKey[=:])[^	 ,;]+/\1<redacted>/Ig; s/(WPAPSK[0-9]*=)[^	 ;]+/\1<redacted>/Ig' |
+        sed -r 's/(key=)[^ ,;]+/\1<redacted>/Ig; s/(WPAKey[=:])[^\t ,;]+/\1<redacted>/Ig; s/(WPAPSK[0-9]*=)[^\t ;]+/\1<redacted>/Ig' |
         tail -n 160 || true
 else
     echo "logread unavailable"
