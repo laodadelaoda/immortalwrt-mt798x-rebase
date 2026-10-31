@@ -31,12 +31,12 @@ start_service() {
         return 1
     fi
 
-    # Use the checked-in vendor WTS test profiles unchanged. Do not derive
+    # Use the checked-in N60-supported vendor WTS template unchanged. Do not derive
     # or rewrite SSIDs/PSKs from DAT files at boot.
     if [ ! -s /etc/map/wts_bss_info_config ] ||
        ! grep -qx '#ucc_bss_info' /etc/map/wts_bss_info_config ||
        [ "$(grep -c '^[0-9][0-9]*,ff:ff:ff:ff:ff:ff ' /etc/map/wts_bss_info_config)" -ne 16 ]; then
-        logger -t easymesh "ERROR: vendor WTS profile set is missing or incomplete; refusing to start EasyMesh"
+        logger -t easymesh "ERROR: N60 WTS template is missing or incomplete; refusing to start EasyMesh"
         return 1
     fi
 
