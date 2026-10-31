@@ -25,14 +25,17 @@ if [ ! -s /etc/wapp_ap.conf ] ||
     exit 1
 fi
 
+# N60 Pro is a dual-band 2.4/5 GHz device: retain the vendor template's
+# 12 records for 8x (2.4 GHz), 11x (5 GHz low), and 12x (5 GHz high).
+# The generic 16-record profile includes a 6 GHz group unsupported by N60.
 if [ ! -s /etc/map/wts_bss_info_config ] ||
    ! grep -qx '#ucc_bss_info' /etc/map/wts_bss_info_config ||
-   [ "$(grep -c '^[0-9][0-9]*,ff:ff:ff:ff:ff:ff ' /etc/map/wts_bss_info_config)" -ne 16 ] ||
+   [ "$(grep -c '^[0-9][0-9]*,ff:ff:ff:ff:ff:ff ' /etc/map/wts_bss_info_config)" -ne 12 ] ||
    ! grep -Fq 'Multi-AP-24G-2' /etc/map/wts_bss_info_config ||
    ! grep -Fq 'Multi-AP-5LG-2' /etc/map/wts_bss_info_config ||
    ! grep -Fq 'Multi-AP-5HG-2' /etc/map/wts_bss_info_config ||
-   ! grep -Fq 'Multi-AP-6G-2' /etc/map/wts_bss_info_config; then
-    log_msg "ERROR: vendor WTS file does not contain the complete 16-record EasyMesh test profile set"
+   grep -Eq '(^| )13x |Multi-AP-6G-' /etc/map/wts_bss_info_config; then
+    log_msg "ERROR: N60 WTS file does not contain the complete 12-record dual-band profile set"
     exit 1
 fi
 
