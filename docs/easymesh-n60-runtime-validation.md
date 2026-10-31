@@ -10,6 +10,14 @@ runtime event exchange.
 The repository stores only the one-line `#ucc_bss_info` WTS template. It must
 not contain real SSIDs, PSKs, factory test SSIDs, or static test BSS records.
 
+At boot, `mtwifi-cfg` first maps the active `wireless` UCI AP sections into
+the two local DAT profiles. Its source writes `SSID1`, `WPAPSK1`,
+`AuthMode`, `EncrypType`, `HideSSID` and `RRMEnable`, then calls
+`save_profile(dats, profile)` before bringing the AP VIFs up. The EasyMesh
+service waits for both AP interfaces to report stable Master mode before it
+reads those profiles. GitHub Actions checks these source-level contracts so
+a future mtwifi-cfg change cannot silently break WTS input generation.
+
 At boot, `generate-wts-bss-info` reads the router-local files:
 
 - `/etc/wireless/mediatek/mt7986-ax6000.dbdc.b0.dat` (2.4 GHz)
