@@ -1,0 +1,100 @@
+name: Audit WAPP 7.6.7.3 source
+
+on:
+  push:
+    branches: ["n60pro-mtk-closed-driver"]
+    paths:
+      - ".github/workflows/wapp-source-audit.yml"
+      - "package/mtk/applications/easymesh-n60/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Download and verify exact WAPP source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wapp-audit"
+          cd "$RUNNER_TEMP/wapp-audit"
+          curl -fL --retry 3 \
+            https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3/wappd-80ca5724.tar.bz2 \
+            -o wappd-80ca5724.tar.bz2
+          echo "73fa8995533e701d3d5774faa92d274497f99e1a37c81ce445f25a959b4b7462  wappd-80ca5724.tar.bz2" | sha256sum -c -
+          echo "===== ARCHIVE CONTENTS ====="
+          tar -tjf wappd-80ca5724.tar.bz2 | tee archive-files.txt
+          mkdir source
+          tar -xjf wappd-80ca5724.tar.bz2 -C source
+          echo "===== EXTRACTED FILE COUNT ====="
+          find source -type f | wc -l
+
+      - name: Audit WTS parser, events, interface registration and WTS writers
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/wapp-audit"
+          python3 - <<'PY'
+          import pathlib, re
+          root = pathlib.Path("source")
+          files = [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in {".c",".h",".cc",".cpp",".hpp",".mk"}]
+          print("SOURCE FILES:", len(files))
+          patterns = {
+              "WTS parser": re.compile(r"wapp_read_wts_map_config", re.I),
+              "WTS references and writers": re.compile(r"wts|bss_info_config", re.I),
+              "event registration/dispatch": re.compile(r"register.{0,50}event|event.{0,50}register|map_handler|event_handler|event_callback|notify.{0,30}event", re.I),
+              "interface registration": re.compile(r"register.{0,50}(interface|ifname|netdev)|(?:interface|ifname|netdev).{0,50}register", re.I),
+          }
+          for label, rx in patterns.items():
+              print("\\n===== " + label + " =====")
+              count = 0
+              for p in files:
+                  try: lines = p.read_text(errors="replace").splitlines()
+                  except Exception: continue
+                  for n,line in enumerate(lines,1):
+                      if rx.search(line):
+                          print(f"{p}:{n}:{line[:300]}")
+                          count += 1
+                          if count >= 180:
+                              print("... output capped at 180 matches")
+                              break
+                  if count >= 180: break
+              print("MATCHES PRINTED:", count)
+          print("\\n===== COMPLETE WTS PARSER FUNCTION =====")
+          found = False
+          for p in files:
+              try: s = p.read_text(errors="replace")
+              except Exception: continue
+              m = re.search(r"\\b(?:static\\s+)?(?:int|void|BOOLEAN|bool|CHAR\\s*\\*)\\s+wapp_read_wts_map_config\\s*\\([^;]*?\\)\\s*\\{", s, re.S)
+              if not m: continue
+              start = m.start()
+              brace = s.find("{", m.start())
+              depth = 0
+              end = brace
+              for i in range(brace, len(s)):
+                  if s[i] == "{": depth += 1
+                  elif s[i] == "}":
+                      depth -= 1
+                      if depth == 0:
+                          end = i + 1
+                          break
+              print("FILE:", p)
+              print(s[start:min(end, start+30000)])
+              found = True
+              break
+          if not found: print("Parser function definition not found by C signature matcher; inspect occurrence list above.")
+          PY
+
+      - name: Upload verified source archive and audit inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: wappd-80ca5724-source-audit
+          path: |
+            ${{ runner.temp }}/wapp-audit/wappd-80ca5724.tar.bz2
+            ${{ runner.temp }}/wapp-audit/archive-files.txt
+          if-no-files-found: error
+          retention-days: 7
