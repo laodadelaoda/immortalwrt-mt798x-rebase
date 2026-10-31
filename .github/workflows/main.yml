@@ -32,9 +32,10 @@ jobs:
           set -euo pipefail
           ROOT="package/mtk/applications/easymesh-n60/files"
           BIN="$ROOT/usr/bin"
-          for f in wapp mapd p1905_managerd wapp-n60-wrapper wappctrl; do
+          for f in wapp mapd p1905_managerd wapp-n60-wrapper; do
             test -x "$BIN/$f" || { echo "::error::Missing or non-executable N60 EasyMesh file: $f"; exit 1; }
           done
+          test -s "$BIN/wappctrl" || { echo "::error::Missing WAPP control client required for driver/MBO initialization"; exit 1; }
 
           # Validate the actual WAPP ELF option ABI against the N60 wrapper.
           WAPP_CMD="$(grep -E '^/usr/bin/wapp ' "$BIN/wapp-n60-wrapper")"
