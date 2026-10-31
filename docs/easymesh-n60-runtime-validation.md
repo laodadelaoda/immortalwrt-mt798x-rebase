@@ -7,45 +7,34 @@ runtime event exchange.
 
 ## WTS source of truth
 
-The repository stores only the one-line `#ucc_bss_info` WTS template. It must
-not contain real SSIDs, PSKs, factory test SSIDs, or static test BSS records.
+The N60 EasyMesh package restores the original vendor WTS test profile file
+from the earlier N60 defaults. It contains 16 fixed records using the vendor
+test SSIDs `Multi-AP-*` and test keys `maprocks1` through `maprocks4`.
+These are intentional vendor test defaults, not the router's live SSID/PSK
+credentials. The file is stored at
+`/etc/map/wts_bss_info_config` and is passed unchanged to both WAPP and P1905.
 
-At boot, the selected `mtwifi-cfg-ucode` backend first maps the active `wireless` UCI AP sections into
-the two local DAT profiles. Its source writes `SSID1`, `WPAPSK1`,
-`AuthMode`, `EncrypType`, `HideSSID` and `RRMEnable`, then calls
-`save_profile(dats, profile)` before bringing the AP VIFs up. The EasyMesh
-service waits for both AP interfaces to report stable Master mode before it
-reads those profiles. GitHub Actions checks the selected ucode backend and verifies that unchanged DAT input does not down an already-UP VIF.
+The vendor profile set contains operating-class groups `8x`, `11x`, `12x`
+and `13x`, including 6 GHz test entries. N60 Pro itself remains a dual-band
+2.4/5 GHz device and has no 6 GHz PHY; restoring vendor defaults does not add
+6 GHz hardware capability or change `radio_band=24G;5GL;5GH;` in
+`1905d.cfg`. These extra records are retained because the requested baseline
+is the original vendor EasyMesh test profile set, not a live-radio-derived
+profile list.
 
-At boot, `generate-wts-bss-info` reads the router-local files:
+There is deliberately **no runtime SSID/WTS generator**. Startup does not read
+DAT files to synthesize WTS entries, does not overwrite vendor test SSIDs, and
+does not copy the live router's PSK into the WTS file. The service checks that
+the checked-in WTS file has the header and all 16 vendor records before
+starting WAPP/P1905. CI compares the file against the exact expected vendor
+default content.
 
-- `/etc/wireless/mediatek/mt7986-ax6000.dbdc.b0.dat` (2.4 GHz)
-- `/etc/wireless/mediatek/mt7986-ax6000.dbdc.b1.dat` (5 GHz)
-
-It requires the first active BSS values for `SSID1` (or `SSID`),
-`AuthMode=WPA2PSK`, `RRMEnable=1`, `EncrypType=AES`, `WPAPSK1` (or
-`WPAPSK`) and `HideSSID` (or `HideSSID1`). If `BssidNum` is present, it
-must be 1. Unsupported security modes, missing values, disabled RRM, invalid
-SSID/PSK syntax, or multiple BSS values fail closed; the service does not start
-with a guessed profile.
-
-The generated WTS contains three N60 Pro profiles:
-
-| Index | Operating class | Source |
-|---|---|---|
-| 1 | `8x` | 2.4 GHz DAT |
-| 2 | `11x` | 5 GHz DAT, low-band profile |
-| 3 | `12x` | 5 GHz DAT, high-band profile |
-
-The N60 Pro has no 6 GHz PHY, so no `13x` profile is emitted. The 5 GHz
-radio can operate in either the low or high 5 GHz channel range; both WTS
-operating-class profiles use the same live 5 GHz SSID/security settings.
-The BSSID wildcard, WPA2-PSK/AES values, Backhaul/Fronthaul flags, hidden
-marker and untagged VLAN tail follow the audited N60/vendor WTS record
-layout. Before writing, the generator also reads live `iwconfig` state and
-requires the AP SSID on `ra0` and `rax0` to match the corresponding DAT
-profile. Each record is generated locally, and the resulting file is mode
-`0600`.
+The selected `mtwifi-cfg-ucode` backend continues to map the active
+`wireless` UCI AP sections into the two local DAT profiles. Its source writes
+`SSID1`, `WPAPSK1`, `AuthMode`, `EncrypType`, `HideSSID` and
+`RRMEnable`, then calls `save_profile(dats, profile)` before bringing AP
+VIFs up. This wireless configuration path is independent of the fixed vendor
+WTS test profile file.
 
 ## Startup ordering and readiness gates
 
@@ -64,7 +53,7 @@ The init service now:
 5. Runs the vendor WAPP v3.0.2.0 `mbo reset_default` command on both radios
    after the control socket is ready. Failure is fatal to WAPP startup.
 6. Starts P1905 only after both WAPP sockets and both interface checks succeed,
-   passing the generated WTS file through `-F`.
+   passing the unchanged vendor WTS file through `-F`.
 7. Starts MAPD after launching P1905, preserving the existing MAPD configuration and
    generated `/etc/mapd_strng.conf`. The current two-second delay is only a
    launch-order cushion, not proof that P1905 completed initialization; a
@@ -76,23 +65,20 @@ A running PID without these sockets is not treated as a ready WAPP service.
 
 GitHub Actions now:
 
-- Runs the WTS generator against test-only DAT fixtures (never production
-  credentials) and checks the exact three-record shape.
-- Verifies WPA2/AES mapping, RRM enablement, hidden-SSID mapping, file mode,
-  no 6 GHz profile, and rejection of vendor test SSIDs.
-- Confirms that unsupported SAE and `RRMEnable=0` profiles fail without
-  replacing the last valid WTS file.
+- Compares `wts_bss_info_config` byte-for-byte with the original 16-record
+  vendor EasyMesh test profile set.
+- Checks that the init service, WAPP wrapper and package install rules do not
+  reference a runtime WTS/SSID generator.
 - Checks the shipped WAPP binary for event registration, WAPP sockets,
   802.11k RRM, 11v/WNM BTM and BTM request API symbols.
 - Checks MAPD steering/topology state-machine symbols and P1905 WTS/topology
   discovery symbols.
 
-These checks prove that the binaries contain the expected code paths and that
-the package wiring is syntactically consistent. CI also checks the active
-`mtwifi-cfg-ucode` setup path: identical DAT input must not trigger VIF down,
-while changed DAT input retains the existing restart path. They do **not** prove that the
-live driver accepted event registration, that a neighbor was discovered, or
-that a real client received and acted on a BTM request.
+These checks prove that the checked-in vendor WTS defaults are intact, that
+runtime generation is not wired into startup, and that the binaries contain
+the expected code paths. They do **not** prove that the live driver accepted
+event registration, that a neighbor was discovered, or that a real client
+received and acted on a BTM request.
 
 ## Runtime acceptance criteria
 
@@ -102,7 +88,7 @@ are present:
 - WTS has three generated records, correct live SSID values, no test SSIDs,
   and permissions `0600`.
 - Both WAPP sockets exist and remain present while WAPP runs.
-- P1905 logs successful WTS parsing (three BSS records) and sends topology
+- P1905 logs successful WTS parsing (16 vendor test records) and sends topology
   discovery; when an EasyMesh peer is connected, its neighbor/AL-MAC entry
   appears in topology state.
 - MAPD creates `/tmp/mapd_ctrl` and receives topology/metrics events from
