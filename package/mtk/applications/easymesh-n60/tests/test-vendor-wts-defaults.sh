@@ -44,7 +44,12 @@ grep -Fq 'Multi-AP-5HG-2' "$WTS"
 # WAPP must preserve its own startup output for diagnosing failures hidden by procd.
 grep -Fq 'WAPP_LOG=/tmp/wapp-n60-startup.log' "$WRAPPER"
 grep -Fq 'umask 077' "$WRAPPER"
-grep -Fq '>>"$WAPP_LOG" 2>&1 &' "$WRAPPER"
+grep -Fq '>> "$WAPP_LOG" 2>&1' "$WRAPPER"
+WAPP_CMD="$(grep -E '^/usr/bin/wapp ' "$WRAPPER")"
+for expected in '-m OPMODE_AP' '-i RA_WEXT' '-d1' '-v2' '-cra0' '-crax0'; do
+    printf '%s\n' "$WAPP_CMD" | grep -Fq -- "$expected"
+done
+! printf '%s\n' "$WAPP_CMD" | grep -Eq '(^|[[:space:]])-(f|F|u|e|w)([[:space:]]|$)'
 grep -Fq 'WAPP startup log (credentials redacted)' "$DIAG"
 grep -Fq 'tail -n 120 "$WAPP_LOG"' "$DIAG"
 
