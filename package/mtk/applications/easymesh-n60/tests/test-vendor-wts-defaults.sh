@@ -23,10 +23,7 @@ cat > "$EXPECTED" <<'EOF'
 10,ff:ff:ff:ff:ff:ff 12x Multi-AP-5HG-2 0x0060 0x0008 maprocks2 0 1 hidden-N 4095 N/A N/A
 11,ff:ff:ff:ff:ff:ff 12x Multi-AP-5HG-3 0x0060 0x0008 maprocks3 0 1 hidden-N 4095 N/A N/A
 12,ff:ff:ff:ff:ff:ff 12x Multi-AP-5HG-4 0x0060 0x0008 maprocks4 0 1 hidden-N 4095 N/A N/A
-13,ff:ff:ff:ff:ff:ff 13x Multi-AP-1 0x00C0 0x0008 maprocks1 1 0 hidden-N 4095 N/A N/A
-14,ff:ff:ff:ff:ff:ff 13x Multi-AP-6G-2 0x0040 0x0008 maprocks2 0 1 hidden-N 4095 N/A N/A
-15,ff:ff:ff:ff:ff:ff 13x Multi-AP-6G-3 0x0040 0x0008 maprocks3 0 1 hidden-N 4095 N/A N/A
-16,ff:ff:ff:ff:ff:ff 13x Multi-AP-6G-4 0x0040 0x0008 maprocks4 0 1 hidden-N 4095 N/A N/A
+
 EOF
 
 cmp -s "$EXPECTED" "$WTS" || {
@@ -35,11 +32,11 @@ cmp -s "$EXPECTED" "$WTS" || {
     exit 1
 }
 
-test "$(grep -c '^[0-9][0-9]*,ff:ff:ff:ff:ff:ff ' "$WTS")" -eq 16
+test "$(grep -c '^[0-9][0-9]*,ff:ff:ff:ff:ff:ff ' "$WTS")" -eq 12
 grep -Fq 'Multi-AP-24G-2' "$WTS"
 grep -Fq 'Multi-AP-5LG-2' "$WTS"
 grep -Fq 'Multi-AP-5HG-2' "$WTS"
-grep -Fq 'Multi-AP-6G-2' "$WTS"
+! grep -Eq '(^| )13x |Multi-AP-6G-' "$WTS"
 
 if grep -Fq 'generate-wts-bss-info' "$INIT" "$WRAPPER" "$MAKEFILE"; then
     echo "FAIL: runtime WTS/SSID generator is still wired into the package" >&2
