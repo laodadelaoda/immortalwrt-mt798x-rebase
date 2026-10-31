@@ -62,16 +62,15 @@ jobs:
           }
           test -x "$ROOT/etc/init.d/easymesh" || { echo "::error::Missing easymesh init service"; exit 1; }
           test -s "$ROOT/usr/sbin/generate-mapd-strng" || { echo "::error::Missing MAPD strength generator source"; exit 1; }
-          test -s "$ROOT/usr/sbin/generate-wts-bss-info" || { echo "::error::Missing runtime WTS generator source"; exit 1; }
           test -s "$ROOT/usr/sbin/easymesh-n60-diagnose" || { echo "::error::Missing read-only EasyMesh diagnostic utility"; exit 1; }
-          test -s "package/mtk/applications/easymesh-n60/tests/test-generate-wts-bss-info.sh" || { echo "::error::Missing WTS generator regression test"; exit 1; }
+          test -s "package/mtk/applications/easymesh-n60/tests/test-vendor-wts-defaults.sh" || { echo "::error::Missing vendor WTS defaults regression test"; exit 1; }
           for f in mapd_cfg 1905d.cfg mapd_user.cfg wts_bss_info_config; do
             test -s "$ROOT/etc/map/$f" || { echo "::error::Missing MAP config: $f"; exit 1; }
           done
-          for f in "$ROOT/etc/init.d/easymesh" "$ROOT/etc/uci-defaults/1001-easymesh-n60" "$BIN/wapp-n60-wrapper" "$ROOT/usr/sbin/generate-mapd-strng" "$ROOT/usr/sbin/generate-wts-bss-info" "$ROOT/usr/sbin/easymesh-n60-diagnose" "package/mtk/applications/easymesh-n60/tests/test-generate-wts-bss-info.sh"; do
+          for f in "$ROOT/etc/init.d/easymesh" "$ROOT/etc/uci-defaults/1001-easymesh-n60" "$BIN/wapp-n60-wrapper" "$ROOT/usr/sbin/generate-mapd-strng" "$ROOT/usr/sbin/easymesh-n60-diagnose" "package/mtk/applications/easymesh-n60/tests/test-vendor-wts-defaults.sh"; do
             sh -n "$f"
           done
-          sh "package/mtk/applications/easymesh-n60/tests/test-generate-wts-bss-info.sh"
+          sh "package/mtk/applications/easymesh-n60/tests/test-vendor-wts-defaults.sh"
           for f in package/mtk/applications/luci-app-mtk-dash2/htdocs/luci-static/resources/view/mtk-dash2/map.js package/mtk/applications/luci-app-mtk-dash2/htdocs/luci-static/resources/view/mtk-dash2/setup.js package/mtk/applications/luci-app-mtk-dash2/htdocs/luci-static/resources/view/mtk-dash2/wireless.js; do
             node --check "$f"
           done
@@ -107,21 +106,16 @@ jobs:
             echo "::error::Fixed ALID must not be configured on N60 Pro."
             exit 1
           fi
-          # Git stores only the WTS header. Runtime credentials are generated
-          # locally from the two N60 DAT files and must never enter the repository.
+          # Restore the original N60 vendor EasyMesh test WTS profiles.
+          # These are fixed vendor defaults, not live router credentials.
           WTS="$ROOT/etc/map/wts_bss_info_config"
-          if ! grep -qx '#ucc_bss_info' "$WTS"; then
-            echo "::error::WTS template must contain the exact #ucc_bss_info marker."
-            exit 1
-          fi
-          if grep -Ev '^(#|[[:space:]]*$)' "$WTS" | grep -q .; then
-            echo "::error::Static WTS records are forbidden; runtime generator owns real BSS values."
-            exit 1
-          fi
-          if grep -Eiq 'maprocks[0-9]*|Multi-AP-' "$WTS"; then
-            echo "::error::Vendor test SSID found in WTS template."
-            exit 1
-          fi
+          grep -qx '#ucc_bss_info' "$WTS"
+          test "$(grep -c '^[0-9][0-9]*,ff:ff:ff:ff:ff:ff ' "$WTS")" -eq 16
+          grep -Fq 'Multi-AP-24G-2' "$WTS"
+          grep -Fq 'Multi-AP-5LG-2' "$WTS"
+          grep -Fq 'Multi-AP-5HG-2' "$WTS"
+          grep -Fq 'Multi-AP-6G-2' "$WTS"
+          test ! -e "$ROOT/usr/sbin/generate-wts-bss-info"
 
           # Static binary audit: the shipped 7.6.7.3 daemons must contain the
           # WAPP event/socket, 11k/11v, MAP steering and P1905 topology paths.
