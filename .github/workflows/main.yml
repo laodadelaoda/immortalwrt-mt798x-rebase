@@ -106,15 +106,20 @@ jobs:
             echo "::error::Fixed ALID must not be configured on N60 Pro."
             exit 1
           fi
-          # Restore the original N60 vendor EasyMesh test WTS profiles.
-          # These are fixed vendor defaults, not live router credentials.
+          # N60 WTS is a static vendor credential/BSS-attribute template.
+          # Keep the original per-band rows, wildcard MAC selectors and row order;
+          # exclude 6 GHz because MT7986 N60 has no 6 GHz radio.
           WTS="$ROOT/etc/map/wts_bss_info_config"
           grep -qx '#ucc_bss_info' "$WTS"
-          test "$(grep -c '^[0-9][0-9]*,ff:ff:ff:ff:ff:ff ' "$WTS")" -eq 16
+          test "$(grep -c '^[0-9][0-9]*,ff:ff:ff:ff:ff:ff ' "$WTS")" -eq 12
+          awk 'NR == 1 { if ($0 != "#ucc_bss_info") exit 1; next }
+               { split($1, f, ","); if (f[1] != NR-1 || f[2] != "ff:ff:ff:ff:ff:ff") exit 1;
+                 if ($2 !~ /^(8x|11x|12x)$/) exit 1 }
+               END { if (NR != 13) exit 1 }' "$WTS"
           grep -Fq 'Multi-AP-24G-2' "$WTS"
           grep -Fq 'Multi-AP-5LG-2' "$WTS"
           grep -Fq 'Multi-AP-5HG-2' "$WTS"
-          grep -Fq 'Multi-AP-6G-2' "$WTS"
+          ! grep -Eq '13x|Multi-AP-6G-' "$WTS"
           test ! -e "$ROOT/usr/sbin/generate-wts-bss-info"
 
           # Static binary audit: the shipped 7.6.7.3 daemons must contain the
