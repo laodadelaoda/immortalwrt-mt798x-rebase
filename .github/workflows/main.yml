@@ -35,6 +35,30 @@ jobs:
           for f in wapp mapd p1905_managerd wapp-n60-wrapper; do
             test -x "$BIN/$f" || { echo "::error::Missing or non-executable N60 EasyMesh file: $f"; exit 1; }
           done
+
+          # Validate the actual WAPP ELF option ABI against the N60 wrapper.
+          WAPP_CMD="$(grep -E '^/usr/bin/wapp ' "$BIN/wapp-n60-wrapper")"
+          test -n "$WAPP_CMD" || { echo "::error::WAPP invocation missing from wrapper"; exit 1; }
+          for expected in \
+            '-m OPMODE_AP' '-i RA_WEXT' '-d 1' '-v 2' \
+            '-f /etc/wapp_ap.conf' \
+            '-F /etc/map/mapd_cfg' \
+            '-u /etc/map/mapd_user.cfg' \
+            '-e br-lan' '-w br-lan' '-c ra0' '-c rax0'
+          do
+            grep -Fq -- "$expected" <<<"$WAPP_CMD" || {
+              echo "::error::WAPP invocation is missing supported argument: $expected"
+              exit 1
+            }
+          done
+          if grep -Eq '(^|[[:space:]])-(l|K)([[:space:]]|$)' <<<"$WAPP_CMD"; then
+            echo "::error::WAPP invocation contains unsupported -l or -K option."
+            exit 1
+          fi
+          strings -a "$BIN/wapp" | grep -Fxq 'm:f:i:d:v:e:w:k:c:F:u:' || {
+            echo "::error::WAPP ELF option ABI differs from the audited N60 CLI contract."
+            exit 1
+          }
           test -x "$ROOT/etc/init.d/easymesh" || { echo "::error::Missing easymesh init service"; exit 1; }
           test -s "$ROOT/usr/sbin/generate-mapd-strng" || { echo "::error::Missing MAPD strength generator source"; exit 1; }
           for f in mapd_cfg 1905d.cfg mapd_user.cfg wts_bss_info_config; do

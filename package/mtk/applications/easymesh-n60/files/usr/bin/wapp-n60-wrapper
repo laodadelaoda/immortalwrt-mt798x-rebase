@@ -31,7 +31,7 @@ log_msg "Starting WAPP for ra0 and rax0"
 # Run in the foreground first. If this WAPP build daemonizes and returns,
 # keep this wrapper alive while its WAPP process(es) remain, so procd tracks
 # the actual service lifetime instead of restarting a short-lived parent.
-/usr/bin/wapp -l br-lan -d1 -v2 -f /etc/wapp_ap.conf -F /etc/map/mapd_cfg -u /etc/map/mapd_user.cfg -K /etc/map/1905d.cfg -cra0 -crax0
+/usr/bin/wapp -m OPMODE_AP -i RA_WEXT -d 1 -v 2 -f /etc/wapp_ap.conf -F /etc/map/mapd_cfg -u /etc/map/mapd_user.cfg -e br-lan -w br-lan -c ra0 -c rax0
 wapp_rc=$?
 
 while pidof wapp >/dev/null 2>&1; do
