@@ -53,12 +53,7 @@ log_msg "Starting WAPP for ra0 and rax0 in OPMODE_AP / RA_WEXT on br-lan; stdout
 # -e/-w must override the vendor br0 defaults with N60's br-lan bridge.
 # -c registers both radio ioctl interfaces; it does not set the bridge.
 # Keep the daemon's original parent/child lifecycle attached to procd.
-/usr/bin/wapp -m OPMODE_AP -i RA_WEXT -d1 -v2 \
-    -f /etc/wapp_ap.conf \
-    -F /etc/map/mapd_cfg \
-    -u /etc/map/mapd_user.cfg \
-    -e br-lan -w br-lan \
-    -c ra0 -c rax0 >> "$WAPP_LOG" 2>&1
+/usr/bin/wapp -m OPMODE_AP -i RA_WEXT -d1 -v2 -f /etc/wapp_ap.conf -F /etc/map/mapd_cfg -u /etc/map/mapd_user.cfg -e br-lan -w br-lan -c ra0 -c rax0 >> "$WAPP_LOG" 2>&1
 wapp_rc=$?
 
 # Some vendor builds daemonize after the parent exits. Keep procd attached
