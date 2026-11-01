@@ -70,6 +70,7 @@ jobs:
           test -x "$ROOT/etc/init.d/easymesh" || { echo "::error::Missing easymesh init service"; exit 1; }
           test -s "$ROOT/usr/sbin/generate-mapd-strng" || { echo "::error::Missing MAPD strength generator source"; exit 1; }
           test -s "$ROOT/usr/sbin/easymesh-n60-diagnose" || { echo "::error::Missing read-only EasyMesh diagnostic utility"; exit 1; }
+          test -x "$ROOT/usr/sbin/easymesh-n60-validate-wts" || { echo "::error::Missing strict N60 WTS preflight validator"; exit 1; }
           test -s "package/mtk/applications/easymesh-n60/tests/test-vendor-wts-defaults.sh" || { echo "::error::Missing vendor WTS defaults regression test"; exit 1; }
           grep -Fq 'WAPP_LOG=/tmp/wapp-n60-startup.log' "$BIN/wapp-n60-wrapper" || { echo "::error::WAPP startup log capture is missing"; exit 1; }
           grep -Fq 'umask 077' "$BIN/wapp-n60-wrapper" || { echo "::error::WAPP diagnostic log must be private"; exit 1; }
@@ -78,10 +79,11 @@ jobs:
           for f in mapd_cfg 1905d.cfg mapd_user.cfg wts_bss_info_config; do
             test -s "$ROOT/etc/map/$f" || { echo "::error::Missing MAP config: $f"; exit 1; }
           done
-          for f in "$ROOT/etc/init.d/easymesh" "$ROOT/etc/uci-defaults/1001-easymesh-n60" "$BIN/wapp-n60-wrapper" "$ROOT/usr/sbin/generate-mapd-strng" "$ROOT/usr/sbin/easymesh-n60-diagnose" "package/mtk/applications/easymesh-n60/tests/test-vendor-wts-defaults.sh"; do
+          for f in "$ROOT/etc/init.d/easymesh" "$ROOT/etc/uci-defaults/1001-easymesh-n60" "$BIN/wapp-n60-wrapper" "$ROOT/usr/sbin/generate-mapd-strng" "$ROOT/usr/sbin/easymesh-n60-diagnose" "$ROOT/usr/sbin/easymesh-n60-validate-wts" "package/mtk/applications/easymesh-n60/tests/test-vendor-wts-defaults.sh"; do
             sh -n "$f"
           done
           sh "package/mtk/applications/easymesh-n60/tests/test-vendor-wts-defaults.sh"
+          "$ROOT/usr/sbin/easymesh-n60-validate-wts" "$ROOT/etc/map/wts_bss_info_config"
           for f in package/mtk/applications/luci-app-mtk-dash2/htdocs/luci-static/resources/view/mtk-dash2/map.js package/mtk/applications/luci-app-mtk-dash2/htdocs/luci-static/resources/view/mtk-dash2/setup.js package/mtk/applications/luci-app-mtk-dash2/htdocs/luci-static/resources/view/mtk-dash2/wireless.js; do
             node --check "$f"
           done
@@ -92,6 +94,8 @@ jobs:
           grep -qx 'bh_type=eth' "$ROOT/etc/map/1905d.cfg"
           grep -qx 'radio_band=24G;5GL;5GH;' "$ROOT/etc/map/1905d.cfg"
           grep -qx 'al_inf=rax0' "$ROOT/etc/map/1905d.cfg"
+          grep -Fq 'validate_al_interface' "$ROOT/etc/init.d/easymesh"
+          grep -Fq 'P1905 AL interface validated' "$ROOT/etc/init.d/easymesh"
           # WAPP discovers its native WTS file at /etc/map/wts_bss_info_config.
           # Radio discovery priority remains in MAPD's own configuration.
           grep -qx 'bss_config_priority=ra0;rax0' "$ROOT/etc/map/mapd_cfg"
