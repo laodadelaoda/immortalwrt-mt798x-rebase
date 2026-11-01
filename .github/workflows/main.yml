@@ -3,7 +3,26 @@ name: Build N60 Pro - ImmortalWrt 25.12 (Standard Only)
 on:
   push:
     branches: ["n60pro-mtk-closed-driver"]
+    paths:
+      - "package/**"
+      - "!package/mtk/applications/easymesh-n60/**"
+      - "target/**"
+      - "toolchain/**"
+      - "tools/**"
+      - "include/**"
+      - "scripts/**"
+      - "config/**"
+      - "!config/n60pro-1001.config"
+      - "feeds.conf.default"
+      - "files/**"
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      easymesh_prebuilt:
+        description: "Reuse the EasyMesh package already compiled by the Quick workflow"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -213,6 +232,18 @@ jobs:
             ${{ runner.os }}-n60pro-ccache-${{ github.ref_name }}-
             ${{ runner.os }}-n60pro-ccache-
 
+      - name: Restore OpenWrt build environment cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            build_dir
+            staging_dir
+            dl
+            tmp
+          key: ${{ runner.os }}-n60pro-openwrt-${{ hashFiles('config/n60pro-1001.config', 'feeds.conf.default', 'include/kernel-version.mk', 'target/linux/mediatek/Makefile', 'package/mtk/applications/easymesh-n60/**') }}
+          restore-keys: |
+            ${{ runner.os }}-n60pro-openwrt-
+
       - name: Update and install feeds
         run: |
           ./scripts/feeds update -a
@@ -377,12 +408,10 @@ jobs:
           echo "PASS: target toolchain runtime staged: $LIBGCC_SO"
 
           echo "===== Step 4c: generate the target Linux kernel configuration required by kmod package builds ====="
-          # Run the target/linux Makefile's oldconfig forwarding rule.
-          # The top-level make interface does not expose target/linux/oldconfig;
-          # entering target/linux forwards oldconfig to the selected board/subtarget,
-          # where Kernel/Configure generates linux-*/.config from the resolved
-          # firmware .config before isolated package compilation.
-          make -C target/linux oldconfig V=s
+          # Invoke the target/linux forwarding rule from the repository root.
+          # Running make -C target/linux drops the top-level TOPDIR export and
+          # expands INCLUDE_DIR to /include, causing /default-packages.mk errors.
+          make target/linux/oldconfig V=s
           KERNEL_CONFIG="$(find build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic -type f -name .config -print -quit)"
           test -n "$KERNEL_CONFIG" && test -s "$KERNEL_CONFIG" || {
             echo "::error::make -C target/linux oldconfig did not generate the target Linux .config required by kmod dependencies."
@@ -390,7 +419,11 @@ jobs:
           }
           echo "PASS: target Linux configuration generated: $KERNEL_CONFIG"
 
-          make package/mtk/applications/easymesh-n60/clean V=s
+          if [ "${{ github.event_name == 'workflow_call' && inputs.easymesh_prebuilt }}" != "true" ]; then
+            make package/mtk/applications/easymesh-n60/clean V=s
+          else
+            echo "PASS: reusing the EasyMesh package built and audited by the Quick workflow."
+          fi
           make package/mtk/applications/easymesh-n60/compile V=s 2>&1 | tee "$EASYMESH_LOG"
 
           WAPP_BIN="$(find build_dir -type f -path '*/easymesh-n60*/wappd/wapp' -print -quit)"
