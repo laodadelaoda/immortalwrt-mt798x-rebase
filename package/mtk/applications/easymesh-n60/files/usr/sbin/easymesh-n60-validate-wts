@@ -38,7 +38,7 @@ NR == 1 {
         printf "WTS validation failed: row %d expected opclass %s, got %s\n", rows, expected[rows], $2 > "/dev/stderr"
         bad = 1
     }
-    if (NF < 9 || $3 == "" || $4 !~ /^0[xX][0-9a-fA-F]+$/ ||
+    if (NF < 12 || $3 == "" || $4 !~ /^0[xX][0-9a-fA-F]+$/ ||
         $5 !~ /^0[xX][0-9a-fA-F]+$/ || $6 == "" ||
         $7 !~ /^[01]$/ || $8 !~ /^[01]$/ || $9 !~ /^hidden-[YN]$/) {
         printf "WTS validation failed: row %d has malformed WAPP/P1905 fields\n", rows > "/dev/stderr"
