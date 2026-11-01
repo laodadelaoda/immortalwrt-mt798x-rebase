@@ -73,10 +73,34 @@ for file in /etc/wireless/mediatek/mt7986-ax6000.dbdc.b0.dat /etc/wireless/media
     fi
 done
 
+section "P1905 AL MAC resolution trace"
+if command -v logread >/dev/null 2>&1; then
+    logread -l 400 2>/dev/null |
+        grep -iE 'LIB_WIRELESS_INTERFACE_INFO|al_inf|almac|cannot find suitable almac|reset almac|set almac to forward module fail|do_map_set_ctl|sp update own almac' |
+        tail -n 100 || true
+else
+    echo "logread unavailable"
+fi
+
+section "MAP filter and EasyMesh runtime libraries"
+if [ -d /sys/module/mapfilter ]; then
+    echo "mapfilter: loaded"
+else
+    echo "mapfilter: NOT LOADED"
+fi
+for lib in /lib/libkvcutil.so.1 /usr/lib/libeth_1905ops.so \
+           /usr/lib/libnl-tiny.so.1 /usr/lib/libssl.so.1.1 /usr/lib/libcrypto.so.1.1; do
+    if [ -e "$lib" ]; then
+        ls -l "$lib"
+    else
+        echo "MISSING: $lib"
+    fi
+done
+
 section "Recent EasyMesh / 11k / 11v events (credentials redacted)"
 if command -v logread >/dev/null 2>&1; then
     logread -l 400 2>/dev/null |
-        grep -iE 'wapp|p1905|mapd|wts|bss|topology|btm|rrm|steer|mbo|neighbor' |
+        grep -iE 'wapp|p1905|mapd|wts|bss|topology|btm|rrm|steer|mbo|neighbor|mapr3|dpp|mapts|cp_support' |
         sed -r 's/(key=)[^ ,;]+/\1<redacted>/Ig; s/(WPAKey[=:])[^\t ,;]+/\1<redacted>/Ig; s/(WPAPSK[0-9]*=)[^\t ;]+/\1<redacted>/Ig' |
         tail -n 160 || true
 else

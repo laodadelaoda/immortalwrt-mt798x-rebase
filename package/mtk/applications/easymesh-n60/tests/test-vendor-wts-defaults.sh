@@ -86,6 +86,14 @@ done
 grep -Fq 'apply_map_r3_driver_config ra0' "$INIT"
 grep -Fq 'apply_map_r3_driver_config rax0' "$INIT"
 
+# Verify shell syntax and the MAP R3 driver startup contract.
+sh -n "$INIT"
+sh -n "$ROOT/usr/bin/wapp-n60-wrapper"
+sh -n "$ROOT/usr/sbin/easymesh-n60-diagnose"
+grep -Fq '/lib/libkvcutil.so.1' "$INIT"
+grep -Fq 'LIB_WIRELESS_INTERFACE_INFO' "$ROOT/usr/sbin/easymesh-n60-diagnose"
+grep -Fq 'cannot find suitable almac' "$ROOT/usr/sbin/easymesh-n60-diagnose"
+
 grep -Fq -- '-ne 12' "$INIT" || { echo "FAIL: init service does not validate the N60 12-row WTS template" >&2; exit 1; }
 grep -Fq -- '-ne 12' "$WRAPPER" || { echo "FAIL: WAPP wrapper does not validate the N60 12-row WTS template" >&2; exit 1; }
 grep -Fq 'Multi-AP-24G-2' "$WTS"
