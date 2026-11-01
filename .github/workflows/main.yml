@@ -376,6 +376,15 @@ jobs:
           }
           echo "PASS: target toolchain runtime staged: $LIBGCC_SO"
 
+          echo "===== Step 4c: prepare the target Linux kernel configuration for kmod dependencies ====="
+          make target/linux/prepare -j"$(nproc)" V=s
+          KERNEL_CONFIG="$(find build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic -maxdepth 2 -type f -name .config -print -quit)"
+          test -n "$KERNEL_CONFIG" || {
+            echo "::error::Target Linux .config is still missing after target/linux/prepare."
+            exit 1
+          }
+          echo "PASS: target Linux configuration prepared: $KERNEL_CONFIG"
+
           make package/mtk/applications/easymesh-n60/clean V=s
           make package/mtk/applications/easymesh-n60/compile V=s 2>&1 | tee "$EASYMESH_LOG"
 
