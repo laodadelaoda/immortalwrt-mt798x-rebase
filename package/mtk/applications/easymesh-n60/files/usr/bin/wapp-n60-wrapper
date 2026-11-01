@@ -1,7 +1,5 @@
 #!/bin/sh
 # N60 Pro WAPP startup using the audited 7.6.7.3 command-line ABI.
-# Explicitly select N60's real bridge and both wireless ioctl interfaces;
-# the vendor binary's compiled bridge defaults are br0, not br-lan.
 
 LOG_TAG="wapp-n60"
 WAPP_LOG=/tmp/wapp-n60-startup.log
@@ -33,27 +31,19 @@ if [ ! -s /etc/wapp_ap.conf ] ||
     exit 1
 fi
 
-# Keep the checked-in vendor WTS template unchanged. This is a validation
-# only; WAPP and P1905 perform their own native WTS reads.
-if [ ! -s /etc/map/wts_bss_info_config ] ||
-   ! grep -qx '#ucc_bss_info' /etc/map/wts_bss_info_config ||
-   [ "$(grep -c '^[0-9][0-9]*,ff:ff:ff:ff:ff:ff ' /etc/map/wts_bss_info_config)" -ne 12 ] ||
-   ! grep -Fq 'Multi-AP-24G-2' /etc/map/wts_bss_info_config ||
-   ! grep -Fq 'Multi-AP-5LG-2' /etc/map/wts_bss_info_config ||
-   ! grep -Fq 'Multi-AP-5HG-2' /etc/map/wts_bss_info_config ||
-   grep -Eq '(^| )13x |Multi-AP-6G-' /etc/map/wts_bss_info_config; then
-    log_msg "ERROR: N60 WTS file does not contain the complete 12-record dual-band profile set"
+# Validate every WTS field consumed independently by WAPP and P1905.
+if ! /usr/sbin/easymesh-n60-validate-wts /etc/map/wts_bss_info_config >> "$WAPP_LOG" 2>&1; then
+    log_msg "ERROR: N60 WTS validation failed; WAPP not started (see $WAPP_LOG)"
     exit 1
 fi
 
 log_msg "Starting WAPP for ra0 and rax0 in OPMODE_AP / RA_WEXT on br-lan; stdout/stderr: $WAPP_LOG"
 
-# WAPP 7.6.7.3 ABI:
-# -f/-F/-u select the N60 AP, MAP and MAP user config files.
-# -e/-w must override the vendor br0 defaults with N60's br-lan bridge.
-# -c registers both radio ioctl interfaces; it does not set the bridge.
-# Keep the daemon's original parent/child lifecycle attached to procd.
-/usr/bin/wapp -m OPMODE_AP -i RA_WEXT -d1 -v2 -f /etc/wapp_ap.conf -F /etc/map/mapd_cfg -u /etc/map/mapd_user.cfg -e br-lan -w br-lan -c ra0 -c rax0 >> "$WAPP_LOG" 2>&1
+# WAPP 7.6.7.3 ABI, verified against the tracked ELF option string:
+# -f AP config list; -F MAP config; -u MAP user config.
+# -e/-w override vendor br0 defaults; repeated -c values are IAPP ioctl interfaces.
+# P1905 reads its own 1905d.cfg in the separate init service.
+ /usr/bin/wapp -m OPMODE_AP -i RA_WEXT -d1 -v2 -f /etc/wapp_ap.conf -F /etc/map/mapd_cfg -u /etc/map/mapd_user.cfg -e br-lan -w br-lan -c ra0 -c rax0 >> "$WAPP_LOG" 2>&1
 wapp_rc=$?
 
 # Some vendor builds daemonize after the parent exits. Keep procd attached
