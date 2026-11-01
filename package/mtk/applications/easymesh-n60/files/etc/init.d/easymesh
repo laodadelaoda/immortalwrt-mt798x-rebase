@@ -173,4 +173,5 @@ stop_service() {
     killall mapd 2>/dev/null
     killall p1905_managerd 2>/dev/null
     killall wapp 2>/dev/null
+    killall WAPP 2>/dev/null
 }
