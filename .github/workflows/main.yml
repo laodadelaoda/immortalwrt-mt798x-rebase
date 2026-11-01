@@ -74,6 +74,9 @@ jobs:
           test -s "package/mtk/applications/easymesh-n60/tests/test-vendor-wts-defaults.sh" || { echo "::error::Missing vendor WTS defaults regression test"; exit 1; }
           grep -Fq 'WAPP_LOG=/tmp/wapp-n60-startup.log' "$BIN/wapp-n60-wrapper" || { echo "::error::WAPP startup log capture is missing"; exit 1; }
           grep -Fq 'umask 077' "$BIN/wapp-n60-wrapper" || { echo "::error::WAPP diagnostic log must be private"; exit 1; }
+          grep -Fq 'killall WAPP' "$BIN/wapp-n60-wrapper" || { echo "::error::WAPP wrapper does not clean up uppercase vendor daemon processes"; exit 1; }
+          grep -Fq 'pidof WAPP' "$BIN/wapp-n60-wrapper" || { echo "::error::WAPP wrapper does not track uppercase vendor daemon processes"; exit 1; }
+          grep -Fq 'killall WAPP' "$ROOT/etc/init.d/easymesh" || { echo "::error::EasyMesh stop service does not terminate uppercase WAPP daemon processes"; exit 1; }
           grep -Fq '>> "$WAPP_LOG" 2>&1' "$BIN/wapp-n60-wrapper" || { echo "::error::WAPP stdout/stderr is not captured"; exit 1; }
           grep -Fq 'WAPP startup log (credentials redacted)' "$ROOT/usr/sbin/easymesh-n60-diagnose" || { echo "::error::Read-only diagnostics do not expose the redacted WAPP startup log"; exit 1; }
           for f in mapd_cfg 1905d.cfg mapd_user.cfg wts_bss_info_config; do
