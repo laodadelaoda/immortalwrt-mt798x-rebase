@@ -15,6 +15,7 @@ chmod 600 "$WAPP_LOG"
 
 # Match the previously successful N60 process lifecycle.
 killall wapp 2>/dev/null || true
+killall WAPP 2>/dev/null || true
 sleep 2
 
 for iface in ra0 rax0; do
@@ -48,7 +49,7 @@ wapp_rc=$?
 
 # Some vendor builds daemonize after the parent exits. Keep procd attached
 # until the complete WAPP process set exits.
-while pidof wapp >/dev/null 2>&1; do
+while pidof wapp >/dev/null 2>&1 || pidof WAPP >/dev/null 2>&1; do
     sleep 2
 done
 
