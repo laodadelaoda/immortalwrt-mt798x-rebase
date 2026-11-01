@@ -170,6 +170,9 @@ jobs:
           echo "PASS: target runtime staged: $LIBGCC_SO"
           # Must be invoked from the repository root so TOPDIR/INCLUDE_DIR resolve.
           make kernel_oldconfig V=s
+          # kernel_oldconfig writes .config only; external kmod builds also need
+          # the prepared kernel headers/generated UAPI asm headers (asm/types.h).
+          make target/linux/prepare V=s
           KERNEL_CONFIG="$(find build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic -type f -name .config -print -quit)"
           test -n "$KERNEL_CONFIG" && test -s "$KERNEL_CONFIG" || {
             echo "::error::Target Linux .config was not generated."
