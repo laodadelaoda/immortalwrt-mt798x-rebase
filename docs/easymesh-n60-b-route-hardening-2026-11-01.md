@@ -9,7 +9,8 @@ Branch: `n60pro-mtk-closed-driver`
 2. The WAPP wrapper and init service both run the same validator before starting vendor daemons. This removes the previous difference where the init script checked only a record count while the wrapper performed a somewhat broader check.
 3. The init service now validates the P1905 `al_inf` input before startup: it must be a real interface, distinct from `br_inf`, present in P1905's `bss_config_priority`, and have a valid nonzero unicast MAC. The actual interface/MAC pair is written to the system log before P1905 starts.
 4. The standard firmware workflow checks the validator's presence and shell syntax, executes it against the tracked WTS template, and checks that the AL-interface guard remains in the init script.
-5. The MAPD/P1905 source audit workflow now retains the SHA-256-verified MAPD, P1905 and mapfilter source archives plus their extracted trees as an Actions artifact, so later ABI and compile review can use the exact inputs rather than snippets alone.
+5. Runtime logs showed the vendor child processes named `WAPP` (uppercase), while the wrapper and stop service previously searched/killed only `wapp` (lowercase). The wrapper now kills and waits for both process names, and the init stop service terminates both. This closes a real process-lifecycle/cleanup mismatch seen in the N60 runtime inventory.
+6. The MAPD/P1905 source audit workflow now retains the SHA-256-verified MAPD, P1905 and mapfilter source archives plus their extracted trees as an Actions artifact, so later ABI and compile review can use the exact inputs rather than snippets alone.
 
 ## Validation boundary
 
