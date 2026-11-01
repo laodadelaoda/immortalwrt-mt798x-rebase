@@ -1,0 +1,63 @@
+#!/bin/sh
+# Validate the exact dual-band N60 WTS input before WAPP/P1905 parse it.
+set -eu
+
+file="${1:-/etc/map/wts_bss_info_config}"
+[ -s "$file" ] || {
+    echo "WTS validation failed: missing or empty file: $file" >&2
+    exit 1
+}
+
+awk '
+BEGIN {
+    expected[1] = "11x"; expected[2] = "11x"; expected[3] = "11x"; expected[4] = "11x"
+    expected[5] = "8x";  expected[6] = "8x";  expected[7] = "8x";  expected[8] = "8x"
+    expected[9] = "12x"; expected[10] = "12x"; expected[11] = "12x"; expected[12] = "12x"
+}
+NR == 1 {
+    if ($0 != "#ucc_bss_info") {
+        print "WTS validation failed: invalid header" > "/dev/stderr"
+        bad = 1
+    }
+    next
+}
+/^[[:space:]]*$/ || /^[[:space:]]*#/ { next }
+{
+    rows++
+    if (rows > 12) {
+        print "WTS validation failed: more than 12 BSS records" > "/dev/stderr"
+        bad = 1
+        next
+    }
+    n = split($1, head, ",")
+    if (n != 2 || head[1] != rows || head[2] != "ff:ff:ff:ff:ff:ff") {
+        printf "WTS validation failed: row %d has invalid index/MAC token (%s)\n", rows, $1 > "/dev/stderr"
+        bad = 1
+    }
+    if ($2 != expected[rows]) {
+        printf "WTS validation failed: row %d expected opclass %s, got %s\n", rows, expected[rows], $2 > "/dev/stderr"
+        bad = 1
+    }
+    if (NF < 9 || $3 == "" || $4 !~ /^0[xX][0-9a-fA-F]+$/ ||
+        $5 !~ /^0[xX][0-9a-fA-F]+$/ || $6 == "" ||
+        $7 !~ /^[01]$/ || $8 !~ /^[01]$/ || $9 !~ /^hidden-[YN]$/) {
+        printf "WTS validation failed: row %d has malformed WAPP/P1905 fields\n", rows > "/dev/stderr"
+        bad = 1
+    }
+    if ($2 == "8x") c24++
+    else if ($2 == "11x") c5l++
+    else if ($2 == "12x") c5h++
+    else {
+        printf "WTS validation failed: unsupported operating class at row %d\n", rows > "/dev/stderr"
+        bad = 1
+    }
+}
+END {
+    if (rows != 12 || c24 != 4 || c5l != 4 || c5h != 4) {
+        printf "WTS validation failed: rows=%d, 8x=%d, 11x=%d, 12x=%d (expected 12/4/4/4)\n", rows, c24, c5l, c5h > "/dev/stderr"
+        bad = 1
+    }
+    if (bad) exit 1
+    print "WTS validation passed: 12 records, 4 each for 2.4 GHz / 5 GHz low / 5 GHz high; no 6 GHz records"
+}
+' "$file"
