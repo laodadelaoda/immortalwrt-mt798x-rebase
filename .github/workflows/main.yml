@@ -99,6 +99,7 @@ jobs:
           grep -qx 'al_inf=rax0' "$ROOT/etc/map/1905d.cfg"
           grep -Fq 'validate_al_interface' "$ROOT/etc/init.d/easymesh"
           grep -Fq 'P1905 AL interface validated' "$ROOT/etc/init.d/easymesh"
+          grep -Fq 'active AP/WEXT interface' "$ROOT/etc/init.d/easymesh"
           # WAPP discovers its native WTS file at /etc/map/wts_bss_info_config.
           # Radio discovery priority remains in MAPD's own configuration.
           grep -qx 'bss_config_priority=ra0;rax0' "$ROOT/etc/map/mapd_cfg"
