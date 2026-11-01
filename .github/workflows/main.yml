@@ -360,6 +360,13 @@ jobs:
           echo "===== Step 4: source-build EasyMesh 7.6.7.3 stack ====="
           EASYMESH_LOG="artifacts/$DEVICE/$PROFILE/easymesh-source-compile.log"
           : > "$EASYMESH_LOG"
+          echo "===== Step 4a: install OpenWrt host tools before isolated package compilation ====="
+          make tools/install -j"$(nproc)" V=s
+          test -x staging_dir/host/bin/sed || {
+            echo "::error::OpenWrt host sed is still missing after tools/install."
+            exit 1
+          }
+
           make package/mtk/applications/easymesh-n60/clean V=s
           make package/mtk/applications/easymesh-n60/compile V=s 2>&1 | tee "$EASYMESH_LOG"
 
