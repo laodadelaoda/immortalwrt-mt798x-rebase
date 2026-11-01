@@ -13,7 +13,7 @@ Release tag: `dl-sources-7.6.7.3`
 | P1905 | `1905daemon-35234223.tar.bz2` | `82f7cc4ad5731e750f87c9a4ad19a39d2456bb8fec0cf79bf4b3f3ccb4f14795` |
 | MTK driver | `mt79xx_20250408-705eb4.tar.xz` | `b029d7b43c498193092dc6a3c857361c8835ce34bb306561c550ac0539784a78` |
 
-The WAPP archive was downloaded, SHA-256 verified and extracted for source inspection. The Release metadata lists MAPD, P1905 and driver source archives with their SHA-256 digests; Release presence alone does not establish that those archives were downloaded, extracted or fully source-audited. Their archive-level verification remains a separate A-route task. The audit workflow is `.github/workflows/wapp-source-audit.yml`.
+The WAPP archive was downloaded, SHA-256 verified and extracted by the WAPP source-audit workflow (successful run `41267510895`). The MAPD and P1905 archives were independently downloaded, SHA-256 verified and extracted by the WTS/MAC audit workflow (successful run `41202136474`). The MTK driver archive is SHA-256 verified and built by the firmware workflow (successful run `41267516580`). These workflows provide the source inputs for the findings below; the WAPP and MAPD/P1905 archive audits are separate workflows: `.github/workflows/wapp-source-audit.yml` and `.github/workflows/easymesh-wts-template-audit.yml`.
 
 ## 2. WTS parser: `wapp_read_wts_map_config()`
 
