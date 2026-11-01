@@ -376,14 +376,18 @@ jobs:
           }
           echo "PASS: target toolchain runtime staged: $LIBGCC_SO"
 
-          echo "===== Step 4c: prepare the target Linux kernel configuration for kmod dependencies ====="
-          make target/linux/prepare -j"$(nproc)" V=s
-          KERNEL_CONFIG="$(find build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic -maxdepth 2 -type f -name .config -print -quit)"
-          test -n "$KERNEL_CONFIG" || {
-            echo "::error::Target Linux .config is still missing after target/linux/prepare."
+          echo "===== Step 4c: generate the target Linux kernel configuration required by kmod package builds ====="
+          # target/linux/prepare only unpacks and patches the kernel source;
+          # it does not generate linux-*/.config. The oldconfig target runs
+          # Kernel/Configure and creates the target kernel .config from the
+          # resolved firmware .config before isolated package compilation.
+          make target/linux/oldconfig V=s
+          KERNEL_CONFIG="$(find build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic -type f -name .config -print -quit)"
+          test -n "$KERNEL_CONFIG" && test -s "$KERNEL_CONFIG" || {
+            echo "::error::target/linux/oldconfig did not generate the target Linux .config required by kmod dependencies."
             exit 1
           }
-          echo "PASS: target Linux configuration prepared: $KERNEL_CONFIG"
+          echo "PASS: target Linux configuration generated: $KERNEL_CONFIG"
 
           make package/mtk/applications/easymesh-n60/clean V=s
           make package/mtk/applications/easymesh-n60/compile V=s 2>&1 | tee "$EASYMESH_LOG"
