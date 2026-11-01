@@ -41,15 +41,18 @@ jobs:
           WAPP_CMD="$(grep -E '^/usr/bin/wapp ' "$BIN/wapp-n60-wrapper")"
           test -n "$WAPP_CMD" || { echo "::error::WAPP invocation missing from wrapper"; exit 1; }
           for expected in \
-            '-m OPMODE_AP' '-i RA_WEXT' '-d1' '-v2' '-cra0' '-crax0'
+            '-m OPMODE_AP' '-i RA_WEXT' '-d1' '-v2' \
+            '-f /etc/wapp_ap.conf' '-F /etc/map/mapd_cfg' \
+            '-u /etc/map/mapd_user.cfg' '-e br-lan' '-w br-lan' \
+            '-c ra0' '-c rax0'
           do
             grep -Fq -- "$expected" <<<"$WAPP_CMD" || {
-              echo "::error::WAPP invocation is missing the audited AP/WEXT baseline argument: $expected"
+              echo "::error::WAPP invocation is missing an audited N60 WAPP ABI argument: $expected"
               exit 1
             }
           done
-          if grep -Eq '(^|[[:space:]])-(f|F|u|e|w|l|K)([[:space:]]|$)' <<<"$WAPP_CMD"; then
-            echo "::error::WAPP invocation contains an unvalidated config/interface override."
+          if grep -Eq '(^|[[:space:]])-(l|K)([[:space:]]|$)' <<<"$WAPP_CMD"; then
+            echo "::error::WAPP invocation contains an unsupported WAPP CLI option."
             exit 1
           fi
           strings -a "$BIN/wapp" | grep -Fxq 'm:f:i:d:v:e:w:k:c:F:u:' || {
