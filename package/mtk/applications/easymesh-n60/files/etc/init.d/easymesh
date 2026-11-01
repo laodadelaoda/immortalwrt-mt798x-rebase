@@ -108,9 +108,10 @@ start_service() {
         return 1
     fi
 
-    # Check the exact SONAMEs required by the shipped WAPP/P1905 ELF files.
+    # Check the exact SONAMEs required by the source-built 7.6.7.3 WAPP/P1905 ELF files.
     for lib in /lib/libkvcutil.so.1 /usr/lib/libeth_1905ops.so \
-               /usr/lib/libnl-tiny.so.1 /usr/lib/libssl.so.1.1 /usr/lib/libcrypto.so.1.1; do
+               /usr/lib/libmapd_interface_client.so /usr/lib/libnl-tiny.so.1 \
+               /usr/lib/libssl.so.3 /usr/lib/libcrypto.so.3; do
         if [ ! -s "$lib" ]; then
             logger -t easymesh "ERROR: required EasyMesh runtime library is missing: $lib"
             return 1
