@@ -169,7 +169,7 @@ jobs:
           test -n "$LIBGCC_SO" || { echo "::error::Target libgcc_s.so was not staged."; exit 1; }
           echo "PASS: target runtime staged: $LIBGCC_SO"
           # Must be invoked from the repository root so TOPDIR/INCLUDE_DIR resolve.
-          make target/linux/oldconfig V=s
+          make kernel_oldconfig V=s
           KERNEL_CONFIG="$(find build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic -type f -name .config -print -quit)"
           test -n "$KERNEL_CONFIG" && test -s "$KERNEL_CONFIG" || {
             echo "::error::Target Linux .config was not generated."
