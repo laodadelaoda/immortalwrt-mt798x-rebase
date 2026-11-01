@@ -13,7 +13,7 @@ Release tag: `dl-sources-7.6.7.3`
 | P1905 | `1905daemon-35234223.tar.bz2` | `82f7cc4ad5731e750f87c9a4ad19a39d2456bb8fec0cf79bf4b3f3ccb4f14795` |
 | MTK driver | `mt79xx_20250408-705eb4.tar.xz` | `b029d7b43c498193092dc6a3c857361c8835ce34bb306561c550ac0539784a78` |
 
-The WAPP archive was downloaded and SHA-256 verified by the GitHub Actions source-audit workflow. The MAPD, P1905 and driver archives were also extracted and inspected for this audit. The audit workflow is `.github/workflows/wapp-source-audit.yml`.
+The WAPP archive was downloaded, SHA-256 verified and extracted for source inspection. The Release metadata lists MAPD, P1905 and driver source archives with their SHA-256 digests; Release presence alone does not establish that those archives were downloaded, extracted or fully source-audited. Their archive-level verification remains a separate A-route task. The audit workflow is `.github/workflows/wapp-source-audit.yml`.
 
 ## 2. WTS parser: `wapp_read_wts_map_config()`
 
@@ -61,13 +61,17 @@ The MAPD controller boot path is:
 
 This is a read-and-transfer path, not a WTS generator. The request is controller-only and is normally initiated by the first operational-BSS report after MAPD initialization.
 
-### Empty/missing WTS behavior is unsafe
+### Empty/missing WTS behavior is unsafe (failure-mode analysis)
 
-- With the current empty `#ucc_bss_info` template, WAPP opens the file, zeroes the output array, returns a record count of zero, and still serializes the full fixed-size array.
+The current tracked N60 WTS file is not empty: it contains the `#ucc_bss_info` header followed by 12 indexed wildcard-MAC records. The empty/missing cases below describe failure modes if that file is removed, truncated or replaced; they are not a description of the current repository default.
+
+- If the file contains only `#ucc_bss_info`, WAPP opens it, zeroes the output array, returns a record count of zero, and still serializes the full fixed-size array.
 - `map_handle_get_wts_config()` ignores both the parser return value and `config_bss_num`.
 - MAPD copies the payload and clears `need_to_update_wts` without checking that any BSS record exists. It therefore treats an empty WTS as synchronized and does not retry until a later renew.
 - If the file is missing, WAPP returns before zeroing the stack array; the caller ignores the error and can serialize uninitialized stack contents.
 - MAPD's `topo_srv_parse_wts_config()` copies `config_length` without checking it against the destination array size. A WAPP/MAPD capacity mismatch could therefore overflow the MAPD buffer.
+
+The package init service, WAPP wrapper and regression test currently require the 12-row N60 file before startup.
 
 ## 4. WTS update triggers: exact conditions
 
@@ -152,24 +156,11 @@ P1905 loads WTS during initialization. An empty file can produce a zero-entry co
 
 ## 7. Decision for the N60 repository
 
-The N60 package restores the original vendor `wts_bss_info_config` from the
-earlier N60 EasyMesh defaults. It contains 16 fixed vendor test records:
-`Multi-AP-*` SSIDs and `maprocks1` through `maprocks4` test keys, covering
-the vendor `8x`, `11x`, `12x` and `13x` operating-class groups. These are
-intentional vendor test profiles, not the live router's SSID/PSK credentials.
+The N60 package currently tracks a fixed 12-record `wts_bss_info_config`: four `8x` (2.4 GHz), four `11x` (5 GHz low) and four `12x` (5 GHz high) records. All records use the wildcard MAC `ff:ff:ff:ff:ff:ff` and vendor test SSIDs/keys (`Multi-AP-*`, `maprocks1` through `maprocks4`); they are not the live router's SSID/PSK credentials. The current file contains no `13x` / 6 GHz records.
 
-The N60 Pro hardware remains dual-band only. Restoring the original vendor
-profile set does not add a 6 GHz PHY and does not change the actual radio
-inventory in `1905d.cfg` (`24G;5GL;5GH;`). The 6 GHz entries are retained as
-part of the requested vendor test defaults; they must not be interpreted as
-evidence that N60 can transmit on 6 GHz.
+The N60 Pro hardware and `1905d.cfg` radio inventory are dual-band (`24G;5GL;5GH;`). The current 12-record template therefore matches the hardware's three operating-class groups and does not imply a 6 GHz radio.
 
-There is no runtime WTS/SSID generator in the package. The init service
-validates that the fixed WTS file exists and contains all 16 records, then
-starts WAPP and P1905 with that same file. The WAPP wrapper repeats the
-profile-count and vendor-profile checks before launching WAPP. The package
-Makefile does not install a WTS generator, and CI byte-compares the checked-in
-file against the complete expected vendor profile set.
+There is no runtime WTS/SSID generator in the package. The init service and WAPP wrapper both require exactly 12 indexed records before startup. The package Makefile does not install a WTS generator, and `tests/test-vendor-wts-defaults.sh` byte-compares the checked-in file against the complete expected 12-record N60 profile set.
 
 The WAPP WPS configuration event handler remains an upstream record updater,
 not a startup generator. It can rewrite an existing record after a WPS
@@ -179,12 +170,11 @@ non-atomic file update) remain relevant if WPS provisioning is later enabled.
 
 The acceptance boundary is:
 
-1. Preserve the exact vendor WTS test profile set as a static package default.
+1. Preserve the exact 12-record N60 dual-band WTS profile set as a static package default.
 2. Do not generate WTS from DAT values or copy the live router's credentials
    into the repository or WTS file at boot.
-3. Keep the N60 hardware declaration dual-band; do not infer a 6 GHz radio from
-   the vendor's generic test profile records.
-4. Validate the WTS file's exact contents in CI before firmware compilation.
+3. Keep the N60 hardware declaration dual-band and reject 6 GHz (`13x`) rows.
+4. Validate the exact 12-row WTS contents in CI before firmware compilation.
 5. On the router, confirm P1905 actually parses the vendor WTS records and
    proceeds to topology discovery. A successful static check alone does not
    prove runtime interoperability.
