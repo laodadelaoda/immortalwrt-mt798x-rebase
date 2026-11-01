@@ -60,6 +60,7 @@ done
 for setting in \
     'map_root=1' \
     'map_agent=0' \
+    'map_ver=R3' \
     'bh_type=eth' \
     'br_inf=br-lan' \
     'al_inf=rax0' \
@@ -70,6 +71,21 @@ for setting in \
         exit 1
     }
 done
+
+# MAP R3 must be enabled in both the N60 driver build and runtime startup.
+REPO_ROOT="$ROOT/../../../.."
+DRIVER_CONFIG="$REPO_ROOT/config/n60pro-1001.config"
+grep -qx 'CONFIG_MTK_MAP_R2_VER_SUPPORT=y' "$DRIVER_CONFIG"
+grep -qx 'CONFIG_MTK_MAP_R3_VER_SUPPORT=y' "$DRIVER_CONFIG"
+for setting in mapR3Enable=1 DppEnable=1 mapTSEnable=1 cp_support=1; do
+    grep -Fq "$setting" "$INIT" || {
+        echo "FAIL: init service does not apply MTK MAP R3 driver setting $setting" >&2
+        exit 1
+    }
+done
+grep -Fq 'apply_map_r3_driver_config ra0' "$INIT"
+grep -Fq 'apply_map_r3_driver_config rax0' "$INIT"
+
 grep -Fq -- '-ne 12' "$INIT" || { echo "FAIL: init service does not validate the N60 12-row WTS template" >&2; exit 1; }
 grep -Fq -- '-ne 12' "$WRAPPER" || { echo "FAIL: WAPP wrapper does not validate the N60 12-row WTS template" >&2; exit 1; }
 grep -Fq 'Multi-AP-24G-2' "$WTS"

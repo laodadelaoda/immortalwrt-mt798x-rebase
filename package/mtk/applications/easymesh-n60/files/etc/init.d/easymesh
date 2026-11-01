@@ -11,6 +11,23 @@ radio_is_ready() {
         printf '%s\n' "$info" | grep -Eq 'ESSID:"[^"]+"'
 }
 
+# Match the MTK 7.6.7.3 EasyMesh R3 startup sequence. The driver defaults
+# bMapR3Enable, bDppEnable and bTSEnable to disabled; MapMode=1 alone does
+# not enable the R3/R2 driver data path.
+apply_map_r3_driver_config() {
+    iface="$1"
+    for setting in mapR3Enable=1 DppEnable=1 mapTSEnable=1 cp_support=1; do
+        output="$(iwpriv "$iface" set "$setting" 2>&1)"
+        rc=$?
+        if [ "$rc" -ne 0 ] ||
+           printf '%s\n' "$output" | grep -qiE 'invalid argument|operation not supported|not supported|no such device'; then
+            logger -t easymesh "ERROR: iwpriv $iface set $setting failed (rc=$rc): $output"
+            return 1
+        fi
+        logger -t easymesh "Applied $setting on $iface"
+    done
+}
+
 start_service() {
     # Wait for both radios to finish AP setup, not merely for netdev creation.
     # Require three consecutive ready samples to avoid racing mtwifi-cfg startup.
@@ -39,12 +56,46 @@ start_service() {
         return 1
     fi
 
-    # GL 7.6.7.3 p1905_managerd expects this unversioned library name.
-    if [ -f /usr/lib/libnl-tiny.so.1 ] && [ ! -e /usr/lib/libnl-tiny.so ]; then
-        ln -sf /usr/lib/libnl-tiny.so.1 /usr/lib/libnl-tiny.so
+    # This N60 package is fixed to MAP R3. Do not start a mixed R2/R3
+    # configuration if the runtime P1905 role/version file was replaced.
+    if ! grep -qx 'map_ver=R3' /etc/map/1905d.cfg; then
+        logger -t easymesh "ERROR: /etc/map/1905d.cfg must select map_ver=R3"
+        return 1
     fi
 
-    modprobe mapfilter 2>/dev/null
+    # Check the exact SONAMEs required by the shipped WAPP/P1905 ELF files.
+    for lib in /usr/lib/libkvcutil.so.1 /usr/lib/libeth_1905ops.so \
+               /usr/lib/libnl-tiny.so.1 /usr/lib/libssl.so.1.1 /usr/lib/libcrypto.so.1.1; do
+        if [ ! -s "$lib" ]; then
+            logger -t easymesh "ERROR: required EasyMesh runtime library is missing: $lib"
+            return 1
+        fi
+    done
+
+    # GL 7.6.7.3 p1905_managerd expects this unversioned link as well.
+    if [ ! -e /usr/lib/libnl-tiny.so ]; then
+        ln -sf /usr/lib/libnl-tiny.so.1 /usr/lib/libnl-tiny.so
+    fi
+    if [ ! -e /usr/lib/libnl-tiny.so ]; then
+        logger -t easymesh "ERROR: failed to create /usr/lib/libnl-tiny.so compatibility link"
+        return 1
+    fi
+
+    if ! modprobe mapfilter 2>/dev/null; then
+        logger -t easymesh "ERROR: mapfilter kernel module failed to load; refusing to start P1905"
+        return 1
+    fi
+
+    # Enable the same MAP R3 driver features as MTK's EasyMesh_openwrt.sh
+    # before WAPP attaches: MAP R3 also enables the MAP R2 driver flag.
+    if ! command -v iwpriv >/dev/null 2>&1; then
+        logger -t easymesh "ERROR: iwpriv is unavailable; cannot enable MTK MAP R3"
+        return 1
+    fi
+    if ! apply_map_r3_driver_config ra0 || ! apply_map_r3_driver_config rax0; then
+        logger -t easymesh "ERROR: MTK MAP R3 driver initialization failed; WAPP/P1905/MAPD will not start"
+        return 1
+    fi
 
     # Match Action #338: do not add procd respawn to the WAPP wrapper.
     # The wrapper remains attached to the vendor daemon's parent/child lifetime.
