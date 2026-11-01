@@ -158,7 +158,7 @@ jobs:
       - name: Download package dependencies
         run: make download -j"$(nproc)"
 
-      - name: Prepare host tools, target toolchain and kernel configuration
+      - name: Prepare host tools, target toolchain and complete kernel build tree
         shell: bash
         run: |
           set -euo pipefail
@@ -168,17 +168,26 @@ jobs:
           LIBGCC_SO="$(find staging_dir -type f -path '*/lib/libgcc_s.so.*' -print -quit)"
           test -n "$LIBGCC_SO" || { echo "::error::Target libgcc_s.so was not staged."; exit 1; }
           echo "PASS: target runtime staged: $LIBGCC_SO"
-          # Must be invoked from the repository root so TOPDIR/INCLUDE_DIR resolve.
+          # Resolve the target kernel configuration before building the kernel.
           make kernel_oldconfig V=s
-          # kernel_oldconfig writes .config only; external kmod builds also need
-          # the prepared kernel headers/generated UAPI asm headers (asm/types.h).
-          make target/linux/prepare V=s
-          KERNEL_CONFIG="$(find build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic -type f -name .config -print -quit)"
-          test -n "$KERNEL_CONFIG" && test -s "$KERNEL_CONFIG" || {
+          # target/linux/prepare only delegates to the target's prepare rule;
+          # on this tree it completed as a no-op and did not generate asm/types.h.
+          # Build the target kernel so generated UAPI headers and module build
+          # metadata are present before package dependencies compile external kmods.
+          make target/linux/compile -j"$(nproc)" V=s
+          KERNEL_DIR="build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/linux-6.12.112"
+          KERNEL_CONFIG="$KERNEL_DIR/.config"
+          test -s "$KERNEL_CONFIG" || {
             echo "::error::Target Linux .config was not generated."
             exit 1
           }
-          echo "PASS: target Linux configuration generated: $KERNEL_CONFIG"
+          ASM_TYPES="$(find "$KERNEL_DIR/arch/arm64/include" "$KERNEL_DIR/include" -path '*/asm/types.h' -type f -print -quit)"
+          test -n "$ASM_TYPES" || {
+            echo "::error::Kernel build did not generate/provide asm/types.h."
+            exit 1
+          }
+          echo "PASS: complete target kernel tree prepared: $KERNEL_DIR"
+          echo "PASS: required ARM64 UAPI header present: $ASM_TYPES"
 
       - name: Compile EasyMesh package only
         shell: bash
