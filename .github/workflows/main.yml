@@ -582,7 +582,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          OUT="bin/targets/mediatek/filogic"
+          OUT="bin/targets/${TARGET}/${SUBTARGET}"
           DEST="artifacts/$DEVICE/$PROFILE"
           mkdir -p "$DEST"
           find "$OUT" -maxdepth 1 -type f \
