@@ -7,7 +7,7 @@ section() {
 }
 
 section "Processes"
-ps w 2>/dev/null | grep -E '[w]app|[m]apd|[p]1905_managerd' || true
+ps w 2>/dev/null | grep -E '[w]app|[W]APP|[m]apd|[p]1905_managerd' || true
 
 section "WAPP / MAPD sockets"
 for socket in /tmp/wapp_server /tmp/wapp_ctrl /tmp/mapd_ctrl; do
