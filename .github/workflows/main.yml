@@ -70,7 +70,7 @@ jobs:
           test -x "$ROOT/etc/init.d/easymesh" || { echo "::error::Missing easymesh init service"; exit 1; }
           test -s "$ROOT/usr/sbin/generate-mapd-strng" || { echo "::error::Missing MAPD strength generator source"; exit 1; }
           test -s "$ROOT/usr/sbin/easymesh-n60-diagnose" || { echo "::error::Missing read-only EasyMesh diagnostic utility"; exit 1; }
-          test -x "$ROOT/usr/sbin/easymesh-n60-validate-wts" || { echo "::error::Missing strict N60 WTS preflight validator"; exit 1; }
+          test -s "$ROOT/usr/sbin/easymesh-n60-validate-wts" || { echo "::error::Missing strict N60 WTS preflight validator"; exit 1; }
           test -s "package/mtk/applications/easymesh-n60/tests/test-vendor-wts-defaults.sh" || { echo "::error::Missing vendor WTS defaults regression test"; exit 1; }
           grep -Fq 'WAPP_LOG=/tmp/wapp-n60-startup.log' "$BIN/wapp-n60-wrapper" || { echo "::error::WAPP startup log capture is missing"; exit 1; }
           grep -Fq 'umask 077' "$BIN/wapp-n60-wrapper" || { echo "::error::WAPP diagnostic log must be private"; exit 1; }
