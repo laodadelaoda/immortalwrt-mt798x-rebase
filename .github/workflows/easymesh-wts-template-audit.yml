@@ -20,11 +20,11 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Download and verify vendor MAPD and P1905 sources
+      - name: Download and verify all remaining 7.6.7.3 EasyMesh source packages
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/wts-audit"/{archives,mapd,1905,mapfilter}
+          mkdir -p "$RUNNER_TEMP/wts-audit"/{archives,mapd,1905,mapfilter,libmapd,bndstrg_plus,fwdd}
           cd "$RUNNER_TEMP/wts-audit/archives"
           curl -fL --retry 3 https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3/mapd-6eca4331.tar.bz2 -o mapd.tar.bz2
           echo "39ab37cb347d372e352ade03181bc9c23429d4d849d32acbdff00973547d7e18  mapd.tar.bz2" | sha256sum -c -
@@ -32,12 +32,26 @@ jobs:
           echo "82f7cc4ad5731e750f87c9a4ad19a39d2456bb8fec0cf79bf4b3f3ccb4f14795  1905daemon.tar.bz2" | sha256sum -c -
           curl -fL --retry 3 https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3/mapfilter-96f2afed.tar.bz2 -o mapfilter.tar.bz2
           echo "3928c6614b84e74f1f1762cee61de8e422299e792f5f363dc369dfc0ed0f1714  mapfilter.tar.bz2" | sha256sum -c -
+          curl -fL --retry 3 https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3/libmapd-0132d199.tar.bz2 -o libmapd.tar.bz2
+          echo "d325b4a8dc2bf44bd3bd639a0c300380c0a6240f407807f8f2eea80d006c8dba  libmapd.tar.bz2" | sha256sum -c -
+          curl -fL --retry 3 https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3/bndstrg_plus-8350508d.tar.bz2 -o bndstrg_plus.tar.bz2
+          echo "e6e64967c7dbc1b9c56183bcea279ad9718bc7267d61b7583965c2f700d179b4  bndstrg_plus.tar.bz2" | sha256sum -c -
+          curl -fL --retry 3 https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3/fwdd-bcbae0e4.tar.bz2 -o fwdd.tar.bz2
+          echo "26a7ad4f55ca0a779e4178b5b8f918df99de90217d9d98a840a20fddd4123a65  fwdd.tar.bz2" | sha256sum -c -
           tar -xjf mapd.tar.bz2 -C "$RUNNER_TEMP/wts-audit/mapd"
           tar -xjf 1905daemon.tar.bz2 -C "$RUNNER_TEMP/wts-audit/1905"
           tar -xjf mapfilter.tar.bz2 -C "$RUNNER_TEMP/wts-audit/mapfilter"
+          tar -xjf libmapd.tar.bz2 -C "$RUNNER_TEMP/wts-audit/libmapd"
+          tar -xjf bndstrg_plus.tar.bz2 -C "$RUNNER_TEMP/wts-audit/bndstrg_plus"
+          tar -xjf fwdd.tar.bz2 -C "$RUNNER_TEMP/wts-audit/fwdd"
           echo "MAPD source files: $(find "$RUNNER_TEMP/wts-audit/mapd" -type f | wc -l)"
           echo "P1905 source files: $(find "$RUNNER_TEMP/wts-audit/1905" -type f | wc -l)"
           echo "mapfilter source files: $(find "$RUNNER_TEMP/wts-audit/mapfilter" -type f | wc -l)"
+          echo "libmapd source files: $(find "$RUNNER_TEMP/wts-audit/libmapd" -type f | wc -l)"
+          echo "bndstrg_plus source files: $(find "$RUNNER_TEMP/wts-audit/bndstrg_plus" -type f | wc -l)"
+          echo "fwdd source files: $(find "$RUNNER_TEMP/wts-audit/fwdd" -type f | wc -l)"
+          echo "===== BUILD ENTRYPOINT INVENTORY ====="
+          find "$RUNNER_TEMP/wts-audit" -type f \( -name Makefile -o -name makefile -o -name GNUmakefile -o -name CMakeLists.txt -o -name configure -o -name '*.mk' \) -print | sort
 
       - name: Trace WTS template semantics and device-specific MAC registration
         shell: bash
@@ -108,5 +122,8 @@ jobs:
             ${{ runner.temp }}/wts-audit/mapd/**
             ${{ runner.temp }}/wts-audit/1905/**
             ${{ runner.temp }}/wts-audit/mapfilter/**
+            ${{ runner.temp }}/wts-audit/libmapd/**
+            ${{ runner.temp }}/wts-audit/bndstrg_plus/**
+            ${{ runner.temp }}/wts-audit/fwdd/**
           if-no-files-found: error
           retention-days: 7
