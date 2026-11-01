@@ -83,7 +83,7 @@ jobs:
             sh -n "$f"
           done
           sh "package/mtk/applications/easymesh-n60/tests/test-vendor-wts-defaults.sh"
-          "$ROOT/usr/sbin/easymesh-n60-validate-wts" "$ROOT/etc/map/wts_bss_info_config"
+          sh "$ROOT/usr/sbin/easymesh-n60-validate-wts" "$ROOT/etc/map/wts_bss_info_config"
           for f in package/mtk/applications/luci-app-mtk-dash2/htdocs/luci-static/resources/view/mtk-dash2/map.js package/mtk/applications/luci-app-mtk-dash2/htdocs/luci-static/resources/view/mtk-dash2/setup.js package/mtk/applications/luci-app-mtk-dash2/htdocs/luci-static/resources/view/mtk-dash2/wireless.js; do
             node --check "$f"
           done
