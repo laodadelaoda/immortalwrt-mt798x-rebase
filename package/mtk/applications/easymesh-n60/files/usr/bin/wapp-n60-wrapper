@@ -43,7 +43,7 @@ log_msg "Starting WAPP for ra0 and rax0 in OPMODE_AP / RA_WEXT on br-lan; stdout
 # -f AP config list; -F MAP config; -u MAP user config.
 # -e/-w override vendor br0 defaults; repeated -c values are IAPP ioctl interfaces.
 # P1905 reads its own 1905d.cfg in the separate init service.
- /usr/bin/wapp -m OPMODE_AP -i RA_WEXT -d1 -v2 -f /etc/wapp_ap.conf -F /etc/map/mapd_cfg -u /etc/map/mapd_user.cfg -e br-lan -w br-lan -c ra0 -c rax0 >> "$WAPP_LOG" 2>&1
+/usr/bin/wapp -m OPMODE_AP -i RA_WEXT -d1 -v2 -f /etc/wapp_ap.conf -F /etc/map/mapd_cfg -u /etc/map/mapd_user.cfg -e br-lan -w br-lan -c ra0 -c rax0 >> "$WAPP_LOG" 2>&1
 wapp_rc=$?
 
 # Some vendor builds daemonize after the parent exits. Keep procd attached
