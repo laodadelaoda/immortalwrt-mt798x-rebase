@@ -39,7 +39,8 @@ define Build/Prepare
 	printf '\n# MediaTek MBO parameters for N60 Pro\nmbo_ap_cdcp=1\nmbo_ap_assoc_disallow_reason=0\nmbo_ap_assoc_retry_delay=0\nmbo_ap_transition_reason_code=0\nmbo_ap_capability=64\n' >> '$(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap_rax0_default.conf'; \
 	printf 'conf_list=/etc/wapp_ap_ra0.conf;/etc/wapp_ap_rax0.conf;\n' > $(PKG_BUILD_DIR)/wappd/wapp_ap.conf; \
 	sed -i 's|$$(CC) $$(CFLAGS) -I../inc|$$(CC) $$(CFLAGS) $$(EXTRA_CFLAGS) -I../inc|g' '$(PKG_BUILD_DIR)/1905daemon/ethernet/Makefile'; \
-	sed -i 's|$$(CC) $$(CFLAGS) $$(INCLUDE)|$$(CC) $$(CFLAGS) $$(EXTRA_CFLAGS) $$(INCLUDE)|g' '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/libbridge/Makefile'
+	sed -i 's|$$(CC) $$(CFLAGS) $$(INCLUDE)|$$(CC) $$(CFLAGS) $$(EXTRA_CFLAGS) $$(INCLUDE)|g' '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/libbridge/Makefile'; \
+	sed -i 's|$$(CC) $$(CFLAGS) -c libbridge_compat.c|$$(CC) $$(CFLAGS) $$(EXTRA_CFLAGS) -c libbridge_compat.c|g' '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/libbridge/Makefile'
 endef
 
 define Build/Compile
