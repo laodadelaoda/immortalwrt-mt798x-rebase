@@ -5,7 +5,7 @@ Branch: `n60pro-mtk-closed-driver`
 
 ## Changes applied
 
-1. Added `easymesh-n60-validate-wts` and installed it in the `easymesh-n60` package. It fails closed unless the WTS file has the expected header, exactly 12 sequential records, wildcard MAC selectors, the N60 dual-band operating-class profile (4 × `11x`, 4 × `8x`, 4 × `12x` in the repository's existing row order), valid WAPP/P1905 core fields, and no 6 GHz rows.
+1. Added `easymesh-n60-validate-wts` and installed it in the `easymesh-n60` package. It fails closed unless the WTS file has the expected header, exactly 12 sequential records, wildcard MAC selectors, the N60 dual-band operating-class profile (4 × `11x`, 4 × `8x`, 4 × `12x` in the repository's existing row order), valid WAPP fields plus the three trailing P1905 VLAN/PVID/PCP tokens, and no 6 GHz rows.
 2. The WAPP wrapper and init service both run the same validator before starting vendor daemons. This removes the previous difference where the init script checked only a record count while the wrapper performed a somewhat broader check.
 3. The init service now validates the P1905 `al_inf` input before startup: it must be a real interface, distinct from `br_inf`, present in P1905's `bss_config_priority`, and be queryable through WEXT in `Mode:Master`, and have a valid nonzero unicast MAC. The actual interface/MAC pair is written to the system log before P1905 starts.
 4. The standard firmware workflow checks the validator's presence and shell syntax, executes it against the tracked WTS template, and checks that the AL-interface guard remains in the init script.
