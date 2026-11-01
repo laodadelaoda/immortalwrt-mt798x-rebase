@@ -3,6 +3,8 @@ include $(TOPDIR)/rules.mk
 PKG_NAME:=easymesh-n60
 PKG_VERSION:=7.6.7.3
 PKG_RELEASE:=12
+PKG_BUILD_DEPENDS:=datconf openssl libnl-tiny
+PKG_BUILD_PARALLEL:=1
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -10,49 +12,86 @@ define Package/easymesh-n60
   SECTION:=net
   CATEGORY:=Network
   TITLE:=MTK EasyMesh binaries and config for N60 Pro
-  DEPENDS:=+kmod-mapfilter +libnl-tiny +libkvcutil
+  DEPENDS:=+kmod-mapfilter +libnl-tiny +libkvcutil +libopenssl
 endef
 
 define Package/easymesh-n60/description
-  GL 7.6.7.3 EasyMesh binaries (wapp/mapd/p1905_managerd) with
-  N60 Pro original configs and startup script.
+  Source-built MediaTek 7.6.7.3 WAPP/MAPD/P1905 EasyMesh stack for N60 Pro,
+  using the matching vendor source archives and N60-specific runtime configs.
 endef
 
 define Build/Prepare
 	set -eu; \
-	printf '%s  %s\n' '73fa8995533e701d3d5774faa92d274497f99e1a37c81ce445f25a959b4b7462' '$(DL_DIR)/wappd-80ca5724.tar.bz2' | sha256sum -c -; \
 	mkdir -p $(PKG_BUILD_DIR); \
-	tar -xjf '$(DL_DIR)/wappd-80ca5724.tar.bz2' -C $(PKG_BUILD_DIR) \
-		wappd/config_and_icon_files/wapp_ap_ra0_default.conf \
-		wappd/config_and_icon_files/wapp_ap_rax0_default.conf; \
+	printf '%s  %s\n' '73fa8995533e701d3d5774faa92d274497f99e1a37c81ce445f25a959b4b7462' '$(DL_DIR)/wappd-80ca5724.tar.bz2' | sha256sum -c -; \
+	printf '%s  %s\n' '39ab37cb347d372e352ade03181bc9c23429d4d849d32acbdff00973547d7e18' '$(DL_DIR)/mapd-6eca4331.tar.bz2' | sha256sum -c -; \
+	printf '%s  %s\n' '82f7cc4ad5731e750f87c9a4ad19a39d2456bb8fec0cf79bf4b3f3ccb4f14795' '$(DL_DIR)/1905daemon-35234223.tar.bz2' | sha256sum -c -; \
+	printf '%s  %s\n' 'd325b4a8dc2bf44bd3bd639a0c300380c0a6240f407807f8f2eea80d006c8dba' '$(DL_DIR)/libmapd-0132d199.tar.bz2' | sha256sum -c -; \
+	tar -xjf '$(DL_DIR)/wappd-80ca5724.tar.bz2' -C $(PKG_BUILD_DIR); \
+	tar -xjf '$(DL_DIR)/mapd-6eca4331.tar.bz2' -C $(PKG_BUILD_DIR); \
+	tar -xjf '$(DL_DIR)/1905daemon-35234223.tar.bz2' -C $(PKG_BUILD_DIR); \
+	tar -xjf '$(DL_DIR)/libmapd-0132d199.tar.bz2' -C $(PKG_BUILD_DIR); \
 	sed -i 's/^interworking=1/interworking=0/' '$(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap_ra0_default.conf'; \
 	sed -i '/^mbo_ap_cdcp=/d; /^mbo_ap_assoc_disallow_reason=/d; /^mbo_ap_assoc_retry_delay=/d; /^mbo_ap_transition_reason_code=/d; /^mbo_ap_capability=/d' '$(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap_ra0_default.conf'; \
 	printf '\n# MediaTek MBO parameters for N60 Pro\nmbo_ap_cdcp=1\nmbo_ap_assoc_disallow_reason=0\nmbo_ap_assoc_retry_delay=0\nmbo_ap_transition_reason_code=0\nmbo_ap_capability=64\n' >> '$(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap_ra0_default.conf'; \
 	sed -i 's/^interworking=1/interworking=0/' '$(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap_rax0_default.conf'; \
 	sed -i '/^mbo_ap_cdcp=/d; /^mbo_ap_assoc_disallow_reason=/d; /^mbo_ap_assoc_retry_delay=/d; /^mbo_ap_transition_reason_code=/d; /^mbo_ap_capability=/d' '$(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap_rax0_default.conf'; \
 	printf '\n# MediaTek MBO parameters for N60 Pro\nmbo_ap_cdcp=1\nmbo_ap_assoc_disallow_reason=0\nmbo_ap_assoc_retry_delay=0\nmbo_ap_transition_reason_code=0\nmbo_ap_capability=64\n' >> '$(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap_rax0_default.conf'; \
-	printf 'conf_list=/etc/wapp_ap_ra0.conf;/etc/wapp_ap_rax0.conf;\n' > $(PKG_BUILD_DIR)/wapp_ap.conf
+	printf 'conf_list=/etc/wapp_ap_ra0.conf;/etc/wapp_ap_rax0.conf;\n' > $(PKG_BUILD_DIR)/wappd/wapp_ap.conf; \
+	# The vendor DSA selector is misspelled in this 7.6.7.3 source tree; \
+	# pass SWTICH_DSA_ARCH=y at compile time and forward OpenWrt flags to DSA sub-builds. \
+	sed -i 's|$(CC) $(CFLAGS) -I../inc|$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -I../inc|g' '$(PKG_BUILD_DIR)/1905daemon/ethernet/Makefile'; \
+	sed -i 's|$(CC) $(CFLAGS) $(INCLUDE)|$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(INCLUDE)|g' '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/libbridge/Makefile'
 endef
 
 define Build/Compile
+	set -eu; \
+	TARGET_EASYMESH_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS)"; \
+	OPENWRT_EASYMESH_CFLAGS="$TARGET_EASYMESH_CFLAGS -DCONFIG_SUPPORT_OPENWRT"; \
+	$(MAKE) -C $(PKG_BUILD_DIR)/libmapd \
+		CC="$(TARGET_CC)" \
+		CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Werror -g" \
+		all; \
+	$(MAKE) -C $(PKG_BUILD_DIR)/wappd \
+		TOPDIR="$(TOPDIR)" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R3_SUPPORT=y \
+		CC="$(TARGET_CC)" EXTRA_CFLAGS="$TARGET_EASYMESH_CFLAGS" \
+		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto" \
+		all; \
+	mkdir -p $(PKG_BUILD_DIR)/1905daemon/obj; \
+	$(MAKE) -C $(PKG_BUILD_DIR)/1905daemon \
+		TOPDIR="$(TOPDIR)" ROOTDIR="$(TOPDIR)" \
+		LINUXDIR="$(patsubst $(TOPDIR)/%,%,$(LINUX_DIR))" \
+		STAGING_DIR="$(STAGING_DIR)" \
+		CONFIG_MAP_R3_SUPPORT=y MAP_R3_SUPPORT=y SWTICH_DSA_ARCH=y \
+		CC="$(TARGET_CC)" EXTRA_CFLAGS="$OPENWRT_EASYMESH_CFLAGS" \
+		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib -Wl,--no-as-needed -lpthread -lnl-tiny -lssl -lcrypto" \
+		all; \
+	$(MAKE) -C $(PKG_BUILD_DIR)/mapd \
+		TOPDIR="$(TOPDIR)" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R3_SUPPORT=y \
+		CC="$(TARGET_CC)" LDO="$(TARGET_CC)" \
+		EXTRA_CFLAGS="$OPENWRT_EASYMESH_CFLAGS" \
+		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib" \
+		version mapd; \
+	test -x $(PKG_BUILD_DIR)/wappd/wapp; \
+	test -x $(PKG_BUILD_DIR)/wappd/wappctrl; \
+	test -x $(PKG_BUILD_DIR)/mapd/mapd; \
+	test -x $(PKG_BUILD_DIR)/1905daemon/p1905_managerd; \
+	test -s $(PKG_BUILD_DIR)/1905daemon/ethernet/libeth_1905ops.so; \
+	test -s $(PKG_BUILD_DIR)/libmapd/libmapd_interface_client.so
 endef
 
 define Package/easymesh-n60/install
 	$(INSTALL_DIR) $(1)/usr/bin $(1)/usr/sbin $(1)/usr/lib $(1)/etc $(1)/etc/map $(1)/etc/init.d $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/usr/bin/wapp $(1)/usr/bin/
-	if [ -s ./files/usr/bin/wappctrl ]; then \
-		$(INSTALL_BIN) ./files/usr/bin/wappctrl $(1)/usr/bin/; \
-	fi
-	$(INSTALL_BIN) ./files/usr/bin/mapd $(1)/usr/bin/
-	$(INSTALL_BIN) ./files/usr/bin/p1905_managerd $(1)/usr/bin/
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/wappd/wapp $(1)/usr/bin/
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/wappd/wappctrl $(1)/usr/bin/
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/mapd/mapd $(1)/usr/bin/
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/1905daemon/p1905_managerd $(1)/usr/bin/
 	$(INSTALL_BIN) ./files/usr/bin/wapp-n60-wrapper $(1)/usr/bin/
 	$(INSTALL_BIN) ./files/usr/sbin/generate-mapd-strng $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/usr/sbin/easymesh-n60-diagnose $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/usr/sbin/easymesh-n60-validate-wts $(1)/usr/sbin/
-	$(INSTALL_BIN) ./files/usr/lib/libeth_1905ops.so $(1)/usr/lib/
-	$(INSTALL_BIN) ./files/usr/lib/libmapd_interface_client.so $(1)/usr/lib/
-	$(INSTALL_DATA) ./files/usr/lib/libssl.so.1.1 $(1)/usr/lib/
-	$(INSTALL_DATA) ./files/usr/lib/libcrypto.so.1.1 $(1)/usr/lib/
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/1905daemon/ethernet/libeth_1905ops.so $(1)/usr/lib/
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/libmapd/libmapd_interface_client.so $(1)/usr/lib/
 	ln -sf libnl-tiny.so.1 $(1)/usr/lib/libnl-tiny.so
 	$(INSTALL_DATA) ./files/etc/map/mapd_cfg $(1)/etc/map/
 	$(INSTALL_DATA) ./files/etc/map/mapd_user.cfg $(1)/etc/map/
