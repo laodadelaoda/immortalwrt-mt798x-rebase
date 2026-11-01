@@ -7,8 +7,46 @@ USE_PROCD=1
 radio_is_ready() {
     iface="$1"
     info="$(iwconfig "$iface" 2>/dev/null)" || return 1
-    printf '%s\n' "$info" | grep -q 'Mode:Master' &&
-        printf '%s\n' "$info" | grep -Eq 'ESSID:"[^"]+"'
+    printf '%s\\n' "$info" | grep -q 'Mode:Master' &&
+        printf '%s\\n' "$info" | grep -Eq 'ESSID:"[^"]+"'
+}
+
+validate_al_interface() {
+    cfg=/etc/map/1905d.cfg
+    al_inf="$(sed -n 's/^al_inf=//p' "$cfg" | tail -n 1)"
+    br_inf="$(sed -n 's/^br_inf=//p' "$cfg" | tail -n 1)"
+    priority="$(sed -n 's/^bss_config_priority=//p' "$cfg" | tail -n 1)"
+
+    case "$al_inf" in
+        ''|*[!A-Za-z0-9_.:-]*)
+            logger -t easymesh "ERROR: invalid or missing al_inf in $cfg"
+            return 1
+            ;;
+    esac
+    if [ "$al_inf" = "$br_inf" ] ||
+       ! printf '%s\\n' ";$priority;" | grep -Fq ";$al_inf;"; then
+        logger -t easymesh "ERROR: al_inf=$al_inf must be a wireless interface listed in bss_config_priority and must differ from br_inf=$br_inf"
+        return 1
+    fi
+    if [ ! -d "/sys/class/net/$al_inf" ]; then
+        logger -t easymesh "ERROR: configured P1905 AL interface $al_inf does not exist"
+        return 1
+    fi
+
+    al_mac="$(cat "/sys/class/net/$al_inf/address" 2>/dev/null)" || return 1
+    if ! printf '%s\\n' "$al_mac" | grep -Eiq '^([0-9a-f]{2}:){5}[0-9a-f]{2}$' ||
+       [ "$al_mac" = "00:00:00:00:00:00" ] ||
+       [ "$al_mac" = "ff:ff:ff:ff:ff:ff" ]; then
+        logger -t easymesh "ERROR: P1905 AL interface $al_inf has invalid MAC '$al_mac'"
+        return 1
+    fi
+    first_octet="$(printf '%s' "$al_mac" | cut -d: -f1)"
+    first_octet_value=$((0x$first_octet))
+    if [ $((first_octet_value & 1)) -ne 0 ]; then
+        logger -t easymesh "ERROR: P1905 AL interface $al_inf has multicast MAC '$al_mac'"
+        return 1
+    fi
+    logger -t easymesh "P1905 AL interface validated: $al_inf ($al_mac), bridge=$br_inf"
 }
 
 # Match the MTK 7.6.7.3 EasyMesh R3 startup sequence. The driver defaults
@@ -20,7 +58,7 @@ apply_map_r3_driver_config() {
         output="$(iwpriv "$iface" set "$setting" 2>&1)"
         rc=$?
         if [ "$rc" -ne 0 ] ||
-           printf '%s\n' "$output" | grep -qiE 'invalid argument|operation not supported|not supported|no such device'; then
+           printf '%s\\n' "$output" | grep -qiE 'invalid argument|operation not supported|not supported|no such device'; then
             logger -t easymesh "ERROR: iwpriv $iface set $setting failed (rc=$rc): $output"
             return 1
         fi
@@ -30,7 +68,6 @@ apply_map_r3_driver_config() {
 
 start_service() {
     # Wait for both radios to finish AP setup, not merely for netdev creation.
-    # Require three consecutive ready samples to avoid racing mtwifi-cfg startup.
     waited=0
     stable=0
     while [ "$waited" -lt 120 ]; do
@@ -48,18 +85,18 @@ start_service() {
         return 1
     fi
 
-    # Use the checked-in N60-supported vendor WTS template unchanged.
-    if [ ! -s /etc/map/wts_bss_info_config ] ||
-       ! grep -qx '#ucc_bss_info' /etc/map/wts_bss_info_config ||
-       [ "$(grep -c '^[0-9][0-9]*,ff:ff:ff:ff:ff:ff ' /etc/map/wts_bss_info_config)" -ne 12 ]; then
-        logger -t easymesh "ERROR: N60 WTS template is missing or incomplete; refusing to start EasyMesh"
+    # Fail closed before either daemon can parse malformed or incomplete WTS.
+    if ! /usr/sbin/easymesh-n60-validate-wts /etc/map/wts_bss_info_config; then
+        logger -t easymesh "ERROR: N60 WTS validation failed; refusing to start EasyMesh"
         return 1
     fi
 
-    # This N60 package is fixed to MAP R3. Do not start a mixed R2/R3
-    # configuration if the runtime P1905 role/version file was replaced.
     if ! grep -qx 'map_ver=R3' /etc/map/1905d.cfg; then
         logger -t easymesh "ERROR: /etc/map/1905d.cfg must select map_ver=R3"
+        return 1
+    fi
+    if ! validate_al_interface; then
+        logger -t easymesh "ERROR: P1905 AL interface preflight failed; refusing to start EasyMesh"
         return 1
     fi
 
@@ -72,7 +109,6 @@ start_service() {
         fi
     done
 
-    # GL 7.6.7.3 p1905_managerd expects this unversioned link as well.
     if [ ! -e /usr/lib/libnl-tiny.so ]; then
         ln -sf /usr/lib/libnl-tiny.so.1 /usr/lib/libnl-tiny.so
     fi
@@ -86,8 +122,6 @@ start_service() {
         return 1
     fi
 
-    # Enable the same MAP R3 driver features as MTK's EasyMesh_openwrt.sh
-    # before WAPP attaches: MAP R3 also enables the MAP R2 driver flag.
     if ! command -v iwpriv >/dev/null 2>&1; then
         logger -t easymesh "ERROR: iwpriv is unavailable; cannot enable MTK MAP R3"
         return 1
@@ -97,15 +131,12 @@ start_service() {
         return 1
     fi
 
-    # Match Action #338: do not add procd respawn to the WAPP wrapper.
-    # The wrapper remains attached to the vendor daemon's parent/child lifetime.
     procd_open_instance wapp
     procd_set_param command /usr/bin/wapp-n60-wrapper
     procd_close_instance
 
     sleep 2
 
-    # P1905 starts only after WAPP has created both real Unix sockets.
     procd_open_instance p1905
     procd_set_param command /bin/sh -c '
         waited=0
@@ -129,9 +160,6 @@ start_service() {
 
     sleep 2
 
-    # Generate only /etc/mapd_strng.conf from existing N60 Pro settings.
-    # Do not run the upstream uci2map.lua converter, which rewrites other
-    # MAPD/P1905 files and depends on a separate /etc/config/mapd layout.
     procd_open_instance mapd
     procd_set_param command /bin/sh -c '
         /usr/sbin/generate-mapd-strng || exit 1
