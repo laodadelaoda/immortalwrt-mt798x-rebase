@@ -32,6 +32,14 @@ validate_al_interface() {
         logger -t easymesh "ERROR: configured P1905 AL interface $al_inf does not exist"
         return 1
     fi
+    al_info="$(iwconfig "$al_inf" 2>/dev/null)" || {
+        logger -t easymesh "ERROR: configured P1905 AL interface $al_inf is not queryable through WEXT"
+        return 1
+    }
+    if ! printf '%s\n' "$al_info" | grep -q 'Mode:Master'; then
+        logger -t easymesh "ERROR: configured P1905 AL interface $al_inf is not an active AP/WEXT interface"
+        return 1
+    fi
 
     al_mac="$(cat "/sys/class/net/$al_inf/address" 2>/dev/null)" || return 1
     if ! printf '%s\n' "$al_mac" | grep -Eiq '^([0-9a-f]{2}:){5}[0-9a-f]{2}$' ||
