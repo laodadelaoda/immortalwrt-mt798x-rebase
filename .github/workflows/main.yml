@@ -367,6 +367,15 @@ jobs:
             exit 1
           }
 
+          echo "===== Step 4b: install the target cross-toolchain before isolated package compilation ====="
+          make toolchain/install -j"$(nproc)" V=s
+          LIBGCC_SO="$(find staging_dir -type f -path '*/lib/libgcc_s.so.*' -print -quit)"
+          test -n "$LIBGCC_SO" || {
+            echo "::error::Target toolchain install did not stage libgcc_s.so."
+            exit 1
+          }
+          echo "PASS: target toolchain runtime staged: $LIBGCC_SO"
+
           make package/mtk/applications/easymesh-n60/clean V=s
           make package/mtk/applications/easymesh-n60/compile V=s 2>&1 | tee "$EASYMESH_LOG"
 
