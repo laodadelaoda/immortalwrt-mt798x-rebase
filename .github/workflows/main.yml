@@ -383,11 +383,11 @@ jobs:
           readelf -d "$P1905_BIN" | grep -Fq 'libeth_1905ops.so'
           readelf -d "$P1905_BIN" | grep -Fq 'libssl.so.3'
           readelf -d "$P1905_BIN" | grep -Fq 'libcrypto.so.3'
-          if readelf -d "$WAPP_BIN" "$P1905_BIN" | grep -Fq 'libssl.so.1.1'; then
+          if readelf -d "$WAPP_BIN" | grep -Fq 'libssl.so.1.1' || readelf -d "$P1905_BIN" | grep -Fq 'libssl.so.1.1'; then
             echo "::error::Source-built EasyMesh binaries still depend on obsolete OpenSSL 1.1."
             exit 1
           fi
-          if readelf -d "$WAPP_BIN" "$P1905_BIN" | grep -Fq 'libcrypto.so.1.1'; then
+          if readelf -d "$WAPP_BIN" | grep -Fq 'libcrypto.so.1.1' || readelf -d "$P1905_BIN" | grep -Fq 'libcrypto.so.1.1'; then
             echo "::error::Source-built EasyMesh binaries still depend on obsolete OpenSSL 1.1."
             exit 1
           fi
