@@ -65,14 +65,244 @@ jobs:
             netcore_n60-pro)
               TARGET="mediatek"
               SUBTARGET="filogic"
-              test -s "$BASE_CONFIG" || { echo "::error::Config not found: $BASE_CONFIG"; exit 1; }
+              BASE_CONFIG="config/n60pro-1001.config"
+              ;;
+            *)
+              echo "::error::Unsupported router model: $DEVICE"
+              exit 1
+              ;;
+          esac
+          test -s "$BASE_CONFIG" || { echo "::error::Missing model feature config: $BASE_CONFIG"; exit 1; }
+          {
+            echo "TARGET=$TARGET"
+            echo "SUBTARGET=$SUBTARGET"
+            echo "BASE_CONFIG=$BASE_CONFIG"
+          } >> "$GITHUB_ENV"
+          echo "Selected model: $DEVICE ($TARGET/$SUBTARGET), feature config: $BASE_CONFIG"
+      - name: Verify N60 Pro EasyMesh package, syntax and configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="package/mtk/applications/easymesh-n60/files"
+          BIN="$ROOT/usr/bin"
+          for f in wapp mapd p1905_managerd wapp-n60-wrapper; do
+            test -x "$BIN/$f" || { echo "::error::Missing or non-executable N60 EasyMesh file: $f"; exit 1; }
+          done
+          test -s "$BIN/wappctrl" || { echo "::error::Missing WAPP control client required for driver/MBO initialization"; exit 1; }
+
+          # Validate the actual WAPP ELF option ABI against the N60 wrapper.
+          WAPP_CMD="$(grep -E '^/usr/bin/wapp ' "$BIN/wapp-n60-wrapper")"
+          test -n "$WAPP_CMD" || { echo "::error::WAPP invocation missing from wrapper"; exit 1; }
+          for expected in \
+            '-m OPMODE_AP' '-i RA_WEXT' '-d1' '-v2' \
+            '-f /etc/wapp_ap.conf' '-F /etc/map/mapd_cfg' \
+            '-u /etc/map/mapd_user.cfg' '-e br-lan' '-w br-lan' \
+            '-c ra0' '-c rax0'
+          do
+            grep -Fq -- "$expected" <<<"$WAPP_CMD" || {
+              echo "::error::WAPP invocation is missing an audited N60 WAPP ABI argument: $expected"
+              exit 1
+            }
+          done
+          if grep -Eq '(^|[[:space:]])-(l|K)([[:space:]]|$)' <<<"$WAPP_CMD"; then
+            echo "::error::WAPP invocation contains an unsupported WAPP CLI option."
+            exit 1
+          fi
+          strings -a "$BIN/wapp" | grep -Fxq 'm:f:i:d:v:e:w:k:c:F:u:' || {
+            echo "::error::WAPP ELF option ABI differs from the audited N60 CLI contract."
+            exit 1
+          }
+          # The 7.6.7.3 WAPP ELF contains its native WTS reader. Keep this
+          # path in WAPP; do not introduce a generated replacement config.
+          for symbol in wapp_read_wts_map_config /etc/map/wts_bss_info_config 'config_bss_num=%d' map_build_wts_config map_handle_get_wts_config; do
+            strings -a "$BIN/wapp" | grep -Fq "$symbol" || {
+              echo "::error::WAPP is missing its native WTS parser/config path: $symbol"
+              exit 1
+            }
+          done
+          test -x "$ROOT/etc/init.d/easymesh" || { echo "::error::Missing easymesh init service"; exit 1; }
+          test -s "$ROOT/usr/sbin/generate-mapd-strng" || { echo "::error::Missing MAPD strength generator source"; exit 1; }
+          test -s "$ROOT/usr/sbin/easymesh-n60-diagnose" || { echo "::error::Missing read-only EasyMesh diagnostic utility"; exit 1; }
+          test -s "$ROOT/usr/sbin/easymesh-n60-validate-wts" || { echo "::error::Missing strict N60 WTS preflight validator"; exit 1; }
+          test -s "package/mtk/applications/easymesh-n60/tests/test-vendor-wts-defaults.sh" || { echo "::error::Missing vendor WTS defaults regression test"; exit 1; }
+          grep -Fq 'WAPP_LOG=/tmp/wapp-n60-startup.log' "$BIN/wapp-n60-wrapper" || { echo "::error::WAPP startup log capture is missing"; exit 1; }
+          grep -Fq 'umask 077' "$BIN/wapp-n60-wrapper" || { echo "::error::WAPP diagnostic log must be private"; exit 1; }
+          grep -Fq 'killall WAPP' "$BIN/wapp-n60-wrapper" || { echo "::error::WAPP wrapper does not clean up uppercase vendor daemon processes"; exit 1; }
+          grep -Fq 'pidof WAPP' "$BIN/wapp-n60-wrapper" || { echo "::error::WAPP wrapper does not track uppercase vendor daemon processes"; exit 1; }
+          grep -Fq 'killall WAPP' "$ROOT/etc/init.d/easymesh" || { echo "::error::EasyMesh stop service does not terminate uppercase WAPP daemon processes"; exit 1; }
+          grep -Fq '>> "$WAPP_LOG" 2>&1' "$BIN/wapp-n60-wrapper" || { echo "::error::WAPP stdout/stderr is not captured"; exit 1; }
+          grep -Fq 'WAPP startup log (credentials redacted)' "$ROOT/usr/sbin/easymesh-n60-diagnose" || { echo "::error::Read-only diagnostics do not expose the redacted WAPP startup log"; exit 1; }
+          grep -Fq '[W]APP' "$ROOT/usr/sbin/easymesh-n60-diagnose" || { echo "::error::Diagnostics omit uppercase vendor WAPP processes"; exit 1; }
+          for f in mapd_cfg 1905d.cfg mapd_user.cfg wts_bss_info_config; do
+            test -s "$ROOT/etc/map/$f" || { echo "::error::Missing MAP config: $f"; exit 1; }
+          done
+          for f in "$ROOT/etc/init.d/easymesh" "$ROOT/etc/uci-defaults/1001-easymesh-n60" "$BIN/wapp-n60-wrapper" "$ROOT/usr/sbin/generate-mapd-strng" "$ROOT/usr/sbin/easymesh-n60-diagnose" "$ROOT/usr/sbin/easymesh-n60-validate-wts" "package/mtk/applications/easymesh-n60/tests/test-vendor-wts-defaults.sh"; do
+            sh -n "$f"
+          done
+          sh "package/mtk/applications/easymesh-n60/tests/test-vendor-wts-defaults.sh"
+          sh "$ROOT/usr/sbin/easymesh-n60-validate-wts" "$ROOT/etc/map/wts_bss_info_config"
+          for f in package/mtk/applications/luci-app-mtk-dash2/htdocs/luci-static/resources/view/mtk-dash2/map.js package/mtk/applications/luci-app-mtk-dash2/htdocs/luci-static/resources/view/mtk-dash2/setup.js package/mtk/applications/luci-app-mtk-dash2/htdocs/luci-static/resources/view/mtk-dash2/wireless.js; do
+            node --check "$f"
+          done
+          grep -qx 'DeviceRole=1' "$ROOT/etc/map/mapd_cfg"
+          grep -qx 'DhcpCtl=0' "$ROOT/etc/map/mapd_cfg"
+          grep -qx 'map_root=1' "$ROOT/etc/map/1905d.cfg"
+          grep -qx 'map_agent=0' "$ROOT/etc/map/1905d.cfg"
+          grep -qx 'bh_type=eth' "$ROOT/etc/map/1905d.cfg"
+          grep -qx 'radio_band=24G;5GL;5GH;' "$ROOT/etc/map/1905d.cfg"
+          grep -qx 'al_inf=rax0' "$ROOT/etc/map/1905d.cfg"
+          grep -Fq 'validate_al_interface' "$ROOT/etc/init.d/easymesh"
+          grep -Fq 'P1905 AL interface validated' "$ROOT/etc/init.d/easymesh"
+          grep -Fq 'active AP/WEXT interface' "$ROOT/etc/init.d/easymesh"
+          # WAPP discovers its native WTS file at /etc/map/wts_bss_info_config.
+          # Radio discovery priority remains in MAPD's own configuration.
+          grep -qx 'bss_config_priority=ra0;rax0' "$ROOT/etc/map/mapd_cfg"
+          # P1905 has its own config file; retain its existing independent list.
+          grep -qx 'bss_config_priority=ra0;rax0;apclix0' "$ROOT/etc/map/1905d.cfg"
+
+          # The selected backend is mtwifi-cfg-ucode (the legacy Lua package
+          # conflicts with it). Audit the actual setup path, not the inactive Lua file.
+          MTWIFI_UCODE_CFG="package/mtk/applications/mtwifi-cfg-ucode/files/usr/share/ucode/mtwifi/config.uc"
+          test -s "$MTWIFI_UCODE_CFG" || { echo "::error::Active mtwifi-cfg-ucode setup source is missing"; exit 1; }
+          grep -Fq 'let diff_res = dat_diff(dat_old, dat_new);' "$MTWIFI_UCODE_CFG" || {
+            echo "::error::Active ucode DAT diff calculation is missing"; exit 1;
+          }
+          grep -Fq 'if (diff_res.is_changed) driver.ifdown(vif);' "$MTWIFI_UCODE_CFG" || {
+            echo "::error::Unchanged DAT setup must not down an already-UP VIF"; exit 1;
+          }
+          grep -Fq 'if (vif && !vif_cfg.disabled) {' "$MTWIFI_UCODE_CFG" || {
+            echo "::error::Active ucode setup no longer restores enabled VIFs"; exit 1;
+          }
+          grep -Fq 'driver.init_dbdc_card(main_vif);' "$MTWIFI_UCODE_CFG" || {
+            echo "::error::DBDC first-initialization path was removed"; exit 1;
+          }
+          if grep -Eq '^map_(controller|agent)_alid=' "$ROOT/etc/map/1905d.cfg"; then
+            echo "::error::Fixed ALID must not be configured on N60 Pro."
+            exit 1
+          fi
+          # N60 WTS is a static vendor credential/BSS-attribute template.
+          # Keep the original per-band rows, wildcard MAC selectors and row order;
+          # exclude 6 GHz because MT7986 N60 has no 6 GHz radio.
+          WTS="$ROOT/etc/map/wts_bss_info_config"
+          grep -qx '#ucc_bss_info' "$WTS"
+          test "$(grep -c '^[0-9][0-9]*,ff:ff:ff:ff:ff:ff ' "$WTS")" -eq 12
+          awk 'NR == 1 { if ($0 != "#ucc_bss_info") exit 1; next }
+               { split($1, f, ","); if (f[1] != NR-1 || f[2] != "ff:ff:ff:ff:ff:ff") exit 1;
+                 if ($2 !~ /^(8x|11x|12x)$/) exit 1 }
+               END { if (NR != 13) exit 1 }' "$WTS"
+          grep -Fq 'Multi-AP-24G-2' "$WTS"
+          grep -Fq 'Multi-AP-5LG-2' "$WTS"
+          grep -Fq 'Multi-AP-5HG-2' "$WTS"
+          ! grep -Eq '13x|Multi-AP-6G-' "$WTS"
+          test ! -e "$ROOT/usr/sbin/generate-wts-bss-info"
+
+          # Static binary audit: the shipped 7.6.7.3 daemons must contain the
+          # WAPP event/socket, 11k/11v, MAP steering and P1905 topology paths.
+          for symbol in wapp_socket_and_ctrl_inf_init wapp_ctrl_iface_init wapp_ctrl_iface_event_register /tmp/wapp_server /tmp/wapp_ctrl driver_rrm_onoff driver_wnm_btm_onoff wapp_send_btm_req_11kv_api event_btm_req event_btm_rsp event_btm_query event_neighbor_report_pool_update; do
+            strings -a "$BIN/wapp" | grep -Fq "$symbol" || {
+              echo "::error::WAPP is missing required runtime path: $symbol"
+              exit 1
+            }
+          done
+          strings -a "$BIN/wapp" | grep -Fq 'mbo_default_assoc_retry_delay' || {
+            echo "::error::WAPP is missing MBO default retry-delay support."
+            exit 1
+          }
+          for symbol in STEER_FSM "BTM Success" "BTM Fail" "topo_srv_handle_topology_event" steer_fsm_trigger chan_mon_handle_steering_req parse_client_steering_btm_report_message; do
+            strings -a "$BIN/mapd" | grep -Fq "$symbol" || {
+              echo "::error::MAPD is missing required steering/topology path: $symbol"
+              exit 1
+            }
+          done
+          for symbol in "read wts_bss_info_config to ctx->bss_config" "send topology discovery data" "Topology Discovery"; do
+            strings -a "$BIN/p1905_managerd" | grep -Fq "$symbol" || {
+              echo "::error::P1905 is missing required WTS/topology path: $symbol"
+              exit 1
+            }
+          done
+          if test -s "$BIN/wappctrl"; then
+            for symbol in btmreq drv_version wapp_cli_cmd_btmreq wapp_cli_cmd_drv_version /tmp/wapp_ctrl EVENT_REGISTER "mbo cmd [arg1] [arg2]" mbo_ap_transition_reason_code; do
+              strings -a "$BIN/wappctrl" | grep -Fq "$symbol" || {
+                echo "::error::wappctrl is missing required BTM/event diagnostic command: $symbol"
+                exit 1
+              }
+            done
+            echo "Optional diagnostic helper present: wappctrl (BTM/event CLI verified)"
+          else
+            echo "NOTICE: optional diagnostic helper wappctrl is absent."
+          fi
+          ls -lh "$BIN"
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost \
+            "$AGENT_TOOLSDIRECTORY" || true
+          df -h
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison g++ gawk \
+            gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
+            python3-dev rsync unzip zlib1g-dev file wget time xsltproc \
+            libelf-dev device-tree-compiler qemu-utils python3-setuptools \
+            python3-pyelftools swig ccache
+
+      - name: Set Go proxy
+        run: |
+          echo "GOPROXY=https://goproxy.cn,direct" >> $GITHUB_ENV
+          echo "GOSUMDB=off" >> $GITHUB_ENV
+
+      - name: Restore compiler cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ${{ runner.os }}-n60pro-ccache-${{ github.ref_name }}-${{ env.DEVICE }}-${{ env.PROFILE }}
+          restore-keys: |
+            ${{ runner.os }}-n60pro-ccache-${{ github.ref_name }}-${{ env.DEVICE }}-
+            ${{ runner.os }}-n60pro-ccache-${{ github.ref_name }}-
+            ${{ runner.os }}-n60pro-ccache-
+
+      - name: Restore OpenWrt build environment cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            build_dir
+            staging_dir
+            dl
+            tmp
+          key: ${{ runner.os }}-n60pro-openwrt-${{ hashFiles('config/n60pro-1001.config', 'feeds.conf.default', 'include/kernel-version.mk', 'target/linux/mediatek/Makefile', 'package/mtk/applications/easymesh-n60/**') }}
+          restore-keys: |
+            ${{ runner.os }}-n60pro-openwrt-
+
+      - name: Update and install feeds
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Configure firmware
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "===== Device: $DEVICE, Profile: $PROFILE ====="
+
+          rm -rf artifacts
+          mkdir -p "$HOME/.cache/ccache" "artifacts/$DEVICE/$PROFILE"
+          ccache --max-size=5G
+          ccache --set-config=compiler_check=content
+
+          test -s "$BASE_CONFIG" || { echo "::error::Config not found: $BASE_CONFIG"; exit 1; }
 
           cp "$BASE_CONFIG" .config
           cp .config "artifacts/$DEVICE/$PROFILE/config.before-defconfig"
           wc -l .config
 
-          # Device selection belongs to main.yml; the model config is a feature
-          # fragment and must never pin a router model or mtkuboot variant.
+          # Router model selection is centralized in main.yml. The feature
+          # fragment must not pin a DEVICE or any mtkuboot variant.
           if grep -Eq '^CONFIG_TARGET_DEVICE_.*=y
           echo "===== MTK driver feature selection ====="
           echo "Resolved MTK feature values after make defconfig:"
@@ -352,10 +582,10 @@ jobs:
             exit 1
           fi
           grep -qx "CONFIG_TARGET_${TARGET}=y" .config || {
-            echo "::error::Feature config target does not match selected model mapping: $TARGET"; exit 1;
+            echo "::error::Feature config target does not match model mapping: $TARGET"; exit 1;
           }
           grep -qx "CONFIG_TARGET_${TARGET}_${SUBTARGET}=y" .config || {
-            echo "::error::Feature config subtarget does not match selected model mapping: $TARGET/$SUBTARGET"; exit 1;
+            echo "::error::Feature config subtarget does not match model mapping: $TARGET/$SUBTARGET"; exit 1;
           }
           echo "CONFIG_TARGET_DEVICE_${TARGET}_${SUBTARGET}_DEVICE_${DEVICE}=y" >> .config
 
