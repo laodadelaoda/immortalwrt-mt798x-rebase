@@ -79,6 +79,7 @@ jobs:
           grep -Fq 'killall WAPP' "$ROOT/etc/init.d/easymesh" || { echo "::error::EasyMesh stop service does not terminate uppercase WAPP daemon processes"; exit 1; }
           grep -Fq '>> "$WAPP_LOG" 2>&1' "$BIN/wapp-n60-wrapper" || { echo "::error::WAPP stdout/stderr is not captured"; exit 1; }
           grep -Fq 'WAPP startup log (credentials redacted)' "$ROOT/usr/sbin/easymesh-n60-diagnose" || { echo "::error::Read-only diagnostics do not expose the redacted WAPP startup log"; exit 1; }
+          grep -Fq '[W]APP' "$ROOT/usr/sbin/easymesh-n60-diagnose" || { echo "::error::Diagnostics omit uppercase vendor WAPP processes"; exit 1; }
           for f in mapd_cfg 1905d.cfg mapd_user.cfg wts_bss_info_config; do
             test -s "$ROOT/etc/map/$f" || { echo "::error::Missing MAP config: $f"; exit 1; }
           done
