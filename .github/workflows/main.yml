@@ -377,14 +377,15 @@ jobs:
           echo "PASS: target toolchain runtime staged: $LIBGCC_SO"
 
           echo "===== Step 4c: generate the target Linux kernel configuration required by kmod package builds ====="
-          # target/linux/prepare only unpacks and patches the kernel source;
-          # it does not generate linux-*/.config. The oldconfig target runs
-          # Kernel/Configure and creates the target kernel .config from the
-          # resolved firmware .config before isolated package compilation.
-          make target/linux/oldconfig V=s
+          # Run the target/linux Makefile's oldconfig forwarding rule.
+          # The top-level make interface does not expose target/linux/oldconfig;
+          # entering target/linux forwards oldconfig to the selected board/subtarget,
+          # where Kernel/Configure generates linux-*/.config from the resolved
+          # firmware .config before isolated package compilation.
+          make -C target/linux oldconfig V=s
           KERNEL_CONFIG="$(find build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic -type f -name .config -print -quit)"
           test -n "$KERNEL_CONFIG" && test -s "$KERNEL_CONFIG" || {
-            echo "::error::target/linux/oldconfig did not generate the target Linux .config required by kmod dependencies."
+            echo "::error::make -C target/linux oldconfig did not generate the target Linux .config required by kmod dependencies."
             exit 1
           }
           echo "PASS: target Linux configuration generated: $KERNEL_CONFIG"
