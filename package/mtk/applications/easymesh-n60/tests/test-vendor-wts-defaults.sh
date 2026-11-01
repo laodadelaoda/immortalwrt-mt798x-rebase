@@ -46,10 +46,13 @@ grep -Fq 'WAPP_LOG=/tmp/wapp-n60-startup.log' "$WRAPPER"
 grep -Fq 'umask 077' "$WRAPPER"
 grep -Fq '>> "$WAPP_LOG" 2>&1' "$WRAPPER"
 WAPP_CMD="$(grep -E '^/usr/bin/wapp ' "$WRAPPER")"
-for expected in '-m OPMODE_AP' '-i RA_WEXT' '-d1' '-v2' '-cra0' '-crax0'; do
+for expected in '-m OPMODE_AP' '-i RA_WEXT' '-d1' '-v2' \
+    '-f /etc/wapp_ap.conf' '-F /etc/map/mapd_cfg' \
+    '-u /etc/map/mapd_user.cfg' '-e br-lan' '-w br-lan' \
+    '-c ra0' '-c rax0'; do
     printf '%s\n' "$WAPP_CMD" | grep -Fq -- "$expected"
 done
-! printf '%s\n' "$WAPP_CMD" | grep -Eq '(^|[[:space:]])-(f|F|u|e|w)([[:space:]]|$)'
+! printf '%s\n' "$WAPP_CMD" | grep -Eq '(^|[[:space:]])-(l|K)([[:space:]]|$)'
 grep -Fq 'WAPP startup log (credentials redacted)' "$DIAG"
 grep -Fq 'tail -n 120 "$WAPP_LOG"' "$DIAG"
 
