@@ -94,8 +94,8 @@ grep -Fq '/lib/libkvcutil.so.1' "$INIT"
 grep -Fq 'LIB_WIRELESS_INTERFACE_INFO' "$ROOT/files/usr/sbin/easymesh-n60-diagnose"
 grep -Fq 'cannot find suitable almac' "$ROOT/files/usr/sbin/easymesh-n60-diagnose"
 
-grep -Fq -- '-ne 12' "$INIT" || { echo "FAIL: init service does not validate the N60 12-row WTS template" >&2; exit 1; }
-grep -Fq -- '-ne 12' "$WRAPPER" || { echo "FAIL: WAPP wrapper does not validate the N60 12-row WTS template" >&2; exit 1; }
+grep -Fq '/usr/sbin/easymesh-n60-validate-wts /etc/map/wts_bss_info_config' "$INIT" || { echo "FAIL: init service does not invoke the strict N60 WTS validator" >&2; exit 1; }
+grep -Fq '/usr/sbin/easymesh-n60-validate-wts /etc/map/wts_bss_info_config' "$WRAPPER" || { echo "FAIL: WAPP wrapper does not invoke the strict N60 WTS validator" >&2; exit 1; }
 grep -Fq 'Multi-AP-24G-2' "$WTS"
 grep -Fq 'Multi-AP-5LG-2' "$WTS"
 grep -Fq 'Multi-AP-5HG-2' "$WTS"
