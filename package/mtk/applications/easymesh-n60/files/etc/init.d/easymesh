@@ -7,8 +7,8 @@ USE_PROCD=1
 radio_is_ready() {
     iface="$1"
     info="$(iwconfig "$iface" 2>/dev/null)" || return 1
-    printf '%s\\n' "$info" | grep -q 'Mode:Master' &&
-        printf '%s\\n' "$info" | grep -Eq 'ESSID:"[^"]+"'
+    printf '%s\n' "$info" | grep -q 'Mode:Master' &&
+        printf '%s\n' "$info" | grep -Eq 'ESSID:"[^"]+"'
 }
 
 validate_al_interface() {
@@ -24,7 +24,7 @@ validate_al_interface() {
             ;;
     esac
     if [ "$al_inf" = "$br_inf" ] ||
-       ! printf '%s\\n' ";$priority;" | grep -Fq ";$al_inf;"; then
+       ! printf '%s\n' ";$priority;" | grep -Fq ";$al_inf;"; then
         logger -t easymesh "ERROR: al_inf=$al_inf must be a wireless interface listed in bss_config_priority and must differ from br_inf=$br_inf"
         return 1
     fi
@@ -34,7 +34,7 @@ validate_al_interface() {
     fi
 
     al_mac="$(cat "/sys/class/net/$al_inf/address" 2>/dev/null)" || return 1
-    if ! printf '%s\\n' "$al_mac" | grep -Eiq '^([0-9a-f]{2}:){5}[0-9a-f]{2}$' ||
+    if ! printf '%s\n' "$al_mac" | grep -Eiq '^([0-9a-f]{2}:){5}[0-9a-f]{2}$' ||
        [ "$al_mac" = "00:00:00:00:00:00" ] ||
        [ "$al_mac" = "ff:ff:ff:ff:ff:ff" ]; then
         logger -t easymesh "ERROR: P1905 AL interface $al_inf has invalid MAC '$al_mac'"
@@ -58,7 +58,7 @@ apply_map_r3_driver_config() {
         output="$(iwpriv "$iface" set "$setting" 2>&1)"
         rc=$?
         if [ "$rc" -ne 0 ] ||
-           printf '%s\\n' "$output" | grep -qiE 'invalid argument|operation not supported|not supported|no such device'; then
+           printf '%s\n' "$output" | grep -qiE 'invalid argument|operation not supported|not supported|no such device'; then
             logger -t easymesh "ERROR: iwpriv $iface set $setting failed (rc=$rc): $output"
             return 1
         fi
