@@ -110,12 +110,38 @@ jobs:
                       print(f"{p}:{n}:{line}")
           PY
 
+      - name: Download and audit exact MAPD and P1905 source archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/wapp-audit"
+          REL="https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3"
+          curl -fL --retry 3 "$REL/mapd-6eca4331.tar.bz2" -o mapd-6eca4331.tar.bz2
+          curl -fL --retry 3 "$REL/1905daemon-35234223.tar.bz2" -o 1905daemon-35234223.tar.bz2
+          echo "39ab37cb347d372e352ade03181bc9c23429d4d849d32acbdff00973547d7e18  mapd-6eca4331.tar.bz2" | sha256sum -c -
+          echo "82f7cc4ad5731e750f87c9a4ad19a39d2456bb8fec0cf79bf4b3f3ccb4f14795  1905daemon-35234223.tar.bz2" | sha256sum -c -
+          mkdir -p mapd-source p1905-source
+          tar -xjf mapd-6eca4331.tar.bz2 -C mapd-source
+          tar -xjf 1905daemon-35234223.tar.bz2 -C p1905-source
+          echo "===== MAPD SOURCE MACROS / VERSION CONFIG ====="
+          grep -RInE 'CONFIG_MAP_R[234]_SUPPORT|MAP_R[234]_SUPPORT|map_ver|MAP_VERSION' mapd-source | head -240 || true
+          echo "===== P1905 SOURCE DSA / ETHERNET CONFIG REFERENCES ====="
+          grep -RInE 'SWTICH_DSA_ARCH|SWITCH_DSA_ARCH|ethernet_cfg\.txt|ext_phy_port|br_lan|lan_vid|wan_vid|CONFIG_MAP_R[234]_SUPPORT|MAP_R[234]_SUPPORT' p1905-source | head -300 || true
+          echo "===== P1905 CONFIG MAKEFILE ====="
+          find p1905-source -path '*/ethernet/config.mk' -o -path '*/ethernet/Makefile' | sort
+          for f in $(find p1905-source -path '*/ethernet/config.mk' -o -path '*/ethernet/Makefile' | sort); do
+            echo "--- $f ---"
+            sed -n '1,220p' "$f"
+          done
+
       - name: Upload verified source archive and audit inventory
         uses: actions/upload-artifact@v4
         with:
           name: wappd-80ca5724-source-audit
           path: |
             ${{ runner.temp }}/wapp-audit/wappd-80ca5724.tar.bz2
+            ${{ runner.temp }}/wapp-audit/mapd-6eca4331.tar.bz2
+            ${{ runner.temp }}/wapp-audit/1905daemon-35234223.tar.bz2
             ${{ runner.temp }}/wapp-audit/archive-files.txt
             ${{ runner.temp }}/wapp-audit/binaries/*
           if-no-files-found: error
