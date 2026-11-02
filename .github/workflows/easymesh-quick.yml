@@ -269,7 +269,11 @@ jobs:
           mkdir -p artifacts/easymesh-quick
           LOG="artifacts/easymesh-quick/easymesh-source-compile.log"
           make package/mtk/applications/easymesh-n60/clean V=s
-          make package/mtk/applications/easymesh-n60/compile V=s 2>&1 | tee "$LOG"
+          # Invoke the package-local compile target directly. The top-level package/<path>/compile
+          # target expands the configured package set and can compile unrelated kernel modules
+          # (for example gpio-button-hotplug), which Quick mode must not build.
+          # This local target runs this package Build/Prepare + Build/Compile only.
+          make -C package/mtk/applications/easymesh-n60 TOPDIR="$GITHUB_WORKSPACE" compile V=s 2>&1 | tee "$LOG"
 
           WAPP_BIN="$(find build_dir -type f -path '*/easymesh-n60*/wappd/wapp' -print -quit)"
           test -n "$WAPP_BIN" || { echo "::error::Source-built WAPP was not found."; exit 1; }
@@ -305,9 +309,6 @@ jobs:
             strings -a "$P1905_BIN" | grep -Fq "$symbol" || { echo "::error::P1905 missing WTS/topology path: $symbol"; exit 1; }
           done
 
-          APK="$(find bin/packages -type f -name 'easymesh-n60*.apk' -print -quit)"
-          test -n "$APK" && test -s "$APK" || { echo "::error::EasyMesh APK package was not produced."; exit 1; }
-          cp "$APK" artifacts/easymesh-quick/
           cp "$WAPP_BIN" "$MAPD_BIN" "$P1905_BIN" "$WAPPCTRL_BIN" "$ETH_OPS_LIB" "$MAPD_IF_LIB" artifacts/easymesh-quick/
           {
             echo "Build revision: $(git rev-parse HEAD)"
