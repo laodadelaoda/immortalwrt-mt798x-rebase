@@ -157,7 +157,7 @@ jobs:
             echo "::error::WAPP UAPI include path is not explicit."
             exit 1
           }
-          grep -q 'INSTALL_DATA ./files/etc/ethernet_cfg.txt' "$PKG_MAKEFILE" || {
+          grep -Fq '$(INSTALL_DATA) ./files/etc/ethernet_cfg.txt' "$PKG_MAKEFILE" || {
             echo "::error::P1905 DSA runtime config is not installed."
             exit 1
           }
