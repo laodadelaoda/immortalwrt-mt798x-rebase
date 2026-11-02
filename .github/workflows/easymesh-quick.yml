@@ -135,7 +135,31 @@ jobs:
           grep -qx 'bss_config_priority=ra0;rax0' "$ROOT/etc/map/mapd_cfg"
           grep -qx 'bss_config_priority=ra0;rax0;apclix0' "$ROOT/etc/map/1905d.cfg"
           ! grep -Eq '^map_(controller|agent)_alid=' "$ROOT/etc/map/1905d.cfg"
-          echo "PASS: WAPP/MAPD/P1905/WTS runtime configuration."
+          PKG_MAKEFILE="package/mtk/applications/easymesh-n60/Makefile"
+          test -s "$ROOT/etc/ethernet_cfg.txt" || {
+            echo "::error::Missing N60 Pro DSA ethernet_cfg.txt."
+            exit 1
+          }
+          grep -qx 'lan=lan1 lan2 lan3 lan4' "$ROOT/etc/ethernet_cfg.txt"
+          grep -qx 'br_lan=br-lan' "$ROOT/etc/ethernet_cfg.txt"
+          grep -qx 'ext_phy_port=5 6' "$ROOT/etc/ethernet_cfg.txt"
+          test "$(grep -c 'CONFIG_MAP_R2_SUPPORT=y' "$PKG_MAKEFILE")" -eq 3 || {
+            echo "::error::MAP R2 base macro must be passed to WAPP, MAPD and P1905."
+            exit 1
+          }
+          test "$(grep -c 'CONFIG_MAP_R3_SUPPORT=y' "$PKG_MAKEFILE")" -eq 3 || {
+            echo "::error::MAP R3 macro must be passed to WAPP, MAPD and P1905."
+            exit 1
+          }
+          grep -q 'UAPD_INCLUDE_PATH=' "$PKG_MAKEFILE" || {
+            echo "::error::WAPP UAPI include path is not explicit."
+            exit 1
+          }
+          grep -q 'INSTALL_DATA ./files/etc/ethernet_cfg.txt' "$PKG_MAKEFILE" || {
+            echo "::error::P1905 DSA runtime config is not installed."
+            exit 1
+          }
+          echo "PASS: WAPP/MAPD/P1905/WTS/DSA runtime configuration and R2/R3 build macros."
 
       - name: Download required MTK package sources
         shell: bash
