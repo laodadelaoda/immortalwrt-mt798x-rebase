@@ -20,9 +20,11 @@ on:
 permissions:
   contents: read
 
+# Isolate the audited Step 4c revision from older long-running Quick Build jobs.
+# A newer audited run may replace an earlier run in this revision-specific group.
 concurrency:
-  group: n60-pro-easymesh-quick
-  cancel-in-progress: false
+  group: n60-pro-easymesh-quick-step4c-v2
+  cancel-in-progress: true
 
 jobs:
   quick:
@@ -221,6 +223,20 @@ jobs:
             echo "::error::USB_XHCI_HCD is not enabled after kernel olddefconfig."
             exit 1
           }
+          # EasyMesh has a runtime dependency on kmod-mapfilter. Its package
+          # builds an external kernel module against this exact target kernel.
+          # Confirm the package and its Kconfig prerequisites before compiling.
+          grep -qx 'CONFIG_PACKAGE_kmod-mapfilter=y' .config || {
+            echo "::error::kmod-mapfilter was not selected by the EasyMesh package dependency."
+            exit 1
+          }
+          for option in CONFIG_NETFILTER=y CONFIG_NF_CONNTRACK=y CONFIG_NF_NAT=m CONFIG_MAP_FILTER_SUPPORT=m; do
+            grep -qx "$option" "$KERNEL_CONFIG" || {
+              echo "::error::Required mapfilter kernel option missing: $option"
+              exit 1
+            }
+          done
+          echo "PASS: kmod-mapfilter selected; NETFILTER, conntrack, NAT and MAP_FILTER_SUPPORT resolved."
           # Build the target kernel so generated UAPI headers and module build
           # metadata are present before package dependencies compile external kmods.
           make target/linux/compile -j"$(nproc)" V=s
@@ -235,6 +251,22 @@ jobs:
           }
           echo "PASS: complete target kernel tree prepared: $KERNEL_DIR"
           echo "PASS: required ARM64 UAPI header present: $ASM_TYPES"
+          # The runtime DEPENDS of easymesh-n60 does not guarantee that an
+          # isolated package/compile request builds kmod-mapfilter. Build it
+          # explicitly after the kernel's Module.symvers and generated headers
+          # exist, then verify both the module and installable APK.
+          make package/kernel/mapfilter/compile V=s
+          MAPFILTER_KO="$(find "$KERNEL_BASE" -type f -name mapfilter.ko -print -quit)"
+          test -n "$MAPFILTER_KO" && test -s "$MAPFILTER_KO" || {
+            echo "::error::kmod-mapfilter did not produce mapfilter.ko."
+            exit 1
+          }
+          MAPFILTER_APK="$(find bin/packages -type f -name 'kmod-mapfilter*.apk' -print -quit)"
+          test -n "$MAPFILTER_APK" && test -s "$MAPFILTER_APK" || {
+            echo "::error::kmod-mapfilter APK package was not produced."
+            exit 1
+          }
+          echo "PASS: mapfilter kernel module and APK built: $MAPFILTER_KO / $MAPFILTER_APK"
 
       - name: Compile EasyMesh package only
         shell: bash
