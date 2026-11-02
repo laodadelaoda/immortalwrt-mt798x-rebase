@@ -224,9 +224,16 @@ jobs:
           # The cross-GCC entry may be a symlink, so do not discover it with
           # find -type f. Pass absolute compiler paths to Kbuild instead of
           # relying on PATH lookup from a nested make process.
-          TOOLCHAIN_ROOT="$(dirname "$(dirname "$LIBGCC_SO")")"
+          # find returns a repository-relative path here. Kbuild changes its
+          # working directory to KERNEL_DIR, so canonicalize the toolchain root
+          # before passing CC/CROSS_COMPILE into the nested kernel make.
+          TOOLCHAIN_ROOT="$(cd "$(dirname "$(dirname "$LIBGCC_SO")")" && pwd -P)"
           TOOLCHAIN_BIN="$TOOLCHAIN_ROOT/bin"
           TOOLCHAIN_GCC="$TOOLCHAIN_BIN/aarch64-openwrt-linux-musl-gcc"
+          case "$TOOLCHAIN_GCC" in
+            /*) ;;
+            *) echo "::error::Toolchain compiler path is not absolute: $TOOLCHAIN_GCC"; exit 1 ;;
+          esac
           test -x "$TOOLCHAIN_GCC" || {
             echo "::error::Staged AArch64 compiler is missing or not executable: $TOOLCHAIN_GCC"
             ls -la "$TOOLCHAIN_BIN" || true
