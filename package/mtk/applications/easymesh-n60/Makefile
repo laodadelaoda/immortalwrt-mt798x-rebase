@@ -32,7 +32,8 @@ define Build/Prepare
 	tar -xjf '$(DL_DIR)/mapd-6eca4331.tar.bz2' -C $(PKG_BUILD_DIR); \
 	tar -xjf '$(DL_DIR)/1905daemon-35234223.tar.bz2' -C $(PKG_BUILD_DIR); \
 	tar -xjf '$(DL_DIR)/libmapd-0132d199.tar.bz2' -C $(PKG_BUILD_DIR); \
-	sed -i 's/\r$$//' '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/eth_ops_dsa.c'; \
+	tr -d '\r' < '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/eth_ops_dsa.c' > '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/eth_ops_dsa.c.tmp'; \
+	mv '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/eth_ops_dsa.c.tmp' '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/eth_ops_dsa.c'; \
 	patch -d $(PKG_BUILD_DIR)/1905daemon -p1 < ./patches/001-dsa-use-linux-mii-ioctl.patch; \
 	sed -i 's/^interworking=1/interworking=0/' '$(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap_ra0_default.conf'; \
 	sed -i '/^mbo_ap_cdcp=/d; /^mbo_ap_assoc_disallow_reason=/d; /^mbo_ap_assoc_retry_delay=/d; /^mbo_ap_transition_reason_code=/d; /^mbo_ap_capability=/d' '$(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap_ra0_default.conf'; \
