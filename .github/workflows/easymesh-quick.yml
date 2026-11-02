@@ -220,16 +220,22 @@ jobs:
           # so generated architecture UAPI headers such as asm/types.h are absent.
           # Run the kernel's prepare/modules_prepare targets only: this generates
           # headers and scripts for external modules without building all modules.
-          TOOLCHAIN_GCC="$(find staging_dir -type f -name aarch64-openwrt-linux-musl-gcc -print -quit)"
-          test -n "$TOOLCHAIN_GCC" || {
-            echo "::error::AArch64 target compiler was not found after toolchain/install."
+          # Derive the compiler location from the staged target runtime.
+          # The cross-GCC entry may be a symlink, so do not discover it with
+          # find -type f. Pass absolute compiler paths to Kbuild instead of
+          # relying on PATH lookup from a nested make process.
+          TOOLCHAIN_ROOT="$(dirname "$(dirname "$LIBGCC_SO")")"
+          TOOLCHAIN_BIN="$TOOLCHAIN_ROOT/bin"
+          TOOLCHAIN_GCC="$TOOLCHAIN_BIN/aarch64-openwrt-linux-musl-gcc"
+          test -x "$TOOLCHAIN_GCC" || {
+            echo "::error::Staged AArch64 compiler is missing or not executable: $TOOLCHAIN_GCC"
+            ls -la "$TOOLCHAIN_BIN" || true
             exit 1
           }
-          TOOLCHAIN_BIN="$(dirname "$TOOLCHAIN_GCC")"
-          export PATH="$TOOLCHAIN_BIN:$PATH"
-          CROSS_COMPILE="aarch64-openwrt-linux-musl-"
+          "$TOOLCHAIN_GCC" --version
+          CROSS_COMPILE="$TOOLCHAIN_BIN/aarch64-openwrt-linux-musl-"
           make -C "$KERNEL_DIR" ARCH=arm64 CROSS_COMPILE="$CROSS_COMPILE" \
-            CC="${CROSS_COMPILE}gcc" HOSTCC=gcc HOSTCXX=g++ \
+            CC="$TOOLCHAIN_GCC" HOSTCC=gcc HOSTCXX=g++ \
             prepare modules_prepare V=s
 
           ASM_TYPES="$KERNEL_DIR/arch/arm64/include/generated/uapi/asm/types.h"
