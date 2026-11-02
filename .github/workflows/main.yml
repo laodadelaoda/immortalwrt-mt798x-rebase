@@ -443,7 +443,12 @@ jobs:
           # Use OpenWrt's top-level kernel_oldconfig target. There is no
           # target/linux/oldconfig forwarding target in this tree.
           make kernel_oldconfig V=s
-          KERNEL_DIR="build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/linux-6.12.112"
+          KERNEL_BASE="build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic"
+          KERNEL_DIR="$(find "$KERNEL_BASE" -mindepth 1 -maxdepth 1 -type d -name 'linux-*' -print -quit)"
+          test -n "$KERNEL_DIR" || {
+            echo "::error::Target Linux build directory was not found under $KERNEL_BASE."
+            exit 1
+          }
           KERNEL_CONFIG="$KERNEL_DIR/.config"
           test -s "$KERNEL_CONFIG" || {
             echo "::error::kernel_oldconfig did not generate the target Linux .config."
