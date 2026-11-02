@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=easymesh-n60
 PKG_VERSION:=7.6.7.3
-PKG_RELEASE:=13
+PKG_RELEASE:=14
 PKG_BUILD_DEPENDS:=datconf openssl libnl-tiny
 PKG_BUILD_PARALLEL:=1
 
@@ -42,29 +42,27 @@ define Build/Prepare
 	sed -i '/^mbo_ap_cdcp=/d; /^mbo_ap_assoc_disallow_reason=/d; /^mbo_ap_assoc_retry_delay=/d; /^mbo_ap_transition_reason_code=/d; /^mbo_ap_capability=/d' '$(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap_rax0_default.conf'; \
 	printf '\n# MediaTek MBO parameters for N60 Pro\nmbo_ap_cdcp=1\nmbo_ap_assoc_disallow_reason=0\nmbo_ap_assoc_retry_delay=0\nmbo_ap_transition_reason_code=0\nmbo_ap_capability=64\n' >> '$(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap_rax0_default.conf'; \
 	printf 'conf_list=/etc/wapp_ap_ra0.conf;/etc/wapp_ap_rax0.conf;\n' > $(PKG_BUILD_DIR)/wappd/wapp_ap.conf; \
-	sed -i 's|$$(CC) $$(CFLAGS) -I../inc|$$(CC) $$(CFLAGS) $$(EXTRA_CFLAGS) -I../inc|g' '$(PKG_BUILD_DIR)/1905daemon/ethernet/Makefile'; \
-	sed -i 's|$$(CC) $$(CFLAGS) $$(INCLUDE)|$$(CC) $$(CFLAGS) $$(EXTRA_CFLAGS) $$(INCLUDE)|g' '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/libbridge/Makefile'; \
-	sed -i 's|$$(CC) $$(CFLAGS) -c libbridge_compat.c|$$(CC) $$(CFLAGS) $$(EXTRA_CFLAGS) -c libbridge_compat.c|g' '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/libbridge/Makefile'
+	python3 -c 'from pathlib import Path; d=chr(36); specs=[(Path("$(PKG_BUILD_DIR)/1905daemon/ethernet/Makefile"), d+"(CC) "+d+"(CFLAGS) -I../inc", d+"(CC) "+d+"(CFLAGS) "+d+"(EXTRA_CFLAGS) -I../inc"), (Path("$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/libbridge/Makefile"), d+"(CC) "+d+"(CFLAGS) "+d+"(INCLUDE)", d+"(CC) "+d+"(CFLAGS) "+d+"(EXTRA_CFLAGS) "+d+"(INCLUDE)"), (Path("$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/libbridge/Makefile"), d+"(CC) "+d+"(CFLAGS) -c libbridge_compat.c", d+"(CC) "+d+"(CFLAGS) "+d+"(EXTRA_CFLAGS) -c libbridge_compat.c")]; exec("for p,old,new in specs:\\n raw=p.read_bytes(); n=raw.count(old.encode()); assert n == 1, f\\\"{p}: expected exactly one compiler rule, found {n}\\\"; p.write_bytes(raw.replace(old.encode(),new.encode())); print(f\\\"PASS: EXTRA_CFLAGS injected into {p}\\\")")'
 endef
 
 define Build/Compile
 	set -eu; \
 	TARGET_EASYMESH_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Wno-deprecated-declarations"; \
-	OPENWRT_EASYMESH_CFLAGS="$$TARGET_EASYMESH_CFLAGS -DCONFIG_SUPPORT_OPENWRT"; \
+	OPENWRT_EASYMESH_CFLAGS="$$$$TARGET_EASYMESH_CFLAGS -DCONFIG_SUPPORT_OPENWRT"; \
 	WAPP_UAPI_DIR="$(LINUX_DIR)/include/uapi/linux/wapp"; \
-	test -s "$$WAPP_UAPI_DIR/wapp_cmm_type.h" || { echo "Missing MTK WAPP UAPI header: $$WAPP_UAPI_DIR/wapp_cmm_type.h" >&2; exit 1; }; \
-	test -s "$$WAPP_UAPI_DIR/mt_wlan_cmm_oid.h" || { echo "Missing MTK WAPP OID header: $$WAPP_UAPI_DIR/mt_wlan_cmm_oid.h" >&2; exit 1; }; \
+	test -s "$$$$WAPP_UAPI_DIR/wapp_cmm_type.h" || { echo "Missing MTK WAPP UAPI header: $$$$WAPP_UAPI_DIR/wapp_cmm_type.h" >&2; exit 1; }; \
+	test -s "$$$$WAPP_UAPI_DIR/mt_wlan_cmm_oid.h" || { echo "Missing MTK WAPP OID header: $$$$WAPP_UAPI_DIR/mt_wlan_cmm_oid.h" >&2; exit 1; }; \
 	$(MAKE) -C $(PKG_BUILD_DIR)/libmapd \
 		CC="$(TARGET_CC)" \
 		CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Werror -g" \
 		all; \
 	$(MAKE) -C $(PKG_BUILD_DIR)/wappd \
-		TOPDIR="$(TOPDIR)" UAPD_INCLUDE_PATH="$$WAPP_UAPI_DIR" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R2_SUPPORT=y CONFIG_MAP_R3_SUPPORT=y \
-		CC="$(TARGET_CC)" EXTRA_CFLAGS="$$TARGET_EASYMESH_CFLAGS" \
+		TOPDIR="$(TOPDIR)" UAPD_INCLUDE_PATH="$$$$WAPP_UAPI_DIR" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R2_SUPPORT=y CONFIG_MAP_R3_SUPPORT=y \
+		CC="$(TARGET_CC)" EXTRA_CFLAGS="$$$$TARGET_EASYMESH_CFLAGS" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto" \
 		all; \
 	mkdir -p $(PKG_BUILD_DIR)/1905daemon/obj; \
-	EXTRA_CFLAGS="$$OPENWRT_EASYMESH_CFLAGS" $(MAKE) -C $(PKG_BUILD_DIR)/1905daemon \
+	EXTRA_CFLAGS="$$$$OPENWRT_EASYMESH_CFLAGS" $(MAKE) -C $(PKG_BUILD_DIR)/1905daemon \
 		TOPDIR="$(TOPDIR)" ROOTDIR="$(TOPDIR)" \
 		LINUXDIR="$(patsubst $(TOPDIR)/%,%,$(LINUX_DIR))" \
 		STAGING_DIR="$(STAGING_DIR)" \
@@ -75,7 +73,7 @@ define Build/Compile
 	$(MAKE) -C $(PKG_BUILD_DIR)/mapd \
 		TOPDIR="$(TOPDIR)" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R2_SUPPORT=y CONFIG_MAP_R3_SUPPORT=y \
 		CC="$(TARGET_CC)" LDO="$(TARGET_CC)" \
-		EXTRA_CFLAGS="$$OPENWRT_EASYMESH_CFLAGS" \
+		EXTRA_CFLAGS="$$$$OPENWRT_EASYMESH_CFLAGS" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib" \
 		version mapd; \
 	test -x $(PKG_BUILD_DIR)/wappd/wapp; \
