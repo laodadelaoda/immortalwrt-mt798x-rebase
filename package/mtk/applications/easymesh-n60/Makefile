@@ -47,12 +47,15 @@ define Build/Compile
 	set -eu; \
 	TARGET_EASYMESH_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Wno-deprecated-declarations"; \
 	OPENWRT_EASYMESH_CFLAGS="$$TARGET_EASYMESH_CFLAGS -DCONFIG_SUPPORT_OPENWRT"; \
+	WAPP_UAPI_DIR="$(LINUX_DIR)/include/uapi/linux/wapp"; \
+	test -s "$$WAPP_UAPI_DIR/wapp_cmm_type.h" || { echo "Missing MTK WAPP UAPI header: $$WAPP_UAPI_DIR/wapp_cmm_type.h" >&2; exit 1; }; \
+	test -s "$$WAPP_UAPI_DIR/mt_wlan_cmm_oid.h" || { echo "Missing MTK WAPP OID header: $$WAPP_UAPI_DIR/mt_wlan_cmm_oid.h" >&2; exit 1; }; \
 	$(MAKE) -C $(PKG_BUILD_DIR)/libmapd \
 		CC="$(TARGET_CC)" \
 		CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Werror -g" \
 		all; \
 	$(MAKE) -C $(PKG_BUILD_DIR)/wappd \
-		TOPDIR="$(TOPDIR)" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R3_SUPPORT=y \
+		TOPDIR="$(TOPDIR)" UAPD_INCLUDE_PATH="$$WAPP_UAPI_DIR" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R3_SUPPORT=y \
 		CC="$(TARGET_CC)" EXTRA_CFLAGS="$$TARGET_EASYMESH_CFLAGS" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto" \
 		all; \
