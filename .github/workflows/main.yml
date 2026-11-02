@@ -459,7 +459,23 @@ jobs:
             echo "::error::kernel_oldconfig did not generate the target Linux .config required by kmod dependencies."
             exit 1
           }
-          echo "PASS: target Linux configuration generated: $KERNEL_CONFIG"
+
+          echo "===== Step 4c.1: audit kmod-mapfilter dependency resolution ====="
+          # easymesh-n60 declares +kmod-mapfilter at runtime. The package is an
+          # external kernel module; its Kconfig symbol was added by the
+          # Linux 6.12 MTK patch and must resolve against this target kernel.
+          grep -qx 'CONFIG_PACKAGE_kmod-mapfilter=y' .config || {
+            echo "::error::easymesh-n60 did not select its required kmod-mapfilter package."
+            exit 1
+          }
+          for option in CONFIG_NETFILTER=y CONFIG_NF_CONNTRACK=y CONFIG_NF_NAT=m CONFIG_MAP_FILTER_SUPPORT=m; do
+            grep -qx "$option" "$KERNEL_CONFIG" || {
+              echo "::error::Required mapfilter kernel option missing: $option"
+              exit 1
+            }
+          done
+          echo "PASS: kmod-mapfilter package selected; NETFILTER/conntrack/NAT/MAP_FILTER_SUPPORT are resolved."
+          echo "PASS: target Linux configuration generated and audited: $KERNEL_CONFIG"
 
           if [ "${{ github.event_name == 'workflow_call' && inputs.easymesh_prebuilt }}" != "true" ]; then
             make package/mtk/applications/easymesh-n60/clean V=s
