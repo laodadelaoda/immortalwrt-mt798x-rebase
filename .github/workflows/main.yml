@@ -477,6 +477,28 @@ jobs:
           echo "PASS: kmod-mapfilter package selected; NETFILTER/conntrack/NAT/MAP_FILTER_SUPPORT are resolved."
           echo "PASS: target Linux configuration generated and audited: $KERNEL_CONFIG"
 
+          echo "===== Step 4c.2: build and verify the full-mode mapfilter kernel module ====="
+          # Full mode validates the real kernel/module artifacts used by the
+          # firmware. Quick mode intentionally stops after preparing headers.
+          make target/linux/compile -j"$(nproc)" V=s
+          test -s "$KERNEL_CONFIG" || {
+            echo "::error::Target Linux .config missing after target/linux/compile."
+            exit 1
+          }
+          make package/kernel/mapfilter/compile V=s
+          KERNEL_BASE="build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic"
+          MAPFILTER_KO="$(find "$KERNEL_BASE" -type f -name mapfilter.ko -print -quit)"
+          test -n "$MAPFILTER_KO" && test -s "$MAPFILTER_KO" || {
+            echo "::error::Full-mode kmod-mapfilter build did not produce a non-empty mapfilter.ko."
+            exit 1
+          }
+          MAPFILTER_APK="$(find bin/packages -type f -name 'kmod-mapfilter*.apk' -print -quit)"
+          test -n "$MAPFILTER_APK" && test -s "$MAPFILTER_APK" || {
+            echo "::error::Full-mode kmod-mapfilter build did not produce a non-empty APK."
+            exit 1
+          }
+          echo "PASS: Full-mode mapfilter kernel module and installable APK verified: $MAPFILTER_KO / $MAPFILTER_APK"
+
           if [ "${{ github.event_name == 'workflow_call' && inputs.easymesh_prebuilt }}" != "true" ]; then
             make package/mtk/applications/easymesh-n60/clean V=s
           else

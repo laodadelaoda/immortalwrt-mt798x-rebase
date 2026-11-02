@@ -176,7 +176,6 @@ jobs:
           REL="https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3"
           for f in \
             mt79xx_20250408-705eb4.tar.xz \
-            mapfilter-96f2afed.tar.bz2 \
             wappd-80ca5724.tar.bz2 \
             mapd-6eca4331.tar.bz2 \
             1905daemon-35234223.tar.bz2 \
@@ -190,7 +189,7 @@ jobs:
       - name: Download package dependencies
         run: make download -j"$(nproc)"
 
-      - name: Prepare host tools, target toolchain and complete kernel build tree
+      - name: Prepare host tools, target toolchain and kernel headers for EasyMesh cross-build
         shell: bash
         run: |
           set -euo pipefail
@@ -216,50 +215,17 @@ jobs:
           # Resolve newly introduced symbols without interactive prompts.
           # This only updates the generated build_dir kernel config.
           make -C "$KERNEL_DIR" ARCH=arm64 olddefconfig
-          # EasyMesh has a runtime dependency on kmod-mapfilter. Its package
-          # builds an external kernel module against this exact target kernel.
-          # Confirm the package and its Kconfig prerequisites before compiling.
-          grep -qx 'CONFIG_PACKAGE_kmod-mapfilter=y' .config || {
-            echo "::error::kmod-mapfilter was not selected by the EasyMesh package dependency."
-            exit 1
-          }
-          for option in CONFIG_NETFILTER=y CONFIG_NF_CONNTRACK=y CONFIG_NF_NAT=m CONFIG_MAP_FILTER_SUPPORT=m; do
-            grep -qx "$option" "$KERNEL_CONFIG" || {
-              echo "::error::Required mapfilter kernel option missing: $option"
+          # Quick mode validates the EasyMesh user-space cross-build only.
+          # The MTK WAPP UAPI headers are supplied by the prepared kernel source;
+          # full kernel and kmod-mapfilter validation belongs to Full mode.
+          WAPP_UAPI_DIR="$KERNEL_DIR/include/uapi/linux/wapp"
+          for header in wapp_cmm_type.h mt_wlan_cmm_oid.h; do
+            test -s "$WAPP_UAPI_DIR/$header" || {
+              echo "::error::Required MTK WAPP UAPI header missing: $WAPP_UAPI_DIR/$header"
               exit 1
             }
           done
-          echo "PASS: kmod-mapfilter selected; NETFILTER, conntrack, NAT and MAP_FILTER_SUPPORT resolved."
-          # Build the target kernel so generated UAPI headers and module build
-          # metadata are present before package dependencies compile external kmods.
-          make target/linux/compile -j"$(nproc)" V=s
-          test -s "$KERNEL_CONFIG" || {
-            echo "::error::Target Linux .config was not generated."
-            exit 1
-          }
-          ASM_TYPES="$(find "$KERNEL_DIR/arch/arm64/include" "$KERNEL_DIR/include" -path '*/asm/types.h' -type f -print -quit)"
-          test -n "$ASM_TYPES" || {
-            echo "::error::Kernel build did not generate/provide asm/types.h."
-            exit 1
-          }
-          echo "PASS: complete target kernel tree prepared: $KERNEL_DIR"
-          echo "PASS: required ARM64 UAPI header present: $ASM_TYPES"
-          # The runtime DEPENDS of easymesh-n60 does not guarantee that an
-          # isolated package/compile request builds kmod-mapfilter. Build it
-          # explicitly after the kernel's Module.symvers and generated headers
-          # exist, then verify both the module and installable APK.
-          make package/kernel/mapfilter/compile V=s
-          MAPFILTER_KO="$(find "$KERNEL_BASE" -type f -name mapfilter.ko -print -quit)"
-          test -n "$MAPFILTER_KO" && test -s "$MAPFILTER_KO" || {
-            echo "::error::kmod-mapfilter did not produce mapfilter.ko."
-            exit 1
-          }
-          MAPFILTER_APK="$(find bin/packages -type f -name 'kmod-mapfilter*.apk' -print -quit)"
-          test -n "$MAPFILTER_APK" && test -s "$MAPFILTER_APK" || {
-            echo "::error::kmod-mapfilter APK package was not produced."
-            exit 1
-          }
-          echo "PASS: mapfilter kernel module and APK built: $MAPFILTER_KO / $MAPFILTER_APK"
+          echo "PASS: target kernel configuration and MTK WAPP UAPI headers prepared: $KERNEL_DIR"
 
       - name: Compile EasyMesh package only
         shell: bash
