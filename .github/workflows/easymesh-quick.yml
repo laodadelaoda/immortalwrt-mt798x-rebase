@@ -199,11 +199,21 @@ jobs:
           LIBGCC_SO="$(find staging_dir -type f -path '*/lib/libgcc_s.so.*' -print -quit)"
           test -n "$LIBGCC_SO" || { echo "::error::Target libgcc_s.so was not staged."; exit 1; }
           echo "PASS: target runtime staged: $LIBGCC_SO"
-          # Quick validates only the EasyMesh user-space cross-build.
-          # kernel_oldconfig prepares the target kernel source/configuration tree;
-          # the WAPP UAPI headers below are source headers and need no Kbuild
-          # prepare/modules_prepare. Do not invoke target/linux/compile or Kbuild
-          # module targets here: kernel-module validation belongs to Full mode.
+          # Prepare only the target kernel source/configuration metadata needed
+          # by the package Makefile to consume MTK WAPP UAPI headers. This does
+          # not compile the kernel or external modules. Full mode owns the real
+          # kernel build and kmod-mapfilter verification.
+          make kernel_oldconfig V=s
+          KERNEL_BASE="build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic"
+          KERNEL_DIR="$(find "$KERNEL_BASE" -mindepth 1 -maxdepth 1 -type d -name 'linux-*' -print -quit)"
+          test -n "$KERNEL_DIR" || {
+            echo "::error::Target Linux source directory was not prepared under $KERNEL_BASE."
+            exit 1
+          }
+          test -s "$KERNEL_DIR/.config" || {
+            echo "::error::kernel_oldconfig did not generate the target Linux .config."
+            exit 1
+          }
           WAPP_UAPI_DIR="$KERNEL_DIR/include/uapi/linux/wapp"
           for header in wapp_cmm_type.h mt_wlan_cmm_oid.h; do
             test -s "$WAPP_UAPI_DIR/$header" || {
@@ -270,14 +280,13 @@ jobs:
           cp "$WAPP_BIN" "$MAPD_BIN" "$P1905_BIN" "$WAPPCTRL_BIN" "$ETH_OPS_LIB" "$MAPD_IF_LIB" artifacts/easymesh-quick/
           {
             echo "Build revision: $(git rev-parse HEAD)"
-            echo "EasyMesh package: $APK"
             echo "Source build directory: $SRC_DIR"
             echo "===== Dynamic dependencies: WAPP ====="
             readelf -d "$WAPP_BIN" | grep NEEDED
             echo "===== Dynamic dependencies: P1905 ====="
             readelf -d "$P1905_BIN" | grep NEEDED
-            echo "===== Package checksum ====="
-            sha256sum "$APK"
+            echo "===== Source-built EasyMesh binary checksums ====="
+            sha256sum "$WAPP_BIN" "$MAPD_BIN" "$P1905_BIN" "$WAPPCTRL_BIN" "$ETH_OPS_LIB" "$MAPD_IF_LIB"
           } > artifacts/easymesh-quick/QUICK-BUILD-INFO.txt
           echo "PASS: WAPP, MAPD, P1905, wappctrl, both .so files and EasyMesh APK built and audited."
 
