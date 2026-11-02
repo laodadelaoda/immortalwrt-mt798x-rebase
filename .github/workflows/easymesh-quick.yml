@@ -159,7 +159,11 @@ jobs:
             echo "::error::P1905 DSA runtime config is not installed."
             exit 1
           }
-          echo "PASS: WAPP/MAPD/P1905/WTS/DSA runtime configuration and R2/R3 build macros."
+          DSA_PATCH="package/mtk/applications/easymesh-n60/patches/001-dsa-use-linux-mii-ioctl.patch"
+          test -s "$DSA_PATCH"
+          grep -q 'SIOCGMIIREG' "$DSA_PATCH"
+          grep -q 'patch -d $(PKG_BUILD_DIR)/1905daemon -p1' "$PKG_MAKEFILE"
+          echo "PASS: WAPP/MAPD/P1905/WTS/DSA configuration, R2/R3 macros and Linux 6.12 MII patch."
 
       - name: Download required MTK package sources
         shell: bash
