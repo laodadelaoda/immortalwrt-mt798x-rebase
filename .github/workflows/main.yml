@@ -451,7 +451,7 @@ jobs:
           }
           make -C "$KERNEL_DIR" ARCH=arm64 olddefconfig
           test -n "$KERNEL_CONFIG" && test -s "$KERNEL_CONFIG" || {
-            echo "::error::make -C target/linux oldconfig did not generate the target Linux .config required by kmod dependencies."
+            echo "::error::kernel_oldconfig did not generate the target Linux .config required by kmod dependencies."
             exit 1
           }
           echo "PASS: target Linux configuration generated: $KERNEL_CONFIG"
