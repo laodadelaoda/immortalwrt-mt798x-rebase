@@ -55,7 +55,7 @@ define Build/Compile
 		CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Werror -g" \
 		all; \
 	$(MAKE) -C $(PKG_BUILD_DIR)/wappd \
-		TOPDIR="$(TOPDIR)" UAPD_INCLUDE_PATH="$$WAPP_UAPI_DIR" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R3_SUPPORT=y \
+		TOPDIR="$(TOPDIR)" UAPD_INCLUDE_PATH="$$WAPP_UAPI_DIR" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R2_SUPPORT=y CONFIG_MAP_R3_SUPPORT=y \
 		CC="$(TARGET_CC)" EXTRA_CFLAGS="$$TARGET_EASYMESH_CFLAGS" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto" \
 		all; \
@@ -64,12 +64,12 @@ define Build/Compile
 		TOPDIR="$(TOPDIR)" ROOTDIR="$(TOPDIR)" \
 		LINUXDIR="$(patsubst $(TOPDIR)/%,%,$(LINUX_DIR))" \
 		STAGING_DIR="$(STAGING_DIR)" \
-		CONFIG_MAP_R3_SUPPORT=y MAP_R3_SUPPORT=y SWTICH_DSA_ARCH=y \
+		CONFIG_MAP_R2_SUPPORT=y CONFIG_MAP_R3_SUPPORT=y MAP_R3_SUPPORT=y SWTICH_DSA_ARCH=y \
 		CC="$(TARGET_CC)" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib -Wl,--no-as-needed -lpthread -lnl-tiny -lssl -lcrypto" \
 		all; \
 	$(MAKE) -C $(PKG_BUILD_DIR)/mapd \
-		TOPDIR="$(TOPDIR)" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R3_SUPPORT=y \
+		TOPDIR="$(TOPDIR)" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R2_SUPPORT=y CONFIG_MAP_R3_SUPPORT=y \
 		CC="$(TARGET_CC)" LDO="$(TARGET_CC)" \
 		EXTRA_CFLAGS="$$OPENWRT_EASYMESH_CFLAGS" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib" \
@@ -99,6 +99,7 @@ define Package/easymesh-n60/install
 	$(INSTALL_DATA) ./files/etc/map/mapd_user.cfg $(1)/etc/map/
 	$(INSTALL_DATA) ./files/etc/map/1905d.cfg $(1)/etc/map/
 	$(INSTALL_DATA) ./files/etc/map/wts_bss_info_config $(1)/etc/map/
+	$(INSTALL_DATA) ./files/etc/ethernet_cfg.txt $(1)/etc/
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wapp_ap.conf $(1)/etc/wapp_ap.conf
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap_ra0_default.conf $(1)/etc/wapp_ap_ra0.conf
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap_rax0_default.conf $(1)/etc/wapp_ap_rax0.conf
