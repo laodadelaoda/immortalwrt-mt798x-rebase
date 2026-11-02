@@ -454,7 +454,10 @@ jobs:
             echo "::error::kernel_oldconfig did not generate the target Linux .config."
             exit 1
           }
-          make -C "$KERNEL_DIR" ARCH=arm64 olddefconfig
+          # kernel_oldconfig above is the OpenWrt-managed Kconfig step.
+          # Avoid invoking Kbuild olddefconfig directly without OpenWrt's
+          # configured kernel toolchain; Full mode prepares/builds the kernel
+          # through target/linux/compile below.
           test -n "$KERNEL_CONFIG" && test -s "$KERNEL_CONFIG" || {
             echo "::error::kernel_oldconfig did not generate the target Linux .config required by kmod dependencies."
             exit 1
