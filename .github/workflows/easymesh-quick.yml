@@ -8,6 +8,7 @@ on:
       - "config/n60pro-1001.config"
       - "feeds.conf.default"
       - ".github/workflows/easymesh-quick.yml"
+      - ".github/workflows/main.yml"
   workflow_dispatch:
     inputs:
       quick_only:
