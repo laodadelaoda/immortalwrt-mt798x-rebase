@@ -1,0 +1,6 @@
+# N60 Pro Linux 6.12 DSA bridge configuration for MediaTek P1905.
+# The lan list is space-separated; the parser enumerates these bridge ports.
+lan=lan1 lan2 lan3 lan4
+br_lan=br-lan
+# N60 Pro 2.5G GPY211C external PHY indexes: LAN1 (switch port 5) and WAN (PHY 6).
+ext_phy_port=5 6
