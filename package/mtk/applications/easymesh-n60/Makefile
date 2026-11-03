@@ -61,7 +61,7 @@ define Build/Compile
 	test -s "$(STAGING_DIR)/usr/include/openssl/x509.h" || { echo "Missing target OpenSSL headers: $(STAGING_DIR)/usr/include/openssl/x509.h" >&2; exit 1; }; \
 	$(MAKE) -C $(PKG_BUILD_DIR)/wappd \
 		TOPDIR="$(TOPDIR)" UAPD_INCLUDE_PATH="$(LINUX_DIR)/include/uapi/linux/wapp -I$(STAGING_DIR)/usr/include" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R2_SUPPORT=y CONFIG_MAP_R3_SUPPORT=y \
-		CC="$(TARGET_CC)" EXTRA_CFLAGS="$$$$TARGET_EASYMESH_CFLAGS" \
+		CC="$(TARGET_CC)" EXTRA_CFLAGS="$$TARGET_EASYMESH_CFLAGS -I$(LINUX_DIR)/include/uapi/linux/wapp" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto" \
 		all; \
 	mkdir -p $(PKG_BUILD_DIR)/1905daemon/obj; \
