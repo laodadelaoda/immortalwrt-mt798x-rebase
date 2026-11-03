@@ -269,7 +269,7 @@ jobs:
             staging_dir
             dl
             tmp
-          key: ${{ runner.os }}-n60pro-openwrt-${{ hashFiles('config/n60pro-1001.config', 'feeds.conf.default', 'include/kernel-version.mk', 'include/kernel.mk', 'include/kernel-build.mk', 'include/kernel-defaults.mk', 'include/toplevel.mk', 'target/linux/Makefile', 'target/linux/mediatek/Makefile', 'target/linux/mediatek/files-6.12/**', 'target/linux/mediatek/patches-6.12/**', 'package/mtk/applications/easymesh-n60/**', 'package/mtk/applications/datconf/**', 'package/libs/openssl/**', 'package/libs/libnl-tiny/**', 'package/kernel/mapfilter/**', 'package/mtk/drivers/mt_wifi/**', '.github/workflows/main.yml') }}
+          key: ${{ runner.os }}-n60pro-openwrt-${{ hashFiles('Makefile', 'rules.mk', 'config/**', 'feeds.conf.default', 'include/**', 'scripts/**', 'tools/**', 'toolchain/**', 'target/linux/generic/**', 'target/linux/mediatek/**', 'package/mtk/applications/easymesh-n60/**', 'package/mtk/applications/datconf/**', 'package/libs/openssl/**', 'package/libs/libnl-tiny/**', 'package/kernel/mapfilter/**', 'package/mtk/drivers/mt_wifi/**', '.github/workflows/main.yml') }}
           restore-keys: |
             ${{ runner.os }}-n60pro-openwrt-
 
