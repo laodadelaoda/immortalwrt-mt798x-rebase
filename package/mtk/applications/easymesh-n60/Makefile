@@ -32,7 +32,7 @@ define Build/Prepare
 	tar -xjf '$(DL_DIR)/mapd-6eca4331.tar.bz2' -C $(PKG_BUILD_DIR); \
 	tar -xjf '$(DL_DIR)/1905daemon-35234223.tar.bz2' -C $(PKG_BUILD_DIR); \
 	tar -xjf '$(DL_DIR)/libmapd-0132d199.tar.bz2' -C $(PKG_BUILD_DIR); \
-	python3 -c 'import re; from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/libmapd/include/os.h"); s=p.read_text(encoding="utf-8"); old="os_memset(&now, 0, sizeof(now))"; assert s.count(old)==1, "expected exactly one os_memset call in libmapd/include/os.h"; s=s.replace(old, "memset(&now, 0, sizeof(now))", 1); s=re.sub(r"(#define\\s+\\w+\\s*\\n)", lambda m: m.group(1)+"\\n#include <string.h>\\n", s, count=1) if "#include <string.h>" not in s else s; p.write_text(s, encoding="utf-8"); print("Applied libmapd os_memset portability fix:", p)'; \
+	python3 -c 'from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/libmapd/include/os.h"); s=p.read_text(encoding="utf-8"); old="os_memset(&now, 0, sizeof(now))"; assert s.count(old)==1, "expected exactly one os_memset call in libmapd/include/os.h"; s=s.replace(old, "memset(&now, 0, sizeof(now))", 1); lines=s.splitlines(True); lines.insert(0, "#include <string.h>"+chr(10)) if "#include <string.h>" not in s else None; p.write_text("".join(lines), encoding="utf-8"); print("Applied libmapd os_memset portability fix:", p)'; \
 	tr -d '\r' < '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/eth_ops_dsa.c' > '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/eth_ops_dsa.c.tmp'; \
 	mv '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/eth_ops_dsa.c.tmp' '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/eth_ops_dsa.c'; \
 	patch -d $(PKG_BUILD_DIR)/1905daemon -p1 < ./patches/001-dsa-use-linux-mii-ioctl.patch; \
