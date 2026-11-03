@@ -243,14 +243,21 @@ jobs:
             make -C "$pkg" TOPDIR="$GITHUB_WORKSPACE" download V=s
           done
 
-      - name: Preflight EasyMesh and datconf source preparation
+      - name: Prepare host tools, preflight sources, target toolchain and kernel headers
         shell: bash
         run: |
           set -euo pipefail
+          make tools/install -j"$(nproc)" V=s
+          test -x staging_dir/host/bin/sed
+          test -x staging_dir/host/bin/cmake || {
+            echo "::error::OpenWrt host CMake is missing after tools/install."; exit 1;
+          }
+          # Prepare source trees only after OpenWrt host tools (patch/tar/CMake)
+          # are installed, but before the expensive target toolchain build.
           DATCONF_PATCH="package/mtk/applications/datconf/patches/001-add-ucode-mod-build.patch"
           git apply --numstat "$DATCONF_PATCH" >/dev/null
-          # Clear restored configure/build stamps because BUILD_UCODE is passed
-          # through CMAKE_OPTIONS, which is not in datconf's PKG_CONFIG_DEPENDS.
+          # CMAKE_OPTIONS is a command-line override and is not included in
+          # datconf's PKG_CONFIG_DEPENDS, so remove restored configure stamps.
           make -C package/mtk/applications/datconf TOPDIR="$GITHUB_WORKSPACE" clean V=s
           make -C package/mtk/applications/easymesh-n60 TOPDIR="$GITHUB_WORKSPACE" clean V=s
           # Fail fast on source hashes and patch application before toolchain and
@@ -278,16 +285,6 @@ jobs:
             echo "::error::N60 Linux 6.12 DSA ioctl patch was not applied to P1905 source."; exit 1;
           }
           echo "PASS: datconf and all four EasyMesh source trees prepared; patch application verified before toolchain build."
-
-      - name: Prepare host tools, target toolchain and kernel headers for EasyMesh cross-build
-        shell: bash
-        run: |
-          set -euo pipefail
-          make tools/install -j"$(nproc)" V=s
-          test -x staging_dir/host/bin/sed
-          test -x staging_dir/host/bin/cmake || {
-            echo "::error::OpenWrt host CMake is missing after tools/install."; exit 1;
-          }
           make toolchain/install -j"$(nproc)" V=s
           # Quick builds need OpenSSL's target development files, not runtime APKs.
           # Request the package's InstallDev staging stamp directly. The package-local
