@@ -84,6 +84,8 @@ Quick 的触发路径和 cache key 必须覆盖：
 
 Full cache key 还覆盖 mapfilter 和 mt_wifi 源码构建输入。内核 Prepare stamp 本身也根据 kernel patch/files 目录计算依赖摘要；cache key 负责避免错误复用不相关的旧构建环境。
 
+Quick 专属的 datconf、OpenSSL、libnl-tiny 和 EasyMesh 源码修改只自动触发 Quick，不再因为 `package/**` 的宽泛匹配而同时启动完整 Full 构建。需要验证最终固件时，可在 Quick workflow 手动选择 `quick_only=false`，或单独 dispatch Full workflow。
+
 ## 7. 验证状态
 
 ### 已由仓库 / 日志确认
