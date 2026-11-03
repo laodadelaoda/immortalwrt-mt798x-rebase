@@ -199,10 +199,11 @@ jobs:
           # Quick builds bypass the global package dependency scheduler. Build
           # target OpenSSL explicitly so Build/InstallDev stages target headers
           # required by WAPP/P1905 (not the host libssl-dev package).
-          # Build only the libopenssl package target (including Build/InstallDev).
-          # The aggregate "compile" goal can enter the global selected-package
-          # scheduler and pull unrelated kernel modules such as gpio-button-hotplug.
-          make -C package/libs/openssl TOPDIR="$GITHUB_WORKSPACE" libopenssl/compile -j"$(nproc)" V=s
+          # Run the OpenSSL package Makefile's own compile goal from its directory.
+          # Do not call the top-level package/<path>/compile scheduler: it can
+          # expand DEFAULT_PACKAGES and pull unrelated kmods such as gpio-button-hotplug.
+          # The package-local "compile" goal builds libopenssl and runs Build/InstallDev.
+          make -C package/libs/openssl TOPDIR="$GITHUB_WORKSPACE" compile -j"$(nproc)" V=s
           TARGET_STAGING="staging_dir/target-aarch64_cortex-a53_musl"
           test -s "$TARGET_STAGING/usr/include/openssl/x509.h" || {
             echo "::error::Target OpenSSL development headers were not staged: $TARGET_STAGING/usr/include/openssl/x509.h"
