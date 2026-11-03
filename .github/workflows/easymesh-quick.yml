@@ -218,6 +218,7 @@ jobs:
           grep -q 'patch -d $(PKG_BUILD_DIR)/1905daemon -p1' "$PKG_MAKEFILE"
           DATCONF_PATCH="package/mtk/applications/datconf/patches/001-add-ucode-mod-build.patch"
           git apply --numstat "$DATCONF_PATCH" >/dev/null || { echo "::error::datconf UCODE patch has invalid unified-diff syntax."; exit 1; }
+          git apply --numstat "$DSA_PATCH" >/dev/null || { echo "::error::EasyMesh DSA patch has invalid unified-diff syntax."; exit 1; }
           grep -Fq '+IF(BUILD_UCODE)' "$DATCONF_PATCH" || { echo "::error::datconf ucode option does not guard add_subdirectory(ucode)."; exit 1; }
           grep -Fq '+ENDIF()' "$DATCONF_PATCH" || { echo "::error::datconf ucode conditional is not closed."; exit 1; }
           echo "PASS: WAPP/MAPD/P1905/WTS/DSA configuration, R2/R3 macros and Linux 6.12 MII patch."
@@ -365,6 +366,10 @@ jobs:
           }
           test -e "$TARGET_STAGING/usr/lib/libnl-tiny.so.1" || {
             echo "::error::Target libnl-tiny ABI library was not staged."
+            exit 1
+          }
+          test -e "$TARGET_STAGING/usr/lib/libnl-tiny.so" || {
+            echo "::error::Target libnl-tiny linker interface libnl-tiny.so was not staged."
             exit 1
           }
           echo "PASS: target libnl-tiny development headers and ABI library staged."
