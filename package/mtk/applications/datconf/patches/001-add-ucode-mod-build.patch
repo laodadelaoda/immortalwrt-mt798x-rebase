@@ -1,6 +1,7 @@
 --- a/datconf/CMakeLists.txt
 +++ b/datconf/CMakeLists.txt
-@@ -3,9 +3,13 @@ project(datconf)
+@@ -3,9 +3,13 @@
+ project(datconf)
  
  OPTION(BUILD_LUA "build Lua binding" ON)
 +OPTION(BUILD_UCODE "build ucode binding" ON)
