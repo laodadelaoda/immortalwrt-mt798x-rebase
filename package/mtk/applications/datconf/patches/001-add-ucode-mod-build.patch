@@ -1,6 +1,6 @@
 --- a/datconf/CMakeLists.txt
 +++ b/datconf/CMakeLists.txt
-@@ -3,9 +3,12 @@ cmake_minimum_required(VERSION 2.6)
+@@ -3,9 +3,14 @@ cmake_minimum_required(VERSION 2.6)
  project(datconf)
  
  OPTION(BUILD_LUA "build Lua binding" ON)
@@ -9,7 +9,9 @@
  SET(L1_PROFILE_PATH "/etc/wireless/l1profile.dat" CACHE STRING "l1profile path")
  
  add_subdirectory(lua)
-+add_subdirectory(ucode)
+-add_subdirectory(ucode)
++IF(BUILD_UCODE)
++  add_subdirectory(ucode)
++ENDIF()
  
  add_definitions(-Os -Wall -Werror -g3)
- 
