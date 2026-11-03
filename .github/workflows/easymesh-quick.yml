@@ -199,7 +199,7 @@ jobs:
           # Quick builds bypass the global package dependency scheduler. Build
           # target OpenSSL explicitly so Build/InstallDev stages target headers
           # required by WAPP/P1905 (not the host libssl-dev package).
-          make package/libs/openssl/compile -j"$(nproc)" V=s
+          make -C package/libs/openssl TOPDIR="$GITHUB_WORKSPACE" compile -j"$(nproc)" V=s
           TARGET_STAGING="staging_dir/target-aarch64_cortex-a53_musl"
           test -s "$TARGET_STAGING/usr/include/openssl/x509.h" || {
             echo "::error::Target OpenSSL development headers were not staged: $TARGET_STAGING/usr/include/openssl/x509.h"
