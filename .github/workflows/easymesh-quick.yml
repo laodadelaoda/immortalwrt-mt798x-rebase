@@ -196,6 +196,16 @@ jobs:
           make tools/install -j"$(nproc)" V=s
           test -x staging_dir/host/bin/sed
           make toolchain/install -j"$(nproc)" V=s
+          # Quick builds bypass the global package dependency scheduler. Build
+          # target OpenSSL explicitly so Build/InstallDev stages target headers
+          # required by WAPP/P1905 (not the host libssl-dev package).
+          make package/libs/openssl/compile -j"$(nproc)" V=s
+          TARGET_STAGING="staging_dir/target-aarch64_cortex-a53_musl"
+          test -s "$TARGET_STAGING/usr/include/openssl/x509.h" || {
+            echo "::error::Target OpenSSL development headers were not staged: $TARGET_STAGING/usr/include/openssl/x509.h"
+            exit 1
+          }
+          echo "PASS: target OpenSSL headers staged: $TARGET_STAGING/usr/include/openssl/x509.h"
           LIBGCC_SO="$(find staging_dir -type f -path '*/lib/libgcc_s.so.*' -print -quit)"
           test -n "$LIBGCC_SO" || { echo "::error::Target libgcc_s.so was not staged."; exit 1; }
           echo "PASS: target runtime staged: $LIBGCC_SO"
