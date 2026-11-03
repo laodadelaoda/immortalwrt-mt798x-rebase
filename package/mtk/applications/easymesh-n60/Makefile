@@ -32,6 +32,7 @@ define Build/Prepare
 	tar -xjf '$(DL_DIR)/mapd-6eca4331.tar.bz2' -C $(PKG_BUILD_DIR); \
 	tar -xjf '$(DL_DIR)/1905daemon-35234223.tar.bz2' -C $(PKG_BUILD_DIR); \
 	tar -xjf '$(DL_DIR)/libmapd-0132d199.tar.bz2' -C $(PKG_BUILD_DIR); \
+	python3 -c 'from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/wappd/include/rtmpiapp.h"); s=p.read_text(encoding="utf-8"); old="__uint32_t inet_make_mask"; assert s.count(old)==1, "expected exactly one inet_make_mask __uint32_t declaration"; s=s.replace(old, "uint32_t inet_make_mask", 1); s=s.replace("#define", "#include <stdint.h>\\n\\n#define", 1) if "#include <stdint.h>" not in s else s; p.write_text(s, encoding="utf-8"); print("Applied musl-portable inet_make_mask type fix:", p)'; \
 	python3 -c 'from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/libmapd/include/os.h"); s=p.read_text(encoding="utf-8"); old="os_memset(&now, 0, sizeof(now))"; assert s.count(old)==1, "expected exactly one os_memset call in libmapd/include/os.h"; s=s.replace(old, "memset(&now, 0, sizeof(now))", 1); lines=s.splitlines(True); lines.insert(0, "#include <string.h>"+chr(10)) if "#include <string.h>" not in s else None; p.write_text("".join(lines), encoding="utf-8"); print("Applied libmapd os_memset portability fix:", p)'; \
 	tr -d '\r' < '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/eth_ops_dsa.c' > '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/eth_ops_dsa.c.tmp'; \
 	mv '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/eth_ops_dsa.c.tmp' '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/eth_ops_dsa.c'; \
@@ -57,8 +58,9 @@ define Build/Compile
 		CC="$(TARGET_CC)" \
 		CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Werror -g" \
 		all; \
+	test -s "$(STAGING_DIR)/usr/include/openssl/x509.h" || { echo "Missing target OpenSSL headers: $(STAGING_DIR)/usr/include/openssl/x509.h" >&2; exit 1; }; \
 	$(MAKE) -C $(PKG_BUILD_DIR)/wappd \
-		TOPDIR="$(TOPDIR)" UAPD_INCLUDE_PATH="$$$$WAPP_UAPI_DIR" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R2_SUPPORT=y CONFIG_MAP_R3_SUPPORT=y \
+		TOPDIR="$(TOPDIR)" UAPD_INCLUDE_PATH="$$WAPP_UAPI_DIR -I$(STAGING_DIR)/usr/include" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R2_SUPPORT=y CONFIG_MAP_R3_SUPPORT=y \
 		CC="$(TARGET_CC)" EXTRA_CFLAGS="$$$$TARGET_EASYMESH_CFLAGS" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto" \
 		all; \
