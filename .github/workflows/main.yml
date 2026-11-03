@@ -6,6 +6,9 @@ on:
     paths:
       - "package/**"
       - "!package/mtk/applications/easymesh-n60/**"
+      - "!package/mtk/applications/datconf/**"
+      - "!package/libs/openssl/**"
+      - "!package/libs/libnl-tiny/**"
       - "target/**"
       - "toolchain/**"
       - "tools/**"
