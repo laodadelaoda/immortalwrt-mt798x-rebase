@@ -228,7 +228,13 @@ jobs:
           # global package dependency scheduler. Stage datconf's development
           # interface explicitly so WAPP can include libdatconf.h and link
           # against the matching target libdatconf/libkvcutil outputs.
+          # WAPP needs datconf's C development interface only. The optional
+          # datconf ucode module is not part of EasyMesh and requires libucode
+          # headers that this package-local Quick path intentionally does not stage.
+          # Disable that unrelated binding for this staging-only build; Full firmware
+          # retains the normal package configuration and dependency resolution.
           make -C package/mtk/applications/datconf TOPDIR="$GITHUB_WORKSPACE" \
+            CMAKE_OPTIONS="-DLUAPATH=/usr/lib/lua -DBUILD_UCODE=OFF" \
             "$TARGET_STAGING/stamp/.datconf_installed" -j"$(nproc)" V=s
           test -s "$TARGET_STAGING/usr/include/libdatconf.h" || {
             echo "::error::Target datconf development header was not staged: $TARGET_STAGING/usr/include/libdatconf.h"
