@@ -72,7 +72,7 @@ jobs:
             build_dir
             staging_dir
             dl
-          key: ${{ runner.os }}-n60pro-openwrt-${{ hashFiles('config/n60pro-1001.config', 'feeds.conf.default', 'include/kernel-version.mk', 'target/linux/mediatek/Makefile', 'package/mtk/applications/easymesh-n60/**', 'package/mtk/applications/datconf/**') }}
+          key: ${{ runner.os }}-n60pro-openwrt-${{ hashFiles('config/n60pro-1001.config', 'feeds.conf.default', 'include/kernel-version.mk', 'target/linux/mediatek/Makefile', 'package/mtk/applications/easymesh-n60/**', 'package/mtk/applications/datconf/**', 'package/libs/openssl/**', 'package/libs/libnl-tiny/**') }}
           restore-keys: |
             ${{ runner.os }}-n60pro-openwrt-
 
@@ -204,8 +204,16 @@ jobs:
           done
           ls -lh dl/
 
-      - name: Download package dependencies
-        run: make download -j"$(nproc)"
+      - name: Download only EasyMesh build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Avoid the global firmware download scheduler: it traverses unrelated
+          # selected packages (including kernel/mapfilter) that Quick never builds.
+          for pkg in package/libs/openssl package/mtk/applications/datconf package/libs/libnl-tiny; do
+            echo "===== Download sources: $pkg ====="
+            make -C "$pkg" TOPDIR="$GITHUB_WORKSPACE" download V=s
+          done
 
       - name: Prepare host tools, target toolchain and kernel headers for EasyMesh cross-build
         shell: bash
@@ -262,6 +270,24 @@ jobs:
             exit 1
           }
           echo "PASS: target datconf/kvcutil development headers and libraries staged."
+          # libnl-tiny is the third declared PKG_BUILD_DEPENDS of easymesh-n60.
+          # Stage its target headers and ABI library explicitly because the
+          # package-local EasyMesh compile bypasses the global dependency scheduler.
+          make -C package/libs/libnl-tiny TOPDIR="$GITHUB_WORKSPACE" \
+            "$TARGET_STAGING/stamp/.libnl-tiny_installed" -j"$(nproc)" V=s
+          test -d "$TARGET_STAGING/usr/include/libnl-tiny" || {
+            echo "::error::Target libnl-tiny development include directory was not staged."
+            exit 1
+          }
+          test -n "$(find "$TARGET_STAGING/usr/include/libnl-tiny" -type f -print -quit)" || {
+            echo "::error::Target libnl-tiny development headers are empty."
+            exit 1
+          }
+          test -e "$TARGET_STAGING/usr/lib/libnl-tiny.so.1" || {
+            echo "::error::Target libnl-tiny ABI library was not staged."
+            exit 1
+          }
+          echo "PASS: target libnl-tiny development headers and ABI library staged."
           LIBGCC_SO="$(find staging_dir -type f -path '*/lib/libgcc_s.so.*' -print -quit)"
           test -n "$LIBGCC_SO" || { echo "::error::Target libgcc_s.so was not staged."; exit 1; }
           echo "PASS: target runtime staged: $LIBGCC_SO"
