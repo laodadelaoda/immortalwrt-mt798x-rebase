@@ -19,6 +19,15 @@ on:
       - "target/linux/mediatek/Makefile"
       - "target/linux/mediatek/files-6.12/**"
       - "target/linux/mediatek/patches-6.12/**"
+      - "target/linux/generic/**"
+      - "target/linux/mediatek/**"
+      - "include/**"
+      - "config/**"
+      - "scripts/**"
+      - "tools/**"
+      - "toolchain/**"
+      - "Makefile"
+      - "rules.mk"
       - "feeds.conf.default"
       - ".github/workflows/easymesh-quick.yml"
       - ".github/workflows/main.yml"
@@ -82,7 +91,7 @@ jobs:
             build_dir
             staging_dir
             dl
-          key: ${{ runner.os }}-n60pro-openwrt-${{ hashFiles('config/n60pro-1001.config', 'feeds.conf.default', 'include/kernel-version.mk', 'include/kernel.mk', 'include/kernel-build.mk', 'include/kernel-defaults.mk', 'include/toplevel.mk', 'target/linux/Makefile', 'target/linux/mediatek/Makefile', 'target/linux/mediatek/files-6.12/**', 'target/linux/mediatek/patches-6.12/**', 'package/mtk/applications/easymesh-n60/**', 'package/mtk/applications/datconf/**', 'package/libs/openssl/**', 'package/libs/libnl-tiny/**', '.github/workflows/easymesh-quick.yml') }}
+          key: ${{ runner.os }}-n60pro-openwrt-${{ hashFiles('Makefile', 'rules.mk', 'config/**', 'feeds.conf.default', 'include/**', 'scripts/**', 'tools/**', 'toolchain/**', 'target/linux/generic/**', 'target/linux/mediatek/**', 'package/mtk/applications/easymesh-n60/**', 'package/mtk/applications/datconf/**', 'package/libs/openssl/**', 'package/libs/libnl-tiny/**', '.github/workflows/easymesh-quick.yml') }}
           restore-keys: |
             ${{ runner.os }}-n60pro-openwrt-
 
