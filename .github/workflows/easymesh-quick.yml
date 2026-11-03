@@ -5,6 +5,7 @@ on:
     branches: ["n60pro-mtk-closed-driver"]
     paths:
       - "package/mtk/applications/easymesh-n60/**"
+      - "package/mtk/applications/datconf/**"
       - "config/n60pro-1001.config"
       - "target/linux/mediatek/filogic/config-6.12"
       - "feeds.conf.default"
@@ -70,7 +71,7 @@ jobs:
             build_dir
             staging_dir
             dl
-          key: ${{ runner.os }}-n60pro-openwrt-${{ hashFiles('config/n60pro-1001.config', 'feeds.conf.default', 'include/kernel-version.mk', 'target/linux/mediatek/Makefile', 'package/mtk/applications/easymesh-n60/**') }}
+          key: ${{ runner.os }}-n60pro-openwrt-${{ hashFiles('config/n60pro-1001.config', 'feeds.conf.default', 'include/kernel-version.mk', 'target/linux/mediatek/Makefile', 'package/mtk/applications/easymesh-n60/**', 'package/mtk/applications/datconf/**') }}
           restore-keys: |
             ${{ runner.os }}-n60pro-openwrt-
 
@@ -179,6 +180,9 @@ jobs:
           test -s "$DSA_PATCH"
           grep -q 'SIOCGMIIREG' "$DSA_PATCH"
           grep -q 'patch -d $(PKG_BUILD_DIR)/1905daemon -p1' "$PKG_MAKEFILE"
+          DATCONF_PATCH="package/mtk/applications/datconf/patches/001-add-ucode-mod-build.patch"
+          grep -Fq '+IF(BUILD_UCODE)' "$DATCONF_PATCH" || { echo "::error::datconf ucode option does not guard add_subdirectory(ucode)."; exit 1; }
+          grep -Fq '+ENDIF()' "$DATCONF_PATCH" || { echo "::error::datconf ucode conditional is not closed."; exit 1; }
           echo "PASS: WAPP/MAPD/P1905/WTS/DSA configuration, R2/R3 macros and Linux 6.12 MII patch."
 
       - name: Download required MTK package sources
@@ -236,6 +240,10 @@ jobs:
           make -C package/mtk/applications/datconf TOPDIR="$GITHUB_WORKSPACE" \
             CMAKE_OPTIONS="-DLUAPATH=/usr/lib/lua -DBUILD_UCODE=OFF" \
             "$TARGET_STAGING/stamp/.datconf_installed" -j"$(nproc)" V=s
+          grep -qx 'BUILD_UCODE:BOOL=OFF' build_dir/target-aarch64_cortex-a53_musl/datconf/CMakeCache.txt || {
+            echo "::error::Quick datconf configure did not retain BUILD_UCODE=OFF."
+            exit 1
+          }
           test -s "$TARGET_STAGING/usr/include/libdatconf.h" || {
             echo "::error::Target datconf development header was not staged: $TARGET_STAGING/usr/include/libdatconf.h"
             exit 1
