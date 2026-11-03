@@ -209,15 +209,16 @@ jobs:
           make tools/install -j"$(nproc)" V=s
           test -x staging_dir/host/bin/sed
           make toolchain/install -j"$(nproc)" V=s
-          # Quick builds bypass the global package dependency scheduler. Build
-          # target OpenSSL explicitly so Build/InstallDev stages target headers
-          # required by WAPP/P1905 (not the host libssl-dev package).
-          # Run the OpenSSL package Makefile's own compile goal from its directory.
-          # Do not call the top-level package/<path>/compile scheduler: it can
-          # expand DEFAULT_PACKAGES and pull unrelated kmods such as gpio-button-hotplug.
-          # The package-local "compile" goal builds libopenssl and runs Build/InstallDev.
-          make -C package/libs/openssl TOPDIR="$GITHUB_WORKSPACE" compile -j"$(nproc)" V=s
-          TARGET_STAGING="staging_dir/target-aarch64_cortex-a53_musl"
+          # Quick builds need OpenSSL's target development files, not runtime APKs.
+          # Request the package's InstallDev staging stamp directly. The package-local
+          # "compile" goal also enters APK generation and dependency scanning, which
+          # is outside Quick's responsibility and can fail on unrelated runtime
+          # package metadata (Run #53: libc.so/libgcc_s.so.1).
+          # The stamp target builds OpenSSL and runs Build/InstallDev only; it does
+          # not create libopenssl3 APKs or invoke the global package scheduler.
+          TARGET_STAGING="$GITHUB_WORKSPACE/staging_dir/target-aarch64_cortex-a53_musl"
+          make -C package/libs/openssl TOPDIR="$GITHUB_WORKSPACE" \
+            "$TARGET_STAGING/stamp/.openssl_installed" -j"$(nproc)" V=s
           test -s "$TARGET_STAGING/usr/include/openssl/x509.h" || {
             echo "::error::Target OpenSSL development headers were not staged: $TARGET_STAGING/usr/include/openssl/x509.h"
             exit 1
