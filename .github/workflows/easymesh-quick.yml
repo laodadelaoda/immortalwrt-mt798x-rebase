@@ -84,6 +84,14 @@ jobs:
         run: |
           set -euo pipefail
           cp config/n60pro-1001.config .config
+          # Quick only needs the target OpenSSL headers and libssl/libcrypto
+          # link interfaces. The firmware config enables the optional
+          # libopenssl-devcrypto engine, which requires cryptodev-linux's
+          # kernel UAPI header and is unrelated to WAPP/MAPD/P1905.
+          # Disable only that optional engine package in this ephemeral Quick
+          # config; the committed N60 config and Full firmware remain unchanged.
+          sed -i '/^CONFIG_PACKAGE_libopenssl-devcrypto=y$/d' .config
+          echo '# CONFIG_PACKAGE_libopenssl-devcrypto is not set' >> .config
           if grep -q '^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_' .config; then
             sed -i -E "s|^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_[^=]+=y|# &|" .config
             sed -i -E "s|^# (CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_${DEVICE})=y|\\1=y|" .config
@@ -92,6 +100,11 @@ jobs:
             echo "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_${DEVICE}=y" >> .config
           fi
           make defconfig
+          if grep -qx 'CONFIG_PACKAGE_libopenssl-devcrypto=y' .config; then
+            echo "::error::Quick config unexpectedly re-enabled optional libopenssl-devcrypto."
+            exit 1
+          fi
+          echo "PASS: Quick excludes optional devcrypto engine; Full firmware config is unchanged."
           for option in \
             CONFIG_MTK_WIFI_MODE_AP=m \
             CONFIG_MTK_MT_AP_SUPPORT=m \
