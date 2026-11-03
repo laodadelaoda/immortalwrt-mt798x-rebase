@@ -11,6 +11,14 @@ on:
       - "package/libs/libnl-tiny/**"
       - "config/n60pro-1001.config"
       - "target/linux/mediatek/filogic/config-6.12"
+      - "include/kernel.mk"
+      - "include/kernel-build.mk"
+      - "include/kernel-defaults.mk"
+      - "include/toplevel.mk"
+      - "target/linux/Makefile"
+      - "target/linux/mediatek/Makefile"
+      - "target/linux/mediatek/files-6.12/**"
+      - "target/linux/mediatek/patches-6.12/**"
       - "feeds.conf.default"
       - ".github/workflows/easymesh-quick.yml"
       - ".github/workflows/main.yml"
@@ -74,7 +82,7 @@ jobs:
             build_dir
             staging_dir
             dl
-          key: ${{ runner.os }}-n60pro-openwrt-${{ hashFiles('config/n60pro-1001.config', 'feeds.conf.default', 'include/kernel-version.mk', 'target/linux/mediatek/Makefile', 'package/mtk/applications/easymesh-n60/**', 'package/mtk/applications/datconf/**', 'package/libs/openssl/**', 'package/libs/libnl-tiny/**') }}
+          key: ${{ runner.os }}-n60pro-openwrt-${{ hashFiles('config/n60pro-1001.config', 'feeds.conf.default', 'include/kernel-version.mk', 'include/kernel.mk', 'include/kernel-build.mk', 'include/kernel-defaults.mk', 'include/toplevel.mk', 'target/linux/Makefile', 'target/linux/mediatek/Makefile', 'target/linux/mediatek/files-6.12/**', 'target/linux/mediatek/patches-6.12/**', 'package/mtk/applications/easymesh-n60/**', 'package/mtk/applications/datconf/**', 'package/libs/openssl/**', 'package/libs/libnl-tiny/**', '.github/workflows/easymesh-quick.yml') }}
           restore-keys: |
             ${{ runner.os }}-n60pro-openwrt-
 
@@ -184,6 +192,7 @@ jobs:
           grep -q 'SIOCGMIIREG' "$DSA_PATCH"
           grep -q 'patch -d $(PKG_BUILD_DIR)/1905daemon -p1' "$PKG_MAKEFILE"
           DATCONF_PATCH="package/mtk/applications/datconf/patches/001-add-ucode-mod-build.patch"
+          git apply --numstat "$DATCONF_PATCH" >/dev/null || { echo "::error::datconf UCODE patch has invalid unified-diff syntax."; exit 1; }
           grep -Fq '+IF(BUILD_UCODE)' "$DATCONF_PATCH" || { echo "::error::datconf ucode option does not guard add_subdirectory(ucode)."; exit 1; }
           grep -Fq '+ENDIF()' "$DATCONF_PATCH" || { echo "::error::datconf ucode conditional is not closed."; exit 1; }
           echo "PASS: WAPP/MAPD/P1905/WTS/DSA configuration, R2/R3 macros and Linux 6.12 MII patch."
@@ -195,7 +204,6 @@ jobs:
           mkdir -p dl
           REL="https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3"
           for f in \
-            mt79xx_20250408-705eb4.tar.xz \
             wappd-80ca5724.tar.bz2 \
             mapd-6eca4331.tar.bz2 \
             1905daemon-35234223.tar.bz2 \
@@ -217,12 +225,51 @@ jobs:
             make -C "$pkg" TOPDIR="$GITHUB_WORKSPACE" download V=s
           done
 
+      - name: Preflight EasyMesh and datconf source preparation
+        shell: bash
+        run: |
+          set -euo pipefail
+          DATCONF_PATCH="package/mtk/applications/datconf/patches/001-add-ucode-mod-build.patch"
+          git apply --numstat "$DATCONF_PATCH" >/dev/null
+          # Clear restored configure/build stamps because BUILD_UCODE is passed
+          # through CMAKE_OPTIONS, which is not in datconf's PKG_CONFIG_DEPENDS.
+          make -C package/mtk/applications/datconf TOPDIR="$GITHUB_WORKSPACE" clean V=s
+          make -C package/mtk/applications/easymesh-n60 TOPDIR="$GITHUB_WORKSPACE" clean V=s
+          # Fail fast on source hashes and patch application before toolchain and
+          # OpenSSL builds consume the majority of Quick's preparation time.
+          make -C package/mtk/applications/datconf TOPDIR="$GITHUB_WORKSPACE" prepare V=s
+          DATCONF_CMAKE="build_dir/target-aarch64_cortex-a53_musl/datconf/datconf/CMakeLists.txt"
+          test -s "$DATCONF_CMAKE" || { echo "::error::Prepared datconf CMakeLists.txt is missing."; exit 1; }
+          grep -Fq 'OPTION(BUILD_UCODE "build ucode binding" ON)' "$DATCONF_CMAKE" || {
+            echo "::error::datconf UCODE option was not applied to the actual source tree."; exit 1;
+          }
+          grep -Fq 'IF(BUILD_UCODE)' "$DATCONF_CMAKE" || {
+            echo "::error::datconf UCODE build is not guarded in the prepared source tree."; exit 1;
+          }
+          grep -Fq 'add_subdirectory(ucode)' "$DATCONF_CMAKE" || {
+            echo "::error::datconf UCODE subdirectory was lost instead of being conditionally guarded."; exit 1;
+          }
+          make -C package/mtk/applications/easymesh-n60 TOPDIR="$GITHUB_WORKSPACE" prepare V=s
+          EASYMESH_BUILD_DIR="build_dir/target-aarch64_cortex-a53_musl/easymesh-n60-7.6.7.3"
+          for f in wappd/Makefile mapd/Makefile 1905daemon/Makefile libmapd/Makefile; do
+            test -s "$EASYMESH_BUILD_DIR/$f" || {
+              echo "::error::Prepared EasyMesh source tree is missing $f"; exit 1;
+            }
+          done
+          grep -Fq 'SIOCGMIIREG' "$EASYMESH_BUILD_DIR/1905daemon/ethernet/mediatek_DSA/eth_ops_dsa.c" || {
+            echo "::error::N60 Linux 6.12 DSA ioctl patch was not applied to P1905 source."; exit 1;
+          }
+          echo "PASS: datconf and all four EasyMesh source trees prepared; patch application verified before toolchain build."
+
       - name: Prepare host tools, target toolchain and kernel headers for EasyMesh cross-build
         shell: bash
         run: |
           set -euo pipefail
           make tools/install -j"$(nproc)" V=s
           test -x staging_dir/host/bin/sed
+          test -x staging_dir/host/bin/cmake || {
+            echo "::error::OpenWrt host CMake is missing after tools/install."; exit 1;
+          }
           make toolchain/install -j"$(nproc)" V=s
           # Quick builds need OpenSSL's target development files, not runtime APKs.
           # Request the package's InstallDev staging stamp directly. The package-local
@@ -238,7 +285,12 @@ jobs:
             echo "::error::Target OpenSSL development headers were not staged: $TARGET_STAGING/usr/include/openssl/x509.h"
             exit 1
           }
-          echo "PASS: target OpenSSL headers staged: $TARGET_STAGING/usr/include/openssl/x509.h"
+          for lib in libssl.so libssl.so.3 libcrypto.so libcrypto.so.3; do
+            test -e "$TARGET_STAGING/usr/lib/$lib" || {
+              echo "::error::Target OpenSSL link library missing: $TARGET_STAGING/usr/lib/$lib"; exit 1;
+            }
+          done
+          echo "PASS: target OpenSSL headers and OpenSSL 3 link libraries staged."
           # The package-local EasyMesh compile intentionally bypasses OpenWrt's
           # global package dependency scheduler. Stage datconf's development
           # interface explicitly so WAPP can include libdatconf.h and link
@@ -269,6 +321,10 @@ jobs:
           }
           test -e "$TARGET_STAGING/usr/lib/libkvcutil.so" || {
             echo "::error::Target libkvcutil shared library was not staged."
+            exit 1
+          }
+          test -e "$TARGET_STAGING/usr/lib/libkvcutil.so.1" || {
+            echo "::error::Target libkvcutil.so.1 ABI library was not staged."
             exit 1
           }
           echo "PASS: target datconf/kvcutil development headers and libraries staged."
@@ -323,17 +379,18 @@ jobs:
           set -Eeuo pipefail
           mkdir -p artifacts/easymesh-quick
           LOG="artifacts/easymesh-quick/easymesh-source-compile.log"
-          # Use only the package-local Makefile targets. The top-level
-          # package/<path>/compile target enters the global package scheduler,
-          # which expands the selected firmware package set and may compile
-          # unrelated kmods (Run #34: gpio-button-hotplug).
-          # Runtime DEPENDS in easymesh-n60/Makefile (including kmod-mapfilter)
-          # remain intact for Full firmware packaging; they are not Quick build
-          # prerequisites. PKG_BUILD_DEPENDS remains the source-build contract.
-          make -C package/mtk/applications/easymesh-n60 TOPDIR="$GITHUB_WORKSPACE" clean V=s
-          make -C package/mtk/applications/easymesh-n60 TOPDIR="$GITHUB_WORKSPACE" compile V=s 2>&1 | tee "$LOG"
-          if grep -q 'package/kernel/gpio-button-hotplug/compile' "$LOG"; then
-            echo "::error::Quick build escaped the package-local target and entered the global kmod scheduler."
+          # Build the package's source .built stamp directly. Even the package-local
+          # "compile" goal enters APK generation and CheckDependencies; that is
+          # Full-mode runtime packaging work and caused Run #53's libc.so/libgcc_s
+          # package-metadata failure. Quick validates only the six source outputs.
+          EASYMESH_BUILD_DIR="$GITHUB_WORKSPACE/build_dir/target-aarch64_cortex-a53_musl/easymesh-n60-7.6.7.3"
+          make -C package/mtk/applications/easymesh-n60 TOPDIR="$GITHUB_WORKSPACE" \
+            "$EASYMESH_BUILD_DIR/.built" -j"$(nproc)" V=s 2>&1 | tee "$LOG"
+          test -s "$EASYMESH_BUILD_DIR/.built" || {
+            echo "::error::EasyMesh source-build stamp was not produced."; exit 1;
+          }
+          if grep -Eq 'gen-dependencies\.sh|apk mkpkg|package/kernel/gpio-button-hotplug/compile' "$LOG"; then
+            echo "::error::Quick entered APK dependency scanning or the global kmod scheduler."
             exit 1
           fi
 
@@ -357,7 +414,7 @@ jobs:
           readelf -d "$P1905_BIN" | grep -Fq 'libeth_1905ops.so'
           readelf -d "$P1905_BIN" | grep -Fq 'libssl.so.3'
           readelf -d "$P1905_BIN" | grep -Fq 'libcrypto.so.3'
-          if readelf -d "$WAPP_BIN" "$P1905_BIN" 2>/dev/null | grep -Eq 'lib(ssl|crypto)\\.so\\.1\\.1'; then
+          if readelf -d "$WAPP_BIN" "$P1905_BIN" 2>/dev/null | grep -Eq 'lib(ssl|crypto)[.]so[.]1[.]1'; then
             echo "::error::Obsolete OpenSSL 1.1 dependency detected."
             exit 1
           fi
@@ -374,6 +431,7 @@ jobs:
           cp "$WAPP_BIN" "$MAPD_BIN" "$P1905_BIN" "$WAPPCTRL_BIN" "$ETH_OPS_LIB" "$MAPD_IF_LIB" artifacts/easymesh-quick/
           {
             echo "Build revision: $(git rev-parse HEAD)"
+            echo "Build scope: source .built only; APK packaging and runtime dependency scanning are deferred to Full."
             echo "Source build directory: $SRC_DIR"
             echo "===== Dynamic dependencies: WAPP ====="
             readelf -d "$WAPP_BIN" | grep NEEDED
@@ -382,7 +440,7 @@ jobs:
             echo "===== Source-built EasyMesh binary checksums ====="
             sha256sum "$WAPP_BIN" "$MAPD_BIN" "$P1905_BIN" "$WAPPCTRL_BIN" "$ETH_OPS_LIB" "$MAPD_IF_LIB"
           } > artifacts/easymesh-quick/QUICK-BUILD-INFO.txt
-          echo "PASS: WAPP, MAPD, P1905, wappctrl, both .so files and EasyMesh APK built and audited."
+          echo "PASS: WAPP, MAPD, P1905, wappctrl and both shared libraries source-built and audited; no APK packaging was run."
 
       - name: Upload EasyMesh Quick Build artifacts
         uses: actions/upload-artifact@v4
@@ -396,5 +454,3 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.quick_only == false }}
     needs: quick
     uses: ./.github/workflows/main.yml
-    with:
-      easymesh_prebuilt: true
