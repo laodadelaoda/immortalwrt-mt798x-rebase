@@ -17,6 +17,7 @@ on:
       - "config/**"
       - "feeds.conf.default"
       - "files/**"
+      - ".github/workflows/main.yml"
   workflow_dispatch:
     inputs:
       device:
@@ -37,9 +38,11 @@ on:
 permissions:
   contents: read
 
+# Do not cancel a running kernel/firmware build when a newer audited workflow
+# revision is pushed; queue the new revision instead.
 concurrency:
   group: n60-pro-build
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -438,9 +441,18 @@ jobs:
           echo "PASS: target toolchain runtime staged: $LIBGCC_SO"
 
           echo "===== Step 4c: generate the target Linux kernel configuration required by kmod package builds ====="
-          # Use OpenWrt's top-level kernel_oldconfig target. There is no
-          # target/linux/oldconfig forwarding target in this tree.
-          make kernel_oldconfig V=s
+          # OpenWrt's kernel_oldconfig uses Kconfig oldconfig. New symbols from
+          # the Linux 6.12 / MTK patch stack must take their declared defaults
+          # in CI; otherwise EOF is treated as an interactive configuration error.
+          run_with_kconfig_defaults() {
+            set +e
+            yes "" | "$@"
+            local command_rc=${PIPESTATUS[1]}
+            set -e
+            return "$command_rc"
+          }
+          # There is no target/linux/oldconfig forwarding target in this tree.
+          run_with_kconfig_defaults make kernel_oldconfig V=s
           KERNEL_BASE="build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic"
           KERNEL_DIR="$(find "$KERNEL_BASE" -mindepth 1 -maxdepth 1 -type d -name 'linux-*' -print -quit)"
           test -n "$KERNEL_DIR" || {
@@ -480,8 +492,13 @@ jobs:
 
           echo "===== Step 4c.2: build and verify the full-mode mapfilter kernel module ====="
           # Full mode validates the real kernel/module artifacts used by the
-          # firmware. Quick mode intentionally stops after preparing headers.
-          make target/linux/compile -j"$(nproc)" V=s
+          # firmware. Kbuild syncconfig may see new symbols added by the MTK
+          # patch stack; feed blank responses so each takes its declared default.
+          run_with_kconfig_defaults make target/linux/compile -j"$(nproc)" V=s
+          grep -qx '# CONFIG_USB_XHCI_MTK_DEBUGFS is not set' "$KERNEL_CONFIG" || {
+            echo "::error::Unexpected USB_XHCI_MTK_DEBUGFS selection after Kconfig reconciliation."
+            exit 1
+          }
           test -s "$KERNEL_CONFIG" || {
             echo "::error::Target Linux .config missing after target/linux/compile."
             exit 1

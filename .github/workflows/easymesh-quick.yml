@@ -28,15 +28,6 @@ on:
       - "toolchain/**"
       - "Makefile"
       - "rules.mk"
-      - "target/linux/generic/**"
-      - "target/linux/mediatek/**"
-      - "include/**"
-      - "config/**"
-      - "scripts/**"
-      - "tools/**"
-      - "toolchain/**"
-      - "Makefile"
-      - "rules.mk"
       - "feeds.conf.default"
       - ".github/workflows/easymesh-quick.yml"
       - ".github/workflows/main.yml"
@@ -51,11 +42,11 @@ on:
 permissions:
   contents: read
 
-# Isolate the audited Step 4c revision from older long-running Quick Build jobs.
-# A newer audited run may replace an earlier run in this revision-specific group.
+# Preserve active toolchain builds; a newer commit waits instead of cancelling
+# a runner after it has already spent time preparing the target toolchain.
 concurrency:
   group: n60-pro-easymesh-quick-step4c-v2
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   quick:
@@ -182,6 +173,22 @@ jobs:
           grep -qx 'bss_config_priority=ra0;rax0;apclix0' "$ROOT/etc/map/1905d.cfg"
           ! grep -Eq '^map_(controller|agent)_alid=' "$ROOT/etc/map/1905d.cfg"
           PKG_MAKEFILE="package/mtk/applications/easymesh-n60/Makefile"
+          grep -Fqx 'PKG_BUILD_DEPENDS:=datconf openssl libnl-tiny' "$PKG_MAKEFILE" || {
+            echo "::error::EasyMesh build dependency declaration changed; update the Quick staging matrix."
+            exit 1
+          }
+          grep -Fqx '  DEPENDS:=+kmod-mapfilter +libnl-tiny +libkvcutil +libopenssl' "$PKG_MAKEFILE" || {
+            echo "::error::EasyMesh runtime dependency declaration changed; update Full package verification."
+            exit 1
+          }
+          grep -Fq -- '-ldatconf -lkvcutil -lssl -lcrypto' "$PKG_MAKEFILE" || {
+            echo "::error::WAPP datconf/kvcutil/OpenSSL link dependencies are missing."
+            exit 1
+          }
+          grep -Fq -- '-lnl-tiny -lssl -lcrypto' "$PKG_MAKEFILE" || {
+            echo "::error::P1905 libnl-tiny/OpenSSL link dependencies are missing."
+            exit 1
+          }
           test -s "$ROOT/etc/ethernet_cfg.txt" || {
             echo "::error::Missing N60 Pro DSA ethernet_cfg.txt."
             exit 1
@@ -364,19 +371,18 @@ jobs:
           LIBGCC_SO="$(find staging_dir -type f -path '*/lib/libgcc_s.so.*' -print -quit)"
           test -n "$LIBGCC_SO" || { echo "::error::Target libgcc_s.so was not staged."; exit 1; }
           echo "PASS: target runtime staged: $LIBGCC_SO"
-          # Prepare only the target kernel source/configuration metadata needed
-          # by the package Makefile to consume MTK WAPP UAPI headers. This does
-          # not compile the kernel or external modules. Full mode owns the real
-          # kernel build and kmod-mapfilter verification.
-          make kernel_oldconfig V=s
+          # Quick consumes only the patched target kernel source tree and MTK
+          # WAPP UAPI headers. It does not need kernel Kconfig, .config, modules
+          # or mapfilter. kernel_oldconfig is an unnecessary interactive phase.
+          make target/linux/prepare V=s
           KERNEL_BASE="build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic"
           KERNEL_DIR="$(find "$KERNEL_BASE" -mindepth 1 -maxdepth 1 -type d -name 'linux-*' -print -quit)"
           test -n "$KERNEL_DIR" || {
             echo "::error::Target Linux source directory was not prepared under $KERNEL_BASE."
             exit 1
           }
-          test -s "$KERNEL_DIR/.config" || {
-            echo "::error::kernel_oldconfig did not generate the target Linux .config."
+          test -s "$KERNEL_DIR/Makefile" || {
+            echo "::error::Prepared target Linux source tree is incomplete: $KERNEL_DIR"
             exit 1
           }
           WAPP_UAPI_DIR="$KERNEL_DIR/include/uapi/linux/wapp"
@@ -386,7 +392,7 @@ jobs:
               exit 1
             }
           done
-          echo "PASS: target kernel source/configuration and MTK WAPP UAPI headers are ready: $KERNEL_DIR"
+          echo "PASS: patched target kernel source and MTK WAPP UAPI headers are ready: $KERNEL_DIR"
 
       - name: Compile EasyMesh package only
         shell: bash
@@ -404,8 +410,8 @@ jobs:
           test -s "$EASYMESH_BUILD_DIR/.built" || {
             echo "::error::EasyMesh source-build stamp was not produced."; exit 1;
           }
-          if grep -Eq 'gen-dependencies\.sh|apk mkpkg|package/kernel/gpio-button-hotplug/compile' "$LOG"; then
-            echo "::error::Quick entered APK dependency scanning or the global kmod scheduler."
+          if grep -Eq 'gen-dependencies\.sh|apk mkpkg|package/kernel/(gpio-button-hotplug|mapfilter)/compile' "$LOG"; then
+            echo "::error::Quick entered APK dependency scanning or the global kernel-module scheduler."
             exit 1
           fi
 

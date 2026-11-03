@@ -21,7 +21,7 @@
 | OpenSSL | `package/libs/openssl` 的 InstallDev | WAPP、P1905 | 直接请求 `.openssl_installed`，只准备 target 开发接口 | Full package scheduler 生成运行时包 | `x509.h`、`libssl.so`、`libssl.so.3`、`libcrypto.so`、`libcrypto.so.3` |
 | datconf | `package/mtk/applications/datconf` 的 Prepare / InstallDev | WAPP | 清理旧缓存；应用 UCODE 条件补丁；以 `BUILD_UCODE=OFF` 构建开发接口 | 保留默认 UCODE 行为，按正式配置构建 | CMakeCache 为 OFF；`libdatconf.h`、`libkvcutil.h`、`libdatconf.a`、`libkvcutil.so.1` 存在 |
 | libnl-tiny | `package/libs/libnl-tiny` 的 InstallDev | P1905 | 直接请求 `.libnl-tiny_installed` | Full package scheduler 负责运行时包 | include 目录非空，`libnl-tiny.so.1` 存在 |
-| WAPP UAPI | `target/linux/mediatek/files-6.12/include/uapi/linux/wapp/`，由 kernel prepare 应用 | WAPP | `make kernel_oldconfig` 准备内核源和配置，不编译内核模块 | 完整内核构建同样使用 | `wapp_cmm_type.h`、`mt_wlan_cmm_oid.h` 存在 |
+| WAPP UAPI | `target/linux/mediatek/files-6.12/include/uapi/linux/wapp/`，由 kernel prepare 应用 | WAPP | `make target/linux/prepare` 只准备补丁后的内核源码和 UAPI，不进入 Kconfig | 完整内核构建同样使用 | `wapp_cmm_type.h`、`mt_wlan_cmm_oid.h` 存在 |
 | WAPP 源码 | `wappd-80ca5724.tar.bz2` | WAPP、wappctrl | 校验并 Prepare；编译 | 同样编译并打包 | AArch64 ELF；WTS、11k/11v 关键符号检查 |
 | MAPD 源码 | `mapd-6eca4331.tar.bz2` | MAPD | 校验并 Prepare；编译 | 同样编译并打包 | AArch64 ELF；steering/topology 关键符号检查 |
 | P1905 源码 | `1905daemon-35234223.tar.bz2` | P1905、`libeth_1905ops.so` | 校验并 Prepare；应用 DSA patch；编译 | 同样编译并打包 | AArch64 ELF；libnl、OpenSSL、libeth 依赖检查 |
@@ -41,7 +41,7 @@
 6. 清理缓存中的 datconf / easymesh package build stamps；执行两者的 `prepare`，校验源码哈希、补丁应用和源码目录。
 7. 执行 `make toolchain/install`。源码预检在 target toolchain 和 OpenSSL 构建之前完成。
 8. 分别通过 `.openssl_installed`、`.datconf_installed`、`.libnl-tiny_installed` 准备 target 开发接口。
-9. 执行 `make kernel_oldconfig`，准备 kernel source/config/UAPI；不执行 `target/linux/compile`。
+9. 执行 `make target/linux/prepare`，准备并应用 kernel source/files/patches；只验证 WAPP UAPI 头文件，不生成内核 .config。
 10. 直接构建 `build_dir/target-aarch64_cortex-a53_musl/easymesh-n60-7.6.7.3/.built`。
 11. 检查六个 AArch64 产物、动态链接依赖、WTS/steering/topology 符号，并上传源码构建产物和日志。
 
@@ -52,8 +52,9 @@
 | `tools/install` | 执行 | 执行 |
 | `toolchain/install` | 执行 | 执行 |
 | OpenSSL / datconf / libnl InstallDev | 显式准备 target 开发文件 | 由完整 package 构建依赖关系准备 |
-| `kernel_oldconfig` | 执行，仅准备内核源和配置 | 可作为完整内核构建前置步骤 |
-| `target/linux/compile` | 不执行 | 执行 |
+| `target/linux/prepare` | 执行，只准备补丁后的内核源码/UAPI | 由完整内核构建调用 |
+| `kernel_oldconfig` | 不执行 | 执行；通过空行输入选择新 Kconfig 符号默认值 |
+| `target/linux/compile` | 不执行 | 执行；syncconfig 同样以非交互默认值处理新符号 |
 | `package/kernel/mapfilter/compile` | 不执行 | 执行并验证 .ko / APK |
 | EasyMesh package `compile` | 不执行；直接请求 `.built` | 执行，生成可安装 APK 并检查运行时依赖 |
 | ITB | 不生成 | 生成并验证 |
@@ -92,7 +93,7 @@ Quick 专属的 datconf、OpenSSL、libnl-tiny 和 EasyMesh 源码修改只自�
 - `easymesh-n60` 声明的源码构建依赖为 `datconf openssl libnl-tiny`。
 - WAPP 需要 datconf / kvcutil 和 OpenSSL 3 接口；P1905 需要 libnl-tiny、libeth 及 OpenSSL 3。
 - WAPP UAPI 头文件由 Mediatek kernel files 提供。
-- `kernel_oldconfig` 的调用链会准备内核源码、应用 kernel patch/files 并生成配置，不会触发 kernel modules 编译。
+- Quick 的 WAPP UAPI 只依赖 patched kernel source/files，使用 `target/linux/prepare` 即可；`kernel_oldconfig` 还会进入 Kconfig 配置，不应放进 Quick。
 - Quick 的 APK dependency scan 与其 source-only 目标冲突。
 - Run #53、#56、#57、#59、#60、#64 的失败分别对应上表中的依赖层问题。
 
@@ -104,6 +105,7 @@ Quick 专属的 datconf、OpenSSL、libnl-tiny 和 EasyMesh 源码修改只自�
 - EasyMesh 直接构建 `.built`，Quick 不再打 APK。
 - Quick / Full 的缓存依赖和触发路径。
 - Full 不再假定跨 runner 复用 Quick 工作目录。
+- Full 的 `kernel_oldconfig` 和 `target/linux/compile` 对新 Kconfig 符号输入空行，采用各符号默认值；验证 USB MTK debugfs 选项仍关闭。
 
 ### 仍须由实际构建证明
 - datconf patch 能否应用到当前固定 SHA 的真实源包。
@@ -111,3 +113,18 @@ Quick 专属的 datconf、OpenSSL、libnl-tiny 和 EasyMesh 源码修改只自�
 - Full 是否生成正确的 `mapfilter.ko`、kmod APK、EasyMesh APK 和最终 ITB。
 
 **验收原则：**下一次 Quick 只负责证明用户态 EasyMesh 依赖闭环；只有 Quick 全部通过后，Full 才负责证明内核模块、运行时 APK 和最终固件闭环。不能用 Quick 的成功替代 Full 验收，也不能让 Quick 为了 APK 依赖扫描而重新触发完整内核构建。
+
+
+## 8. 内核 Kconfig 与 GPIO 默认包边界
+
+Full #500 的完整日志证明，实际失败发生在 `target/linux/compile` 的 Kbuild
+`syncconfig` 阶段：非交互 runner 遇到新增 Kconfig 符号
+`USB_XHCI_MTK_DEBUGFS` 时因输入 EOF 退出。它并没有到达 EasyMesh package
+compile。Full 现在对 `kernel_oldconfig` 和 `target/linux/compile` 提供空行输入，
+让新增符号采用 Kconfig 声明的默认值，并在编译后检查
+`CONFIG_USB_XHCI_MTK_DEBUGFS` 仍为关闭状态。
+
+`kmod-gpio-button-hotplug` 来自 `target/linux/mediatek/Makefile` 的
+`DEFAULT_PACKAGES`，属于 Full 固件默认包，不是 EasyMesh 的
+`PKG_BUILD_DEPENDS`。Quick 必须继续绕过全局 package scheduler，但不能为了
+消除 Quick 的误触发而从 Full 默认包中删除 gpio-button-hotplug。
