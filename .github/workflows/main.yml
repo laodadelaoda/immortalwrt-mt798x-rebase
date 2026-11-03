@@ -30,11 +30,6 @@ on:
         required: false
         type: string
         default: netcore_n60-pro
-      easymesh_prebuilt:
-        description: "Reuse the EasyMesh package already compiled by the Quick workflow"
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -274,7 +269,7 @@ jobs:
             staging_dir
             dl
             tmp
-          key: ${{ runner.os }}-n60pro-openwrt-${{ hashFiles('config/n60pro-1001.config', 'feeds.conf.default', 'include/kernel-version.mk', 'target/linux/mediatek/Makefile', 'package/mtk/applications/easymesh-n60/**') }}
+          key: ${{ runner.os }}-n60pro-openwrt-${{ hashFiles('config/n60pro-1001.config', 'feeds.conf.default', 'include/kernel-version.mk', 'include/kernel.mk', 'include/kernel-build.mk', 'include/kernel-defaults.mk', 'include/toplevel.mk', 'target/linux/Makefile', 'target/linux/mediatek/Makefile', 'target/linux/mediatek/files-6.12/**', 'target/linux/mediatek/patches-6.12/**', 'package/mtk/applications/easymesh-n60/**', 'package/mtk/applications/datconf/**', 'package/libs/openssl/**', 'package/libs/libnl-tiny/**', 'package/kernel/mapfilter/**', 'package/mtk/drivers/mt_wifi/**', '.github/workflows/main.yml') }}
           restore-keys: |
             ${{ runner.os }}-n60pro-openwrt-
 
@@ -502,11 +497,10 @@ jobs:
           }
           echo "PASS: Full-mode mapfilter kernel module and installable APK verified: $MAPFILTER_KO / $MAPFILTER_APK"
 
-          if [ "${{ github.event_name == 'workflow_call' && inputs.easymesh_prebuilt }}" != "true" ]; then
-            make package/mtk/applications/easymesh-n60/clean V=s
-          else
-            echo "PASS: reusing the EasyMesh package built and audited by the Quick workflow."
-          fi
+          # The reusable workflow runs on a separate GitHub-hosted runner.
+          # Quick's source artifacts are not a prebuilt OpenWrt package tree,
+          # so Full must clean and build its own installable package normally.
+          make package/mtk/applications/easymesh-n60/clean V=s
           make package/mtk/applications/easymesh-n60/compile V=s 2>&1 | tee "$EASYMESH_LOG"
 
           WAPP_BIN="$(find build_dir -type f -path '*/easymesh-n60*/wappd/wapp' -print -quit)"
