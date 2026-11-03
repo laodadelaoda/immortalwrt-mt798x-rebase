@@ -20,7 +20,7 @@
 | 交叉工具链 | `make toolchain/install` | WAPP、MAPD、P1905、共享库 | 必需 | 必需 | AArch64 编译器和 target libgcc 可用 |
 | OpenSSL | `package/libs/openssl` 的 InstallDev | WAPP、P1905 | 直接请求 `.openssl_installed`，只准备 target 开发接口 | Full package scheduler 生成运行时包 | `x509.h`、`libssl.so`、`libssl.so.3`、`libcrypto.so`、`libcrypto.so.3` |
 | datconf | `package/mtk/applications/datconf` 的 Prepare / InstallDev | WAPP | 清理旧缓存；应用 UCODE 条件补丁；以 `BUILD_UCODE=OFF` 构建开发接口 | 保留默认 UCODE 行为，按正式配置构建 | CMakeCache 为 OFF；`libdatconf.h`、`libkvcutil.h`、`libdatconf.a`、`libkvcutil.so.1` 存在 |
-| libnl-tiny | `package/libs/libnl-tiny` 的 InstallDev | P1905 | 直接请求 `.libnl-tiny_installed` | Full package scheduler 负责运行时包 | include 目录非空，`libnl-tiny.so.1` 存在 |
+| libnl-tiny | `package/libs/libnl-tiny` 的 InstallDev | P1905 | 直接请求 `.libnl-tiny_installed` | Full package scheduler 负责运行时包 | include 目录非空，链接接口 `libnl-tiny.so` 与 ABI 库 `libnl-tiny.so.1` 均存在 |
 | WAPP UAPI | `target/linux/mediatek/files-6.12/include/uapi/linux/wapp/`，由 kernel prepare 应用 | WAPP | `make target/linux/prepare` 只准备补丁后的内核源码和 UAPI，不进入 Kconfig | 完整内核构建同样使用 | `wapp_cmm_type.h`、`mt_wlan_cmm_oid.h` 存在 |
 | WAPP 源码 | `wappd-80ca5724.tar.bz2` | WAPP、wappctrl | 校验并 Prepare；编译 | 同样编译并打包 | AArch64 ELF；WTS、11k/11v 关键符号检查 |
 | MAPD 源码 | `mapd-6eca4331.tar.bz2` | MAPD | 校验并 Prepare；编译 | 同样编译并打包 | AArch64 ELF；steering/topology 关键符号检查 |
@@ -35,7 +35,7 @@
 
 1. 安装 Ubuntu host build dependencies。
 2. 更新 feeds，复制 N60 Pro 配置并执行 `make defconfig`。
-3. 静态检查 WTS、MAP 配置、R2/R3 宏、DSA patch 和 datconf patch 语法。
+3. 静态检查 WTS、MAP 配置、R2/R3 宏，并分别用 `git apply --numstat` 检查 DSA 与 datconf 两个补丁的 unified-diff 语法。
 4. 下载四个 EasyMesh vendor 源码包，以及 OpenSSL、datconf、libnl-tiny 的构建源。
 5. 执行 `make tools/install`，确保 host patch/tar/CMake 等工具已经就绪。
 6. 清理缓存中的 datconf / easymesh package build stamps；执行两者的 `prepare`，校验源码哈希、补丁应用和源码目录。
@@ -73,6 +73,12 @@
 另外，原 Quick 虽然使用 package-local `compile`，但 `include/package-pack.mk` 仍会将其连接到 APK 生成和 `CheckDependencies`。因此“package-local”并不等于“source-only”。本轮改为直接构建 `.built` stamp，避免再次进入运行时包依赖扫描和 APK 生成。
 
 原 Full workflow 的 `easymesh_prebuilt` 输入只跳过 clean，并没有把 Quick runner 的源码构建目录传递到 Full runner。本轮移除这项不成立的复用声明，Full 始终在自己的 runner 上清理并构建完整 EasyMesh package。
+
+## 5.1 本轮全链路审计新增发现
+
+- 当前分支的 P1905 DSA 补丁 `001-dsa-use-linux-mii-ioctl.patch` 第二个 hunk 声明 `-649,24 +651,26`，实际内容为旧 23 行、新 25 行；独立执行 `git apply --numstat` 可复现 `corrupt patch at line 49`。已修正为 `-649,23 +651,25`。
+- Quick 预检现在同时检查 datconf UCODE 补丁和 P1905 DSA 补丁，任何 unified-diff 语法错误都在 `tools/install`、`toolchain/install` 和目标依赖构建之前失败。
+- `libnl-tiny` 原检查只验证 ABI 库 `libnl-tiny.so.1`，但 P1905 使用 `-lnl-tiny` 链接；现在同时验证开发链接入口 `libnl-tiny.so`，避免把运行时 ABI 文件误当成完整链接接口。
 
 ## 6. 缓存与触发依赖
 
