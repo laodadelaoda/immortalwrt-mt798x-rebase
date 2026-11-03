@@ -9,7 +9,7 @@
  #include <pthread.h>
  #include <stdbool.h>
  #include "libbridge.h"
-@@ -649,24 +651,26 @@
+@@ -649,23 +651,25 @@
  static int get_phy_status_by_index(
  	unsigned short index,
  	unsigned int reg_num,
