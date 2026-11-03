@@ -37,9 +37,9 @@
 2. 更新 feeds，复制 N60 Pro 配置并执行 `make defconfig`。
 3. 静态检查 WTS、MAP 配置、R2/R3 宏、DSA patch 和 datconf patch 语法。
 4. 下载四个 EasyMesh vendor 源码包，以及 OpenSSL、datconf、libnl-tiny 的构建源。
-5. 清理缓存中的 datconf / easymesh package build stamps。
-6. 在昂贵的工具链构建之前执行 datconf 和 EasyMesh 的 `prepare`，校验源码哈希、补丁应用和源码目录。
-7. 执行 `make tools/install`、`make toolchain/install`。
+5. 执行 `make tools/install`，确保 host patch/tar/CMake 等工具已经就绪。
+6. 清理缓存中的 datconf / easymesh package build stamps；执行两者的 `prepare`，校验源码哈希、补丁应用和源码目录。
+7. 执行 `make toolchain/install`。源码预检在 target toolchain 和 OpenSSL 构建之前完成。
 8. 分别通过 `.openssl_installed`、`.datconf_installed`、`.libnl-tiny_installed` 准备 target 开发接口。
 9. 执行 `make kernel_oldconfig`，准备 kernel source/config/UAPI；不执行 `target/linux/compile`。
 10. 直接构建 `build_dir/target-aarch64_cortex-a53_musl/easymesh-n60-7.6.7.3/.built`。
