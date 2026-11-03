@@ -224,6 +224,29 @@ jobs:
             exit 1
           }
           echo "PASS: target OpenSSL headers staged: $TARGET_STAGING/usr/include/openssl/x509.h"
+          # The package-local EasyMesh compile intentionally bypasses OpenWrt's
+          # global package dependency scheduler. Stage datconf's development
+          # interface explicitly so WAPP can include libdatconf.h and link
+          # against the matching target libdatconf/libkvcutil outputs.
+          make -C package/mtk/applications/datconf TOPDIR="$GITHUB_WORKSPACE" \
+            "$TARGET_STAGING/stamp/.datconf_installed" -j"$(nproc)" V=s
+          test -s "$TARGET_STAGING/usr/include/libdatconf.h" || {
+            echo "::error::Target datconf development header was not staged: $TARGET_STAGING/usr/include/libdatconf.h"
+            exit 1
+          }
+          test -s "$TARGET_STAGING/usr/include/libkvcutil.h" || {
+            echo "::error::Target kvcutil development header was not staged: $TARGET_STAGING/usr/include/libkvcutil.h"
+            exit 1
+          }
+          test -s "$TARGET_STAGING/usr/lib/libdatconf.a" || {
+            echo "::error::Target libdatconf archive was not staged."
+            exit 1
+          }
+          test -e "$TARGET_STAGING/usr/lib/libkvcutil.so" || {
+            echo "::error::Target libkvcutil shared library was not staged."
+            exit 1
+          }
+          echo "PASS: target datconf/kvcutil development headers and libraries staged."
           LIBGCC_SO="$(find staging_dir -type f -path '*/lib/libgcc_s.so.*' -print -quit)"
           test -n "$LIBGCC_SO" || { echo "::error::Target libgcc_s.so was not staged."; exit 1; }
           echo "PASS: target runtime staged: $LIBGCC_SO"
