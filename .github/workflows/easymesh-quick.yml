@@ -5,6 +5,7 @@ on:
     branches: ["n60pro-mtk-closed-driver"]
     paths:
       - "package/mtk/applications/easymesh-n60/**"
+      - "package/mtk/applications/datconf/patches/**"
       - "package/mtk/applications/datconf/**"
       - "config/n60pro-1001.config"
       - "target/linux/mediatek/filogic/config-6.12"
