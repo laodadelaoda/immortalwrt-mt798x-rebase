@@ -1,6 +1,6 @@
 --- a/datconf/CMakeLists.txt
 +++ b/datconf/CMakeLists.txt
-@@ -3,9 +3,14 @@ cmake_minimum_required(VERSION 2.6)
+@@ -3,10 +3,14 @@ cmake_minimum_required(VERSION 2.6)
  project(datconf)
  
  OPTION(BUILD_LUA "build Lua binding" ON)
