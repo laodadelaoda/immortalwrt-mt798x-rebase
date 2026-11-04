@@ -334,7 +334,7 @@ jobs:
           # Disable that unrelated binding for this staging-only build; Full firmware
           # retains the normal package configuration and dependency resolution.
           make -C package/mtk/applications/datconf TOPDIR="$GITHUB_WORKSPACE" \
-            CMAKE_OPTIONS="-DLUAPATH=/usr/lib/lua" \
+            CMAKE_OPTIONS="-DLUAPATH=/usr/lib/lua -DBUILD_LUA=OFF" \
             "$TARGET_STAGING/stamp/.datconf_installed" -j"$(nproc)" V=s
           test -s "$TARGET_STAGING/usr/include/libdatconf.h" || {
             echo "::error::Target datconf development header was not staged: $TARGET_STAGING/usr/include/libdatconf.h"
