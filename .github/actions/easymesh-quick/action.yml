@@ -238,6 +238,94 @@ runs:
         printf '%s  %s\n' 'b029d7b43c498193092dc6a3c857361c8835ce34bb306561c550ac0539784a78' 'dl/mt79xx_20250408-705eb4.tar.xz' | sha256sum -c -
         ls -lh dl/
 
+    - name: Audit WAPP DPP source, API contract and credential parsing before toolchain build
+      shell: bash
+      run: |
+        set -euo pipefail
+        ARCHIVE="dl/wappd-80ca5724.tar.bz2"
+        AUDIT_DIR="$RUNNER_TEMP/n60-wapp-dpp-audit"
+        REPORT="artifacts/easymesh-quick/DPP-SOURCE-API-AUDIT.txt"
+        EXPECTED_SHA256="73fa8995533e701d3d5774faa92d274497f99e1a37c81ce445f25a959b4b7462"
+        test -s "$ARCHIVE" || {
+          echo "::error::Pinned WAPP source archive is missing; DPP audit cannot run."
+          exit 1
+        }
+        printf '%s  %s\\n' "$EXPECTED_SHA256" "$ARCHIVE" | sha256sum -c -
+        rm -rf "$AUDIT_DIR"
+        mkdir -p "$AUDIT_DIR" artifacts/easymesh-quick
+        tar -xjf "$ARCHIVE" -C "$AUDIT_DIR"
+        WAPP_SRC="$AUDIT_DIR/wappd"
+        test -d "$WAPP_SRC/dpp" || {
+          echo "::error::Pinned WAPP archive has no wappd/dpp source directory."
+          exit 1
+        }
+        python3 - "$WAPP_SRC" "$REPORT" <<'PY'
+        import pathlib, re, sys
+        root = pathlib.Path(sys.argv[1])
+        report = pathlib.Path(sys.argv[2])
+        symbol = "dpp_read_config_file_for_connection"
+        files = sorted(p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in {".c", ".h", ".cc", ".cpp"})
+        hits = []
+        for path in files:
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            for n, line in enumerate(text.splitlines(), 1):
+                if symbol in line:
+                    hits.append((path, n, line.strip()))
+        if not hits:
+            raise SystemExit("ERROR: expected DPP API symbol is absent from the pinned WAPP source; refusing to treat an empty grep as a passing audit.")
+        definitions = []
+        for path in files:
+            text = path.read_text(encoding="utf-8", errors="replace")
+            # A definition must have a parameter list followed by a body; a
+            # prototype ending in ';' is not counted as a definition.
+            pattern = re.compile(r"(?m)^[^;{}\\n]*\\b" + re.escape(symbol) + r"\\s*\\([^;{}]*\\)\\s*\\{")
+            for match in pattern.finditer(text):
+                brace = text.find("{", match.start())
+                depth, end = 0, None
+                for i in range(brace, len(text)):
+                    if text[i] == "{": depth += 1
+                    elif text[i] == "}":
+                        depth -= 1
+                        if depth == 0:
+                            end = i + 1
+                            break
+                if end is None:
+                    raise SystemExit(f"ERROR: unterminated function body: {path}")
+                definitions.append((path, text.count("\\n", 0, match.start()) + 1, text[match.start():end]))
+        if len(definitions) != 1:
+            raise SystemExit(f"ERROR: expected exactly one function definition for {symbol}; found {len(definitions)}")
+        path, start_line, body = definitions[0]
+        lines = body.splitlines()
+        # Report the full function body and all credential-length references
+        # across WAPP DPP. Do not impose guessed bounds or alter vendor logic:
+        # findings are reviewed against the actual buffer types and APIs.
+        cred = []
+        for p in files:
+            txt = p.read_text(encoding="utf-8", errors="replace")
+            for n, line in enumerate(txt.splitlines(), 1):
+                if re.search(r"cred_len|credential.{0,24}length|length.{0,24}credential", line, re.I):
+                    cred.append((p.relative_to(root), n, line.strip()))
+        out = []
+        out += ["DPP SOURCE/API AUDIT", f"Source root: {root}", f"Function: {symbol}",
+                f"Definition: {path.relative_to(root)}:{start_line}", "",
+                "== All API references =="]
+        out += [f"{p.relative_to(root)}:{n}: {line}" for p,n,line in hits]
+        out += ["", "== Complete function body =="]
+        out += [f"{start_line+i}: {line}" for i,line in enumerate(lines)]
+        out += ["", "== Credential-length data flow references =="]
+        out += [f"{p}:{n}: {line}" for p,n,line in cred] or ["No credential-length identifiers found."]
+        out += ["", "== Review scope ==",
+                "The source audit verifies symbol presence, a unique implementation, declaration/call locations and credential-length references.",
+                "The complete function body is retained for review. No bounds rule is guessed from the identifier name alone.",
+                "Compilation/API compatibility is verified by the subsequent real target EasyMesh build.",
+                "Runtime file/path/permission and peer-connection behavior require runtime tests."]
+        report.write_text("\\n".join(out) + "\\n", encoding="utf-8")
+        print(report.read_text(encoding="utf-8"))
+        print("PASS: DPP source/API audit completed before target toolchain build.")
+        PY
     - name: Download only EasyMesh build dependencies
       shell: bash
       run: |
