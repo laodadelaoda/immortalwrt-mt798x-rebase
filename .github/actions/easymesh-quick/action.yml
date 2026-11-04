@@ -78,7 +78,7 @@ runs:
         test -s package/mtk/applications/easymesh-n60/patches/004-libmapd-target-flags.patch
         HOTSPOT_PATCH="package/mtk/applications/easymesh-n60/patches/005-wapp-hotspot-realloc-pointer-arithmetic.patch"
         test -s "$HOTSPOT_PATCH" || { echo "::error::WAPP hotspot realloc pointer fix is missing."; exit 1; }
-        grep -Fq 'patch -d $(PKG_BUILD_DIR) -p1 < ./patches/005-wapp-hotspot-realloc-pointer-arithmetic.patch' "$PKG_MAKEFILE" || {
+        grep -Fq 'patch -d $(PKG_BUILD_DIR) -p1 < ./patches/005-wapp-hotspot-realloc-pointer-arithmetic.patch' package/mtk/applications/easymesh-n60/Makefile || {
           echo "::error::WAPP hotspot realloc fix is not applied during Build/Prepare."; exit 1;
         }
         grep -Fq 'patch -d $(PKG_BUILD_DIR) -p1 < ./patches/004-libmapd-target-flags.patch' package/mtk/applications/easymesh-n60/Makefile
