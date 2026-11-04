@@ -126,11 +126,7 @@ jobs:
           test -s "$DSA_PATCH"
           grep -q 'SIOCGMIIREG' "$DSA_PATCH"
           grep -q 'patch -d $(PKG_BUILD_DIR)/1905daemon -p1' "$PKG_MAKEFILE"
-          DATCONF_PATCH="package/mtk/applications/datconf/patches/001-add-ucode-mod-build.patch"
-          git apply --numstat "$DATCONF_PATCH" >/dev/null || { echo "::error::datconf UCODE patch has invalid unified-diff syntax."; exit 1; }
           git apply --numstat "$DSA_PATCH" >/dev/null || { echo "::error::EasyMesh DSA patch has invalid unified-diff syntax."; exit 1; }
-          grep -Fq '+IF(BUILD_UCODE)' "$DATCONF_PATCH" || { echo "::error::datconf ucode option does not guard add_subdirectory(ucode)."; exit 1; }
-          grep -Fq '+ENDIF()' "$DATCONF_PATCH" || { echo "::error::datconf ucode conditional is not closed."; exit 1; }
           echo "PASS: WAPP/MAPD/P1905/WTS/DSA configuration, R2/R3 macros and Linux 6.12 MII patch."
 
       - name: Free disk space
@@ -245,39 +241,30 @@ jobs:
             make -C "$pkg" TOPDIR="$GITHUB_WORKSPACE" download V=s
           done
 
-      - name: Preflight datconf patch against downloaded source archive
+      - name: Preflight datconf source archive structure
         shell: bash
         run: |
           set -euo pipefail
           ARCHIVE="dl/datconf-757f9679.tar.bz2"
-          PATCH="package/mtk/applications/datconf/patches/001-add-ucode-mod-build.patch"
           test -s "$ARCHIVE"
           TMP="$(mktemp -d)"
           trap 'rm -rf "$TMP"' EXIT
           tar -xjf "$ARCHIVE" -C "$TMP"
-          # The archive has an outer project CMakeLists.txt at datconf/CMakeLists.txt
-          # and the patch target is the nested datconf/datconf/CMakeLists.txt.
-          # Do not select the outer file: both paths end in datconf/CMakeLists.txt.
-          echo "===== datconf CMakeLists files in pinned archive ====="
-          find "$TMP" -type f -name CMakeLists.txt -print | sort
           CMAKE_FILE="$(find "$TMP" -path '*/datconf/datconf/CMakeLists.txt' -type f -print -quit)"
           test -n "$CMAKE_FILE" || {
-            echo "::error::datconf archive does not contain the nested patch target datconf/datconf/CMakeLists.txt"
-            find "$TMP" -maxdepth 5 -type f | sort | head -150
+            echo "::error::Pinned datconf archive is missing datconf/datconf/CMakeLists.txt"
             exit 1
           }
-          SOURCE_ROOT="${CMAKE_FILE%/datconf/CMakeLists.txt}"
-          test -s "$SOURCE_ROOT/CMakeLists.txt" || {
-            echo "::error::datconf outer project CMakeLists.txt is missing under $SOURCE_ROOT"
+          grep -Fq 'add_subdirectory(lua)' "$CMAKE_FILE" || {
+            echo "::error::Pinned datconf source no longer contains its Lua binding declaration."
             exit 1
           }
-          echo "===== Outer datconf project CMakeLists ====="
-          nl -ba "$SOURCE_ROOT/CMakeLists.txt"
-          echo "===== Exact nested patch target ====="
-          nl -ba "$CMAKE_FILE"
-          echo "===== Applying patch in dry-run mode before toolchain build ====="
-          patch --dry-run -p1 -d "$SOURCE_ROOT" < "$PATCH"
-          echo "PASS: datconf patch applies cleanly to the exact nested CMakeLists in the pinned source archive."
+          if grep -Fq 'add_subdirectory(ucode)' "$CMAKE_FILE"; then
+            echo "::error::Pinned datconf source now has a ucode CMake target; review its build dependency before changing Quick."
+            exit 1
+          fi
+          test -d "$(dirname "$CMAKE_FILE")/lua"
+          echo "PASS: pinned datconf archive has Lua binding and no ucode CMake subdirectory; no ucode patch is required."
 
       - name: Prepare host tools, preflight sources, target toolchain and kernel headers
         shell: bash
@@ -290,8 +277,6 @@ jobs:
           }
           # Prepare source trees only after OpenWrt host tools (patch/tar/CMake)
           # are installed, but before the expensive target toolchain build.
-          DATCONF_PATCH="package/mtk/applications/datconf/patches/001-add-ucode-mod-build.patch"
-          git apply --numstat "$DATCONF_PATCH" >/dev/null
           # CMAKE_OPTIONS is a command-line override and is not included in
           # datconf's PKG_CONFIG_DEPENDS, so remove restored configure stamps.
           make -C package/mtk/applications/datconf TOPDIR="$GITHUB_WORKSPACE" clean V=s
@@ -301,14 +286,11 @@ jobs:
           make -C package/mtk/applications/datconf TOPDIR="$GITHUB_WORKSPACE" prepare V=s
           DATCONF_CMAKE="build_dir/target-aarch64_cortex-a53_musl/datconf/datconf/CMakeLists.txt"
           test -s "$DATCONF_CMAKE" || { echo "::error::Prepared datconf CMakeLists.txt is missing."; exit 1; }
-          grep -Fq 'OPTION(BUILD_UCODE "build ucode binding" ON)' "$DATCONF_CMAKE" || {
-            echo "::error::datconf UCODE option was not applied to the actual source tree."; exit 1;
+          grep -Fq 'add_subdirectory(lua)' "$DATCONF_CMAKE" || {
+            echo "::error::Prepared datconf source is missing its Lua binding declaration."; exit 1;
           }
-          grep -Fq 'IF(BUILD_UCODE)' "$DATCONF_CMAKE" || {
-            echo "::error::datconf UCODE build is not guarded in the prepared source tree."; exit 1;
-          }
-          grep -Fq 'add_subdirectory(ucode)' "$DATCONF_CMAKE" || {
-            echo "::error::datconf UCODE subdirectory was lost instead of being conditionally guarded."; exit 1;
+          ! grep -Fq 'add_subdirectory(ucode)' "$DATCONF_CMAKE" || {
+            echo "::error::Prepared datconf source unexpectedly gained a ucode CMake target; review dependencies."; exit 1;
           }
           make -C package/mtk/applications/easymesh-n60 TOPDIR="$GITHUB_WORKSPACE" prepare V=s
           EASYMESH_BUILD_DIR="build_dir/target-aarch64_cortex-a53_musl/easymesh-n60-7.6.7.3"
@@ -352,12 +334,8 @@ jobs:
           # Disable that unrelated binding for this staging-only build; Full firmware
           # retains the normal package configuration and dependency resolution.
           make -C package/mtk/applications/datconf TOPDIR="$GITHUB_WORKSPACE" \
-            CMAKE_OPTIONS="-DLUAPATH=/usr/lib/lua -DBUILD_UCODE=OFF" \
+            CMAKE_OPTIONS="-DLUAPATH=/usr/lib/lua" \
             "$TARGET_STAGING/stamp/.datconf_installed" -j"$(nproc)" V=s
-          grep -qx 'BUILD_UCODE:BOOL=OFF' build_dir/target-aarch64_cortex-a53_musl/datconf/CMakeCache.txt || {
-            echo "::error::Quick datconf configure did not retain BUILD_UCODE=OFF."
-            exit 1
-          }
           test -s "$TARGET_STAGING/usr/include/libdatconf.h" || {
             echo "::error::Target datconf development header was not staged: $TARGET_STAGING/usr/include/libdatconf.h"
             exit 1
