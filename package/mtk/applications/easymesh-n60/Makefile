@@ -50,7 +50,7 @@ endef
 
 define Build/Compile
 	set -eu; \
-	TARGET_EASYMESH_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Wno-deprecated-declarations"; \
+	TARGET_EASYMESH_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Wno-deprecated-declarations -Wno-error=unused-but-set-variable"; \
 	OPENWRT_EASYMESH_CFLAGS="$$$$TARGET_EASYMESH_CFLAGS -DCONFIG_SUPPORT_OPENWRT"; \
 	WAPP_UAPI_DIR="$(LINUX_DIR)/include/uapi/linux/wapp"; \
 	test -s "$$$$WAPP_UAPI_DIR/wapp_cmm_type.h" || { echo "Missing MTK WAPP UAPI header: $$$$WAPP_UAPI_DIR/wapp_cmm_type.h" >&2; exit 1; }; \
