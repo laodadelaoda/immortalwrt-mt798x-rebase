@@ -33,6 +33,7 @@ define Build/Prepare
 	tar -xjf '$(DL_DIR)/1905daemon-35234223.tar.bz2' -C $(PKG_BUILD_DIR); \
 	tar -xjf '$(DL_DIR)/libmapd-0132d199.tar.bz2' -C $(PKG_BUILD_DIR); \
 	python3 -c 'from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/wappd/dpp/dpp.h"); s=p.read_text(encoding="utf-8"); old="EC_KEY * EVP_PKEY_get0_EC_KEY(EVP_PKEY *pkey);"; assert s.count(old)==1, "expected exactly one legacy EVP_PKEY_get0_EC_KEY prototype"; p.write_text(s.replace(old, "", 1), encoding="utf-8"); print("Removed conflicting legacy EVP_PKEY_get0_EC_KEY prototype; use target OpenSSL declaration:", p)'; \
+	python3 -c 'import re; from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/wappd/Makefile"); lines=p.read_text(encoding="utf-8").splitlines(); rules=[x.strip() for x in lines if "$(CC)" in x and "$(CFLAGS)" in x]; assert rules, "WAPP source Makefile has no compiler recipe consuming $(CFLAGS); refusing to guess another flag variable"; print("Verified WAPP compiler variable: CFLAGS; compiler recipe:", rules[0])'; \
 	python3 -c 'from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/wappd/include/rtmpiapp.h"); s=p.read_text(encoding="utf-8"); old="__uint32_t inet_make_mask"; assert s.count(old)==1, "expected exactly one inet_make_mask __uint32_t declaration"; s=s.replace(old, "uint32_t inet_make_mask", 1); lines=s.splitlines(True); lines.insert(0, "#include <stdint.h>"+chr(10)) if "#include <stdint.h>" not in s else None; s="".join(lines); p.write_text(s, encoding="utf-8"); print("Applied musl-portable inet_make_mask type fix:", p)'; \
 	python3 -c 'from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/libmapd/include/os.h"); s=p.read_text(encoding="utf-8"); old="os_memset(&now, 0, sizeof(now))"; assert s.count(old)==1, "expected exactly one os_memset call in libmapd/include/os.h"; s=s.replace(old, "memset(&now, 0, sizeof(now))", 1); lines=s.splitlines(True); lines.insert(0, "#include <string.h>"+chr(10)) if "#include <string.h>" not in s else None; p.write_text("".join(lines), encoding="utf-8"); print("Applied libmapd os_memset portability fix:", p)'; \
 	tr -d '\r' < '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/eth_ops_dsa.c' > '$(PKG_BUILD_DIR)/1905daemon/ethernet/mediatek_DSA/eth_ops_dsa.c.tmp'; \
@@ -60,11 +61,15 @@ define Build/Compile
 		CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Werror -g" \
 		all; \
 	test -s "$(STAGING_DIR)/usr/include/openssl/x509.h" || { echo "Missing target OpenSSL headers: $(STAGING_DIR)/usr/include/openssl/x509.h" >&2; exit 1; }; \
+	WAPP_COMPILE_LOG="$(PKG_BUILD_DIR)/wapp-compile.log"; \
 	$(MAKE) -C $(PKG_BUILD_DIR)/wappd \
 		TOPDIR="$(TOPDIR)" UAPD_INCLUDE_PATH="$(LINUX_DIR)/include/uapi/linux/wapp -I$(STAGING_DIR)/usr/include" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R2_SUPPORT=y CONFIG_MAP_R3_SUPPORT=y \
-		CC="$(TARGET_CC)" EXTRA_CFLAGS="$$TARGET_EASYMESH_CFLAGS -I$(LINUX_DIR)/include/uapi/linux/wapp" \
+		CC="$(TARGET_CC)" CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -MMD -Wall -Werror -Wno-error=unused-but-set-variable -g -I$(LINUX_DIR)/include/uapi/linux/wapp" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto" \
-		all; \
+		V=s all 2>&1 | tee "$$WAPP_COMPILE_LOG"; \
+	grep -F 'common/main.c' "$$WAPP_COMPILE_LOG" | grep -Fq -- '-Wno-error=unused-but-set-variable' || { echo "WAPP compile command for common/main.c did not receive -Wno-error=unused-but-set-variable" >&2; exit 1; }; \
+	grep -F 'common/main.c' "$$WAPP_COMPILE_LOG" | grep -Fq -- '-Werror' || { echo "WAPP compile command lost -Werror" >&2; exit 1; }; \
+	echo "PASS: actual WAPP common/main.c compile command contains -Werror and the targeted unused-but-set-variable exception."; \
 	mkdir -p $(PKG_BUILD_DIR)/1905daemon/obj; \
 	EXTRA_CFLAGS="$$$$OPENWRT_EASYMESH_CFLAGS" $(MAKE) -C $(PKG_BUILD_DIR)/1905daemon \
 		TOPDIR="$(TOPDIR)" ROOTDIR="$(TOPDIR)" \
