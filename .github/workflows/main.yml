@@ -5,10 +5,6 @@ on:
     branches: ["n60pro-mtk-closed-driver"]
     paths:
       - "package/**"
-      - "!package/mtk/applications/easymesh-n60/**"
-      - "!package/mtk/applications/datconf/**"
-      - "!package/libs/openssl/**"
-      - "!package/libs/libnl-tiny/**"
       - "target/**"
       - "toolchain/**"
       - "tools/**"
@@ -17,7 +13,10 @@ on:
       - "config/**"
       - "feeds.conf.default"
       - "files/**"
+      - "Makefile"
+      - "rules.mk"
       - ".github/workflows/main.yml"
+      - ".github/workflows/easymesh-quick.yml"
   workflow_dispatch:
     inputs:
       device:
@@ -27,13 +26,6 @@ on:
         default: netcore_n60-pro
         options:
           - netcore_n60-pro
-  workflow_call:
-    inputs:
-      device:
-        description: "Router model to build"
-        required: false
-        type: string
-        default: netcore_n60-pro
 
 permissions:
   contents: read
@@ -45,7 +37,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Full firmware production is strictly gated by the reusable EasyMesh
+  # compatibility workflow. Any Quick failure prevents kernel/firmware build.
+  quick_compatibility:
+    name: Quick compatibility gate
+    uses: ./.github/workflows/easymesh-quick.yml
+
   build:
+    needs: quick_compatibility
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
