@@ -162,6 +162,7 @@ runs:
           ${{ runner.os }}-n60pro-openwrt-
 
     - name: Update and install feeds
+      shell: bash
       run: |
         ./scripts/feeds update -a
         ./scripts/feeds install -a
