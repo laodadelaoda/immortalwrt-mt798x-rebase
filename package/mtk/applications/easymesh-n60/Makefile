@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=easymesh-n60
 PKG_VERSION:=7.6.7.3
-PKG_RELEASE:=22
+PKG_RELEASE:=23
 PKG_BUILD_DEPENDS:=datconf openssl libnl-tiny
 PKG_BUILD_PARALLEL:=1
 
@@ -45,6 +45,7 @@ define Build/Prepare
 	patch -d $(PKG_BUILD_DIR) -p1 < ./patches/003-wapp-gcc14-copy-semantics.patch; \
 	patch -d $(PKG_BUILD_DIR) -p1 < ./patches/004-libmapd-target-flags.patch; \
 	patch -d $(PKG_BUILD_DIR) -p1 < ./patches/005-wapp-hotspot-realloc-pointer-arithmetic.patch; \
+	patch -d $(PKG_BUILD_DIR) -p1 < ./patches/006-p1905-libbridge-tool-propagation.patch; \
 	python3 -c 'from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/wappd/include/map_1905.h"); b=p.read_bytes(); old1=b"struct GNU_PACKED air_monitor_query_rsp{"; old2=b"struct GNU_PACKED bh_assoc_ctrl {"; assert b.count(old1)==1 and b.count(old2)==1, "expected exactly two packed in-memory list structs"; b=b.replace(old1,b"struct air_monitor_query_rsp{",1); b=b.replace(old2,b"struct bh_assoc_ctrl {",1); p.write_bytes(b); print("Removed packed attributes from in-memory list nodes:",p)'; \
 	python3 -c 'from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/wappd/common/main.c"); s=p.read_text(encoding="utf-8"); old_decl="u16 cred_len = 0, is_1905_conn = 0, is_normal = 0;"; new_decl="u16 is_1905_conn = 0, is_normal = 0;"; old_set="\t\tcred_len = sizeof(*cred) + cred->payload_len;"; old_dead="#if 0\n\tcred_len = 0;"; new_dead="#if 0\n\tu16 cred_len = 0;\n\tcred_len = 0;"; assert s.count(old_decl)==1, "expected one DPP cred_len declaration"; assert s.count(old_set)==1, "expected one active DPP cred_len assignment"; assert s.count(old_dead)==1, "expected one disabled legacy BSS-credential block"; s=s.replace(old_decl,new_decl,1).replace(old_set,"",1).replace(old_dead,new_dead,1); p.write_text(s,encoding="utf-8"); print("N60 DPP: moved cred_len into the #if 0 legacy block and removed its active dead assignment:",p)'; \
 	python3 -c 'from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/wappd/dpp/dpp.h"); s=p.read_text(encoding="utf-8"); old="EC_KEY * EVP_PKEY_get0_EC_KEY(EVP_PKEY *pkey);"; assert s.count(old)==1, "expected exactly one legacy EVP_PKEY_get0_EC_KEY prototype"; p.write_text(s.replace(old, "", 1), encoding="utf-8"); print("Removed conflicting legacy EVP_PKEY_get0_EC_KEY prototype; use target OpenSSL declaration:", p)'; \
@@ -84,25 +85,32 @@ define Build/Compile
 		CC="$(TARGET_CC)" EXTRA_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Wno-deprecated-declarations -I$(LINUX_DIR)/include/uapi/linux/wapp" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto" \
 		V=s all > "$$$$WAPP_COMPILE_LOG" 2>&1 || { cat "$$$$WAPP_COMPILE_LOG"; exit 1; }; \
-	cat "$$$$WAPP_COMPILE_LOG"; \
-	grep -F 'common/main.c' "$$$$WAPP_COMPILE_LOG" | grep -Fq -- '-Werror' || { echo "WAPP compile command lost -Werror" >&2; exit 1; }; \
+	if grep -Eq '(^|: )error:|make(\\[[0-9]+\\])?: \\*\\*\\*' "$$WAPP_COMPILE_LOG"; then cat "$$WAPP_COMPILE_LOG"; echo "WAPP compiler log contains an error despite a successful make status" >&2; exit 1; fi; \
+	cat "$$WAPP_COMPILE_LOG"; \
+	grep -F 'common/main.c' "$$WAPP_COMPILE_LOG" | grep -Fq -- '-Werror' || { echo "WAPP compile command lost -Werror" >&2; exit 1; }; \
 	! grep -Fq 'unused-but-set-variable' "$$$$WAPP_COMPILE_LOG" || { echo "WAPP still emits an unused-but-set-variable diagnostic after the DPP source fix" >&2; exit 1; }; \
 	echo "PASS: WAPP common/main.c compiled with -Werror and no unused-but-set-variable diagnostic; no warning suppression used."; \
 	mkdir -p $(PKG_BUILD_DIR)/1905daemon/obj; \
-	EXTRA_CFLAGS="$$$$OPENWRT_EASYMESH_CFLAGS" $(MAKE) -C $(PKG_BUILD_DIR)/1905daemon \
+	P1905_COMPILE_LOG="$(PKG_BUILD_DIR)/p1905-compile.log"; \
+	EXTRA_CFLAGS="$$OPENWRT_EASYMESH_CFLAGS" $(MAKE) -C $(PKG_BUILD_DIR)/1905daemon \
 		TOPDIR="$(TOPDIR)" ROOTDIR="$(TOPDIR)" \
 		LINUXDIR="$(patsubst $(TOPDIR)/%,%,$(LINUX_DIR))" \
 		STAGING_DIR="$(STAGING_DIR)" \
 		CONFIG_MAP_R2_SUPPORT=y CONFIG_MAP_R3_SUPPORT=y MAP_R3_SUPPORT=y SWTICH_DSA_ARCH=y \
 		CC="$(TARGET_CC)" AR="$(TARGET_AR)" RANLIB="$(TARGET_RANLIB)" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib -Wl,--no-as-needed -lpthread -lnl-tiny -lssl -lcrypto" \
-		all; \
+		all > "$$P1905_COMPILE_LOG" 2>&1 || { cat "$$P1905_COMPILE_LOG"; exit 1; }; \
+	if grep -Eq '(^|: )error:|make(\\[[0-9]+\\])?: \\*\\*\\*' "$$P1905_COMPILE_LOG"; then cat "$$P1905_COMPILE_LOG"; echo "P1905 compiler log contains an error despite a successful make status" >&2; exit 1; fi; \
+	cat "$$P1905_COMPILE_LOG"; \
+	MAPD_COMPILE_LOG="$(PKG_BUILD_DIR)/mapd-compile.log"; \
 	$(MAKE) -C $(PKG_BUILD_DIR)/mapd \
 		TOPDIR="$(TOPDIR)" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R2_SUPPORT=y CONFIG_MAP_R3_SUPPORT=y \
 		CC="$(TARGET_CC)" LDO="$(TARGET_CC)" \
-		EXTRA_CFLAGS="$$$$OPENWRT_EASYMESH_CFLAGS" \
+		EXTRA_CFLAGS="$$OPENWRT_EASYMESH_CFLAGS" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib" \
-		version mapd; \
+		version mapd > "$$MAPD_COMPILE_LOG" 2>&1 || { cat "$$MAPD_COMPILE_LOG"; exit 1; }; \
+	if grep -Eq '(^|: )error:|make(\\[[0-9]+\\])?: \\*\\*\\*' "$$MAPD_COMPILE_LOG"; then cat "$$MAPD_COMPILE_LOG"; echo "MAPD compiler log contains an error despite a successful make status" >&2; exit 1; fi; \
+	cat "$$MAPD_COMPILE_LOG"; \
 	test -x $(PKG_BUILD_DIR)/wappd/wapp; \
 	test -x $(PKG_BUILD_DIR)/wappd/wappctrl; \
 	test -x $(PKG_BUILD_DIR)/mapd/mapd; \
