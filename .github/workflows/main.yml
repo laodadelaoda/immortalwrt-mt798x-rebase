@@ -42,6 +42,8 @@ jobs:
   quick_compatibility:
     name: Quick compatibility gate
     uses: ./.github/workflows/easymesh-quick.yml
+    with:
+      device: ${{ github.event.inputs.device || 'netcore_n60-pro' }}
 
   build:
     needs: quick_compatibility
