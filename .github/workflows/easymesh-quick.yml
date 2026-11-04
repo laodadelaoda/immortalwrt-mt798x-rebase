@@ -1,36 +1,7 @@
 name: N60 Pro EasyMesh Quick Build
 
 on:
-  push:
-    branches: ["n60pro-mtk-closed-driver"]
-    paths:
-      - "package/mtk/applications/easymesh-n60/**"
-      - "package/mtk/applications/datconf/patches/**"
-      - "package/mtk/applications/datconf/**"
-      - "package/libs/openssl/**"
-      - "package/libs/libnl-tiny/**"
-      - "config/n60pro-1001.config"
-      - "target/linux/mediatek/filogic/config-6.12"
-      - "include/kernel.mk"
-      - "include/kernel-build.mk"
-      - "include/kernel-defaults.mk"
-      - "include/toplevel.mk"
-      - "target/linux/Makefile"
-      - "target/linux/mediatek/Makefile"
-      - "target/linux/mediatek/files-6.12/**"
-      - "target/linux/mediatek/patches-6.12/**"
-      - "target/linux/generic/**"
-      - "target/linux/mediatek/**"
-      - "include/**"
-      - "config/**"
-      - "scripts/**"
-      - "tools/**"
-      - "toolchain/**"
-      - "Makefile"
-      - "rules.mk"
-      - "feeds.conf.default"
-      - ".github/workflows/easymesh-quick.yml"
-      - ".github/workflows/main.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -59,6 +30,35 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Compatibility Gate 0: reject known-incompatible platform baselines
+          # before feeds, host tools, target toolchain or source preparation.
+          grep -Fqx 'KERNEL_PATCHVER:=6.12' target/linux/mediatek/Makefile || {
+            echo "::error::N60 EasyMesh audit requires Linux 6.12 target kernel."; exit 1;
+          }
+          grep -Fq '25.12-SNAPSHOT' include/version.mk || {
+            echo "::error::ImmortalWrt 25.12-SNAPSHOT version baseline is missing."; exit 1;
+          }
+          OPENSSL_VERSION="$(sed -n 's/^PKG_VERSION:=//p' package/libs/openssl/Makefile | head -n1)"
+          case "$OPENSSL_VERSION" in
+            3.*) echo "OpenSSL source baseline: $OPENSSL_VERSION (ABI major 3)" ;;
+            *) echo "::error::Expected OpenSSL 3.x, found '$OPENSSL_VERSION'."; exit 1 ;;
+          esac
+          test "$(grep -c '^PKG_VERSION:=' package/libs/openssl/Makefile)" -eq 1 || {
+            echo "::error::OpenSSL package version declaration is ambiguous."; exit 1;
+          }
+          grep -Fq 'PKG_BUILD_DEPENDS:=datconf openssl libnl-tiny' package/mtk/applications/easymesh-n60/Makefile || {
+            echo "::error::EasyMesh build dependency closure changed."; exit 1;
+          }
+          for patch in \
+            022-since-v5.18-drop-deprecated-mm_segment_t-usages.patch \
+            026-since-v6.1-replace-deprecated-prandom_u32-usage.patch \
+            034-since-v6.12-fix-unaligned_h-not-found-error.patch \
+            035-since-v6.8-change-strlcpy-to-strscpy.patch; do
+            test -s "package/mtk/drivers/mt_wifi/patches-7673/$patch" || {
+              echo "::error::Required Linux 6.12 driver compatibility patch missing: $patch"; exit 1;
+            }
+          done
+          echo "PASS: platform baseline Linux 6.12 / ImmortalWrt 25.12 / OpenSSL $OPENSSL_VERSION; required driver compatibility patches present."
           ROOT="package/mtk/applications/easymesh-n60/files"
           BIN="$ROOT/usr/bin"
           for f in wapp mapd p1905_managerd wappctrl wapp-n60-wrapper; do
@@ -450,7 +450,8 @@ jobs:
             echo "Scope: userspace EasyMesh source build; no kernel module/APK/ITB build"
             echo "Vendor stack compatibility lock:"
             grep -E '^(PKG_VERSION|PKG_SOURCE|PKG_HASH):=' package/mtk/applications/easymesh-n60/Makefile package/mtk/drivers/mt_wifi/Makefile
-            echo "MT Wi-Fi selected Kconfig: $(grep '^CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y
+            echo "MT Wi-Fi selected Kconfig:"
+            grep -qx 'CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y' .config
             grep '^PKG_BUILD_DEPENDS' package/mtk/applications/easymesh-n60/Makefile
             echo
             echo "Host tools:"
