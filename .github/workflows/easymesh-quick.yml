@@ -1,7 +1,7 @@
 name: N60 Pro EasyMesh Quick Build
 
 on:
-  workflow_call:
+  workflow_call: {}
   workflow_dispatch:
 
 permissions:
