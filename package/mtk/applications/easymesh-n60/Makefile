@@ -23,7 +23,7 @@ endef
 
 define Build/Prepare
 	set -eu; \
-	# Enforce the N60 vendor stack compatibility lock: MT Wi-Fi and EasyMesh must both be 7.6.7.3.
+	printf '%s\n' 'Checking N60 MT Wi-Fi / EasyMesh 7.6.7.3 compatibility lock'; \
 	grep -qx 'CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y' $(TOPDIR)/.config || { echo "N60 EasyMesh requires MT Wi-Fi driver 7.6.7.3" >&2; exit 1; }; \
 	grep -qx 'CONFIG_MTK_MAP_SUPPORT=y' $(TOPDIR)/.config || { echo "N60 EasyMesh requires MTK MAP support" >&2; exit 1; }; \
 	grep -qx 'CONFIG_MTK_MAP_R2_VER_SUPPORT=y' $(TOPDIR)/.config || { echo "N60 EasyMesh requires MTK MAP R2 support" >&2; exit 1; }; \
