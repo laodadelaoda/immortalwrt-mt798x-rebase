@@ -83,6 +83,13 @@ jobs:
           grep -qx 'bss_config_priority=ra0;rax0;apclix0' "$ROOT/etc/map/1905d.cfg"
           ! grep -Eq '^map_(controller|agent)_alid=' "$ROOT/etc/map/1905d.cfg"
           PKG_MAKEFILE="package/mtk/applications/easymesh-n60/Makefile"
+          DRIVER_MAKEFILE="package/mtk/drivers/mt_wifi/Makefile"
+          DRIVER_CONFIG="package/mtk/drivers/mt_wifi/config.in"
+          grep -Fqx 'PKG_SOURCE:=mt79xx_20250408-705eb4.tar.xz' "$DRIVER_MAKEFILE"
+          grep -Fqx 'PKG_HASH:=b029d7b43c498193092dc6a3c857361c8835ce34bb306561c550ac0539784a78' "$DRIVER_MAKEFILE"
+          grep -Fqx 'PKG_VERSION:=7.6.7.3' "$DRIVER_MAKEFILE"
+          grep -Fq 'config MTK_MT_WIFI_DRIVER_VERSION_7673' "$DRIVER_CONFIG"
+          grep -Fqx 'PKG_VERSION:=7.6.7.3' "$PKG_MAKEFILE"
           grep -Fqx 'PKG_BUILD_DEPENDS:=datconf openssl libnl-tiny' "$PKG_MAKEFILE" || {
             echo "::error::EasyMesh build dependency declaration changed; update the Quick staging matrix."
             exit 1
@@ -211,7 +218,13 @@ jobs:
             echo "::error::MTK U-Boot profile must not be selected."
             exit 1
           fi
-          echo "PASS: N60 Pro Standard configuration resolved."
+          grep -qx 'CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y' .config || {
+            echo "::error::Quick selected a different MT Wi-Fi driver version; N60 EasyMesh source batch requires 7.6.7.3."
+            exit 1
+          }
+          grep -qx 'CONFIG_MTK_MAP_R2_VER_SUPPORT=y' .config
+          grep -qx 'CONFIG_MTK_MAP_R3_VER_SUPPORT=y' .config
+          echo "PASS: N60 Pro Standard configuration and MT Wi-Fi/EasyMesh 7.6.7.3 compatibility lock resolved."
 
       - name: Download required MTK package sources
         shell: bash
@@ -228,6 +241,9 @@ jobs:
             test -s "dl/$f" || wget -q -P dl "$REL/$f"
             test -s "dl/$f" || { echo "::error::Required source archive missing: $f"; exit 1; }
           done
+          DRIVER_URL="https://raw.githubusercontent.com/hanwckf/immortalwrt-mt798x/refs/heads/openwrt-21.02/dl/mt79xx_20250408-705eb4.tar.xz"
+          test -s dl/mt79xx_20250408-705eb4.tar.xz || wget -q -O dl/mt79xx_20250408-705eb4.tar.xz "$DRIVER_URL"
+          printf '%s  %s\n' 'b029d7b43c498193092dc6a3c857361c8835ce34bb306561c550ac0539784a78' 'dl/mt79xx_20250408-705eb4.tar.xz' | sha256sum -c -
           ls -lh dl/
 
       - name: Download only EasyMesh build dependencies
@@ -405,6 +421,25 @@ jobs:
           done
           echo "PASS: patched target kernel source and MTK WAPP UAPI headers are ready: $KERNEL_DIR"
 
+          # Prepare the matching 7.6.7.3 driver source without compiling the kernel module.
+          # This proves the pinned MT_WIFI source and its N60 WNM patch series still apply.
+          make package/mtk/drivers/mt_wifi/clean V=s
+          MT_WIFI_PREPARE_LOG="artifacts/mtwifi-prepare-quick.log"
+          mkdir -p artifacts
+          make package/mtk/drivers/mt_wifi/prepare V=s 2>&1 | tee "$MT_WIFI_PREPARE_LOG"
+          for patch in 094-fix-wnm-fortify.patch 095-fix-wnm-fortify-rsp.patch 096-wnm-fix-send-btm-req-fortify.patch; do
+            test -s "package/mtk/drivers/mt_wifi/patches-7673/$patch" || {
+              echo "::error::Missing MT Wi-Fi 7.6.7.3 compatibility patch: $patch"; exit 1;
+            }
+            grep -Fq "$patch" "$MT_WIFI_PREPARE_LOG" || {
+              echo "::error::MT Wi-Fi prepare log does not confirm application of $patch"; exit 1;
+            }
+          done
+          if grep -Eq 'Hunk FAILED|Patch failed|patch failed' "$MT_WIFI_PREPARE_LOG"; then
+            echo "::error::MT Wi-Fi 7.6.7.3 patch application failed."; exit 1
+          fi
+          echo "PASS: matching MT Wi-Fi 7.6.7.3 source prepared; patches 094/095/096 applied; no driver compilation."
+
           # Persist the audited Quick dependency closure alongside the compiled
           # binaries. This is a report only; it does not expand Quick into kernel
           # module, APK or firmware packaging work.
@@ -413,6 +448,128 @@ jobs:
           {
             echo "Revision: $(git rev-parse HEAD)"
             echo "Scope: userspace EasyMesh source build; no kernel module/APK/ITB build"
+            echo "Vendor stack compatibility lock:"
+            grep -E '^(PKG_VERSION|PKG_SOURCE|PKG_HASH):=' package/mtk/applications/easymesh-n60/Makefile package/mtk/drivers/mt_wifi/Makefile
+            echo "MT Wi-Fi selected Kconfig: $(grep '^CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y
+            grep '^PKG_BUILD_DEPENDS' package/mtk/applications/easymesh-n60/Makefile
+            echo
+            echo "Host tools:"
+            for f in staging_dir/host/bin/sed staging_dir/host/bin/cmake; do
+              test -x "$f" && printf "PASS %s\\n" "$f"
+            done
+            echo
+            echo "Target OpenSSL development interface:"
+            for f in usr/include/openssl/x509.h usr/lib/libssl.so usr/lib/libssl.so.3 usr/lib/libcrypto.so usr/lib/libcrypto.so.3; do
+              test -e "$TARGET_STAGING/$f" && printf "PASS %s\\n" "$TARGET_STAGING/$f"
+            done
+            echo
+            echo "Target datconf/kvcutil development interface:"
+            for f in usr/include/libdatconf.h usr/include/libkvcutil.h usr/lib/libdatconf.a usr/lib/libkvcutil.so usr/lib/libkvcutil.so.1; do
+              test -e "$TARGET_STAGING/$f" && printf "PASS %s\\n" "$TARGET_STAGING/$f"
+            done
+            echo
+            echo "Target libnl-tiny development interface:"
+            for f in usr/lib/libnl-tiny.so usr/lib/libnl-tiny.so.1; do
+              test -e "$TARGET_STAGING/$f" && printf "PASS %s\\n" "$TARGET_STAGING/$f"
+            done
+            find "$TARGET_STAGING/usr/include/libnl-tiny" -type f -print | sort
+            echo
+            echo "Target runtime:"
+            printf "PASS %s\\n" "$LIBGCC_SO"
+            echo
+            echo "MTK WAPP UAPI:"
+            printf "Kernel source: %s\\n" "$KERNEL_DIR"
+            for f in "$WAPP_UAPI_DIR/wapp_cmm_type.h" "$WAPP_UAPI_DIR/mt_wlan_cmm_oid.h"; do
+              printf "PASS %s\\n" "$f"
+            done
+            echo
+            echo "EasyMesh source archive checksums:"
+            sha256sum dl/wappd-80ca5724.tar.bz2 dl/mapd-6eca4331.tar.bz2 dl/1905daemon-35234223.tar.bz2 dl/libmapd-0132d199.tar.bz2
+          } > "$MATRIX"
+          cat "$MATRIX"
+
+      - name: Compile EasyMesh package only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts/easymesh-quick
+          LOG="artifacts/easymesh-quick/easymesh-source-compile.log"
+          # Build the package's source .built stamp directly. Even the package-local
+          # "compile" goal enters APK generation and CheckDependencies; that is
+          # Full-mode runtime packaging work and caused Run #53's libc.so/libgcc_s
+          # package-metadata failure. Quick validates only the six source outputs.
+          EASYMESH_BUILD_DIR="$GITHUB_WORKSPACE/build_dir/target-aarch64_cortex-a53_musl/easymesh-n60-7.6.7.3"
+          make -C package/mtk/applications/easymesh-n60 TOPDIR="$GITHUB_WORKSPACE" \
+            "$EASYMESH_BUILD_DIR/.built" -j"$(nproc)" V=s 2>&1 | tee "$LOG"
+          test -s "$EASYMESH_BUILD_DIR/.built" || {
+            echo "::error::EasyMesh source-build stamp was not produced."; exit 1;
+          }
+          if grep -Eq 'gen-dependencies\.sh|apk mkpkg|package/kernel/(gpio-button-hotplug|mapfilter)/compile' "$LOG"; then
+            echo "::error::Quick entered APK dependency scanning or the global kernel-module scheduler."
+            exit 1
+          fi
+
+          WAPP_BIN="$(find build_dir -type f -path '*/easymesh-n60*/wappd/wapp' -print -quit)"
+          test -n "$WAPP_BIN" || { echo "::error::Source-built WAPP was not found."; exit 1; }
+          SRC_DIR="$(dirname "$(dirname "$WAPP_BIN")")"
+          MAPD_BIN="$SRC_DIR/mapd/mapd"
+          P1905_BIN="$SRC_DIR/1905daemon/p1905_managerd"
+          WAPPCTRL_BIN="$SRC_DIR/wappd/wappctrl"
+          ETH_OPS_LIB="$SRC_DIR/1905daemon/ethernet/libeth_1905ops.so"
+          MAPD_IF_LIB="$SRC_DIR/libmapd/libmapd_interface_client.so"
+
+          for f in "$WAPP_BIN" "$MAPD_BIN" "$P1905_BIN" "$WAPPCTRL_BIN" "$ETH_OPS_LIB" "$MAPD_IF_LIB"; do
+            test -s "$f" || { echo "::error::Missing source-built output: $f"; exit 1; }
+            readelf -h "$f" | grep -Fq 'AArch64' || { echo "::error::Not an AArch64 ELF: $f"; exit 1; }
+          done
+          readelf -d "$WAPP_BIN" | grep -Fq 'libkvcutil.so.1'
+          readelf -d "$WAPP_BIN" | grep -Fq 'libssl.so.3'
+          readelf -d "$WAPP_BIN" | grep -Fq 'libcrypto.so.3'
+          readelf -d "$P1905_BIN" | grep -Fq 'libnl-tiny.so.1'
+          readelf -d "$P1905_BIN" | grep -Fq 'libeth_1905ops.so'
+          readelf -d "$P1905_BIN" | grep -Fq 'libssl.so.3'
+          readelf -d "$P1905_BIN" | grep -Fq 'libcrypto.so.3'
+          if readelf -d "$WAPP_BIN" "$P1905_BIN" 2>/dev/null | grep -Eq 'lib(ssl|crypto)[.]so[.]1[.]1'; then
+            echo "::error::Obsolete OpenSSL 1.1 dependency detected."
+            exit 1
+          fi
+          for symbol in wapp_read_wts_map_config /etc/map/wts_bss_info_config wapp_socket_and_ctrl_inf_init driver_rrm_onoff driver_wnm_btm_onoff wapp_send_btm_req_11kv_api; do
+            strings -a "$WAPP_BIN" | grep -Fq "$symbol" || { echo "::error::WAPP missing required WTS/11k/11v path: $symbol"; exit 1; }
+          done
+          for symbol in STEER_FSM topo_srv_handle_topology_event steer_fsm_trigger parse_client_steering_btm_report_message; do
+            strings -a "$MAPD_BIN" | grep -Fq "$symbol" || { echo "::error::MAPD missing steering/topology path: $symbol"; exit 1; }
+          done
+          for symbol in "read wts_bss_info_config to ctx->bss_config" "send topology discovery data" "Topology Discovery"; do
+            strings -a "$P1905_BIN" | grep -Fq "$symbol" || { echo "::error::P1905 missing WTS/topology path: $symbol"; exit 1; }
+          done
+
+          cp "$WAPP_BIN" "$MAPD_BIN" "$P1905_BIN" "$WAPPCTRL_BIN" "$ETH_OPS_LIB" "$MAPD_IF_LIB" artifacts/easymesh-quick/
+          {
+            echo "Build revision: $(git rev-parse HEAD)"
+            echo "Build scope: source .built only; APK packaging and runtime dependency scanning are deferred to Full."
+            echo "Source build directory: $SRC_DIR"
+            echo "===== Dynamic dependencies: WAPP ====="
+            readelf -d "$WAPP_BIN" | grep NEEDED
+            echo "===== Dynamic dependencies: P1905 ====="
+            readelf -d "$P1905_BIN" | grep NEEDED
+            echo "===== Source-built EasyMesh binary checksums ====="
+            sha256sum "$WAPP_BIN" "$MAPD_BIN" "$P1905_BIN" "$WAPPCTRL_BIN" "$ETH_OPS_LIB" "$MAPD_IF_LIB"
+          } > artifacts/easymesh-quick/QUICK-BUILD-INFO.txt
+          echo "PASS: WAPP, MAPD, P1905, wappctrl and both shared libraries source-built and audited; no APK packaging was run."
+
+      - name: Upload EasyMesh Quick Build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: n60pro-easymesh-quick-${{ github.run_number }}
+          path: artifacts/easymesh-quick/
+          if-no-files-found: error
+          retention-days: 14
+ .config)"
+            echo "MT Wi-Fi source SHA256:"
+            sha256sum dl/mt79xx_20250408-705eb4.tar.xz
+            echo "MT Wi-Fi patch application:"
+            grep -E '094-fix-wnm-fortify|095-fix-wnm-fortify-rsp|096-wnm-fix-send-btm-req-fortify' "$MT_WIFI_PREPARE_LOG"
+            echo
             echo "Declared PKG_BUILD_DEPENDS:"
             grep '^PKG_BUILD_DEPENDS' package/mtk/applications/easymesh-n60/Makefile
             echo
