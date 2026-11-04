@@ -336,7 +336,13 @@ jobs:
               exit 1
             fi
           done
-          echo "PASS: AP module mode, Band Steering, MBO and MAP are enabled."
+          grep -qx 'CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y' .config || {
+            echo "::error::N60 EasyMesh 7.6.7.3 requires MT Wi-Fi driver version 7.6.7.3."
+            exit 1
+          }
+          grep -qx 'CONFIG_MTK_MAP_R2_VER_SUPPORT=y' .config
+          grep -qx 'CONFIG_MTK_MAP_R3_VER_SUPPORT=y' .config
+          echo "PASS: AP mode, Band Steering, MBO, MAP R2/R3 and MT Wi-Fi 7.6.7.3 compatibility lock are enabled."
 
           echo "===== Save minimal Kconfig for audit ====="
           KCONFIG_CONFIG=.config ./scripts/config/conf --savedefconfig="artifacts/$DEVICE/$PROFILE/config.savedefconfig" Config.in
