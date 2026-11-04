@@ -76,6 +76,11 @@ runs:
         grep -Fq 'patch -d $(PKG_BUILD_DIR) -p1 < ./patches/002-dpp-parser-safety.patch' package/mtk/applications/easymesh-n60/Makefile
         grep -Fq 'patch -d $(PKG_BUILD_DIR) -p1 < ./patches/003-wapp-gcc14-copy-semantics.patch' package/mtk/applications/easymesh-n60/Makefile
         test -s package/mtk/applications/easymesh-n60/patches/004-libmapd-target-flags.patch
+        HOTSPOT_PATCH="package/mtk/applications/easymesh-n60/patches/005-wapp-hotspot-realloc-pointer-arithmetic.patch"
+        test -s "$HOTSPOT_PATCH" || { echo "::error::WAPP hotspot realloc pointer fix is missing."; exit 1; }
+        grep -Fq 'patch -d $(PKG_BUILD_DIR) -p1 < ./patches/005-wapp-hotspot-realloc-pointer-arithmetic.patch' "$PKG_MAKEFILE" || {
+          echo "::error::WAPP hotspot realloc fix is not applied during Build/Prepare."; exit 1;
+        }
         grep -Fq 'patch -d $(PKG_BUILD_DIR) -p1 < ./patches/004-libmapd-target-flags.patch' package/mtk/applications/easymesh-n60/Makefile
         grep -Fq 'LDFLAGS="$(TARGET_LDFLAGS)"' package/mtk/applications/easymesh-n60/Makefile || {
           echo "::error::libmapd must receive target link flags."; exit 1;
@@ -381,6 +386,7 @@ runs:
         WAPP_SRC="$AUDIT_ROOT/wappd"
         PATCH="package/mtk/applications/easymesh-n60/patches/002-dpp-parser-safety.patch"
         COPY_PATCH="package/mtk/applications/easymesh-n60/patches/003-wapp-gcc14-copy-semantics.patch"
+        HOTSPOT_PATCH="package/mtk/applications/easymesh-n60/patches/005-wapp-hotspot-realloc-pointer-arithmetic.patch"
         test -s "$PATCH"
         test -s "$COPY_PATCH"
         test -s "$WAPP_SRC/common/main.c"
@@ -389,6 +395,26 @@ runs:
         patch -d "$AUDIT_ROOT" -p1 < "$PATCH"
         patch --dry-run -d "$AUDIT_ROOT" -p1 < "$COPY_PATCH"
         patch -d "$AUDIT_ROOT" -p1 < "$COPY_PATCH"
+        test -s "$WAPP_SRC/hotspot/hotspot.c"
+        patch --dry-run -d "$AUDIT_ROOT" -p1 < "$HOTSPOT_PATCH"
+        patch -d "$AUDIT_ROOT" -p1 < "$HOTSPOT_PATCH"
+        python3 - "$WAPP_SRC/hotspot/hotspot.c" <<'PY'
+        import pathlib, sys
+        source = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+        expected = [
+            "os_memset((u8 *)vname_duple_new + size, 0, more_size);",
+            "os_memset((u8 *)realm_data_new + size, 0, more_size);",
+            "os_memset((u8 *)authparam_new + size, 0, more_size);",
+            "os_memset((u8 *)op_name_duple_new + size, 0, more_size);",
+        ]
+        for line in expected:
+            if source.count(line) != 1:
+                raise SystemExit("ERROR: expected exactly one repaired WAPP hotspot allocation write: " + line)
+        forbidden = ["os_memset(vname_duple_new + size", "os_memset(realm_data_new + size", "os_memset(authparam_new + size", "os_memset(op_name_duple + size"]
+        if any(token in source for token in forbidden):
+            raise SystemExit("ERROR: unsafe typed-pointer arithmetic or stale pre-realloc pointer remains in hotspot parser.")
+        print("PASS: all four WAPP hotspot realloc writes use byte offsets and the post-realloc pointer.")
+        PY
         python3 - "$WAPP_SRC/include/map_1905.h" <<'PY'
         import pathlib, sys
         p = pathlib.Path(sys.argv[1])
