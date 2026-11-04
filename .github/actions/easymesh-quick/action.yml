@@ -75,6 +75,11 @@ runs:
         test -s "$DPP_PATCH" || { echo "::error::DPP parser safety patch is missing."; exit 1; }
         grep -Fq 'patch -d $(PKG_BUILD_DIR) -p1 < ./patches/002-dpp-parser-safety.patch' package/mtk/applications/easymesh-n60/Makefile
         grep -Fq 'patch -d $(PKG_BUILD_DIR) -p1 < ./patches/003-wapp-gcc14-copy-semantics.patch' package/mtk/applications/easymesh-n60/Makefile
+        test -s package/mtk/applications/easymesh-n60/patches/004-libmapd-target-flags.patch
+        grep -Fq 'patch -d $(PKG_BUILD_DIR) -p1 < ./patches/004-libmapd-target-flags.patch' package/mtk/applications/easymesh-n60/Makefile
+        grep -Fq 'LDFLAGS="$(TARGET_LDFLAGS)"' package/mtk/applications/easymesh-n60/Makefile || {
+          echo "::error::libmapd must receive target link flags."; exit 1;
+        }
         grep -Fq 'AR="$(TARGET_AR)" RANLIB="$(TARGET_RANLIB)"' package/mtk/applications/easymesh-n60/Makefile || {
           echo "::error::P1905 DSA bridge archive must use the target AR/RANLIB tools."; exit 1;
         }
@@ -455,6 +460,21 @@ runs:
         grep -Fq 'os_memcpy(vname_duple->language, token, 3)' package/mtk/applications/easymesh-n60/patches/003-wapp-gcc14-copy-semantics.patch
         grep -Fq 'p.read_bytes()' package/mtk/applications/easymesh-n60/Makefile
         echo "PASS: WAPP copy warnings are fixed at source level; P1905 DSA archive uses target binutils."
+    - name: Audit libmapd target compile and link flags
+      shell: bash
+      run: |
+        set -euo pipefail
+        AUDIT_ROOT="$RUNNER_TEMP/n60-libmapd-audit"
+        rm -rf "$AUDIT_ROOT"
+        mkdir -p "$AUDIT_ROOT"
+        tar -xjf dl/libmapd-0132d199.tar.bz2 -C "$AUDIT_ROOT"
+        PATCH="package/mtk/applications/easymesh-n60/patches/004-libmapd-target-flags.patch"
+        test -s "$PATCH"
+        patch --dry-run -d "$AUDIT_ROOT" -p1 < "$PATCH"
+        patch -d "$AUDIT_ROOT" -p1 < "$PATCH"
+        grep -Fq '$(CFLAGS) -I ./include -c -fPIC' "$AUDIT_ROOT/libmapd/Makefile"
+        grep -Fq '$(CC) $(LDFLAGS) -shared -o $@ $^' "$AUDIT_ROOT/libmapd/Makefile"
+        echo "PASS: both libmapd object compilation and shared-library link consume target toolchain flags."
     - name: Download only EasyMesh build dependencies
       shell: bash
       run: |
@@ -526,6 +546,12 @@ runs:
         done
         grep -Fq 'SIOCGMIIREG' "$EASYMESH_BUILD_DIR/1905daemon/ethernet/mediatek_DSA/eth_ops_dsa.c" || {
           echo "::error::N60 Linux 6.12 DSA ioctl patch was not applied to P1905 source."; exit 1;
+        }
+        grep -Fq '$(CFLAGS) -I ./include -c -fPIC' "$EASYMESH_BUILD_DIR/libmapd/Makefile" || {
+          echo "::error::libmapd target compile flags patch was not applied."; exit 1;
+        }
+        grep -Fq '$(CC) $(LDFLAGS) -shared -o $@ $^' "$EASYMESH_BUILD_DIR/libmapd/Makefile" || {
+          echo "::error::libmapd target link flags patch was not applied."; exit 1;
         }
         echo "PASS: datconf and all four EasyMesh source trees prepared; patch application verified before toolchain build."
         make toolchain/install -j"$(nproc)" V=s

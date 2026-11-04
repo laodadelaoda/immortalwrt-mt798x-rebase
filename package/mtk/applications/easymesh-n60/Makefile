@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=easymesh-n60
 PKG_VERSION:=7.6.7.3
-PKG_RELEASE:=19
+PKG_RELEASE:=20
 PKG_BUILD_DEPENDS:=datconf openssl libnl-tiny
 PKG_BUILD_PARALLEL:=1
 
@@ -43,6 +43,7 @@ define Build/Prepare
 	tar -xjf '$(DL_DIR)/libmapd-0132d199.tar.bz2' -C $(PKG_BUILD_DIR); \
 	patch -d $(PKG_BUILD_DIR) -p1 < ./patches/002-dpp-parser-safety.patch; \
 	patch -d $(PKG_BUILD_DIR) -p1 < ./patches/003-wapp-gcc14-copy-semantics.patch; \
+	patch -d $(PKG_BUILD_DIR) -p1 < ./patches/004-libmapd-target-flags.patch; \
 	python3 -c 'from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/wappd/include/map_1905.h"); b=p.read_bytes(); old1=b"struct GNU_PACKED air_monitor_query_rsp{"; old2=b"struct GNU_PACKED bh_assoc_ctrl {"; assert b.count(old1)==1 and b.count(old2)==1, "expected exactly two packed in-memory list structs"; b=b.replace(old1,b"struct air_monitor_query_rsp{",1); b=b.replace(old2,b"struct bh_assoc_ctrl {",1); p.write_bytes(b); print("Removed packed attributes from in-memory list nodes:",p)'; \
 	python3 -c 'from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/wappd/common/main.c"); s=p.read_text(encoding="utf-8"); old_decl="u16 cred_len = 0, is_1905_conn = 0, is_normal = 0;"; new_decl="u16 is_1905_conn = 0, is_normal = 0;"; old_set="\t\tcred_len = sizeof(*cred) + cred->payload_len;"; old_dead="#if 0\n\tcred_len = 0;"; new_dead="#if 0\n\tu16 cred_len = 0;\n\tcred_len = 0;"; assert s.count(old_decl)==1, "expected one DPP cred_len declaration"; assert s.count(old_set)==1, "expected one active DPP cred_len assignment"; assert s.count(old_dead)==1, "expected one disabled legacy BSS-credential block"; s=s.replace(old_decl,new_decl,1).replace(old_set,"",1).replace(old_dead,new_dead,1); p.write_text(s,encoding="utf-8"); print("N60 DPP: moved cred_len into the #if 0 legacy block and removed its active dead assignment:",p)'; \
 	python3 -c 'from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/wappd/dpp/dpp.h"); s=p.read_text(encoding="utf-8"); old="EC_KEY * EVP_PKEY_get0_EC_KEY(EVP_PKEY *pkey);"; assert s.count(old)==1, "expected exactly one legacy EVP_PKEY_get0_EC_KEY prototype"; p.write_text(s.replace(old, "", 1), encoding="utf-8"); print("Removed conflicting legacy EVP_PKEY_get0_EC_KEY prototype; use target OpenSSL declaration:", p)'; \
@@ -73,6 +74,7 @@ define Build/Compile
 	$(MAKE) -C $(PKG_BUILD_DIR)/libmapd \
 		CC="$(TARGET_CC)" \
 		CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Werror -g" \
+		LDFLAGS="$(TARGET_LDFLAGS)" \
 		all; \
 	test -s "$(STAGING_DIR)/usr/include/openssl/x509.h" || { echo "Missing target OpenSSL headers: $(STAGING_DIR)/usr/include/openssl/x509.h" >&2; exit 1; }; \
 	WAPP_COMPILE_LOG="$(PKG_BUILD_DIR)/wapp-compile.log"; \
