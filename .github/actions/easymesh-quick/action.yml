@@ -82,6 +82,16 @@ runs:
           echo "::error::WAPP hotspot realloc fix is not applied during Build/Prepare."; exit 1;
         }
         grep -Fq 'patch -d $(PKG_BUILD_DIR) -p1 < ./patches/004-libmapd-target-flags.patch' package/mtk/applications/easymesh-n60/Makefile
+        LIBBRIDGE_PATCH="package/mtk/applications/easymesh-n60/patches/006-p1905-libbridge-tool-propagation.patch"
+        test -s "$LIBBRIDGE_PATCH" || { echo "::error::P1905 recursive libbridge toolchain propagation patch is missing."; exit 1; }
+        grep -Fq 'patch -d $(PKG_BUILD_DIR) -p1 < ./patches/006-p1905-libbridge-tool-propagation.patch' package/mtk/applications/easymesh-n60/Makefile || {
+          echo "::error::P1905 recursive libbridge toolchain patch is not applied during Build/Prepare."; exit 1;
+        }
+        grep -Fq 'if grep -Eq' package/mtk/applications/easymesh-n60/Makefile || {
+          echo "::error::EasyMesh compiler logs are not checked for diagnostics hidden by inherited make flags."; exit 1;
+        }
+        grep -Fq 'P1905_COMPILE_LOG=' package/mtk/applications/easymesh-n60/Makefile
+        grep -Fq 'MAPD_COMPILE_LOG=' package/mtk/applications/easymesh-n60/Makefile
         grep -Fq 'LDFLAGS="$(TARGET_LDFLAGS)"' package/mtk/applications/easymesh-n60/Makefile || {
           echo "::error::libmapd must receive target link flags."; exit 1;
         }
@@ -486,6 +496,10 @@ runs:
         grep -Fq 'AR="$(TARGET_AR)" RANLIB="$(TARGET_RANLIB)"' package/mtk/applications/easymesh-n60/Makefile
         grep -Fq 'V=s all > ' package/mtk/applications/easymesh-n60/Makefile
         grep -Fq '2>&1 || { cat ' package/mtk/applications/easymesh-n60/Makefile
+        grep -Fq '006-p1905-libbridge-tool-propagation.patch' package/mtk/applications/easymesh-n60/Makefile
+        grep -Fq 'P1905 compiler log contains an error despite a successful make status' package/mtk/applications/easymesh-n60/Makefile
+        grep -Fq 'WAPP compiler log contains an error despite a successful make status' package/mtk/applications/easymesh-n60/Makefile
+        grep -Fq 'MAPD compiler log contains an error despite a successful make status' package/mtk/applications/easymesh-n60/Makefile
         grep -Fq 'os_memcpy(vname_duple->language, token, 3)' package/mtk/applications/easymesh-n60/patches/003-wapp-gcc14-copy-semantics.patch
         grep -Fq 'p.read_bytes()' package/mtk/applications/easymesh-n60/Makefile
         echo "PASS: WAPP copy warnings are fixed at source level; P1905 DSA archive uses target binutils."
@@ -581,6 +595,9 @@ runs:
         }
         grep -Fq '$(CC) $(LDFLAGS) -shared -o $@ $^' "$EASYMESH_BUILD_DIR/libmapd/Makefile" || {
           echo "::error::libmapd target link flags patch was not applied."; exit 1;
+        }
+        grep -Fq '$(MAKE) -C $(LIBDIR) AR="$(AR)" RANLIB="$(RANLIB)" CC="$(CC)"' "$EASYMESH_BUILD_DIR/1905daemon/ethernet/Makefile" || {
+          echo "::error::P1905 libbridge recursive make did not receive target AR/RANLIB/CC variables."; exit 1;
         }
         echo "PASS: datconf and all four EasyMesh source trees prepared; patch application verified before toolchain build."
         make toolchain/install -j"$(nproc)" V=s
