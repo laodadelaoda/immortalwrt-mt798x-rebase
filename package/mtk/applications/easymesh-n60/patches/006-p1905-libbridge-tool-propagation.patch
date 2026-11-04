@@ -1,5 +1,14 @@
---- a/1905daemon/ethernet/Makefile
-+++ b/1905daemon/ethernet/Makefile
+--- a/1905daemon/Makefile
++++ b/1905daemon/Makefile
+@@ -149,7 +149,7 @@ all: $(ETH_OPS_LIB_DIR) $(BIN) $(EXPORT_LIB) $(CTRL_EXEC)
+ 
+ eth_ops_lib:
+ 	cd $(ETH_OPS_LIB_DIR) && $(MAKE) clean
+-	make -C $(ETH_OPS_LIB_DIR)
++	$(MAKE) -C $(ETH_OPS_LIB_DIR) AR="$(AR)" RANLIB="$(RANLIB)" CC="$(CC)" CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" INCLUDE="$(INCLUDES)"
+ 
+ ifeq ($(MAP_R3_SUPPORT),y)
+ $(BIN): $(OBJS) eth_ops_lib $(CRYPTO_LIB) sp_ut
 @@ -25,7 +25,7 @@ all: $(ETH_OPS_LIB) $(ETH_OPS_LIB_OBJS) $(EXTRA_LIB)
  
  ifeq ($(SWITCH_TYPE), mediatek_dsa)
