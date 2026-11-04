@@ -118,6 +118,21 @@ runs:
           echo "::error::P1905 DSA runtime config is not installed."
           exit 1
         }
+        # GNU Make expands single-dollar shell variables inside package recipes.
+        # Reject unescaped shell variables in Build/Prepare before any toolchain work.
+        python3 - <<'PY'
+        import pathlib, re
+        path = pathlib.Path("package/mtk/applications/easymesh-n60/Makefile")
+        text = path.read_text(encoding="utf-8")
+        try:
+            prepare = text.split("define Build/Prepare", 1)[1].split("endef", 1)[0]
+        except IndexError:
+            raise SystemExit("ERROR: easymesh-n60 Build/Prepare section is missing")
+        bad = sorted(set(re.findall(r"(?<!\$)\$(?!\$)[A-Za-z_][A-Za-z0-9_]*", prepare)))
+        if bad:
+            raise SystemExit("ERROR: unescaped shell variable(s) in GNU Make Build/Prepare: " + ", ".join(bad) + "; use $VAR")
+        print("PASS: Build/Prepare contains no unescaped shell-variable references.")
+        PY
         DSA_PATCH="package/mtk/applications/easymesh-n60/patches/001-dsa-use-linux-mii-ioctl.patch"
         test -s "$DSA_PATCH"
         grep -q 'SIOCGMIIREG' "$DSA_PATCH"
