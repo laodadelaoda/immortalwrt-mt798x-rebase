@@ -1,6 +1,23 @@
 name: Build N60 Pro - ImmortalWrt 25.12 (Standard Only)
 
 on:
+  push:
+    branches: ["n60pro-mtk-closed-driver"]
+    paths:
+      - "package/**"
+      - "target/**"
+      - "toolchain/**"
+      - "tools/**"
+      - "include/**"
+      - "scripts/**"
+      - "config/**"
+      - "feeds.conf.default"
+      - "files/**"
+      - "Makefile"
+      - "rules.mk"
+      - ".github/workflows/main.yml"
+      - ".github/workflows/easymesh-quick.yml"
+      - ".github/actions/easymesh-quick/**"
   workflow_dispatch:
     inputs:
       device:
@@ -11,7 +28,25 @@ on:
         options:
           - netcore_n60-pro
 jobs:
+  # Quick runs as a normal job in this workflow, so Full cannot start until
+  # compatibility checks and the real EasyMesh userspace source build pass.
+  quick_compatibility:
+    name: Quick compatibility gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+      - name: Run shared Quick compatibility and EasyMesh source-build gate
+        uses: ./.github/actions/easymesh-quick
+        with:
+          device: ${{ github.event.inputs.device || 'netcore_n60-pro' }}
+
   build:
+    needs: quick_compatibility
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
