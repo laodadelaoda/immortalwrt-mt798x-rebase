@@ -146,23 +146,3 @@
  					DBGPRINT(RT_DEBUG_TRACE, "operator friendly name:%s , strlen:%zu\n", token,os_strlen(token));
  					dl_list_add_tail(&conf->operator_friendly_duple_list, &op_name_duple->list);
  					conf->op_friendly_name_nums++;
---- a/wappd/include/map_1905.h
-+++ b/wappd/include/map_1905.h
-@@ -151,7 +151,7 @@
- #define AIR_MONITOR_QUERY_TIMEOUT			750000U /* micro seconds*/
- #define WPS_TIMEOUT							150 // 2.5 min
- #define RRM_REQUEST_TIMEOUT					5
--struct GNU_PACKED air_monitor_query_rsp{
-+struct air_monitor_query_rsp{
- 	struct dl_list list;
- 	unsigned char almac[ETH_ALEN];
- 	unsigned int bitmap;
-@@ -163,7 +163,7 @@
- 	unsigned int profile2_bh_assoc_disallow;
- };
- 
--struct GNU_PACKED bh_assoc_ctrl {
-+struct bh_assoc_ctrl {
- 	struct dl_list list;
- 	struct bh_assoc_disallow_info bh_ctrl_info;
- };

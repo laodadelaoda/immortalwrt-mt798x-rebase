@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=easymesh-n60
 PKG_VERSION:=7.6.7.3
-PKG_RELEASE:=17
+PKG_RELEASE:=18
 PKG_BUILD_DEPENDS:=datconf openssl libnl-tiny
 PKG_BUILD_PARALLEL:=1
 
@@ -43,6 +43,7 @@ define Build/Prepare
 	tar -xjf '$(DL_DIR)/libmapd-0132d199.tar.bz2' -C $(PKG_BUILD_DIR); \
 	patch -d $(PKG_BUILD_DIR) -p1 < ./patches/002-dpp-parser-safety.patch; \
 	patch -d $(PKG_BUILD_DIR) -p1 < ./patches/003-wapp-gcc14-copy-semantics.patch; \
+	python3 -c 'from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/wappd/include/map_1905.h"); b=p.read_bytes(); pairs=[(b"struct GNU_PACKED air_monitor_query_rsp{", b"struct air_monitor_query_rsp{"), (b"struct GNU_PACKED bh_assoc_ctrl {", b"struct bh_assoc_ctrl {")]; [(None if b.count(old)==1 else (_ for _ in ()).throw(AssertionError("expected one packed in-memory list struct: "+old.decode()))) for old,new in pairs]; [None for old,new in pairs if not (b:=b.replace(old,new,1))]; p.write_bytes(b); print("Removed packed attribute from in-memory list nodes:",p)'; \
 	python3 -c 'from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/wappd/common/main.c"); s=p.read_text(encoding="utf-8"); old_decl="u16 cred_len = 0, is_1905_conn = 0, is_normal = 0;"; new_decl="u16 is_1905_conn = 0, is_normal = 0;"; old_set="\t\tcred_len = sizeof(*cred) + cred->payload_len;"; old_dead="#if 0\n\tcred_len = 0;"; new_dead="#if 0\n\tu16 cred_len = 0;\n\tcred_len = 0;"; assert s.count(old_decl)==1, "expected one DPP cred_len declaration"; assert s.count(old_set)==1, "expected one active DPP cred_len assignment"; assert s.count(old_dead)==1, "expected one disabled legacy BSS-credential block"; s=s.replace(old_decl,new_decl,1).replace(old_set,"",1).replace(old_dead,new_dead,1); p.write_text(s,encoding="utf-8"); print("N60 DPP: moved cred_len into the #if 0 legacy block and removed its active dead assignment:",p)'; \
 	python3 -c 'from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/wappd/dpp/dpp.h"); s=p.read_text(encoding="utf-8"); old="EC_KEY * EVP_PKEY_get0_EC_KEY(EVP_PKEY *pkey);"; assert s.count(old)==1, "expected exactly one legacy EVP_PKEY_get0_EC_KEY prototype"; p.write_text(s.replace(old, "", 1), encoding="utf-8"); print("Removed conflicting legacy EVP_PKEY_get0_EC_KEY prototype; use target OpenSSL declaration:", p)'; \
 	python3 -c 'import re; from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/wappd/common/ctrl_iface_unix.c"); s=p.read_text(encoding="utf-8"); rx=re.compile(r"os_strncpy\(tmp_confname,\s*confname,\s*strlen\(confname\)\s*-\s*strlen\(tmp_ptr\)\s*\)"); s2,n=rx.subn("os_memcpy(tmp_confname, confname, strlen(confname) - strlen(tmp_ptr))",s); assert n==6, "expected exactly six WAPP path-prefix copies; found %d" % n; p.write_text(s2,encoding="utf-8"); print("WAPP GCC -Wstringop-truncation: converted six exact-length path-prefix copies to os_memcpy; explicit NUL writes retained:",p)'; \

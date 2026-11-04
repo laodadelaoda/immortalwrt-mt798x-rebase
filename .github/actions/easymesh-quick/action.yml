@@ -385,6 +385,19 @@ runs:
         patch -d "$AUDIT_ROOT" -p1 < "$PATCH"
         patch --dry-run -d "$AUDIT_ROOT" -p1 < "$COPY_PATCH"
         patch -d "$AUDIT_ROOT" -p1 < "$COPY_PATCH"
+        python3 - "$WAPP_SRC/include/map_1905.h" <<'PY'
+        import pathlib, sys
+        p = pathlib.Path(sys.argv[1])
+        b = p.read_bytes()
+        pairs = [
+            (b"struct GNU_PACKED air_monitor_query_rsp{", b"struct air_monitor_query_rsp{"),
+            (b"struct GNU_PACKED bh_assoc_ctrl {", b"struct bh_assoc_ctrl {"),
+        ]
+        for old, new in pairs:
+            assert b.count(old) == 1, "expected one packed in-memory list structure: " + old.decode()
+            b = b.replace(old, new, 1)
+        p.write_bytes(b)
+        PY
         python3 - "$WAPP_SRC" <<'PY'
         import pathlib, re, sys
         root = pathlib.Path(sys.argv[1])
