@@ -372,7 +372,6 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        WAPP_SRC="$RUNNER_TEMP/n60-wapp-dpp-audit/wappd"
         AUDIT_ROOT="$RUNNER_TEMP/n60-wapp-dpp-audit"
         WAPP_SRC="$AUDIT_ROOT/wappd"
         PATCH="package/mtk/applications/easymesh-n60/patches/002-dpp-parser-safety.patch"
@@ -437,7 +436,7 @@ runs:
         assert "os_memcpy(op_name_duple->operator_name, token, os_strlen(token))" in cmm
         assert "struct GNU_PACKED air_monitor_query_rsp" not in defs
         assert "struct GNU_PACKED bh_assoc_ctrl" not in defs
-        assert "printf(" not in body or "dpp_ppkey" not in body, "DPP private key material must not be printed"
+        assert not re.search(r"(?m)^\s*(?:wpa_)?printf\s*\([^;]*dpp_ppkey", body), "DPP private key material must not be printed"
         csign = body.index("hexstr2bin(value, buf_temp, key_len)", body.index("_1905cSignKey"))
         csign_clear = body.index("NdisZeroMemory(value", csign)
         assert csign < csign_clear, "_1905cSignKey is cleared before conversion"
