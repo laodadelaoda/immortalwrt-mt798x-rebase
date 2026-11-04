@@ -85,32 +85,32 @@ define Build/Compile
 		CC="$(TARGET_CC)" EXTRA_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Wno-deprecated-declarations -I$(LINUX_DIR)/include/uapi/linux/wapp" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto" \
 		V=s all > "$$$$WAPP_COMPILE_LOG" 2>&1 || { cat "$$$$WAPP_COMPILE_LOG"; exit 1; }; \
-	if grep -Eq '(^|: )error:|make(\[[0-9]+\])?: \*\*\*' "$$WAPP_COMPILE_LOG"; then cat "$$WAPP_COMPILE_LOG"; echo "WAPP compiler log contains an error despite a successful make status" >&2; exit 1; fi; \
-	cat "$$WAPP_COMPILE_LOG"; \
-	grep -F 'common/main.c' "$$WAPP_COMPILE_LOG" | grep -Fq -- '-Werror' || { echo "WAPP compile command lost -Werror" >&2; exit 1; }; \
+	if grep -Eq '(^|: )error:|make(\[[0-9]+\])?: \*\*\*' "$$$$WAPP_COMPILE_LOG"; then cat "$$$$WAPP_COMPILE_LOG"; echo "WAPP compiler log contains an error despite a successful make status" >&2; exit 1; fi; \
+	cat "$$$$WAPP_COMPILE_LOG"; \
+	grep -F 'common/main.c' "$$$$WAPP_COMPILE_LOG" | grep -Fq -- '-Werror' || { echo "WAPP compile command lost -Werror" >&2; exit 1; }; \
 	! grep -Fq 'unused-but-set-variable' "$$$$WAPP_COMPILE_LOG" || { echo "WAPP still emits an unused-but-set-variable diagnostic after the DPP source fix" >&2; exit 1; }; \
 	echo "PASS: WAPP common/main.c compiled with -Werror and no unused-but-set-variable diagnostic; no warning suppression used."; \
 	mkdir -p $(PKG_BUILD_DIR)/1905daemon/obj; \
 	P1905_COMPILE_LOG="$(PKG_BUILD_DIR)/p1905-compile.log"; \
-	EXTRA_CFLAGS="$$OPENWRT_EASYMESH_CFLAGS" $(MAKE) -C $(PKG_BUILD_DIR)/1905daemon \
+	EXTRA_CFLAGS="$$$$OPENWRT_EASYMESH_CFLAGS" $(MAKE) -C $(PKG_BUILD_DIR)/1905daemon \
 		TOPDIR="$(TOPDIR)" ROOTDIR="$(TOPDIR)" \
 		LINUXDIR="$(patsubst $(TOPDIR)/%,%,$(LINUX_DIR))" \
 		STAGING_DIR="$(STAGING_DIR)" \
 		CONFIG_MAP_R2_SUPPORT=y CONFIG_MAP_R3_SUPPORT=y MAP_R3_SUPPORT=y SWTICH_DSA_ARCH=y \
 		CC="$(TARGET_CC)" AR="$(TARGET_AR)" RANLIB="$(TARGET_RANLIB)" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib -Wl,--no-as-needed -lpthread -lnl-tiny -lssl -lcrypto" \
-		all > "$$P1905_COMPILE_LOG" 2>&1 || { cat "$$P1905_COMPILE_LOG"; exit 1; }; \
-	if grep -Eq '(^|: )error:|make(\[[0-9]+\])?: \*\*\*' "$$P1905_COMPILE_LOG"; then cat "$$P1905_COMPILE_LOG"; echo "P1905 compiler log contains an error despite a successful make status" >&2; exit 1; fi; \
-	cat "$$P1905_COMPILE_LOG"; \
+		all > "$$$$P1905_COMPILE_LOG" 2>&1 || { cat "$$$$P1905_COMPILE_LOG"; exit 1; }; \
+	if grep -Eq '(^|: )error:|make(\[[0-9]+\])?: \*\*\*' "$$$$P1905_COMPILE_LOG"; then cat "$$$$P1905_COMPILE_LOG"; echo "P1905 compiler log contains an error despite a successful make status" >&2; exit 1; fi; \
+	cat "$$$$P1905_COMPILE_LOG"; \
 	MAPD_COMPILE_LOG="$(PKG_BUILD_DIR)/mapd-compile.log"; \
 	$(MAKE) -C $(PKG_BUILD_DIR)/mapd \
 		TOPDIR="$(TOPDIR)" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R2_SUPPORT=y CONFIG_MAP_R3_SUPPORT=y \
 		CC="$(TARGET_CC)" LDO="$(TARGET_CC)" \
-		EXTRA_CFLAGS="$$OPENWRT_EASYMESH_CFLAGS" \
+		EXTRA_CFLAGS="$$$$OPENWRT_EASYMESH_CFLAGS" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib" \
-		version mapd > "$$MAPD_COMPILE_LOG" 2>&1 || { cat "$$MAPD_COMPILE_LOG"; exit 1; }; \
-	if grep -Eq '(^|: )error:|make(\[[0-9]+\])?: \*\*\*' "$$MAPD_COMPILE_LOG"; then cat "$$MAPD_COMPILE_LOG"; echo "MAPD compiler log contains an error despite a successful make status" >&2; exit 1; fi; \
-	cat "$$MAPD_COMPILE_LOG"; \
+		version mapd > "$$$$MAPD_COMPILE_LOG" 2>&1 || { cat "$$$$MAPD_COMPILE_LOG"; exit 1; }; \
+	if grep -Eq '(^|: )error:|make(\[[0-9]+\])?: \*\*\*' "$$$$MAPD_COMPILE_LOG"; then cat "$$$$MAPD_COMPILE_LOG"; echo "MAPD compiler log contains an error despite a successful make status" >&2; exit 1; fi; \
+	cat "$$$$MAPD_COMPILE_LOG"; \
 	test -x $(PKG_BUILD_DIR)/wappd/wapp; \
 	test -x $(PKG_BUILD_DIR)/wappd/wappctrl; \
 	test -x $(PKG_BUILD_DIR)/mapd/mapd; \
