@@ -71,6 +71,15 @@ runs:
         grep -qx 'bss_config_priority=ra0;rax0' "$ROOT/etc/map/mapd_cfg"
         grep -qx 'bss_config_priority=ra0;rax0;apclix0' "$ROOT/etc/map/1905d.cfg"
         ! grep -Eq '^map_(controller|agent)_alid=' "$ROOT/etc/map/1905d.cfg"
+        DPP_PATCH="package/mtk/applications/easymesh-n60/patches/002-dpp-parser-safety.patch"
+        test -s "$DPP_PATCH" || { echo "::error::DPP parser safety patch is missing."; exit 1; }
+        grep -Fq 'patch -d $(PKG_BUILD_DIR)/wappd -p1 < ./patches/002-dpp-parser-safety.patch' package/mtk/applications/easymesh-n60/Makefile
+        grep -Fq 'rm -rf $(PKG_BUILD_DIR)' package/mtk/applications/easymesh-n60/Makefile || {
+          echo "::error::EasyMesh Build/Prepare must remove restored stale source/object trees."; exit 1;
+        }
+        ! grep -Fq 'V=s all 2>&1 | tee' package/mtk/applications/easymesh-n60/Makefile || {
+          echo "::error::WAPP build still uses a failure-masking tee pipeline."; exit 1;
+        }
         PKG_MAKEFILE="package/mtk/applications/easymesh-n60/Makefile"
         DRIVER_MAKEFILE="package/mtk/drivers/mt_wifi/Makefile"
         DRIVER_CONFIG="package/mtk/drivers/mt_wifi/config.in"
@@ -354,6 +363,56 @@ runs:
         report.write_text("\n".join(out) + "\n", encoding="utf-8")
         print(report.read_text(encoding="utf-8"))
         print("PASS: DPP source/API audit completed before target toolchain build.")
+        PY
+    - name: Audit DPP caller, compile gates, configuration API and repaired credential parser
+      shell: bash
+      run: |
+        set -euo pipefail
+        WAPP_SRC="$RUNNER_TEMP/n60-wapp-dpp-audit/wappd"
+        PATCH="package/mtk/applications/easymesh-n60/patches/002-dpp-parser-safety.patch"
+        test -s "$PATCH"
+        test -s "$WAPP_SRC/common/main.c"
+        # Prove the patch applies to this exact pinned archive before the toolchain phase.
+        patch --dry-run -d "$WAPP_SRC" -p1 < "$PATCH"
+        patch -d "$WAPP_SRC" -p1 < "$PATCH"
+        python3 - "$WAPP_SRC" <<'PY'
+        import pathlib, re, sys
+        root = pathlib.Path(sys.argv[1])
+        main = (root / "common/main.c").read_text(encoding="utf-8")
+        caller = (root / "map/map_1905.c").read_text(encoding="utf-8")
+        header = (root / "dpp/dpp_wdev.h").read_text(encoding="utf-8")
+        getter = main[main.index("int get_dpp_parameters"):main.index("int dpp_read_config_file_for_connection")]
+        symbol = "dpp_read_config_file_for_connection"
+        assert len(re.findall(r"\b" + symbol + r"\s*\(", main)) == 1, "WAPP DPP implementation count changed"
+        assert len(re.findall(r"\b" + symbol + r"\s*\(", caller)) == 2, "Expected one active and one commented legacy caller"
+        assert re.search(r"int\s+" + symbol + r"\s*\(struct wifi_app \*wapp\)\s*\{", main)
+        assert re.search(r"int\s+" + symbol + r"\s*\(struct wifi_app \*wapp\)\s*;", header)
+        active = caller[caller.index("case WAPP_USER_GET_BH_WIRELESS_SETTING:"):caller.index("case WAPP_USER_SET_ETH_BH_DOWN:")]
+        assert "#ifdef MAP_R3" in active and "map_version == DEV_TYPE_R3" in active and "TurnKeyEnable == 1" in active
+        cfg = (root / "wappd_config").read_text(encoding="utf-8")
+        assert "ifeq ($(CONFIG_MAP_R3_SUPPORT), y)" in cfg and "CONFIG_DPP_SUPPORT=y" in cfg
+        mk = (root / "Makefile").read_text(encoding="utf-8")
+        assert "ifeq ($(CONFIG_DPP_SUPPORT),y)" in mk and "dpp/dpp_wired.o" in mk
+        assert "-lssl -lcrypto" in mk and "common/main.o" in mk
+        assert "dat_load(file)" in getter and "kvc_get(dat_ctx" in getter and "kvc_unload(dat_ctx)" in getter
+        assert "ret = -1;" in getter
+        # Check the patched parser, not merely the symbol name.
+        body = main[main.index("int " + symbol):main.index("\n}", main.index("int " + symbol)) + 2]
+        assert "os_memset(&auth, 0, sizeof(auth));" in body, "auth cleanup state is not initialized before early exits"
+        assert body.count("get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0") >= 10, "DPP config read failures are not propagated"
+        assert body.count("wpabuf_alloc(key_len)") == 2, "1905 DPP keys are not allocated using decoded byte lengths"
+        assert body.count("hexstr2bin(value, buf_temp, key_len)") == 2, "1905 DPP hex decode lengths are not byte-based"
+        assert "config[k].dpp_csign_len = os_strlen(value) / 2;" in body
+        assert "config[k].dpp_netaccesskey_len = os_strlen(value) / 2;" in body
+        assert "printf(" not in body or "dpp_ppkey" not in body, "DPP private key material must not be printed"
+        csign = body.index("hexstr2bin(value, buf_temp, key_len)", body.index("_1905cSignKey"))
+        csign_clear = body.index("NdisZeroMemory(value", csign)
+        assert csign < csign_clear, "_1905cSignKey is cleared before conversion"
+        assert "#ifdef MAP_R3_RECONFIG\n\tif (config[k].dpp_ppkey)" in body, "DPP ppkey error cleanup is missing"
+        util = (root / "common/util.c").read_text(encoding="utf-8")
+        hexfn = util[util.index("int hexstr2bin"):util.index("\n}", util.index("int hexstr2bin"))]
+        assert "hex will be double" in util and "for (i = 0; i < len; i++)" in hexfn
+        print("PASS: DPP implementation/declaration/call guard, MAP R3 compile gates, datconf API, key byte lengths, error propagation and cleanup verified.")
         PY
     - name: Download only EasyMesh build dependencies
       shell: bash
