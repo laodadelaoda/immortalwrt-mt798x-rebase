@@ -506,9 +506,6 @@ runs:
         grep -Fq 'WAPP compiler log contains an error despite a successful make status' package/mtk/applications/easymesh-n60/Makefile
         grep -Fq 'P1905 compiler log contains an error despite a successful make status' package/mtk/applications/easymesh-n60/Makefile
         grep -Fq 'MAPD compiler log contains an error despite a successful make status' package/mtk/applications/easymesh-n60/Makefile
-        grep -Fq 'P1905 compiler log contains an error despite a successful make status' package/mtk/applications/easymesh-n60/Makefile
-        grep -Fq 'WAPP compiler log contains an error despite a successful make status' package/mtk/applications/easymesh-n60/Makefile
-        grep -Fq 'MAPD compiler log contains an error despite a successful make status' package/mtk/applications/easymesh-n60/Makefile
         grep -Fq 'os_memcpy(vname_duple->language, token, 3)' package/mtk/applications/easymesh-n60/patches/003-wapp-gcc14-copy-semantics.patch
         grep -Fq 'p.read_bytes()' package/mtk/applications/easymesh-n60/Makefile
         echo "PASS: WAPP copy warnings are fixed at source level; P1905 DSA archive uses target binutils."
