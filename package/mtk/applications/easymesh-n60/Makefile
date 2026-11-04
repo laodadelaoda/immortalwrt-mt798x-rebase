@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=easymesh-n60
 PKG_VERSION:=7.6.7.3
-PKG_RELEASE:=20
+PKG_RELEASE:=21
 PKG_BUILD_DEPENDS:=datconf openssl libnl-tiny
 PKG_BUILD_PARALLEL:=1
 

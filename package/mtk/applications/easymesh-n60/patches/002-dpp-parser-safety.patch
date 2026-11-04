@@ -264,3 +264,22 @@
  	if (cred)
  		os_free(cred);
  	return -1;
+
+--- a/wappd/map/map_1905.c
++++ b/wappd/map/map_1905.c
+@@ -6277,8 +6277,13 @@
+ 			read_backhaul_configs(wapp);
+ #ifdef MAP_R3
+ 			if (wapp->map && (wapp->map->map_version == DEV_TYPE_R3)
+-				&& (wapp->map->TurnKeyEnable == 1))
+-				dpp_read_config_file_for_connection(wapp);
++				&& (wapp->map->TurnKeyEnable == 1)) {
++				if (dpp_read_config_file_for_connection(wapp) < 0) {
++					DBGPRINT(RT_DEBUG_ERROR, "[%s] DPP configuration parsing failed\n", __func__);
++					ret = MAP_ERROR;
++					break;
++				}
++			}
+ #endif
+ 			ret = MAP_SUCCESS;
+ 			break;

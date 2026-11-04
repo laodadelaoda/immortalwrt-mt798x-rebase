@@ -416,6 +416,8 @@ runs:
         assert re.search(r"int\s+" + symbol + r"\s*\(struct wifi_app \*wapp\)\s*;", header)
         active = caller[caller.index("case WAPP_USER_GET_BH_WIRELESS_SETTING:"):caller.index("case WAPP_USER_SET_ETH_BH_DOWN:")]
         assert "#ifdef MAP_R3" in active and "map_version == DEV_TYPE_R3" in active and "TurnKeyEnable == 1" in active
+        assert re.search(r"dpp_read_config_file_for_connection\(wapp\)\s*<\s*0", active), "DPP caller ignores parser failure"
+        assert "ret = MAP_ERROR;" in active, "DPP parser failure is not propagated to WAPP event result"
         cfg = (root / "wappd_config").read_text(encoding="utf-8")
         assert "ifeq ($(CONFIG_MAP_R3_SUPPORT), y)" in cfg and "CONFIG_DPP_SUPPORT=y" in cfg
         mk = (root / "Makefile").read_text(encoding="utf-8")
