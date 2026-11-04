@@ -64,7 +64,7 @@ define Build/Compile
 	WAPP_COMPILE_LOG="$(PKG_BUILD_DIR)/wapp-compile.log"; \
 	$(MAKE) -C $(PKG_BUILD_DIR)/wappd \
 		TOPDIR="$(TOPDIR)" UAPD_INCLUDE_PATH="$(LINUX_DIR)/include/uapi/linux/wapp -I$(STAGING_DIR)/usr/include" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R2_SUPPORT=y CONFIG_MAP_R3_SUPPORT=y \
-		CC="$(TARGET_CC)" CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -MMD -Wall -Werror -Wno-error=unused-but-set-variable -g -I$(LINUX_DIR)/include/uapi/linux/wapp" \
+		CC="$(TARGET_CC)" CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -MMD -Wall -Werror -Wno-deprecated-declarations -Wno-error=unused-but-set-variable -g -I$(LINUX_DIR)/include/uapi/linux/wapp" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto" \
 		V=s all 2>&1 | tee "$$WAPP_COMPILE_LOG"; \
 	grep -F 'common/main.c' "$$WAPP_COMPILE_LOG" | grep -Fq -- '-Wno-error=unused-but-set-variable' || { echo "WAPP compile command for common/main.c did not receive -Wno-error=unused-but-set-variable" >&2; exit 1; }; \
