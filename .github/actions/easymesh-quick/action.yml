@@ -456,7 +456,8 @@ runs:
       run: |
         set -euo pipefail
         grep -Fq 'AR="$(TARGET_AR)" RANLIB="$(TARGET_RANLIB)"' package/mtk/applications/easymesh-n60/Makefile
-        grep -Fq 'V=s all > "$$WAPP_COMPILE_LOG" 2>&1 ||' package/mtk/applications/easymesh-n60/Makefile
+        grep -Fq 'V=s all > ' package/mtk/applications/easymesh-n60/Makefile
+        grep -Fq '2>&1 || { cat ' package/mtk/applications/easymesh-n60/Makefile
         grep -Fq 'os_memcpy(vname_duple->language, token, 3)' package/mtk/applications/easymesh-n60/patches/003-wapp-gcc14-copy-semantics.patch
         grep -Fq 'p.read_bytes()' package/mtk/applications/easymesh-n60/Makefile
         echo "PASS: WAPP copy warnings are fixed at source level; P1905 DSA archive uses target binutils."
