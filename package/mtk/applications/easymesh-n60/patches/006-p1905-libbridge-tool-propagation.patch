@@ -9,6 +9,9 @@
  
  ifeq ($(MAP_R3_SUPPORT),y)
  $(BIN): $(OBJS) eth_ops_lib $(CRYPTO_LIB) sp_ut
+ 
+--- a/1905daemon/ethernet/Makefile
++++ b/1905daemon/ethernet/Makefile
 @@ -25,7 +25,7 @@ all: $(ETH_OPS_LIB) $(ETH_OPS_LIB_OBJS) $(EXTRA_LIB)
  
  ifeq ($(SWITCH_TYPE), mediatek_dsa)
