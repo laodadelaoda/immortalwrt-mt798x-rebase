@@ -250,7 +250,7 @@ runs:
           echo "::error::Pinned WAPP source archive is missing; DPP audit cannot run."
           exit 1
         }
-        printf '%s  %s\\n' "$EXPECTED_SHA256" "$ARCHIVE" | sha256sum -c -
+        printf '%s  %s\n' "$EXPECTED_SHA256" "$ARCHIVE" | sha256sum -c -
         rm -rf "$AUDIT_DIR"
         mkdir -p "$AUDIT_DIR" artifacts/easymesh-quick
         tar -xjf "$ARCHIVE" -C "$AUDIT_DIR"
@@ -281,7 +281,7 @@ runs:
             text = path.read_text(encoding="utf-8", errors="replace")
             # A definition must have a parameter list followed by a body; a
             # prototype ending in ';' is not counted as a definition.
-            pattern = re.compile(r"(?m)^[^;{}\\n]*\\b" + re.escape(symbol) + r"\\s*\\([^;{}]*\\)\\s*\\{")
+            pattern = re.compile(r"(?m)^[^;{}\n]*\b" + re.escape(symbol) + r"\s*\([^;{}]*\)\s*\{")
             for match in pattern.finditer(text):
                 brace = text.find("{", match.start())
                 depth, end = 0, None
@@ -294,7 +294,7 @@ runs:
                             break
                 if end is None:
                     raise SystemExit(f"ERROR: unterminated function body: {path}")
-                definitions.append((path, text.count("\\n", 0, match.start()) + 1, text[match.start():end]))
+                definitions.append((path, text.count("\n", 0, match.start()) + 1, text[match.start():end]))
         if len(definitions) != 1:
             raise SystemExit(f"ERROR: expected exactly one function definition for {symbol}; found {len(definitions)}")
         path, start_line, body = definitions[0]
@@ -322,7 +322,7 @@ runs:
                 "The complete function body is retained for review. No bounds rule is guessed from the identifier name alone.",
                 "Compilation/API compatibility is verified by the subsequent real target EasyMesh build.",
                 "Runtime file/path/permission and peer-connection behavior require runtime tests."]
-        report.write_text("\\n".join(out) + "\\n", encoding="utf-8")
+        report.write_text("\n".join(out) + "\n", encoding="utf-8")
         print(report.read_text(encoding="utf-8"))
         print("PASS: DPP source/API audit completed before target toolchain build.")
         PY
