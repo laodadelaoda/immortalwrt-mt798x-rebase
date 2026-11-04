@@ -1,7 +1,13 @@
 name: N60 Pro EasyMesh Quick Build
 
 on:
-  workflow_call: {}
+  workflow_call:
+    inputs:
+      device:
+        description: Router model under compatibility audit
+        required: false
+        type: string
+        default: netcore_n60-pro
   workflow_dispatch:
 
 permissions:
@@ -18,7 +24,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
-      DEVICE: netcore_n60-pro
+      DEVICE: ${{ inputs.device }}
       PROFILE: standard
     steps:
       - name: Checkout source
