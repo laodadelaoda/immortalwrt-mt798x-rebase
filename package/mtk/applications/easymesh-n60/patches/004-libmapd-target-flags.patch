@@ -1,8 +1,6 @@
 --- a/libmapd/Makefile
 +++ b/libmapd/Makefile
-@@ -8,11 +8,11 @@
- 
- mapd_interface_ctrl.o : mapd_interface_ctrl.c 
+@@ -15,10 +15,10 @@
  	$(CC) -I ./include -c -fPIC $^ -o $@ $(CFLAGS)
  	
  include/os_unix_lib.o : include/os_unix.c
