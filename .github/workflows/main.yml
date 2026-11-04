@@ -376,6 +376,36 @@ jobs:
           done
           ls -lh dl/
 
+      - name: Audit WAPP DPP source and credential-length handling
+        shell: bash
+        run: |
+          set -euo pipefail
+          DPP_AUDIT_DIR="$RUNNER_TEMP/n60-wapp-dpp-audit"
+          DPP_AUDIT_LOG="artifacts/$DEVICE/$PROFILE/dpp-source-audit.txt"
+          rm -rf "$DPP_AUDIT_DIR"
+          mkdir -p "$DPP_AUDIT_DIR"
+          test -s dl/wappd-80ca5724.tar.bz2 || {
+            echo "::error::WAPP source archive is missing before DPP audit."
+            exit 1
+          }
+          sha256sum dl/wappd-80ca5724.tar.bz2
+          tar -xjf dl/wappd-80ca5724.tar.bz2 -C "$DPP_AUDIT_DIR"
+          test -s "$DPP_AUDIT_DIR/wappd/dpp/dpp.h" || {
+            echo "::error::Expected WAPP DPP source tree/header is missing."
+            exit 1
+          }
+          {
+            echo "===== DPP source file inventory ====="
+            find "$DPP_AUDIT_DIR/wappd/dpp" -maxdepth 2 -type f -print | sort
+            echo "===== dpp_read_config_file_for_connection / cred_len references ====="
+            grep -R -n -C 18 -E 'dpp_read_config_file_for_connection|cred_len' "$DPP_AUDIT_DIR/wappd/dpp" || true
+            echo "===== related declarations and bounds checks ====="
+            grep -R -n -E 'cred_len[[:space:]]*(==|!=|<|>|<=|>=)|sizeof[[:space:]]*\([^)]*cred|memcpy|strncpy|snprintf' "$DPP_AUDIT_DIR/wappd/dpp" || true
+          } | tee "$DPP_AUDIT_LOG"
+          if ! grep -Rq 'dpp_read_config_file_for_connection' "$DPP_AUDIT_DIR/wappd/dpp"; then
+            echo "NOTICE: named DPP function is not present in this WAPP source archive."
+          fi
+          echo "PASS: DPP source evidence captured before toolchain/kernel compilation."
       - name: Download sources
         run: make download -j$(nproc)
 
@@ -490,32 +520,7 @@ jobs:
           echo "PASS: kmod-mapfilter package selected; NETFILTER/conntrack/NAT/MAP_FILTER_SUPPORT are resolved."
           echo "PASS: target Linux configuration generated and audited: $KERNEL_CONFIG"
 
-          echo "===== Step 4c.2: build and verify the full-mode mapfilter kernel module ====="
-          # Full mode validates the real kernel/module artifacts used by the
-          # firmware. Kbuild syncconfig may see new symbols added by the MTK
-          # patch stack; feed blank responses so each takes its declared default.
-          run_with_kconfig_defaults make target/linux/compile -j"$(nproc)" V=s
-          grep -qx '# CONFIG_USB_XHCI_MTK_DEBUGFS is not set' "$KERNEL_CONFIG" || {
-            echo "::error::Unexpected USB_XHCI_MTK_DEBUGFS selection after Kconfig reconciliation."
-            exit 1
-          }
-          test -s "$KERNEL_CONFIG" || {
-            echo "::error::Target Linux .config missing after target/linux/compile."
-            exit 1
-          }
-          make package/kernel/mapfilter/compile V=s
-          KERNEL_BASE="build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic"
-          MAPFILTER_KO="$(find "$KERNEL_BASE" -type f -name mapfilter.ko -print -quit)"
-          test -n "$MAPFILTER_KO" && test -s "$MAPFILTER_KO" || {
-            echo "::error::Full-mode kmod-mapfilter build did not produce a non-empty mapfilter.ko."
-            exit 1
-          }
-          MAPFILTER_APK="$(find bin/packages -type f -name 'kmod-mapfilter*.apk' -print -quit)"
-          test -n "$MAPFILTER_APK" && test -s "$MAPFILTER_APK" || {
-            echo "::error::Full-mode kmod-mapfilter build did not produce a non-empty APK."
-            exit 1
-          }
-          echo "PASS: Full-mode mapfilter kernel module and installable APK verified: $MAPFILTER_KO / $MAPFILTER_APK"
+
 
           # The reusable workflow runs on a separate GitHub-hosted runner.
           # Quick's source artifacts are not a prebuilt OpenWrt package tree,
@@ -570,6 +575,33 @@ jobs:
             echo "===== P1905 NEEDED ====="
             readelf -d "$P1905_BIN" | grep NEEDED
           } >> "$EASYMESH_LOG"
+
+          echo "===== Step 4c.2: build and verify the full-mode mapfilter kernel module ====="
+          # Full mode validates the real kernel/module artifacts used by the
+          # firmware. Kbuild syncconfig may see new symbols added by the MTK
+          # patch stack; feed blank responses so each takes its declared default.
+          run_with_kconfig_defaults make target/linux/compile -j"$(nproc)" V=s
+          grep -qx '# CONFIG_USB_XHCI_MTK_DEBUGFS is not set' "$KERNEL_CONFIG" || {
+            echo "::error::Unexpected USB_XHCI_MTK_DEBUGFS selection after Kconfig reconciliation."
+            exit 1
+          }
+          test -s "$KERNEL_CONFIG" || {
+            echo "::error::Target Linux .config missing after target/linux/compile."
+            exit 1
+          }
+          make package/kernel/mapfilter/compile V=s
+          KERNEL_BASE="build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic"
+          MAPFILTER_KO="$(find "$KERNEL_BASE" -type f -name mapfilter.ko -print -quit)"
+          test -n "$MAPFILTER_KO" && test -s "$MAPFILTER_KO" || {
+            echo "::error::Full-mode kmod-mapfilter build did not produce a non-empty mapfilter.ko."
+            exit 1
+          }
+          MAPFILTER_APK="$(find bin/packages -type f -name 'kmod-mapfilter*.apk' -print -quit)"
+          test -n "$MAPFILTER_APK" && test -s "$MAPFILTER_APK" || {
+            echo "::error::Full-mode kmod-mapfilter build did not produce a non-empty APK."
+            exit 1
+          }
+          echo "PASS: Full-mode mapfilter kernel module and installable APK verified: $MAPFILTER_KO / $MAPFILTER_APK"
 
           echo "===== Step 5: full build ====="
           BUILD_LOG="artifacts/$DEVICE/$PROFILE/FULL-BUILD-VS-LOG.txt"
