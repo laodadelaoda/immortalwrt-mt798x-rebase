@@ -41,6 +41,7 @@ define Build/Prepare
 	tar -xjf '$(DL_DIR)/mapd-6eca4331.tar.bz2' -C $(PKG_BUILD_DIR); \
 	tar -xjf '$(DL_DIR)/1905daemon-35234223.tar.bz2' -C $(PKG_BUILD_DIR); \
 	tar -xjf '$(DL_DIR)/libmapd-0132d199.tar.bz2' -C $(PKG_BUILD_DIR); \
+	python3 -c 'from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/wappd/common/main.c"); s=p.read_text(encoding="utf-8"); old_decl="u16 cred_len = 0, is_1905_conn = 0, is_normal = 0;"; new_decl="u16 is_1905_conn = 0, is_normal = 0;"; old_set="\t\tcred_len = sizeof(*cred) + cred->payload_len;"; old_dead="#if 0\n\tcred_len = 0;"; new_dead="#if 0\n\tu16 cred_len = 0;\n\tcred_len = 0;"; assert s.count(old_decl)==1, "expected one DPP cred_len declaration"; assert s.count(old_set)==1, "expected one active DPP cred_len assignment"; assert s.count(old_dead)==1, "expected one disabled legacy BSS-credential block"; s=s.replace(old_decl,new_decl,1).replace(old_set,"",1).replace(old_dead,new_dead,1); p.write_text(s,encoding="utf-8"); print("N60 DPP: moved cred_len into the #if 0 legacy block and removed its active dead assignment:",p)'; \
 	python3 -c 'from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/wappd/dpp/dpp.h"); s=p.read_text(encoding="utf-8"); old="EC_KEY * EVP_PKEY_get0_EC_KEY(EVP_PKEY *pkey);"; assert s.count(old)==1, "expected exactly one legacy EVP_PKEY_get0_EC_KEY prototype"; p.write_text(s.replace(old, "", 1), encoding="utf-8"); print("Removed conflicting legacy EVP_PKEY_get0_EC_KEY prototype; use target OpenSSL declaration:", p)'; \
 	python3 -c 'from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/wappd/Makefile"); s=p.read_text(encoding="utf-8"); lines=s.splitlines(); rules=[x.strip() for x in lines if "$(CC)" in x and "$(CFLAGS)" in x]; assert rules, "WAPP source Makefile has no compiler recipe consuming $(CFLAGS); refusing to guess another flag variable"; marker="# N60 Pro: force package EXTRA_CFLAGS into WAPP compiler CFLAGS"; assert marker not in s, "N60 WAPP CFLAGS bridge was unexpectedly applied more than once"; p.write_text(s.rstrip()+"\n\n"+marker+"\noverride CFLAGS += $(EXTRA_CFLAGS)\n", encoding="utf-8"); print("Verified WAPP compiler variable: CFLAGS; appended override EXTRA_CFLAGS bridge; compiler recipe:", rules[0])'; \
 	python3 -c 'from pathlib import Path; p=Path("$(PKG_BUILD_DIR)/wappd/include/rtmpiapp.h"); s=p.read_text(encoding="utf-8"); old="__uint32_t inet_make_mask"; assert s.count(old)==1, "expected exactly one inet_make_mask __uint32_t declaration"; s=s.replace(old, "uint32_t inet_make_mask", 1); lines=s.splitlines(True); lines.insert(0, "#include <stdint.h>"+chr(10)) if "#include <stdint.h>" not in s else None; s="".join(lines); p.write_text(s, encoding="utf-8"); print("Applied musl-portable inet_make_mask type fix:", p)'; \
@@ -60,7 +61,7 @@ endef
 
 define Build/Compile
 	set -eu; \
-	TARGET_EASYMESH_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Wno-deprecated-declarations -Wno-error=unused-but-set-variable"; \
+	TARGET_EASYMESH_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Wno-deprecated-declarations"; \
 	OPENWRT_EASYMESH_CFLAGS="$$$$TARGET_EASYMESH_CFLAGS -DCONFIG_SUPPORT_OPENWRT"; \
 	WAPP_UAPI_DIR="$(LINUX_DIR)/include/uapi/linux/wapp"; \
 	test -s "$$$$WAPP_UAPI_DIR/wapp_cmm_type.h" || { echo "Missing MTK WAPP UAPI header: $$$$WAPP_UAPI_DIR/wapp_cmm_type.h" >&2; exit 1; }; \
@@ -73,12 +74,12 @@ define Build/Compile
 	WAPP_COMPILE_LOG="$(PKG_BUILD_DIR)/wapp-compile.log"; \
 	$(MAKE) -C $(PKG_BUILD_DIR)/wappd \
 		TOPDIR="$(TOPDIR)" UAPD_INCLUDE_PATH="$(LINUX_DIR)/include/uapi/linux/wapp -I$(STAGING_DIR)/usr/include" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R2_SUPPORT=y CONFIG_MAP_R3_SUPPORT=y \
-		CC="$(TARGET_CC)" EXTRA_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Wno-deprecated-declarations -Wno-error=unused-but-set-variable -I$(LINUX_DIR)/include/uapi/linux/wapp" \
+		CC="$(TARGET_CC)" EXTRA_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Wno-deprecated-declarations -I$(LINUX_DIR)/include/uapi/linux/wapp" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto" \
 		V=s all 2>&1 | tee "$$$$WAPP_COMPILE_LOG"; \
-	grep -F 'common/main.c' "$$$$WAPP_COMPILE_LOG" | grep -Fq -- '-Wno-error=unused-but-set-variable' || { echo "WAPP compile command for common/main.c did not receive -Wno-error=unused-but-set-variable" >&2; exit 1; }; \
-	grep -F 'common/main.c' "$$$$WAPP_COMPILE_LOG" | grep -Fq -- '-Werror' || { echo "WAPP compile command lost -Werror" >&2; exit 1; }; \
-	echo "PASS: actual WAPP common/main.c compile command contains -Werror and the targeted unused-but-set-variable exception."; \
+	grep -F 'common/main.c' "$$WAPP_COMPILE_LOG" | grep -Fq -- '-Werror' || { echo "WAPP compile command lost -Werror" >&2; exit 1; }; \
+	! grep -Fq 'unused-but-set-variable' "$$WAPP_COMPILE_LOG" || { echo "WAPP still emits an unused-but-set-variable diagnostic after the DPP source fix" >&2; exit 1; }; \
+	echo "PASS: WAPP common/main.c compiled with -Werror and no unused-but-set-variable diagnostic; no warning suppression used."; \
 	mkdir -p $(PKG_BUILD_DIR)/1905daemon/obj; \
 	EXTRA_CFLAGS="$$$$OPENWRT_EASYMESH_CFLAGS" $(MAKE) -C $(PKG_BUILD_DIR)/1905daemon \
 		TOPDIR="$(TOPDIR)" ROOTDIR="$(TOPDIR)" \
