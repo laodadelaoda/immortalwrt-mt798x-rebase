@@ -23,6 +23,15 @@ endef
 
 define Build/Prepare
 	set -eu; \
+	# Enforce the N60 vendor stack compatibility lock: MT Wi-Fi and EasyMesh must both be 7.6.7.3.
+	grep -qx 'CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y' $(TOPDIR)/.config || { echo "N60 EasyMesh requires MT Wi-Fi driver 7.6.7.3" >&2; exit 1; }; \
+	grep -qx 'CONFIG_MTK_MAP_SUPPORT=y' $(TOPDIR)/.config || { echo "N60 EasyMesh requires MTK MAP support" >&2; exit 1; }; \
+	grep -qx 'CONFIG_MTK_MAP_R2_VER_SUPPORT=y' $(TOPDIR)/.config || { echo "N60 EasyMesh requires MTK MAP R2 support" >&2; exit 1; }; \
+	grep -qx 'CONFIG_MTK_MAP_R3_VER_SUPPORT=y' $(TOPDIR)/.config || { echo "N60 EasyMesh requires MTK MAP R3 support" >&2; exit 1; }; \
+	DRIVER_MAKEFILE="$(TOPDIR)/package/mtk/drivers/mt_wifi/Makefile"; \
+	grep -Fqx 'PKG_SOURCE:=mt79xx_20250408-705eb4.tar.xz' "$DRIVER_MAKEFILE" || { echo "MT Wi-Fi 7.6.7.3 source archive mismatch" >&2; exit 1; }; \
+	grep -Fqx 'PKG_HASH:=b029d7b43c498193092dc6a3c857361c8835ce34bb306561c550ac0539784a78' "$DRIVER_MAKEFILE" || { echo "MT Wi-Fi 7.6.7.3 source checksum mismatch" >&2; exit 1; }; \
+	grep -Fqx 'PKG_VERSION:=7.6.7.3' "$DRIVER_MAKEFILE" || { echo "MT Wi-Fi 7.6.7.3 package version declaration missing" >&2; exit 1; }; \
 	mkdir -p $(PKG_BUILD_DIR); \
 	printf '%s  %s\n' '73fa8995533e701d3d5774faa92d274497f99e1a37c81ce445f25a959b4b7462' '$(DL_DIR)/wappd-80ca5724.tar.bz2' | sha256sum -c -; \
 	printf '%s  %s\n' '39ab37cb347d372e352ade03181bc9c23429d4d849d32acbdff00973547d7e18' '$(DL_DIR)/mapd-6eca4331.tar.bz2' | sha256sum -c -; \
