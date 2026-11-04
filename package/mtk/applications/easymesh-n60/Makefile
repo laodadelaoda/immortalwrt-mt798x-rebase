@@ -78,8 +78,8 @@ define Build/Compile
 		CC="$(TARGET_CC)" EXTRA_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Wno-deprecated-declarations -I$(LINUX_DIR)/include/uapi/linux/wapp" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto" \
 		V=s all 2>&1 | tee "$$$$WAPP_COMPILE_LOG"; \
-	grep -F 'common/main.c' "$$WAPP_COMPILE_LOG" | grep -Fq -- '-Werror' || { echo "WAPP compile command lost -Werror" >&2; exit 1; }; \
-	! grep -Fq 'unused-but-set-variable' "$$WAPP_COMPILE_LOG" || { echo "WAPP still emits an unused-but-set-variable diagnostic after the DPP source fix" >&2; exit 1; }; \
+	grep -F 'common/main.c' "$$$$WAPP_COMPILE_LOG" | grep -Fq -- '-Werror' || { echo "WAPP compile command lost -Werror" >&2; exit 1; }; \
+	! grep -Fq 'unused-but-set-variable' "$$$$WAPP_COMPILE_LOG" || { echo "WAPP still emits an unused-but-set-variable diagnostic after the DPP source fix" >&2; exit 1; }; \
 	echo "PASS: WAPP common/main.c compiled with -Werror and no unused-but-set-variable diagnostic; no warning suppression used."; \
 	mkdir -p $(PKG_BUILD_DIR)/1905daemon/obj; \
 	EXTRA_CFLAGS="$$$$OPENWRT_EASYMESH_CFLAGS" $(MAKE) -C $(PKG_BUILD_DIR)/1905daemon \
