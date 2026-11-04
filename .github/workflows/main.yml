@@ -383,36 +383,6 @@ jobs:
           done
           ls -lh dl/
 
-      - name: Audit WAPP DPP source and credential-length handling
-        shell: bash
-        run: |
-          set -euo pipefail
-          DPP_AUDIT_DIR="$RUNNER_TEMP/n60-wapp-dpp-audit"
-          DPP_AUDIT_LOG="artifacts/$DEVICE/$PROFILE/dpp-source-audit.txt"
-          rm -rf "$DPP_AUDIT_DIR"
-          mkdir -p "$DPP_AUDIT_DIR"
-          test -s dl/wappd-80ca5724.tar.bz2 || {
-            echo "::error::WAPP source archive is missing before DPP audit."
-            exit 1
-          }
-          sha256sum dl/wappd-80ca5724.tar.bz2
-          tar -xjf dl/wappd-80ca5724.tar.bz2 -C "$DPP_AUDIT_DIR"
-          test -s "$DPP_AUDIT_DIR/wappd/dpp/dpp.h" || {
-            echo "::error::Expected WAPP DPP source tree/header is missing."
-            exit 1
-          }
-          {
-            echo "===== DPP source file inventory ====="
-            find "$DPP_AUDIT_DIR/wappd/dpp" -maxdepth 2 -type f -print | sort
-            echo "===== dpp_read_config_file_for_connection / cred_len references ====="
-            grep -R -n -C 18 -E 'dpp_read_config_file_for_connection|cred_len' "$DPP_AUDIT_DIR/wappd/dpp" || true
-            echo "===== related declarations and bounds checks ====="
-            grep -R -n -E 'cred_len[[:space:]]*(==|!=|<|>|<=|>=)|sizeof[[:space:]]*\([^)]*cred|memcpy|strncpy|snprintf' "$DPP_AUDIT_DIR/wappd/dpp" || true
-          } | tee "$DPP_AUDIT_LOG"
-          if ! grep -Rq 'dpp_read_config_file_for_connection' "$DPP_AUDIT_DIR/wappd/dpp"; then
-            echo "NOTICE: named DPP function is not present in this WAPP source archive."
-          fi
-          echo "PASS: DPP source evidence captured before toolchain/kernel compilation."
       - name: Download sources
         run: make download -j$(nproc)
 
