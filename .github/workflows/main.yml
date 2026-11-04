@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
-      DEVICE: ${{ inputs.device || 'netcore_n60-pro' }}
+      DEVICE: ${{ github.event.inputs.device || 'netcore_n60-pro' }}
       PROFILE: standard
 
     steps:
