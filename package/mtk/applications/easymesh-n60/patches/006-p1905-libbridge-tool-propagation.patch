@@ -1,0 +1,11 @@
+--- a/1905daemon/ethernet/Makefile
++++ b/1905daemon/ethernet/Makefile
+@@ -25,7 +25,7 @@ all: $(ETH_OPS_LIB) $(ETH_OPS_LIB_OBJS) $(EXTRA_LIB)
+ 
+ ifeq ($(SWITCH_TYPE), mediatek_dsa)
+ $(EXTRA_LIB):
+-	make -C $(LIBDIR)
++	$(MAKE) -C $(LIBDIR) AR="$(AR)" RANLIB="$(RANLIB)" CC="$(CC)" CFLAGS="$(CFLAGS)" INCLUDE="$(INCLUDE)"
+ endif
+ 
+ $(ETH_OPS_LIB_OBJS): %.o: %.c
