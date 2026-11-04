@@ -87,6 +87,12 @@ runs:
         grep -Fq 'patch -d $(PKG_BUILD_DIR) -p1 < ./patches/006-p1905-libbridge-tool-propagation.patch' package/mtk/applications/easymesh-n60/Makefile || {
           echo "::error::P1905 recursive libbridge toolchain patch is not applied during Build/Prepare."; exit 1;
         }
+        grep -Fq "tr -d '\\r' < '$(PKG_BUILD_DIR)/1905daemon/ethernet/Makefile'" package/mtk/applications/easymesh-n60/Makefile || {
+          echo "::error::P1905 Ethernet Makefile CRLF normalization is missing before patch application."; exit 1;
+        }
+        git apply --numstat "$LIBBRIDGE_PATCH" >/dev/null || {
+          echo "::error::P1905 libbridge tool propagation patch has invalid unified-diff syntax."; exit 1;
+        }
         grep -Fq 'if grep -Eq' package/mtk/applications/easymesh-n60/Makefile || {
           echo "::error::EasyMesh compiler logs are not checked for diagnostics hidden by inherited make flags."; exit 1;
         }
@@ -497,6 +503,9 @@ runs:
         grep -Fq 'V=s all > ' package/mtk/applications/easymesh-n60/Makefile
         grep -Fq '2>&1 || { cat ' package/mtk/applications/easymesh-n60/Makefile
         grep -Fq '006-p1905-libbridge-tool-propagation.patch' package/mtk/applications/easymesh-n60/Makefile
+        grep -Fq 'WAPP compiler log contains an error despite a successful make status' package/mtk/applications/easymesh-n60/Makefile
+        grep -Fq 'P1905 compiler log contains an error despite a successful make status' package/mtk/applications/easymesh-n60/Makefile
+        grep -Fq 'MAPD compiler log contains an error despite a successful make status' package/mtk/applications/easymesh-n60/Makefile
         grep -Fq 'P1905 compiler log contains an error despite a successful make status' package/mtk/applications/easymesh-n60/Makefile
         grep -Fq 'WAPP compiler log contains an error despite a successful make status' package/mtk/applications/easymesh-n60/Makefile
         grep -Fq 'MAPD compiler log contains an error despite a successful make status' package/mtk/applications/easymesh-n60/Makefile
@@ -596,8 +605,11 @@ runs:
         grep -Fq '$(CC) $(LDFLAGS) -shared -o $@ $^' "$EASYMESH_BUILD_DIR/libmapd/Makefile" || {
           echo "::error::libmapd target link flags patch was not applied."; exit 1;
         }
+        grep -Fq '$(MAKE) -C $(ETH_OPS_LIB_DIR) AR="$(AR)" RANLIB="$(RANLIB)" CC="$(CC)"' "$EASYMESH_BUILD_DIR/1905daemon/Makefile" || {
+          echo "::error::P1905 Ethernet submake did not receive target AR/RANLIB/CC variables."; exit 1;
+        }
         grep -Fq '$(MAKE) -C $(LIBDIR) AR="$(AR)" RANLIB="$(RANLIB)" CC="$(CC)"' "$EASYMESH_BUILD_DIR/1905daemon/ethernet/Makefile" || {
-          echo "::error::P1905 libbridge recursive make did not receive target AR/RANLIB/CC variables."; exit 1;
+          echo "::error::P1905 libbridge submake did not receive target AR/RANLIB/CC variables."; exit 1;
         }
         echo "PASS: datconf and all four EasyMesh source trees prepared; patch application verified before toolchain build."
         make toolchain/install -j"$(nproc)" V=s
