@@ -245,6 +245,29 @@ jobs:
             make -C "$pkg" TOPDIR="$GITHUB_WORKSPACE" download V=s
           done
 
+      - name: Preflight datconf patch against downloaded source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE="dl/datconf-757f9679.tar.bz2"
+          PATCH="package/mtk/applications/datconf/patches/001-add-ucode-mod-build.patch"
+          test -s "$ARCHIVE"
+          TMP="$(mktemp -d)"
+          trap 'rm -rf "$TMP"' EXIT
+          tar -xjf "$ARCHIVE" -C "$TMP"
+          CMAKE_FILE="$(find "$TMP" -path '*/datconf/CMakeLists.txt' -type f -print -quit)"
+          test -n "$CMAKE_FILE" || {
+            echo "::error::datconf archive does not contain datconf/CMakeLists.txt"
+            find "$TMP" -maxdepth 4 -type f | sort | head -100
+            exit 1
+          }
+          SOURCE_ROOT="${CMAKE_FILE%/datconf/CMakeLists.txt}"
+          echo "===== Actual datconf CMakeLists from pinned archive ====="
+          nl -ba "$CMAKE_FILE"
+          echo "===== Applying patch in dry-run mode before toolchain build ====="
+          patch --dry-run -p1 -d "$SOURCE_ROOT" < "$PATCH"
+          echo "PASS: datconf patch applies cleanly to the exact pinned source archive."
+
       - name: Prepare host tools, preflight sources, target toolchain and kernel headers
         shell: bash
         run: |
