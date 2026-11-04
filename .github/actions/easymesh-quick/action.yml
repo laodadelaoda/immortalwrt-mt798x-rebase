@@ -322,9 +322,15 @@ runs:
             raise SystemExit(f"ERROR: expected exactly one function definition for {symbol}; found {len(definitions)}")
         path, start_line, body = definitions[0]
         lines = body.splitlines()
-        # Report the full function body and all credential-length references
-        # across WAPP DPP. Do not impose guessed bounds or alter vendor logic:
-        # findings are reviewed against the actual buffer types and APIs.
+        # Confirm the pinned vendor source still has the known set-only variable
+        # pattern: its only reads belong to a #if 0 legacy block. Build/Prepare
+        # applies the exact minimal transformation before compilation.
+        active_body = re.sub(r"(?ms)^\s*#if\s+0\b.*?^\s*#endif\s*$", "", body)
+        if not re.search(r"(?m)^\s*cred_len\s*=\s*sizeof\(\*cred\)\s*\+\s*cred->payload_len\s*;", active_body):
+            raise SystemExit("ERROR: pinned DPP cred_len assignment changed; review the source repair instead of applying a stale transformation.")
+        if not re.search(r"(?m)^\s*hex_dump\(DPP_MAP_PREX.*cred_len", body):
+            raise SystemExit("ERROR: expected legacy DPP credential-length consumer is missing; review source drift.")
+        # Report the full function body and all credential-length references.
         cred = []
         for p in files:
             txt = p.read_text(encoding="utf-8", errors="replace")
@@ -342,8 +348,8 @@ runs:
         out += [f"{p}:{n}: {line}" for p,n,line in cred] or ["No credential-length identifiers found."]
         out += ["", "== Review scope ==",
                 "The source audit verifies symbol presence, a unique implementation, declaration/call locations and credential-length references.",
-                "The complete function body is retained for review. No bounds rule is guessed from the identifier name alone.",
-                "Compilation/API compatibility is verified by the subsequent real target EasyMesh build.",
+                "The audit identified cred_len as set-only in active code: its consumers are confined to a #if 0 legacy block. Build/Prepare moves the declaration into that disabled block and removes the orphan active assignment.",
+                "The fix preserves active DPP behavior and does not suppress -Werror; the subsequent target build verifies the repaired source.",
                 "Runtime file/path/permission and peer-connection behavior require runtime tests."]
         report.write_text("\n".join(out) + "\n", encoding="utf-8")
         print(report.read_text(encoding="utf-8"))
