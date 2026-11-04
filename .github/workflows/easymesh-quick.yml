@@ -32,12 +32,6 @@ on:
       - ".github/workflows/easymesh-quick.yml"
       - ".github/workflows/main.yml"
   workflow_dispatch:
-    inputs:
-      quick_only:
-        description: "Only compile and audit EasyMesh; skip the full firmware build"
-        required: true
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -60,6 +54,84 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+
+      - name: Static preflight - EasyMesh runtime configuration and dependency declarations
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="package/mtk/applications/easymesh-n60/files"
+          BIN="$ROOT/usr/bin"
+          for f in wapp mapd p1905_managerd wappctrl wapp-n60-wrapper; do
+            test -s "$BIN/$f" || { echo "::error::Missing EasyMesh input: $f"; exit 1; }
+          done
+          for f in mapd_cfg mapd_user.cfg 1905d.cfg wts_bss_info_config; do
+            test -s "$ROOT/etc/map/$f" || { echo "::error::Missing MAP config: $f"; exit 1; }
+          done
+          sh "package/mtk/applications/easymesh-n60/tests/test-vendor-wts-defaults.sh"
+          sh "$ROOT/usr/sbin/easymesh-n60-validate-wts" "$ROOT/etc/map/wts_bss_info_config"
+          for f in "$ROOT/etc/init.d/easymesh" "$ROOT/etc/uci-defaults/1001-easymesh-n60" "$BIN/wapp-n60-wrapper"; do
+            sh -n "$f"
+          done
+          grep -qx 'DeviceRole=1' "$ROOT/etc/map/mapd_cfg"
+          grep -qx 'DhcpCtl=0' "$ROOT/etc/map/mapd_cfg"
+          grep -qx 'map_root=1' "$ROOT/etc/map/1905d.cfg"
+          grep -qx 'map_agent=0' "$ROOT/etc/map/1905d.cfg"
+          grep -qx 'bh_type=eth' "$ROOT/etc/map/1905d.cfg"
+          grep -qx 'radio_band=24G;5GL;5GH;' "$ROOT/etc/map/1905d.cfg"
+          grep -qx 'al_inf=rax0' "$ROOT/etc/map/1905d.cfg"
+          grep -qx 'bss_config_priority=ra0;rax0' "$ROOT/etc/map/mapd_cfg"
+          grep -qx 'bss_config_priority=ra0;rax0;apclix0' "$ROOT/etc/map/1905d.cfg"
+          ! grep -Eq '^map_(controller|agent)_alid=' "$ROOT/etc/map/1905d.cfg"
+          PKG_MAKEFILE="package/mtk/applications/easymesh-n60/Makefile"
+          grep -Fqx 'PKG_BUILD_DEPENDS:=datconf openssl libnl-tiny' "$PKG_MAKEFILE" || {
+            echo "::error::EasyMesh build dependency declaration changed; update the Quick staging matrix."
+            exit 1
+          }
+          grep -Fqx '  DEPENDS:=+kmod-mapfilter +libnl-tiny +libkvcutil +libopenssl' "$PKG_MAKEFILE" || {
+            echo "::error::EasyMesh runtime dependency declaration changed; update Full package verification."
+            exit 1
+          }
+          grep -Fq -- '-ldatconf -lkvcutil -lssl -lcrypto' "$PKG_MAKEFILE" || {
+            echo "::error::WAPP datconf/kvcutil/OpenSSL link dependencies are missing."
+            exit 1
+          }
+          grep -Fq -- '-lnl-tiny -lssl -lcrypto' "$PKG_MAKEFILE" || {
+            echo "::error::P1905 libnl-tiny/OpenSSL link dependencies are missing."
+            exit 1
+          }
+          test -s "$ROOT/etc/ethernet_cfg.txt" || {
+            echo "::error::Missing N60 Pro DSA ethernet_cfg.txt."
+            exit 1
+          }
+          grep -qx 'lan=lan1 lan2 lan3 lan4' "$ROOT/etc/ethernet_cfg.txt"
+          grep -qx 'br_lan=br-lan' "$ROOT/etc/ethernet_cfg.txt"
+          grep -qx 'ext_phy_port=5 6' "$ROOT/etc/ethernet_cfg.txt"
+          test "$(grep -c 'CONFIG_MAP_R2_SUPPORT=y' "$PKG_MAKEFILE")" -eq 3 || {
+            echo "::error::MAP R2 base macro must be passed to WAPP, MAPD and P1905."
+            exit 1
+          }
+          test "$(grep -c 'CONFIG_MAP_R3_SUPPORT=y' "$PKG_MAKEFILE")" -eq 3 || {
+            echo "::error::MAP R3 macro must be passed to WAPP, MAPD and P1905."
+            exit 1
+          }
+          grep -q 'UAPD_INCLUDE_PATH=' "$PKG_MAKEFILE" || {
+            echo "::error::WAPP UAPI include path is not explicit."
+            exit 1
+          }
+          grep -Fq '$(INSTALL_DATA) ./files/etc/ethernet_cfg.txt' "$PKG_MAKEFILE" || {
+            echo "::error::P1905 DSA runtime config is not installed."
+            exit 1
+          }
+          DSA_PATCH="package/mtk/applications/easymesh-n60/patches/001-dsa-use-linux-mii-ioctl.patch"
+          test -s "$DSA_PATCH"
+          grep -q 'SIOCGMIIREG' "$DSA_PATCH"
+          grep -q 'patch -d $(PKG_BUILD_DIR)/1905daemon -p1' "$PKG_MAKEFILE"
+          DATCONF_PATCH="package/mtk/applications/datconf/patches/001-add-ucode-mod-build.patch"
+          git apply --numstat "$DATCONF_PATCH" >/dev/null || { echo "::error::datconf UCODE patch has invalid unified-diff syntax."; exit 1; }
+          git apply --numstat "$DSA_PATCH" >/dev/null || { echo "::error::EasyMesh DSA patch has invalid unified-diff syntax."; exit 1; }
+          grep -Fq '+IF(BUILD_UCODE)' "$DATCONF_PATCH" || { echo "::error::datconf ucode option does not guard add_subdirectory(ucode)."; exit 1; }
+          grep -Fq '+ENDIF()' "$DATCONF_PATCH" || { echo "::error::datconf ucode conditional is not closed."; exit 1; }
+          echo "PASS: WAPP/MAPD/P1905/WTS/DSA configuration, R2/R3 macros and Linux 6.12 MII patch."
 
       - name: Free disk space
         run: |
@@ -144,84 +216,6 @@ jobs:
             exit 1
           fi
           echo "PASS: N60 Pro Standard configuration resolved."
-
-      - name: Verify EasyMesh runtime configuration
-        shell: bash
-        run: |
-          set -euo pipefail
-          ROOT="package/mtk/applications/easymesh-n60/files"
-          BIN="$ROOT/usr/bin"
-          for f in wapp mapd p1905_managerd wappctrl wapp-n60-wrapper; do
-            test -s "$BIN/$f" || { echo "::error::Missing EasyMesh input: $f"; exit 1; }
-          done
-          for f in mapd_cfg mapd_user.cfg 1905d.cfg wts_bss_info_config; do
-            test -s "$ROOT/etc/map/$f" || { echo "::error::Missing MAP config: $f"; exit 1; }
-          done
-          sh "package/mtk/applications/easymesh-n60/tests/test-vendor-wts-defaults.sh"
-          sh "$ROOT/usr/sbin/easymesh-n60-validate-wts" "$ROOT/etc/map/wts_bss_info_config"
-          for f in "$ROOT/etc/init.d/easymesh" "$ROOT/etc/uci-defaults/1001-easymesh-n60" "$BIN/wapp-n60-wrapper"; do
-            sh -n "$f"
-          done
-          grep -qx 'DeviceRole=1' "$ROOT/etc/map/mapd_cfg"
-          grep -qx 'DhcpCtl=0' "$ROOT/etc/map/mapd_cfg"
-          grep -qx 'map_root=1' "$ROOT/etc/map/1905d.cfg"
-          grep -qx 'map_agent=0' "$ROOT/etc/map/1905d.cfg"
-          grep -qx 'bh_type=eth' "$ROOT/etc/map/1905d.cfg"
-          grep -qx 'radio_band=24G;5GL;5GH;' "$ROOT/etc/map/1905d.cfg"
-          grep -qx 'al_inf=rax0' "$ROOT/etc/map/1905d.cfg"
-          grep -qx 'bss_config_priority=ra0;rax0' "$ROOT/etc/map/mapd_cfg"
-          grep -qx 'bss_config_priority=ra0;rax0;apclix0' "$ROOT/etc/map/1905d.cfg"
-          ! grep -Eq '^map_(controller|agent)_alid=' "$ROOT/etc/map/1905d.cfg"
-          PKG_MAKEFILE="package/mtk/applications/easymesh-n60/Makefile"
-          grep -Fqx 'PKG_BUILD_DEPENDS:=datconf openssl libnl-tiny' "$PKG_MAKEFILE" || {
-            echo "::error::EasyMesh build dependency declaration changed; update the Quick staging matrix."
-            exit 1
-          }
-          grep -Fqx '  DEPENDS:=+kmod-mapfilter +libnl-tiny +libkvcutil +libopenssl' "$PKG_MAKEFILE" || {
-            echo "::error::EasyMesh runtime dependency declaration changed; update Full package verification."
-            exit 1
-          }
-          grep -Fq -- '-ldatconf -lkvcutil -lssl -lcrypto' "$PKG_MAKEFILE" || {
-            echo "::error::WAPP datconf/kvcutil/OpenSSL link dependencies are missing."
-            exit 1
-          }
-          grep -Fq -- '-lnl-tiny -lssl -lcrypto' "$PKG_MAKEFILE" || {
-            echo "::error::P1905 libnl-tiny/OpenSSL link dependencies are missing."
-            exit 1
-          }
-          test -s "$ROOT/etc/ethernet_cfg.txt" || {
-            echo "::error::Missing N60 Pro DSA ethernet_cfg.txt."
-            exit 1
-          }
-          grep -qx 'lan=lan1 lan2 lan3 lan4' "$ROOT/etc/ethernet_cfg.txt"
-          grep -qx 'br_lan=br-lan' "$ROOT/etc/ethernet_cfg.txt"
-          grep -qx 'ext_phy_port=5 6' "$ROOT/etc/ethernet_cfg.txt"
-          test "$(grep -c 'CONFIG_MAP_R2_SUPPORT=y' "$PKG_MAKEFILE")" -eq 3 || {
-            echo "::error::MAP R2 base macro must be passed to WAPP, MAPD and P1905."
-            exit 1
-          }
-          test "$(grep -c 'CONFIG_MAP_R3_SUPPORT=y' "$PKG_MAKEFILE")" -eq 3 || {
-            echo "::error::MAP R3 macro must be passed to WAPP, MAPD and P1905."
-            exit 1
-          }
-          grep -q 'UAPD_INCLUDE_PATH=' "$PKG_MAKEFILE" || {
-            echo "::error::WAPP UAPI include path is not explicit."
-            exit 1
-          }
-          grep -Fq '$(INSTALL_DATA) ./files/etc/ethernet_cfg.txt' "$PKG_MAKEFILE" || {
-            echo "::error::P1905 DSA runtime config is not installed."
-            exit 1
-          }
-          DSA_PATCH="package/mtk/applications/easymesh-n60/patches/001-dsa-use-linux-mii-ioctl.patch"
-          test -s "$DSA_PATCH"
-          grep -q 'SIOCGMIIREG' "$DSA_PATCH"
-          grep -q 'patch -d $(PKG_BUILD_DIR)/1905daemon -p1' "$PKG_MAKEFILE"
-          DATCONF_PATCH="package/mtk/applications/datconf/patches/001-add-ucode-mod-build.patch"
-          git apply --numstat "$DATCONF_PATCH" >/dev/null || { echo "::error::datconf UCODE patch has invalid unified-diff syntax."; exit 1; }
-          git apply --numstat "$DSA_PATCH" >/dev/null || { echo "::error::EasyMesh DSA patch has invalid unified-diff syntax."; exit 1; }
-          grep -Fq '+IF(BUILD_UCODE)' "$DATCONF_PATCH" || { echo "::error::datconf ucode option does not guard add_subdirectory(ucode)."; exit 1; }
-          grep -Fq '+ENDIF()' "$DATCONF_PATCH" || { echo "::error::datconf ucode conditional is not closed."; exit 1; }
-          echo "PASS: WAPP/MAPD/P1905/WTS/DSA configuration, R2/R3 macros and Linux 6.12 MII patch."
 
       - name: Download required MTK package sources
         shell: bash
@@ -399,6 +393,52 @@ jobs:
           done
           echo "PASS: patched target kernel source and MTK WAPP UAPI headers are ready: $KERNEL_DIR"
 
+          # Persist the audited Quick dependency closure alongside the compiled
+          # binaries. This is a report only; it does not expand Quick into kernel
+          # module, APK or firmware packaging work.
+          mkdir -p artifacts/easymesh-quick
+          MATRIX="artifacts/easymesh-quick/PREPARE-DEPENDENCY-MATRIX.txt"
+          {
+            echo "Revision: $(git rev-parse HEAD)"
+            echo "Scope: userspace EasyMesh source build; no kernel module/APK/ITB build"
+            echo "Declared PKG_BUILD_DEPENDS:"
+            grep '^PKG_BUILD_DEPENDS' package/mtk/applications/easymesh-n60/Makefile
+            echo
+            echo "Host tools:"
+            for f in staging_dir/host/bin/sed staging_dir/host/bin/cmake; do
+              test -x "$f" && printf "PASS %s\\n" "$f"
+            done
+            echo
+            echo "Target OpenSSL development interface:"
+            for f in usr/include/openssl/x509.h usr/lib/libssl.so usr/lib/libssl.so.3 usr/lib/libcrypto.so usr/lib/libcrypto.so.3; do
+              test -e "$TARGET_STAGING/$f" && printf "PASS %s\\n" "$TARGET_STAGING/$f"
+            done
+            echo
+            echo "Target datconf/kvcutil development interface:"
+            for f in usr/include/libdatconf.h usr/include/libkvcutil.h usr/lib/libdatconf.a usr/lib/libkvcutil.so usr/lib/libkvcutil.so.1; do
+              test -e "$TARGET_STAGING/$f" && printf "PASS %s\\n" "$TARGET_STAGING/$f"
+            done
+            echo
+            echo "Target libnl-tiny development interface:"
+            for f in usr/lib/libnl-tiny.so usr/lib/libnl-tiny.so.1; do
+              test -e "$TARGET_STAGING/$f" && printf "PASS %s\\n" "$TARGET_STAGING/$f"
+            done
+            find "$TARGET_STAGING/usr/include/libnl-tiny" -type f -print | sort
+            echo
+            echo "Target runtime:"
+            printf "PASS %s\\n" "$LIBGCC_SO"
+            echo
+            echo "MTK WAPP UAPI:"
+            printf "Kernel source: %s\\n" "$KERNEL_DIR"
+            for f in "$WAPP_UAPI_DIR/wapp_cmm_type.h" "$WAPP_UAPI_DIR/mt_wlan_cmm_oid.h"; do
+              printf "PASS %s\\n" "$f"
+            done
+            echo
+            echo "EasyMesh source archive checksums:"
+            sha256sum dl/wappd-80ca5724.tar.bz2 dl/mapd-6eca4331.tar.bz2 dl/1905daemon-35234223.tar.bz2 dl/libmapd-0132d199.tar.bz2
+          } > "$MATRIX"
+          cat "$MATRIX"
+
       - name: Compile EasyMesh package only
         shell: bash
         run: |
@@ -475,8 +515,3 @@ jobs:
           path: artifacts/easymesh-quick/
           if-no-files-found: error
           retention-days: 14
-
-  full_firmware:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.quick_only == false }}
-    needs: quick
-    uses: ./.github/workflows/main.yml
