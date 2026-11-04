@@ -1,0 +1,168 @@
+--- a/wappd/common/wapp_cmm.c
++++ b/wappd/common/wapp_cmm.c
+@@ -2861,13 +2861,13 @@
+ 					vname_duple = os_zalloc(sizeof(struct venue_name_duple) + 256);
+ 					token = strtok(tmpbuf, "=");
+ 					token = strtok(NULL, "%");
+-					if (!token) {
+-						DBGPRINT(RT_DEBUG_ERROR, "[%s] (%d): strtok fail\n", __func__, __LINE__);
++					if (!token || os_strlen(token) < 3) {
++						DBGPRINT(RT_DEBUG_ERROR, "[%s] invalid venue-name language code\n", __func__);
+ 						os_free(vname_duple);
+ 						continue;
+ 					}
+ 					vname_duple->length += 3;
+-					os_strncpy(vname_duple->language, token, 3);
++					os_memcpy(vname_duple->language, token, 3);
+ 					DBGPRINT(RT_DEBUG_TRACE, "Language of venue name = %s\n", token);
+ 					token = strtok(NULL, "%");
+ 					if (!token) {
+@@ -2890,7 +2890,7 @@
+ 									copy_len = os_strlen(token)-1;
+ 
+ 								vname_duple->length += copy_len;
+-								os_strncpy(venue_ptr, token, copy_len);
++								os_memcpy(venue_ptr, token, copy_len);
+ 								venue_ptr += copy_len;
+ 								break;
+ 							}
+@@ -2900,7 +2900,7 @@
+ 								{
+ 									copy_len = max_venue_len-vname_duple->length;
+ 									vname_duple->length += copy_len;
+-									os_strncpy(venue_ptr, token, copy_len);
++									os_memcpy(venue_ptr, token, copy_len);
+ 									venue_ptr += copy_len;
+ 									break;
+ 								}
+@@ -2908,7 +2908,7 @@
+ 								{
+ 									copy_len = os_strlen(token)+1;
+ 									vname_duple->length += copy_len;
+-									os_strncpy(venue_ptr, token, copy_len-1);
++									os_memcpy(venue_ptr, token, copy_len-1);
+ 									venue_ptr += copy_len-1;
+ 									*venue_ptr = 0x0a;
+ 									venue_ptr += 1;
+@@ -3036,12 +3036,17 @@
+ 					friendly_name = os_zalloc(sizeof(struct osu_friendly_name) + os_strlen(token));
+ 					token = strtok(tmpbuf, "=");
+ 					token = strtok(NULL, ":");
++					if (!token || os_strlen(token) < 3) {
++						DBGPRINT(RT_DEBUG_ERROR, "[%s] invalid OSU friendly-name language code\n", __func__);
++						os_free(friendly_name);
++						continue;
++					}
+ 					friendly_name->len += 3;
+-					os_strncpy(friendly_name->language, token, 3);
++					os_memcpy(friendly_name->language, token, 3);
+ 					DBGPRINT(RT_DEBUG_TRACE, "Language of osu_friendly_name = %s\n", token);
+ 					token = strtok(NULL, ":");
+ 					friendly_name->len += os_strlen(token);
+-					os_strncpy(friendly_name->osu_friendly_name_value, token, os_strlen(token));
++					os_memcpy(friendly_name->osu_friendly_name_value, token, os_strlen(token));
+ 					DBGPRINT(RT_DEBUG_TRACE, "osu_friendly_name:%s\n", token);
+ 
+ 					if (providers_list) {
+@@ -3229,16 +3234,16 @@
+ 				token = strtok(NULL, "");
+ 				DBGPRINT(RT_DEBUG_TRACE, "aoc_language:[%s]\n", token);
+ 				plan_tuple_data = os_zalloc(sizeof(*plan_tuple_data));
+-				if ((plan_tuple_data != NULL) && (token != NULL))
+-					os_strncpy(plan_tuple_data->language, token, 3);
++				if ((plan_tuple_data != NULL) && (token != NULL) && os_strlen(token) >= 3)
++					os_memcpy(plan_tuple_data->language, token, 3);
+ 				else
+ 					DBGPRINT(RT_DEBUG_ERROR, "[ERR]ADVICE OF CHARGE Element incomplete, plan_tuple_data: [%p], aoc_language: [%s]\n",
+                                                           plan_tuple_data, token);
+ 			} else if (os_strcmp(token, "aoc_currency_code") == 0) {
+ 				token = strtok(NULL, "");
+ 				DBGPRINT(RT_DEBUG_TRACE, "aoc_currency_code:[%s]\n", token);
+-				if ((plan_tuple_data != NULL) && (token != NULL))
+-					os_strncpy(plan_tuple_data->currency_code, token, 3);
++				if ((plan_tuple_data != NULL) && (token != NULL) && os_strlen(token) >= 3)
++					os_memcpy(plan_tuple_data->currency_code, token, 3);
+ 				else
+ 					DBGPRINT(RT_DEBUG_ERROR, "[ERR]ADVICE OF CHARGE Element incomplete, plan_tuple_data: [%p], aoc_currency_code: [%s]\n",
+                                                           plan_tuple_data, token);
+@@ -3271,7 +3276,7 @@
+ 
+ 					vurl_duple->venue_number = ven_num;
+ 					vurl_duple->url_length = os_strlen(token);
+-					os_strncpy(vurl_duple->venue_url, token, vurl_duple->url_length);
++					os_memcpy(vurl_duple->venue_url, token, vurl_duple->url_length);
+ 					dl_list_add_tail(&conf->venue_url_list, &vurl_duple->list);
+ 					conf->venue_url_nums++;
+ 
+@@ -3410,13 +3415,13 @@
+ 						continue;
+ 					}
+ 					token = strtok(NULL, ":");
+-					if (!token) {
+-						DBGPRINT(RT_DEBUG_ERROR, "[%s] (%d): strtok fail\n", __func__, __LINE__);
++					if (!token || os_strlen(token) < 3) {
++						DBGPRINT(RT_DEBUG_ERROR, "[%s] invalid OSU service language code\n", __func__);
+ 						os_free(service_desc);
+ 						continue;
+ 					}
+ 					service_desc->len += 3;
+-					os_strncpy(service_desc->language, token, 3);
++					os_memcpy(service_desc->language, token, 3);
+ 					DBGPRINT(RT_DEBUG_TRACE, "Language of osu_service_desc = %s\n", token);
+ 					token = strtok(NULL, ":");
+ 					if (!token) {
+@@ -3425,7 +3430,7 @@
+ 						continue;
+ 					}
+ 					service_desc->len += os_strlen(token);
+-					os_strncpy(service_desc->osu_service_desc_value, token, os_strlen(token));
++					os_memcpy(service_desc->osu_service_desc_value, token, os_strlen(token));
+ 					DBGPRINT(RT_DEBUG_TRACE, "osu_service_desc:%s\n", token);
+ 
+ 					if (providers_list) {
+@@ -3627,13 +3632,13 @@
+ 					op_name_duple = os_zalloc(sizeof(struct operator_name_duple) + os_strlen(token));
+ 					token = strtok(tmpbuf, "=");
+ 					token = strtok(NULL, ",");
+-					if (!token) {
+-						DBGPRINT(RT_DEBUG_ERROR, "[%s] (%d): strtok fail\n", __func__, __LINE__);
++					if (!token || os_strlen(token) < 3) {
++						DBGPRINT(RT_DEBUG_ERROR, "[%s] invalid operator-name language code\n", __func__);
+ 						os_free(op_name_duple);
+ 						continue;
+ 					}
+ 					op_name_duple->length += 3;
+-					os_strncpy(op_name_duple->language, token, 3);
++					os_memcpy(op_name_duple->language, token, 3);
+ 					DBGPRINT(RT_DEBUG_TRACE, "Language of operator friendly name = %s\n", token);
+ 					token = strtok(NULL, ",");
+ 					if (!token) {
+@@ -3642,7 +3647,7 @@
+ 						continue;
+ 					}
+ 					op_name_duple->length += os_strlen(token);
+-					os_strncpy(op_name_duple->operator_name, token, os_strlen(token));
++					os_memcpy(op_name_duple->operator_name, token, os_strlen(token));
+ 					DBGPRINT(RT_DEBUG_TRACE, "operator friendly name:%s , strlen:%zu\n", token,os_strlen(token));
+ 					dl_list_add_tail(&conf->operator_friendly_duple_list, &op_name_duple->list);
+ 					conf->op_friendly_name_nums++;
+--- a/wappd/include/map_1905.h
++++ b/wappd/include/map_1905.h
+@@ -151,7 +151,7 @@
+ #define AIR_MONITOR_QUERY_TIMEOUT			750000U /* micro seconds*/
+ #define WPS_TIMEOUT							150 // 2.5 min
+ #define RRM_REQUEST_TIMEOUT					5
+-struct GNU_PACKED air_monitor_query_rsp{
++struct air_monitor_query_rsp{
+ 	struct dl_list list;
+ 	unsigned char almac[ETH_ALEN];
+ 	unsigned int bitmap;
+@@ -163,7 +163,7 @@
+ 	unsigned int profile2_bh_assoc_disallow;
+ };
+ 
+-struct GNU_PACKED bh_assoc_ctrl {
++struct bh_assoc_ctrl {
+ 	struct dl_list list;
+ 	struct bh_assoc_disallow_info bh_ctrl_info;
+ };
