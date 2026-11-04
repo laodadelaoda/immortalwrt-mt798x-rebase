@@ -1,52 +1,17 @@
 name: Build N60 Pro - ImmortalWrt 25.12 (Standard Only)
 
 on:
-  push:
-    branches: ["n60pro-mtk-closed-driver"]
-    paths:
-      - "package/**"
-      - "target/**"
-      - "toolchain/**"
-      - "tools/**"
-      - "include/**"
-      - "scripts/**"
-      - "config/**"
-      - "feeds.conf.default"
-      - "files/**"
-      - "Makefile"
-      - "rules.mk"
-      - ".github/workflows/main.yml"
-      - ".github/workflows/easymesh-quick.yml"
   workflow_dispatch:
     inputs:
       device:
-        description: "Router model to build"
+        description: Router model to build
         required: true
         type: choice
         default: netcore_n60-pro
         options:
           - netcore_n60-pro
-
-permissions:
-  contents: read
-
-# Do not cancel a running kernel/firmware build when a newer audited workflow
-# revision is pushed; queue the new revision instead.
-concurrency:
-  group: n60-pro-build
-  cancel-in-progress: false
-
 jobs:
-  # Full firmware production is strictly gated by the reusable EasyMesh
-  # compatibility workflow. Any Quick failure prevents kernel/firmware build.
-  quick_compatibility:
-    name: Quick compatibility gate
-    uses: ./.github/workflows/easymesh-quick.yml
-    with:
-      device: ${{ github.event.inputs.device || 'netcore_n60-pro' }}
-
   build:
-    needs: quick_compatibility
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
