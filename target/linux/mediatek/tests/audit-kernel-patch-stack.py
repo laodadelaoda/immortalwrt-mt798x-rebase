@@ -20,6 +20,23 @@ VERSION_FILE = "target/linux/generic/kernel-6.12"
 SEMANTIC = [
     ("999-net-01-netdevice-add-macvlan-device-path-type.patch", "999-net-02-netdevice-add-dslite-device-path-type.patch", "DS-Lite enum context follows MACVLAN enum addition"),
     ("999-net-02-netdevice-add-dslite-device-path-type.patch", "999-net-03-netdevice-add-tnl-device-path-type.patch", "TNL enum context includes DS-Lite and 6RD entries"),
+    ("999-net-02-netdevice-add-npu-device-path-type.patch", "999-net-03-netdevice-add-tnl-device-path-type.patch", "TNL enum hunk must preserve the NPU-added L2TP/PPTP entries after MTK_WDMA"),
+    ("999-hnat-03-netfilter-nf_flow_table-support-hw-offload-through-v.patch", "999-hnat-04-net-8021q-support-hardware-flow-table-offload.patch", "VLAN ndo_flow_offload_check consumes flow_offload_hw_path introduced by HNAT base patch"),
+    ("999-hnat-03-netfilter-nf_flow_table-support-hw-offload-through-v.patch", "999-hnat-05-net-bridge-support-hardware-flow-table-offload.patch", "Bridge ndo_flow_offload_check consumes flow_offload_hw_path introduced by HNAT base patch"),
+    ("999-hnat-03-netfilter-nf_flow_table-support-hw-offload-through-v.patch", "999-hnat-06-net-pppoe-support-hardware-flow-table-offload.patch", "PPP/PPPoE flow-offload callbacks extend the HNAT base API"),
+    ("999-hnat-03-netfilter-nf_flow_table-support-hw-offload-through-v.patch", "999-net-04-netdevice-add-ndo_flow_offload_stats64_add-for-offload-stats-correction.patch", "net_device_ops extension is based on ndo_flow_offload_check introduced by HNAT base patch"),
+    ("999-net-04-netdevice-add-ndo_flow_offload_stats64_add-for-offload-stats-correction.patch", "999-hnat-14-net-vlan-add-ndo_flow_offload_stats64_add-for-offload-stats-correction.patch", "VLAN statistics callback initializes the ndo field introduced by net-04; source dependency is cross-file"),
+    ("999-net-04-netdevice-add-ndo_flow_offload_stats64_add-for-offload-stats-correction.patch", "999-hnat-15-ppp-add-ndo_flow_offload_stats64_add-for-offload-stats-correction.patch", "PPP statistics callback initializes the ndo field introduced by net-04; source dependency is cross-file"),
+    ("999-hnat-03-netfilter-nf_flow_table-support-hw-offload-through-v.patch", "999-tnl-01-mtk-tunnel-offload-support.patch", "Tunnel patch extends flow_offload_hw_path introduced by HNAT base patch"),
+    ("999-net-03-netdevice-add-tnl-device-path-type.patch", "999-tnl-02-mtk-gre-offload-support.patch", "GRE callback sets BIT(DEV_PATH_TNL)"),
+    ("999-tnl-01-mtk-tunnel-offload-support.patch", "999-tnl-02-mtk-gre-offload-support.patch", "GRE callback uses FLOW_OFFLOAD_TNL_GRETAP"),
+    ("999-net-03-netdevice-add-tnl-device-path-type.patch", "999-tnl-04-mtk-vxlan-offload-support.patch", "VXLAN callback sets BIT(DEV_PATH_TNL)"),
+    ("999-tnl-01-mtk-tunnel-offload-support.patch", "999-tnl-04-mtk-vxlan-offload-support.patch", "VXLAN callback uses FLOW_OFFLOAD_TNL_VXLAN"),
+    ("999-hnat-06-net-pppoe-support-hardware-flow-table-offload.patch", "999-tnl-03-mtk-ppp-offload-support.patch", "PPP socket API patch extends ppp_generic and ppp_channel.h after HNAT PPP callbacks"),
+    ("999-hnat-06-net-pppoe-support-hardware-flow-table-offload.patch", "999-tnl-90-mtk-l2tp-offload-support.patch", "L2TP PPP channel callback uses flow_offload_check member introduced by HNAT PPP patch"),
+    ("999-hnat-06-net-pppoe-support-hardware-flow-table-offload.patch", "999-tnl-91-mtk-pptp-offload-support.patch", "PPTP PPP channel callback uses flow_offload_check member introduced by HNAT PPP patch"),
+    ("999-dsa-02-add-mt7531-netlink-support.patch", "999-dsa-09-harden-mt7530-netlink-lifecycle-and-bounds.patch", "MT7530 hardening patch modifies Netlink files created by DSA base patch"),
+    ("999-dsa-03-add-an8855-netlink-support.patch", "999-dsa-10-harden-an8855-netlink-and-procfs-lifecycle.patch", "AN8855 hardening patch modifies Netlink files created by DSA base patch"),
     ("999-net-02-netdevice-add-npu-device-path-type.patch", "999-tnl-07-l2tp-add-fill-forward-path.patch", "L2TP callback uses DEV_PATH_L2TP and net_device_path.tunnel"),
     ("999-net-02-netdevice-add-npu-device-path-type.patch", "999-tnl-08-pptp-add-fill-forward-path.patch", "PPTP callback uses DEV_PATH_PPTP and net_device_path.tunnel"),
     ("999-net-02-netdevice-add-npu-device-path-type.patch", "999-ppe-41-nft_flow_offload-add-npu-offload-support.patch", "nft flow path consumes NPU tunnel path fields"),
@@ -88,7 +105,8 @@ def inventory(repo):
             edges.append({"target_file": target, "previous_patch": a["path"], "next_patch": b["path"],
                           "previous_order": a["order"], "next_order": b["order"]})
     names = {p["name"] for p in patches}
-    semantic = [{"prerequisite": a, "consumer": b, "reason": why} for a, b, why in SEMANTIC if a in names and b in names]
+    order = {p["name"]: p["order"] for p in patches}
+    semantic = [{"prerequisite": a, "consumer": b, "reason": why, "prerequisite_order": order[a], "consumer_order": order[b], "prerequisite_applied_before_consumer": order[a] < order[b]} for a, b, why in SEMANTIC if a in names and b in names]
     missing = [{"prerequisite": a, "consumer": b} for a, b, _ in SEMANTIC if a not in names or b not in names]
     version_text = (repo / VERSION_FILE).read_text()
     vm = re.search(r"LINUX_VERSION-6\.12\s*=\s*\.([0-9]+)", version_text)
@@ -123,7 +141,7 @@ def write_inventory(inv, out):
     for filename, rows, fields in [
         ("file-overlap-dependencies.csv", inv["file_overlap_edges"], ["target_file","previous_patch","next_patch","previous_order","next_order"]),
         ("overlay-inventory.csv", inv["overlays"], ["directory_order","directory","source_path","target_path","sha256","bytes"]),
-        ("semantic-dependencies.csv", inv["semantic_dependencies"], ["prerequisite","consumer","reason"]),
+        ("semantic-dependencies.csv", inv["semantic_dependencies"], ["prerequisite","consumer","reason","prerequisite_order","consumer_order","prerequisite_applied_before_consumer"]),
     ]:
         with (out / filename).open("w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=fields); w.writeheader(); w.writerows(rows)
