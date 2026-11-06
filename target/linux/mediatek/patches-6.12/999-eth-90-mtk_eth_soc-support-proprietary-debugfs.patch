@@ -45,7 +45,7 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: support proprietary debugfs
 
 --- a/drivers/net/ethernet/mediatek/Makefile
 +++ b/drivers/net/ethernet/mediatek/Makefile
-@@ -4,7 +4,7 @@
+@@ -4,8 +4,8 @@
  #
  
  obj-$(CONFIG_NET_MEDIATEK_SOC) += mtk_eth.o
@@ -56,7 +56,7 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: support proprietary debugfs
  mtk_eth-$(CONFIG_NET_MEDIATEK_SOC_WED) += mtk_wed_debugfs.o
 --- /dev/null
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_dbg.c
-@@ -0,0 +1,2995 @@
+@@ -0,1 +1,3009 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + *   Copyright (C) 2025 MediaTek Inc.
@@ -82,18 +82,27 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: support proprietary debugfs
 +static int mtk_qdma_pppq_show(struct seq_file *m, void *v)
 +{
 +	struct mtk_eth *eth = m->private;
++	u32 speed[MTK_QDMA_NUM_QUEUES];
++	u32 threshold;
++	int refcnt[MTK_QDMA_NUM_QUEUES];
 +	int i;
++
++	spin_lock_bh(&eth->qdma_shaper.lock);
++	threshold = eth->qdma_shaper.threshold;
++	for (i = 0; i < MTK_QDMA_NUM_QUEUES; i++) {
++		speed[i] = eth->qdma_shaper.speed[i];
++		refcnt[i] = atomic_read(&eth->qdma_shaper.refcnt[i]);
++	}
++	spin_unlock_bh(&eth->qdma_shaper.lock);
 +
 +	seq_puts(m, "Usage of the QDMA PPPQ for the HW path:\n");
 +	for (i = 0; i < MTK_QDMA_NUM_QUEUES; i++)
-+		seq_printf(m, "qdma_txq%d:	%5d Mbps %8d refcnt\n",
-+			   i, eth->qdma_shaper.speed[i],
-+			   atomic_read(&eth->qdma_shaper.refcnt[i]));
-+	seq_printf(m, "qdma_thres:	%5d Mbps\n", eth->qdma_shaper.threshold);
++		seq_printf(m, "qdma_txq%d:\t%5d Mbps %8d refcnt\n",
++			   i, speed[i], refcnt[i]);
++	seq_printf(m, "qdma_thres:\t%5d Mbps\n", threshold);
 +
 +	return 0;
 +}
-+
 +static int mtk_qdma_pppq_open(struct inode *inode, struct file *file)
 +{
 +	return single_open(file, mtk_qdma_pppq_show, inode->i_private);
@@ -104,26 +113,30 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: support proprietary debugfs
 +{
 +	struct seq_file *m = (struct seq_file *)file->private_data;
 +	struct mtk_eth *eth = m->private;
-+	char buf[8] = {0};
++	char buf[16];
 +	u32 threshold;
-+	int len = count;
 +
-+	if ((len > 8) || copy_from_user(buf, buffer, len))
++	if (!count || count >= sizeof(buf))
++		return -EINVAL;
++
++	if (copy_from_user(buf, buffer, count))
 +		return -EFAULT;
++	buf[count] = '\0';
 +
-+	if (sscanf(buf, "%6d", &threshold) != 1)
-+		return -EFAULT;
++	if (kstrtou32(buf, 0, &threshold))
++		return -EINVAL;
 +
-+	if (threshold > 10000 || threshold < 0) {
++	if (threshold > 10000) {
 +		pr_warn("Threshold must be between 0 and 10000 Mbps\n");
 +		return -EINVAL;
 +	}
 +
++	spin_lock_bh(&eth->qdma_shaper.lock);
 +	eth->qdma_shaper.threshold = threshold;
++	spin_unlock_bh(&eth->qdma_shaper.lock);
 +
-+	return len;
++	return count;
 +}
-+
 +static const struct file_operations mtk_eth_debugfs_qdma_pppq_fops = {
 +	.owner = THIS_MODULE,
 +	.open = mtk_qdma_pppq_open,
