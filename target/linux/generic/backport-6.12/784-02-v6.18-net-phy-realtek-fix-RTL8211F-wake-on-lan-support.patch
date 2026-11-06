@@ -110,7 +110,7 @@ Signed-off-by: Jakub Kicinski <kuba@kernel.org>
  };
  
  static int rtl821x_read_page(struct phy_device *phydev)
-@@ -255,6 +254,34 @@ static int rtl821x_probe(struct phy_devi
+@@ -255,6 +254,36 @@ static int rtl821x_probe(struct phy_devi
  	return 0;
  }
  
