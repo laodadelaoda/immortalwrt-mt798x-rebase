@@ -18,8 +18,8 @@ Date: Thu, 18 Sep 2025 16:31:44 +0800
 Subject: [PATCH] net: pcs: mtk-lynxi: add autoneg off
 
 ---
- drivers/net/pcs/pcs-mtk-lynxi.c | 43 +++++++++++++++++++++++----------
- 1 file changed, 30 insertions(+), 13 deletions(-)
+ drivers/net/pcs/pcs-mtk-lynxi.c | 22 ++++++++--------------
+ 1 file changed, 8 insertions(+), 14 deletions(-)
 
 --- a/drivers/net/pcs/pcs-mtk-lynxi.c
 +++ b/drivers/net/pcs/pcs-mtk-lynxi.c
