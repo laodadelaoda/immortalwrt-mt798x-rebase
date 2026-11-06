@@ -124,10 +124,11 @@
         "mtk_driver_abi"
       ],
       "components": [
-        "mtwifi",
         "conninfra",
-        "warp",
-        "mapfilter"
+        "easymesh",
+        "mapfilter",
+        "mtwifi",
+        "warp"
       ]
     },
     {
@@ -161,8 +162,9 @@
         "package_prepare"
       ],
       "components": [
-        "mtwifi",
         "conninfra",
+        "easymesh",
+        "mtwifi",
         "warp"
       ]
     },
