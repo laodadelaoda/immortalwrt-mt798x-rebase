@@ -268,6 +268,7 @@ def attest(repo, out, kernel_src, log_path, archive, run_id, attempt):
         ("AN8855 Netlink/procfs lifecycle", [sys.executable, str(tests_dir / "test-dsa-an8855-netlink.py"), str(kernel_src)]),
         ("PCIe Gen3 IRQ lifecycle", [sys.executable, str(tests_dir / "test-pcie-gen3-irq-lifecycle.py"), str(kernel_src)]),
         ("Ethernet/HNAT/PPE/NPU/TNL API and ownership", [sys.executable, str(tests_dir / "test-network-offload-api.py"), str(kernel_src)]),
+        ("PHY/WED API and lifecycle", [sys.executable, str(tests_dir / "test-phy-wed-api.py"), str(kernel_src)]),
     ]
     for label, command in gates:
         result = subprocess.run(command, check=False)
