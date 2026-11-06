@@ -155,7 +155,6 @@ index 6ad33a9..2aac404 100644
  int mt7530_probe_common(struct mt7530_priv *priv);
  void mt7530_remove_common(struct mt7530_priv *priv);
 +void mt7530_write(struct mt7530_priv *priv, u32 reg, u32 val);
-+void mt7530_write(struct mt7530_priv *priv, u32 reg, u32 val);
 +u32 mt7530_read(struct mt7530_priv *priv, u32 reg);
 +int mt7531_ind_c45_phy_read(struct mt7530_priv *priv, int port, int devad, int regnum);
 +int mt7531_ind_c45_phy_write(struct mt7530_priv *priv, int port, int devad, int regnum, u16 data);
