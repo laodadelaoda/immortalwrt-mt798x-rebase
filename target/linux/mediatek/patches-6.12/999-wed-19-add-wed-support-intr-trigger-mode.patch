@@ -15,7 +15,7 @@ Subject: [PATCH] add wed support intr trigger mode
 ---
  drivers/net/ethernet/mediatek/mtk_wed.c | 45 +++++++++++++++++++++++++--
  include/linux/soc/mediatek/mtk_wed.h    |  6 +++-
- 2 files changed, 46 insertions(+), 3 deletions(-)
+ 2 files changed, 48 insertions(+), 3 deletions(-)
 
 diff --git a/drivers/net/ethernet/mediatek/mtk_wed.c b/drivers/net/ethernet/mediatek/mtk_wed.c
 index e4fc718..8b9243f 100644
