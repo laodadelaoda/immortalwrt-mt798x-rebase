@@ -152,6 +152,23 @@ def inventory(repo):
         "duplicate_patch_content": [v for v in _groups([p["sha256"] for p in patches], [p["path"] for p in patches]).values() if len(v)>1],
     }
 
+def validate_inventory(inv):
+    """Fail closed when curated semantic prerequisites are absent or out of order."""
+    missing = inv.get("missing_semantic_dependencies", [])
+    violations = inv.get("semantic_dependency_order_violations", [])
+    if missing:
+        details = ", ".join(
+            f"{x['prerequisite']} -> {x['consumer']}" for x in missing
+        )
+        raise RuntimeError("Missing curated semantic dependency patch(es): " + details)
+    if violations:
+        details = ", ".join(
+            f"{x['prerequisite']} (order {x['prerequisite_order']}) -> "
+            f"{x['consumer']} (order {x['consumer_order']})"
+            for x in violations
+        )
+        raise RuntimeError("Semantic dependency order violation(s): " + details)
+
 def _groups(keys, values):
     d = defaultdict(list)
     for k, v in zip(keys, values): d[k].append(v)
@@ -181,6 +198,7 @@ def write_inventory(inv, out):
 
 def attest(repo, out, kernel_src, log_path, archive, run_id, attempt):
     inv = json.loads((out / "patch-inventory.json").read_text())
+    validate_inventory(inv)
     archive_sha = digest(archive.read_bytes())
     if archive_sha != inv["kernel_archive_sha256"]: raise RuntimeError("Downloaded kernel archive SHA256 differs from the repository pin")
     raw = log_path.read_bytes(); log = raw.decode("utf-8", errors="replace")
@@ -216,6 +234,7 @@ def verify(repo, att_path, run_id, attempt):
     if att.get("repository_head_sha") != head(repo): raise RuntimeError("Attestation HEAD differs from checked-out revision")
     if att.get("github_run_id") != str(run_id) or att.get("github_run_attempt") != str(attempt): raise RuntimeError("Attestation belongs to another workflow run/attempt")
     inv = inventory(repo)
+    validate_inventory(inv)
     for key in ("kernel_version","kernel_archive_sha256","patch_manifest_sha256","overlay_manifest_sha256","input_manifest_sha256","patch_count"):
         if att.get(key) != inv.get(key): raise RuntimeError("Attested source input changed: " + key)
     unsigned = dict(att); signature = unsigned.pop("attestation_sha256", None)
