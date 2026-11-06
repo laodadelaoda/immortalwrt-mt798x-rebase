@@ -63,6 +63,7 @@ jobs:
               "target/linux/mediatek/tests/test-dsa-mt7530-netlink.py",
               "target/linux/mediatek/tests/test-dsa-an8855-netlink.py",
               "target/linux/mediatek/tests/test-pcie-gen3-irq-lifecycle.py",
+              "target/linux/mediatek/tests/test-network-offload-api.py",
           ]
           for name in files:
               path = Path(name)
@@ -133,6 +134,9 @@ jobs:
               python3 target/linux/mediatek/tests/test-pcie-gen3-irq-lifecycle.py "$KERNEL_SRC" \
                 > "$AUDIT_DIR/partial-pcie-lifecycle-audit.log" 2>&1
               echo "PCIe AUDIT EXIT: $?"
+              python3 target/linux/mediatek/tests/test-network-offload-api.py "$KERNEL_SRC" \
+                > "$AUDIT_DIR/partial-network-offload-api-audit.log" 2>&1
+              echo "NETWORK OFFLOAD API AUDIT EXIT: $?"
               for report in "$AUDIT_DIR"/partial-*-audit.log; do
                 echo "===== $report ====="
                 cat "$report"
