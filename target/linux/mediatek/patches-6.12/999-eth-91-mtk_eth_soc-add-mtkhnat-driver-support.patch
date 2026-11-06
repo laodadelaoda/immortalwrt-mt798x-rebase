@@ -49,7 +49,7 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: add mtkhnat driver support
 +obj-$(CONFIG_NET_MEDIATEK_HNAT) += mtk_hnat/
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-@@ -48,1 +48,5 @@
+@@ -48,3 +48,7 @@
 +#if defined(CONFIG_NET_MEDIATEK_HNAT) || defined(CONFIG_NET_MEDIATEK_HNAT_MODULE)
 +#include "mtk_hnat/nf_hnat_mtk.h"
 +#endif
@@ -57,7 +57,7 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: add mtkhnat driver support
  static int mtk_msg_level = -1;
  module_param_named(msg_level, mtk_msg_level, int, 0);
  MODULE_PARM_DESC(msg_level, "Message level (-1=defaults,0=none,...,16=all)");
-@@ -2954,6 +2958,53 @@ static int mtk_poll_rx(struct napi_struc
+@@ -2954,6 +2958,48 @@ static int mtk_poll_rx(struct napi_struc
  
  			skb_reserve(skb, NET_SKB_PAD + NET_IP_ALIGN);
  			skb_put(skb, pktlen);
@@ -78,8 +78,6 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: add mtkhnat driver support
 +			skb_hnat_set_is_pppoe(skb, 0);
 +
 +			if (skb_hnat_reason(skb) == HIT_BIND_FORCE_TO_CPU) {
-+				trace_printk("[%s] reason=0x%x(force to CPU) from WAN to Ext\n",
-+					     __func__, skb_hnat_reason(skb));
 +				skb->pkt_type = PACKET_HOST;
 +			}
 +
@@ -104,9 +102,6 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: add mtkhnat driver support
 +				}
 +			}
 +
-+			trace_printk("[%s] rxd:(entry=%x,sport=%x,reason=%x,alg=%x\n",
-+				     __func__, skb_hnat_entry(skb), skb_hnat_sport(skb),
-+				     skb_hnat_reason(skb), skb_hnat_alg(skb));
 +#endif
  		}
  
