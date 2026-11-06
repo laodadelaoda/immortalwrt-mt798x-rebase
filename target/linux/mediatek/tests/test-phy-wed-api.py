@@ -112,6 +112,43 @@ check("mtk_wed_set_pcie_mask(dev, true)" in body(wed, "mtk_wed_start") and
       "mtk_wed_set_pcie_mask(dev, false)" in body(wed, "mtk_wed_stop"),
       "WED PCIe interrupt mask is not paired across start/stop")
 
+
+# Realtek PHY backports must preserve Linux 6.12 MDIO/PHY/PM API contracts.
+mdio_h = read("include/linux/mdio.h")
+wakeirq_h = read("include/linux/pm_wakeirq.h")
+for symbol, header in (
+    ("phy_read_mmd_poll_timeout", phy_h),
+    ("__mdiobus_c45_read", mdio_h),
+    ("devm_pm_set_wake_irq", wakeirq_h),
+):
+    check(bool(re.search(r"\b" + symbol + r"\s*\(", header)),
+          "Linux 6.12 Realtek PHY API declaration missing: " + symbol)
+
+realtek_hwmon = read("drivers/net/phy/realtek/realtek_hwmon.c")
+hwmon_read = body(realtek_hwmon, "rtl822x_hwmon_read")
+hwmon_init = body(realtek_hwmon, "rtl822x_hwmon_init")
+check(hwmon_read.count("phy_read_mmd(") == 2 and hwmon_read.count("if (raw < 0)") == 2,
+      "RTL822x hwmon treats negative MDIO errors as temperature values")
+check("ret = phy_clear_bits_mmd" in hwmon_init and "if (ret < 0)" in hwmon_init,
+      "RTL822x hwmon initialization ignores over-temperature alarm reset failure")
+
+realtek_main = read("drivers/net/phy/realtek/realtek_main.c")
+led_set_f = body(realtek_main, "rtl8211f_led_hw_control_set")
+led_set_e = body(realtek_main, "rtl8211e_led_hw_control_set")
+check("if (index >= RTL8211x_LED_COUNT)" in led_set_f and
+      led_set_f.find("if (index >= RTL8211x_LED_COUNT)") < led_set_f.find("mask = RTL8211F_LEDCR_MASK"),
+      "RTL8211F LED index is shifted before its bounds check")
+check("if (index >= RTL8211x_LED_COUNT)" in led_set_e and
+      led_set_e.find("if (index >= RTL8211x_LED_COUNT)") < led_set_e.find("cr1mask = RTL8211E_LEDCR1_MASK") and
+      led_set_e.find("if (index >= RTL8211x_LED_COUNT)") < led_set_e.find("cr2mask = RTL8211E_LEDCR2_MASK"),
+      "RTL8211E LED index is shifted before its bounds check")
+
+rtl_probe = body(realtek_main, "rtl8211f_probe")
+check("ret = devm_pm_set_wake_irq(dev, phydev->irq)" in rtl_probe and
+      "if (ret)" in rtl_probe and
+      rtl_probe.find("if (ret)") < rtl_probe.find("device_set_wakeup_capable(dev, true)"),
+      "RTL8211F probe ignores failure to register the PHY wake IRQ")
+
 if failures:
     for failure in failures:
         print("FAIL: " + failure, file=sys.stderr)
