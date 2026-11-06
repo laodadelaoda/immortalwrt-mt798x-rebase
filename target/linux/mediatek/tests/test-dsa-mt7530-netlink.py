@@ -16,7 +16,7 @@ if missing:
     raise SystemExit("FAIL: missing patched MT7530 source: " + ", ".join(missing))
 
 def function(source, name):
-    match = re.search(r"\b" + re.escape(name) + r"\s*\\([^;]*?\\)\\s*\\{", source, re.S)
+    match = re.search(r"\b" + re.escape(name) + r"\s*\([^;]*?\)\s*\{", source, re.S)
     if not match:
         return ""
     opening = source.find("{", match.start())
