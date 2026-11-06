@@ -66,7 +66,7 @@ index 74a6fe5..42e28be 100644
 +			continue;
 +
 +		if (dev_open(eth->netdev[i], NULL))
-+			netdev_err(eth->netdev[i], "Netdev restart failed\\n");
++			netdev_err(eth->netdev[i], "Netdev restart failed\n");
 +	}
 +
 +	rtnl_unlock();
