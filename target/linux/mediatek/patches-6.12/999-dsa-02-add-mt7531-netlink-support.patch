@@ -150,7 +150,7 @@ diff --git a/drivers/net/dsa/mt7530.h b/drivers/net/dsa/mt7530.h
 index 6ad33a9..2aac404 100644
 --- a/drivers/net/dsa/mt7530.h
 +++ b/drivers/net/dsa/mt7530.h
-@@ -874,6 +874,13 @@ static inline void INIT_MT7530_DUMMY_POLL(struct mt7530_dummy_poll *p,
+@@ -874,6 +874,12 @@ static inline void INIT_MT7530_DUMMY_POLL(struct mt7530_dummy_poll *p,
  
  int mt7530_probe_common(struct mt7530_priv *priv);
  void mt7530_remove_common(struct mt7530_priv *priv);
