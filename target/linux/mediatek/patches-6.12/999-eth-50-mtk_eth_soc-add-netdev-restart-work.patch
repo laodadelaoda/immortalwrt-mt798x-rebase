@@ -41,7 +41,7 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.c b/drivers/net/ethernet/
 index 74a6fe5..42e28be 100644
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-@@ -5699,13 +5699,45 @@ static void mtk_uninit(struct net_device *dev)
+@@ -5699,5 +5699,32 @@ static void mtk_uninit(struct net_device *dev)
  	mtk_rx_irq_disable(eth, ~0);
  }
  
@@ -57,7 +57,7 @@ index 74a6fe5..42e28be 100644
 +		if (!eth->netdev[i] || !netif_running(eth->netdev[i]))
 +			continue;
 +
-+		mtk_stop(eth->netdev[i]);
++		dev_close(eth->netdev[i]);
 +		__set_bit(i, &restart);
 +	}
 +
@@ -65,11 +65,8 @@ index 74a6fe5..42e28be 100644
 +		if (!test_bit(i, &restart) || !eth->netdev[i])
 +			continue;
 +
-+		if (mtk_open(eth->netdev[i])) {
-+			netif_alert(eth, ifup, eth->netdev[i],
-+				    "Netdev restart failed, closing device...\n");
-+			dev_close(eth->netdev[i]);
-+		}
++		if (dev_open(eth->netdev[i], NULL))
++			netdev_err(eth->netdev[i], "Netdev restart failed\\n");
 +	}
 +
 +	rtnl_unlock();
@@ -77,30 +74,6 @@ index 74a6fe5..42e28be 100644
 +
  static int mtk_change_mtu(struct net_device *dev, int new_mtu)
  {
- 	struct mtk_mac *mac = netdev_priv(dev);
- 	struct mtk_eth *eth = mac->hw;
- 	int max_mtu, i, length;
-+	u32 rx_buf_len;
- 
- 	WRITE_ONCE(dev->mtu, new_mtu);
-+	rx_buf_len = eth->rx_buf_len;
- 
- 	max_mtu = mtk_max_gmac_mtu(eth);
- 	for (i = 0; i < ARRAY_SIZE(eth->ppe); i++)
-@@ -5725,6 +5757,13 @@ static int mtk_change_mtu(struct net_device *dev, int new_mtu)
- 		eth->rx_buf_len = DIV_ROUND_UP(length, MTK_MAX_RX_LENGTH_UNIT) *
- 				  MTK_MAX_RX_LENGTH_UNIT;
- 
-+	if (eth->rx_buf_len != rx_buf_len && refcount_read(&eth->dma_refcnt) > 0) {
-+		netdev_info(dev,
-+			    "RX buffer length changed (%u -> %u), scheduling netdevs restart\n",
-+			    rx_buf_len, eth->rx_buf_len);
-+		schedule_work(&eth->netdev_restart_work);
-+	}
-+
- 	return 0;
- }
- 
 @@ -6013,6 +6052,7 @@ static int mtk_cleanup(struct mtk_eth *eth)
 +	cancel_work_sync(&eth->pending_work);
 +	cancel_work_sync(&eth->netdev_restart_work);
@@ -123,7 +96,7 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.h b/drivers/net/ethernet/
 index 78e572e..a40183b 100644
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.h
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.h
-@@ -1747,6 +1747,7 @@ struct mtk_eth {
+@@ -1747,7 +1747,7 @@ struct mtk_eth {
  	struct mii_bus			*mii_bus;
  	unsigned int			mdc_divider;
  	struct work_struct		pending_work;
