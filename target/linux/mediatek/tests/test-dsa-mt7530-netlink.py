@@ -57,7 +57,7 @@ register_pos = init.find("genl_register_family")
 publish_pos = init.find("sw_priv =")
 check(register_pos >= 0 and publish_pos > register_pos,
       "sw_priv is published before Generic Netlink family registration succeeds")
-check("if (ret)" in init and "return ret" in init,
+check("if (!ret)" in init and "return ret" in init,
       "mt7530_nl_init does not propagate family-registration failure")
 unregister_pos = exit_fn.find("genl_unregister_family")
 clear_pos = exit_fn.find("sw_priv = NULL")
