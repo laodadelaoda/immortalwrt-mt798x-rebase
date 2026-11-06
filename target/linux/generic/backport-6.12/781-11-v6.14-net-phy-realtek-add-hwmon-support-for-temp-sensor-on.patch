@@ -16,9 +16,9 @@ Signed-off-by: Jakub Kicinski <kuba@kernel.org>
  drivers/net/phy/realtek/Kconfig         |  6 ++
  drivers/net/phy/realtek/Makefile        |  1 +
  drivers/net/phy/realtek/realtek.h       | 10 ++++
- drivers/net/phy/realtek/realtek_hwmon.c | 86 +++++++++++++++++++++++++++++
+ drivers/net/phy/realtek/realtek_hwmon.c | 88 +++++++++++++++++++++++++++++++
  drivers/net/phy/realtek/realtek_main.c  | 12 ++++
- 5 files changed, 115 insertions(+)
+ 5 files changed, 117 insertions(+)
  create mode 100644 drivers/net/phy/realtek/realtek.h
  create mode 100644 drivers/net/phy/realtek/realtek_hwmon.c
 
@@ -56,7 +56,7 @@ Signed-off-by: Jakub Kicinski <kuba@kernel.org>
 +#endif /* REALTEK_H */
 --- /dev/null
 +++ b/drivers/net/phy/realtek/realtek_hwmon.c
-@@ -0,0 +1,86 @@
+@@ -0,0 +1,88 @@
 +// SPDX-License-Identifier: GPL-2.0+
 +/*
 + * HWMON support for Realtek PHY's
