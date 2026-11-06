@@ -119,3 +119,18 @@ end-to-end NPU/WED offload compatibility.
 The verifier also requires the intermediate per-patch report directory.
 An attestation cannot be verified from the whole-tree report alone; every patch
 report must be present and hash-match.
+
+
+## PHY/PCS/WED lifecycle and API contracts
+
+The PHY/WED gate checks the Linux phylink callback signature after the 6.14
+backport sequence, the generic PHY API declarations consumed by the MediaTek
+PCS drivers, and the final SGMII/USXGMII delayed-work lifecycle. Polling must
+start only from PCS enable and must be stopped before synchronous work
+cancellation; error paths must release the PCS regmap mutex.
+
+It also checks the WED RX-ring configured flag against the RX ring actually
+being freed, and verifies typed MMIO mapping, NULL checks, and unmapping in the
+PCIe interrupt-trigger path. These checks cover the identified regressions in
+the current patch set; they do not replace a full PHY link negotiation test or
+hardware WED DMA/RRO stress test.
