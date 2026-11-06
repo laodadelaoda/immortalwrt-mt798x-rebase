@@ -1,0 +1,111 @@
+#!/bin/sh
+# Read-only N60 Pro EasyMesh diagnostics. Never print PSKs.
+set -u
+
+section() {
+    printf '\n===== %s =====\n' "$1"
+}
+
+section "Processes"
+ps w 2>/dev/null | grep -E '[w]app|[W]APP|[m]apd|[p]1905_managerd' || true
+
+section "WAPP / MAPD sockets"
+for socket in /tmp/wapp_server /tmp/wapp_ctrl /tmp/mapd_ctrl; do
+    if [ -S "$socket" ]; then
+        ls -l "$socket"
+    else
+        echo "MISSING: $socket"
+    fi
+done
+
+section "WAPP startup log (credentials redacted)"
+WAPP_LOG=/tmp/wapp-n60-startup.log
+if [ -r "$WAPP_LOG" ]; then
+    ls -l "$WAPP_LOG"
+    tail -n 120 "$WAPP_LOG" |
+        sed -r 's/((key|psk|passphrase|password)=)[^ ,;]+/\1<redacted>/Ig; s/(WPAPSK[0-9]*=)[^\t ,;]+/\1<redacted>/Ig; s/(WPAKey[=:])[^\t ,;]+/\1<redacted>/Ig'
+else
+    echo "MISSING: $WAPP_LOG"
+fi
+
+section "WAPP driver registration"
+if [ -x /usr/bin/wappctrl ]; then
+    for iface in ra0 rax0; do
+        echo "--- $iface drv_version ---"
+        /usr/bin/wappctrl "$iface" drv_version 2>&1 || true
+    done
+else
+    echo "MISSING: /usr/bin/wappctrl"
+fi
+
+section "Wireless AP state"
+for iface in ra0 rax0; do
+    echo "--- $iface ---"
+    iwconfig "$iface" 2>&1 || true
+done
+
+section "Runtime WTS (PSK redacted)"
+WTS=/etc/map/wts_bss_info_config
+if [ -r "$WTS" ]; then
+    ls -l "$WTS"
+    awk 'NR == 1 { print; next } { if (NF >= 6) $6 = "<redacted>"; print }' "$WTS"
+else
+    echo "MISSING: $WTS"
+fi
+
+section "MAPD / P1905 role and steering config"
+for file in /etc/map/mapd_cfg /etc/map/1905d.cfg; do
+    echo "--- $file ---"
+    if [ -r "$file" ]; then
+        grep -E '^(DeviceRole|SteerEnable|CentralizedSteering|APSteerRssiTh|BhPriority|map_agent|map_root|map_ver|radio_band|bh_type|br_inf|lan|al_inf|bss_config_priority)=' "$file" || true
+    else
+        echo "MISSING: $file"
+    fi
+done
+
+section "Local DAT security and 11k state (PSK omitted)"
+for file in /etc/wireless/mediatek/mt7986-ax6000.dbdc.b0.dat /etc/wireless/mediatek/mt7986-ax6000.dbdc.b1.dat; do
+    echo "--- $file ---"
+    if [ -r "$file" ]; then
+        grep -E '^(BssidNum|SSID1|AuthMode|RRMEnable|EncrypType|HideSSID)=' "$file" || true
+    else
+        echo "MISSING: $file"
+    fi
+done
+
+section "P1905 AL MAC resolution trace"
+if command -v logread >/dev/null 2>&1; then
+    logread -l 400 2>/dev/null |
+        grep -iE 'LIB_WIRELESS_INTERFACE_INFO|al_inf|almac|cannot find suitable almac|reset almac|set almac to forward module fail|do_map_set_ctl|sp update own almac' |
+        tail -n 100 || true
+else
+    echo "logread unavailable"
+fi
+
+section "MAP filter and EasyMesh runtime libraries"
+if [ -d /sys/module/mapfilter ]; then
+    echo "mapfilter: loaded"
+else
+    echo "mapfilter: NOT LOADED"
+fi
+for lib in /lib/libkvcutil.so.1 /usr/lib/libeth_1905ops.so \
+           /usr/lib/libnl-tiny.so.1 /usr/lib/libssl.so.1.1 /usr/lib/libcrypto.so.1.1; do
+    if [ -e "$lib" ]; then
+        ls -l "$lib"
+    else
+        echo "MISSING: $lib"
+    fi
+done
+
+section "Recent EasyMesh / 11k / 11v events (credentials redacted)"
+if command -v logread >/dev/null 2>&1; then
+    logread -l 400 2>/dev/null |
+        grep -iE 'wapp|p1905|mapd|wts|bss|topology|btm|rrm|steer|mbo|neighbor|mapr3|dpp|mapts|cp_support' |
+        sed -r 's/(key=)[^ ,;]+/\1<redacted>/Ig; s/(WPAKey[=:])[^\t ,;]+/\1<redacted>/Ig; s/(WPAPSK[0-9]*=)[^\t ;]+/\1<redacted>/Ig' |
+        tail -n 160 || true
+else
+    echo "logread unavailable"
+fi
+
+echo
+echo "Diagnostic collection complete. No BTM request was sent and no configuration was changed."

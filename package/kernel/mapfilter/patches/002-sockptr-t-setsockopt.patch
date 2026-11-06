@@ -1,0 +1,25 @@
+--- a/mtkmapfilter.c
++++ b/mtkmapfilter.c
+@@ -1,4 +1,5 @@
+ #include <linux/init.h>
++#include <linux/sockptr.h>
+ #include <linux/module.h>
+ #include <linux/netfilter.h>
+ #include <linux/netfilter_bridge.h>
+@@ -941,14 +941,14 @@
+ #define MAP_SO_MAX (MAP_SO_BASE + 1)
+ 
+ static int do_map_set_ctl(struct sock *sk, int cmd,
+-		void __user *user, unsigned int len)
++		sockptr_t user, unsigned int len)
+ {
+ 	int ret = 0;
+ 
+ 	pr_info("do_map_set_ctl==>cmd(%d)\n", cmd);
+ 	switch (cmd) {
+ 	case MAP_SET_ALMAC:
+-		if (copy_from_user(almac, user, ETH_ALEN) != 0) {
++		if (copy_from_sockptr(almac, user, ETH_ALEN) != 0) {
+ 			ret = -EFAULT;
+ 			pr_info("do_map_set_ctl==>copy_from_user fail\n");
+ 			break;

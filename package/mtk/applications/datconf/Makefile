@@ -7,6 +7,9 @@
 
 include $(TOPDIR)/rules.mk
 
+# Keep native OpenWrt package patching as strict as Vendor Audit.
+export PATCH := patch --fuzz=0
+
 PKG_NAME:=datconf
 PKG_REVISION:=757f9679
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_REVISION).tar.bz2

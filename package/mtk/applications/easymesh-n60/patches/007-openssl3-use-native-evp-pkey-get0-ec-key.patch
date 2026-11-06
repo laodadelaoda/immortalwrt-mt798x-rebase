@@ -1,0 +1,16 @@
+--- a/wappd/dpp/dpp.c
++++ b/wappd/dpp/dpp.c
+@@ -11612,9 +11612,0 @@
+-EC_KEY * EVP_PKEY_get0_EC_KEY(EVP_PKEY *pkey)
+-{
+-	if (EVP_PKEY_base_id(pkey) != EVP_PKEY_EC) {
+-		wpa_printf(MSG_ERROR, "DPP: Could not create EVP_PKEY_base_id");
+-		return NULL;
+-	}
+-
+-	return pkey->pkey.ec;
+-}
+--- a/wappd/dpp/dpp.h
++++ b/wappd/dpp/dpp.h
+@@ -1264,1 +1264,0 @@
+-EC_KEY * EVP_PKEY_get0_EC_KEY(EVP_PKEY *pkey);

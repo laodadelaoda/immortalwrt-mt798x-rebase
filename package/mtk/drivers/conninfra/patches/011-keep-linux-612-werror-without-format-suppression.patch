@@ -1,0 +1,17 @@
+--- a/Makefile
++++ b/Makefile
+@@ -7,13 +7,10 @@
+ 
+ #ccflags-y += -imacros $(AUTOCONF_H)
+ 
+-# Force build fail on modpost warning
+-KBUILD_MODPOST_FAIL_ON_WARNINGS := y
++# Keep upstream Linux 6.12 modpost defaults; do not set KBUILD_MODPOST_WARN.
+ 
+ ###############################################################################
+ ccflags-y += -Werror
+-ccflags-y += -Wno-error=format
+-ccflags-y += -Wno-error=format-extra-args
+ ccflags-y += -Wframe-larger-than=1024
+ 
+ ###############################################################################

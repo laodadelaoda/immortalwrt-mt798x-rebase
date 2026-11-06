@@ -4,6 +4,9 @@
 # See /LICENSE for more information.
 
 include $(TOPDIR)/rules.mk
+
+# Keep native OpenWrt package patching as strict as Vendor Audit.
+export PATCH := patch --fuzz=0
 include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=mt_wifi
@@ -35,7 +38,7 @@ PKG_VERSION:=7.6.7.3
 PATCH_DIR:=patches-7673
 endif
 
-PKG_BUILD_DEPENDS:=warp
+PKG_BUILD_DEPENDS:=warp conninfra
 PKG_BUILD_PARALLEL:=1
 PKG_BUILD_DIR:=$(KERNEL_BUILD_DIR)/$(PKG_NAME)
 PKG_KCONFIG:= \
@@ -314,10 +317,17 @@ define KernelPackage/mt_wifi/config
 endef
 
 define Build/Compile
+	@if [ "$(CONFIG_MTK_CONNINFRA_APSOC)" = "y" ]; then \
+		test -s "$(KERNEL_BUILD_DIR)/conninfra/Module.symvers" || { \
+			echo "ERROR: conninfra Module.symvers is missing; build dependency closure is incomplete."; \
+			exit 1; \
+		}; \
+	fi
 	+$(MAKE) $(PKG_JOBS) -C "$(LINUX_DIR)" \
 		$(KERNEL_MAKE_FLAGS) \
 		M="$(PKG_BUILD_DIR)/mt_wifi_ap" \
 		LINUX_DIR="$(KERNEL_BUILD_DIR)" \
+		$(if $(CONFIG_MTK_CONNINFRA_APSOC),KBUILD_EXTRA_SYMBOLS="$(KERNEL_BUILD_DIR)/conninfra/Module.symvers") \
 		$(foreach c, $(PKG_KCONFIG),$(if $(CONFIG_MTK_$c),CONFIG_$(c)=$(CONFIG_MTK_$(c)))) \
 		modules
 endef

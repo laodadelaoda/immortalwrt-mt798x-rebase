@@ -1,0 +1,15 @@
+--- a/wappd/common/main.c
++++ b/wappd/common/main.c
+@@ -805 +805 @@
+-	u16 cred_len = 0, is_1905_conn = 0, is_normal = 0;
++	u16 is_1905_conn = 0, is_normal = 0;
+@@ -807 +806,0 @@
+-	dev_list = &wapp->dev_list;
+@@ -816,0 +816,3 @@
++#ifdef MAP_R3
++	dev_list = &wapp->dev_list;
++#endif
+@@ -996 +997,0 @@
+-		cred_len = sizeof(*cred) + cred->payload_len;
+@@ -1120,0 +1122 @@
++	u16 cred_len = 0;

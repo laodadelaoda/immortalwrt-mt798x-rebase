@@ -1,0 +1,58 @@
+--- a/ethernet/mediatek_DSA/eth_ops_dsa.c
++++ b/ethernet/mediatek_DSA/eth_ops_dsa.c
+@@ -47,6 +47,8 @@
+ #include <sys/ioctl.h>
+ #include <sys/socket.h>
+ #include <linux/if.h>
++#include <linux/mii.h>
++#include <linux/sockios.h>
+ #include <pthread.h>
+ #include <stdbool.h>
+ #include "libbridge.h"
+@@ -649,24 +651,26 @@
+ static int get_phy_status_by_index(
+ 	unsigned short index,
+ 	unsigned int reg_num,
+-	unsigned int *val,
+-
+-	unsigned short cmd)
++	unsigned int *val)
+ {
+-	struct ifreq ifr;
+-	struct mtk_mii_ioctl_data mtk_mii;
++	struct ifreq ifr = {0};
++	struct mii_ioctl_data mii = {0};
+ 	int err;
+ 
+-	strncpy(ifr.ifr_name, "eth0", sizeof(ifr.ifr_name));
+-
+-	fill_mtk_mii_ioctl(&mtk_mii, index, reg_num, val);
+-	ifr.ifr_data = (char *)&mtk_mii;
++	/* N60 Pro PHY5/PHY6 share the MDIO bus attached to gmac1 (eth1).
++	 * Linux 6.12 mtk_eth_soc exposes standard SIOCGMIIREG, not the
++	 * legacy vendor-private MTKETH_MII_READ ioctl (0x89F3).
++	 */
++	strncpy(ifr.ifr_name, "eth1", sizeof(ifr.ifr_name) - 1);
++	mii.phy_id = index;
++	mii.reg_num = reg_num;
++	ifr.ifr_data = (char *)&mii;
+ 
+-	err = ioctl(sk_fd_ext_phy, cmd, &ifr);
++	err = ioctl(sk_fd_ext_phy, SIOCGMIIREG, &ifr);
+ 	if (err)
+ 		return -1;
+ 
+-	*val = (mtk_mii.val_out & 0x00000004) ? 1 : 0;
++	*val = (mii.val_out & 0x0004) ? 1 : 0;
+ 	return 0;
+ }
+ 
+@@ -700,7 +704,7 @@
+ 		if (ext_phy_port[i] == index) {
+ 			if (index >= 5) {
+ 				/* ext wan phy port (5, 6) */
+-				ret = get_phy_status_by_index(index, REG_NUM, &tmp_stat, MTKETH_MII_READ);
++				ret = get_phy_status_by_index(index, REG_NUM, &tmp_stat);
+ 				if (!ret)
+ 					*status = (int)tmp_stat;
+ 			} else {

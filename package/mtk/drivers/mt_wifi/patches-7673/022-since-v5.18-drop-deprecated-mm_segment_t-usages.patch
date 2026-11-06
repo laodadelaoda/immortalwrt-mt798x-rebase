@@ -295,7 +295,7 @@
  	struct file *file_w;
 -	mm_segment_t orig_fs;
 +#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0))
-+ 	mm_segment_t	fs;
++ 	mm_segment_t	orig_fs;
 +#endif /* (LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0)) */
  	UINT32 startaddr = 0,  endaddr = 0, addr = 0;
  	UINT32 macVal = 0;

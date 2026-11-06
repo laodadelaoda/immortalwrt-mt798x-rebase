@@ -1,0 +1,539 @@
+--- a/wappd/common/main.c
++++ b/wappd/common/main.c
+@@ -284,17 +284,25 @@
+ 	int ret = 0;
+ 	int tmp = 0;
+ 
+-	if (!max_bss_num || max_bss_num > MAX_SET_BSS_INFO_NUM) {
+-		DBGPRINT(RT_DEBUG_ERROR, "[%s]input max_bss_num is invaild", __func__);
++	if (config_bss_num)
++		*config_bss_num = 0;
++	if (!name || !bss_info || !config_bss_num || !max_bss_num ||
++		max_bss_num > MAX_SET_BSS_INFO_NUM) {
++		DBGPRINT(RT_DEBUG_ERROR, "[%s] invalid WTS parser arguments\n", __func__);
+ 		return -1;
+ 	}
+ 
+ 	content_len = WTS_FILE_READ_LINE * max_bss_num;
++	if (content_len < 2)
++		return -1;
+ 	content = (char *)os_zalloc(content_len);
+ 	if (!content) {
+ 		DBGPRINT(RT_DEBUG_ERROR, "[%s]all buf fail", __func__);
+ 		return -1;
+ 	}
++
++	for (i = 0; i < max_bss_num; i++)
++		memset(&bss_info[i], 0, sizeof(*bss_info));
+ 
+ 	f = fopen(name, "r");
+ 	if (f == NULL) {
+@@ -308,55 +316,56 @@
+ 	}
+ 
+ 	i = 0;
+-	do {
+-		ch = fgetc(f);
+-		if (ferror(f)) {
+-			DBGPRINT(RT_DEBUG_TRACE, "fgetc error");
+-			break;
+-		}
+-	/* If ssid is a space, need add \ as ESC infront of it in wts file. As space is regard as
+-	* a separator. If ssid is a \, need add \ as ESC in front of it. when parsing wts file,
+-	"\space"need remove \ and replace space to SUB. "\\"need remove \*/
++	while ((ch = fgetc(f)) != EOF) {
+ 		if (ch == backslash) {
+ 			sch = fgetc(f);
+-			if (ferror(f)) {
+-				DBGPRINT(RT_DEBUG_ERROR, "[%s] fgetc fail\n", __func__);
+-				break;
+-			}
+-			if (sch == space) {
++			if (sch == EOF)
++				goto err;
++			if (sch == space)
+ 				ch = SUB;
+-			} else if (sch == backslash) {
++			else if (sch == backslash)
++				ch = backslash;
++			else {
++				if (i >= content_len - 1)
++					goto err;
++				content[i++] = (char)backslash;
+ 				ch = sch;
+-			} else {
+-				content[i++] = ch;
+-				ch = sch;
+-				if (i >= content_len) {
+-					DBGPRINT(RT_DEBUG_ERROR, "[%d]wts file is bigger than input buffer fail!\n", __LINE__);
+-					goto err;
+-				}
+-			}
+-		}
+-		content[i++] = ch;
+-		if (i >= content_len) {
+-			DBGPRINT(RT_DEBUG_ERROR, "[%s] [%d]wts file is bigger than input buffer fail!\n", __func__, __LINE__);
+-			goto err;
+-		}
+-	}while (EOF != ch);
+-
++			}
++		}
++		if (i >= content_len - 1)
++			goto err;
++		content[i++] = (char)ch;
++	}
++	if (ferror(f))
++		goto err;
++	content[i] = '\0';
+ 	i = 0;
+ 	pos1 = content;
+ 	while (1) {
++		if (*pos1 == '\0')
++			break;
++		memset(mac_int, 0, sizeof(mac_int));
++		memset(mac, 0, sizeof(mac));
++		memset(op_class, 0, sizeof(op_class));
++		memset(ssid, 0, sizeof(ssid));
++		memset(key, 0, sizeof(key));
++		authmode = 0;
++		encrytype = 0;
++		resv1 = 0;
++		resv2 = 0;
++		hidden_ssid = 0;
++		hidden_ssid_exist = 0;
+ 		/*index*/
+ 		pos2 = strchr(pos1, ',');
+ 		if (pos2 == NULL) {
+ 			DBGPRINT(RT_DEBUG_TRACE, "index not found\n");
+-			break;
++			goto err;
+ 		}
+ 		*pos2 = '\0';
+ 		ret = sscanf(pos1, "%d", &index);
+-		if (ret == EOF) {
++		if (ret != 1) {
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] sscanf fail\n", __func__);
+-			continue;
++			goto err;
+ 		}
+ 		pos2++;
+ 		pos1 = pos2;
+@@ -365,15 +374,15 @@
+ 		pos2 = strchr(pos1, ' ');
+ 		if (pos2 == NULL) {
+ 			DBGPRINT(RT_DEBUG_TRACE, "mac not found\n");
+-			break;
++			goto err;
+ 		}
+ 		*pos2 = '\0';
+ 		ret = sscanf(pos1, "%02x:%02x:%02x:%02x:%02x:%02x", mac_int,
+ 				(mac_int + 1), (mac_int + 2), (mac_int + 3),
+ 				(mac_int + 4), (mac_int + 5));
+-		if (ret == EOF) {
++		if (ret != 6) {
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] sscanf fail\n", __func__);
+-			continue;
++			goto err;
+ 		}
+ 		for (j = 0; j < 6; j++)
+ 			mac[j] = (unsigned char)mac_int[j];
+@@ -385,14 +394,16 @@
+ 		pos2 = strchr(pos1, ' ');
+ 		if (pos2 == NULL) {
+ 			DBGPRINT(RT_DEBUG_TRACE, "opclass not found\n");
+-			break;
++			goto err;
+ 		}
+ 		*pos2 = '\0';
+ 
+-		ret = sscanf(pos1, "%s", op_class);
+-		if (ret == EOF) {
++		if (!*pos1 || os_strlen(pos1) >= sizeof(op_class))
++			goto err;
++		ret = sscanf(pos1, "%3s", op_class);
++		if (ret != 1) {
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] sscanf fail\n", __func__);
+-			continue;
++			goto err;
+ 		}
+ 		DBGPRINT(RT_DEBUG_TRACE, "opclass %s\n", op_class);
+ 
+@@ -414,6 +425,10 @@
+ 			bss_info[i].operating_chan = RADIO_6G;
+ 		}
+ #endif
++		else {
++			DBGPRINT(RT_DEBUG_ERROR, "[%s] unsupported WTS operating class\n", __func__);
++			goto err;
++		}
+ 
+ 		pos2++;
+ 		pos1 = pos2;
+@@ -422,12 +437,14 @@
+ 		if (pos2 == NULL) {
+ 			DBGPRINT(RT_DEBUG_TRACE, "ssid not found\n");
+-			break;
++			goto err;
+ 		}
+ 		*pos2 = '\0';
+-		ret = sscanf(pos1, "%s", ssid);
+-		if (ret == EOF) {
++		if (!*pos1 || os_strlen(pos1) >= sizeof(ssid))
++			goto err;
++		ret = sscanf(pos1, "%32s", ssid);
++		if (ret != 1) {
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] sscanf fail\n", __func__);
+-			continue;
++			goto err;
+ 		}
+ 		for (j = 0; j < 32; j++) {
+ 			if (ssid[j] == SUB)
+@@ -441,12 +458,12 @@
+ 		if (pos2 == NULL) {
+ 			DBGPRINT(RT_DEBUG_TRACE, "authmode not found\n");
+-			break;
++			goto err;
+ 		}
+ 		*pos2 = '\0';
+ 		ret = sscanf(pos1, "0x%04x", &authmode);
+-		if (ret == EOF) {
++		if (ret != 1) {
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] sscanf fail\n", __func__);
+-			continue;
++			goto err;
+ 		}
+ 		pos2++;
+ 		pos1 = pos2;
+@@ -456,12 +473,12 @@
+ 		if (pos2 == NULL) {
+ 			DBGPRINT(RT_DEBUG_TRACE, "encrytype not found\n");
+-			break;
++			goto err;
+ 		}
+ 		*pos2 = '\0';
+ 		ret = sscanf(pos1, "0x%04x", &encrytype);
+-		if (ret == EOF) {
++		if (ret != 1) {
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] sscanf fail\n", __func__);
+-			continue;
++			goto err;
+ 		}
+ 		pos2++;
+ 		pos1 = pos2;
+@@ -471,12 +488,14 @@
+ 		if (pos2 == NULL) {
+ 			DBGPRINT(RT_DEBUG_TRACE, "key not found\n");
+-			break;
++			goto err;
+ 		}
+ 		*pos2 = '\0';
+-		ret = sscanf(pos1, "%s", key);
+-		if (ret == EOF) {
++		if (!*pos1 || os_strlen(pos1) >= sizeof(key))
++			goto err;
++		ret = sscanf(pos1, "%64s", key);
++		if (ret != 1) {
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] sscanf fail\n", __func__);
+-			continue;
++			goto err;
+ 		}
+ 		pos2++;
+ 		pos1 = pos2;
+@@ -486,12 +505,12 @@
+ 		if (pos2 == NULL) {
+ 			DBGPRINT(RT_DEBUG_TRACE, "resv1 not found\n");
+-			break;
++			goto err;
+ 		}
+ 		*pos2 = '\0';
+ 		ret = sscanf(pos1, "%d", &resv1);
+-		if (ret == EOF) {
++		if (ret != 1) {
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] sscanf fail\n", __func__);
+-			continue;
++			goto err;
+ 		}
+ 		pos2++;
+ 		pos1 = pos2;
+@@ -512,12 +531,12 @@
+ 			if (pos2 == NULL) {
+ 				DBGPRINT(RT_DEBUG_TRACE, "resv2 not found\n");
+-				break;
++				goto err;
+ 			}
+ 			*pos2 = '\0';
+ 			ret = sscanf(pos1, "%d", &resv2);
+-			if (ret == EOF) {
++			if (ret != 1) {
+ 				DBGPRINT(RT_DEBUG_ERROR, "[%s] sscanf fail\n", __func__);
+-				continue;
++				goto err;
+ 			}
+ 			pos2++;
+ 			pos1 = pos2;
+@@ -527,12 +546,12 @@
+ 			if (pos2 == NULL) {
+ 				DBGPRINT(RT_DEBUG_TRACE, "resv2 not found\n");
+-				break;
++				goto err;
+ 			}
+ 			*pos2 = '\0';
+ 			ret = sscanf(pos1, "%d", &resv2);
+-			if (ret == EOF) {
++			if (ret != 1) {
+ 				DBGPRINT(RT_DEBUG_ERROR, "[%s] sscanf fail\n", __func__);
+-				continue;
++				goto err;
+ 			}
+ 			pos2++;
+ 			pos1 = pos2;
+@@ -542,6 +561,6 @@
+ 			if (pos2 == NULL) {
+ 				DBGPRINT(RT_DEBUG_TRACE, "hidden ssid not found\n");
+-				break;
++				goto err;
+ 			}
+ 			*pos2 = '\0';
+ 			if (sscanf(pos1, "hidden-%c", &hidden_ssid) == 1) {
+@@ -568,7 +587,7 @@
+ 		DBGPRINT(RT_DEBUG_OFF, "set bss index=%d, mac="MACSTR
+-				", opclass=%s, ssid=%s, authmode=%04x, encrytype=%04x, key=%s, "
++				", opclass=%s, ssid=%s, authmode=%04x, encrytype=%04x, key is configured, "
+ 				"bh_bss=%s, fh_bss=%s hidden_ssid=%d\n",
+-				index, MAC2STR(mac), op_class, ssid, authmode, encrytype, key,
++				index, MAC2STR(mac), op_class, ssid, authmode, encrytype,
+ 				bss_info[i].wfa_vendor_extension & BIT_BH_BSS ? "1" : "0",
+ 				bss_info[i].wfa_vendor_extension & BIT_FH_BSS ? "1" : "0", bss_info[i].hidden_ssid);
+ 		i++;
+@@ -581,11 +600,15 @@
+ 		}
+ 	}
+ 
++	if (i == 0)
++		goto err;
+ 	*config_bss_num = i;
+ 	DBGPRINT(RT_DEBUG_OFF, "config_bss_num=%d\n", *config_bss_num);
+ 	os_free(content);
+ 	tmp = fclose(f);
+ 	if (tmp != 0) {
++		*config_bss_num = 0;
++		memset(bss_info, 0, sizeof(*bss_info) * max_bss_num);
+ 		DBGPRINT(RT_DEBUG_ERROR, "[%s] fclose fail\n", __func__);
+ 		return -1;
+ 	}
+@@ -645,6 +668,8 @@
+ 	}
+ 	return 0;
+ err:
++	*config_bss_num = 0;
++	memset(bss_info, 0, sizeof(*bss_info) * max_bss_num);
+ 	os_free(content);
+ 	tmp = fclose(f);
+ 	if (tmp != 0)
+@@ -705,11 +730,13 @@
+ #ifdef MAP_R3
+ 	if (wapp->dpp->is_map) {
+ 		if (wapp->dpp->dpp_configurator_supported) {
+-			wapp_read_wts_map_config(wapp, MAPD_WTS_FILE,
+-					wapp->dpp->bss_config, MAX_SET_BSS_INFO_NUM, &wapp->dpp->bss_config_num);
+-
+-			DBGPRINT(RT_DEBUG_TRACE, DPP_MAP_PREX"Setting configurator\n");
+-			dpp_controller_start(wapp->dpp);
++			if (wapp_read_wts_map_config(wapp, MAPD_WTS_FILE,
++					wapp->dpp->bss_config, MAX_SET_BSS_INFO_NUM, &wapp->dpp->bss_config_num) < 0) {
++				DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"WTS parsing failed; DPP configurator will not start\n");
++			} else {
++				DBGPRINT(RT_DEBUG_TRACE, DPP_MAP_PREX"Setting configurator\n");
++				dpp_controller_start(wapp->dpp);
++			}
+ 		}
+ 	}
+ 	dl_list_init(&wapp->map_devices);
+--- a/wappd/common/wdev.c
++++ b/wappd/common/wdev.c
+@@ -4275,8 +4275,8 @@
+ 	DBGPRINT_RAW(RT_DEBUG_OFF,
+ 		"set psk:\n"
+ 		"\t ifname = %s\n"
+-		"\t psk = %s\n",
+-		wdev->ifname, psk);
++		"\t psk is configured\n",
++		wdev->ifname);
+ 	wapp->drv_ops->drv_set_psk(wapp->drv_data, wdev->ifname, psk);
+ 
+ 	return WAPP_SUCCESS;
+--- a/wappd/map/map_1905.c
++++ b/wappd/map/map_1905.c
+@@ -2864,9 +2864,9 @@
+ #else
+ 		psetting = &pountconf->setting[i];
+ #endif /* MAP_R3 */
+-		DBGPRINT(RT_DEBUG_TRACE, AUTO_CONFIG_PREX"wireless_setting%d intf_mac="MACSTR" ssid=%s, autmode=0x%04x, encryptype=0x%04x, key=%s bh_bss=%s, fh_bss=%s hidden_ssid=%d\n", i,
++		DBGPRINT(RT_DEBUG_TRACE, AUTO_CONFIG_PREX"wireless_setting%d intf_mac="MACSTR" ssid=%s, autmode=0x%04x, encryptype=0x%04x, key is configured bh_bss=%s, fh_bss=%s hidden_ssid=%d\n", i,
+ 			MAC2STR(psetting->mac_addr),
+-			psetting->Ssid, psetting->AuthMode, psetting->EncrypType, psetting->WPAKey,
++			psetting->Ssid, psetting->AuthMode, psetting->EncrypType,
+ 			psetting->map_vendor_extension & BIT_BH_BSS ? "1" : "0",
+ 			psetting->map_vendor_extension & BIT_FH_BSS ? "1" : "0",
+ 			psetting->hidden_ssid);
+@@ -9700,2 +9700,7 @@
+-	wapp_read_wts_map_config(wapp, MAPD_WTS_FILE,
+-		bss_config, MAX_SET_BSS_INFO_NUM, &bss_config_num);
++	os_memset(bss_config, 0, sizeof(bss_config));
++	if (wapp_read_wts_map_config(wapp, MAPD_WTS_FILE,
++		bss_config, MAX_SET_BSS_INFO_NUM, &bss_config_num) < 0) {
++		*len_buf = 0;
++		DBGPRINT(RT_DEBUG_ERROR, "[%s] WTS configuration unavailable\n", __func__);
++		return MAP_ERROR;
++	}
+--- a/wappd/dpp/dpp_ctrl.c
++++ b/wappd/dpp/dpp_ctrl.c
+@@ -218,9 +218,13 @@
+ 		if (wapp->dpp->dpp_configurator_supported) {
+ 			DBGPRINT(RT_DEBUG_TRACE, DPP_MAP_PREX"updating the BSS configurations from UCC");
+ 			wapp->dpp->bss_config_num = 0;
+-			wapp_read_wts_map_config(wapp, MAPD_WTS_FILE,
+-				wapp->dpp->bss_config, MAX_SET_BSS_INFO_NUM, &wapp->dpp->bss_config_num);
+-			DBGPRINT(RT_DEBUG_WARN, DPP_MAP_PREX"Setting configurator\n");
++			if (wapp_read_wts_map_config(wapp, MAPD_WTS_FILE,
++					wapp->dpp->bss_config, MAX_SET_BSS_INFO_NUM, &wapp->dpp->bss_config_num) < 0) {
++				DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"UCC WTS configuration rejected\n");
++				reply_len = -1;
++			} else {
++				DBGPRINT(RT_DEBUG_WARN, DPP_MAP_PREX"Setting configurator\n");
++			}
+ 		}
+ 		else{
+ 			DBGPRINT(RT_DEBUG_WARN, DPP_MAP_PREX"Device is not configurator\n");
+--- a/1905daemon/src/file_io.c
++++ b/1905daemon/src/file_io.c
+@@ -102,7 +102,7 @@
+ #ifdef MAP_R2
+ 	char *pos3 = NULL;
+ #endif
+-	signed char ch = 0, sch = 0;
++	int ch = 0, sch = 0;
+ 	unsigned char hidden_ssid = 0;
+ 	//unsigned char hidden_ssid_exist = 0;
+ 	unsigned char fh_bss_unhidden = 0;
+@@ -112,10 +112,12 @@
+ 	char SUB = 0x1A;
+ 	int tmp = 0;
+ 
+-	if (!max_bss_num) {
+-		debug(DEBUG_ERROR, "input max_bss_num is 0, invaild");
++	if (!name || !bss_info || !config_bss_num || !max_bss_num ||
++		max_bss_num > MAX_SET_BSS_INFO_NUM) {
++		debug(DEBUG_ERROR, "invalid WTS parser arguments");
+ 		return -1;
+ 	}
++	*config_bss_num = 0;
+ 
+ 	content_len = 100 * max_bss_num;
+ 	content = (char *)os_zalloc(content_len);
+@@ -137,48 +139,30 @@
+ 	}
+ 
+ 	i = 0;
+-	while ((ch = (signed char)fgetc(f)) != EOF) {
+-		if (ferror(f)) {
+-			debug(DEBUG_ERROR, "[%d] wts file read fail!\n", __LINE__);
+-			goto err;
+-		}
+-		/* If ssid is a space, need add \ as ESC infront of it in wts file. As space is regard as
+-		* a separator. If ssid is a \, need add \ as ESC in front of it. when parsing wts file,
+-		"\space"need remove \ and replace space to SUB. "\\"need remove \*/
++	while ((ch = fgetc(f)) != EOF) {
+ 		if (ch == backslash) {
+-			tmp = fgetc(f);
+-			if (ferror(f)) {
+-				debug(DEBUG_ERROR, "[%d] wts file read fail!\n", __LINE__);
++			sch = fgetc(f);
++			if (sch == EOF)
+ 				goto err;
+-			}
+-			if (tmp == EOF)
+-				break;
+-			sch = (signed char)tmp;
+ 			if (sch == space) {
+ 				ch = SUB;
+ 			} else if (sch == backslash) {
++				ch = backslash;
++			} else {
++				if (i >= content_len - 1)
++					goto err;
++				content[i++] = (char)backslash;
+ 				ch = sch;
+-			} else {
+-				content[i++] = ch;
+-				ch = sch;
+-				if (i >= content_len) {
+-					debug(DEBUG_ERROR, "[%d]wts file is bigger than input buffer fail!\n", __LINE__);
+-					goto err;
+-				}
+-			}
+-		}
+-		content[i++] = ch;
+-		if (i >= content_len) {
+-			debug(DEBUG_ERROR, "[%d]wts file is bigger than input buffer fail!\n", __LINE__);
++			}
++		}
++		if (i >= content_len - 1)
+ 			goto err;
+-		}
+-
++		content[i++] = (char)ch;
+ 		debugbyte(DEBUG_TRACE, "%c", ch);
+ 	}
+-	if (ferror(f)) {
+-		debug(DEBUG_ERROR, "[%d] wts file read fail!\n", __LINE__);
++	if (ferror(f))
+ 		goto err;
+-	}
++	content[i] = '\0';
+ 	debugbyte(DEBUG_TRACE, "\n");
+ 
+ 	i = 0;
+@@ -342,7 +326,7 @@
+ 
+ 		/*resv2*/
+ 		//*pos2 and pos2 point to bh;
+-		if (sscanf(pos1, "%d", &resv2) < 0) {
++		if (sscanf(pos1, "%d", &resv2) != 1) {
+ 			debug(DEBUG_ERROR, "[%d]sscanf fail!\n", __LINE__);
+ 			goto err;
+ 		}
+@@ -595,9 +579,9 @@
+ 		else
+ 			bss_info[i].hidden_ssid = 0;
+ 		debug(DEBUG_OFF, "set bss index=%d, mac="MACSTR","
+-			" opclass=%s, ssid=%s, ssid_len %d, authmode=%04x, encrytype=%04x, key=%s, "
++			" opclass=%s, ssid=%s, ssid_len %d, authmode=%04x, encrytype=%04x, key is configured, "
+ 			"bh_bss=%s, fh_bss=%s pvid %d, pcp %d, vlan %d hidden_ssid=%d\n",
+-			index, PRINT_MAC(mac), op_class, ssid,ssid_len,  authmode, encrytype, key,
++			index, PRINT_MAC(mac), op_class, ssid,ssid_len,  authmode, encrytype,
+ 			bss_info[i].wfa_vendor_extension & BIT_BH_BSS ? "1" : "0",
+ 			bss_info[i].wfa_vendor_extension & BIT_FH_BSS ? "1" : "0",
+ 			bss_info[i].pvid, bss_info[i].pcp, bss_info[i].vid,
+--- a/1905daemon/src/multi_ap.c
++++ b/1905daemon/src/multi_ap.c
+@@ -10914,11 +10914,11 @@
+ 			memcpy(ctx->bss_config[j].key, conf->key, 65);
+ 			memcpy(ctx->bss_config[j].oper_class, opclass[k], 4);
+ 			debug(DEBUG_OFF, "add bss, mac="MACSTR", opclass=%s,"
+-				" ssid=%s, authmode=%04x, encrytype=%04x, key=%s, bh_bss=%s, fh_bss=%s"
++				" ssid=%s, authmode=%04x, encrytype=%04x, key is configured, bh_bss=%s, fh_bss=%s"
+ 				"hidden_ssid=%d\n",
+ 				PRINT_MAC(ctx->bss_config[j].mac), ctx->bss_config[j].oper_class,
+ 				ctx->bss_config[j].ssid, ctx->bss_config[j].authmode, ctx->bss_config[j].encryptype,
+-				ctx->bss_config[j].key,
++
+ 				ctx->bss_config[j].wfa_vendor_extension & BIT_BH_BSS ? "1" : "0",
+ 				ctx->bss_config[j].wfa_vendor_extension & BIT_FH_BSS ? "1" : "0",
+ 				ctx->bss_config[j].hidden_ssid);
+--- a/mapd/src/topologySrv/topologySrv.c
++++ b/mapd/src/topologySrv/topologySrv.c
+@@ -1782 +1782 @@
+-		always("key=%s\n", bss->key);
++		always("key is configured\n");

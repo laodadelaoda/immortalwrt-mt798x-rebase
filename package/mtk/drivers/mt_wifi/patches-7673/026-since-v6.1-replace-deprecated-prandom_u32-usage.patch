@@ -1,5 +1,12 @@
 --- a/mt_wifi/embedded/common/rt_os_util.c
 +++ b/mt_wifi/embedded/common/rt_os_util.c
+@@ -12,5 +12,6 @@
+ #define RTMP_MODULE_OS_UTIL
+ 
++#include <linux/random.h>
+ #include "rt_config.h"
+ #include "rtmp_comm.h"
+ #include "rt_os_util.h"
 @@ -260,7 +260,9 @@ INT32  RtPrivIoctlSetVal(VOID)
  
  UINT32 MtRandom32(VOID)

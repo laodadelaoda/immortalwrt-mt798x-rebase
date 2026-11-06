@@ -1,0 +1,293 @@
+{
+  "schema_version": 1,
+  "description": "Canonical lock for N60 Pro fixed vendor source archives, package declarations, and complete active patch inventories. Update this file only with an explicit source review.",
+  "release": "7.6.7.3",
+  "sources": [
+    {
+      "id": "wappd",
+      "archive": "wappd-80ca5724.tar.bz2",
+      "sha256": "73fa8995533e701d3d5774faa92d274497f99e1a37c81ce445f25a959b4b7462",
+      "url": "https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3/wappd-80ca5724.tar.bz2",
+      "package_makefile": "package/mtk/applications/easymesh-n60/Makefile",
+      "extract_root": "wappd",
+      "extract_to": "easymesh",
+      "patch_set": "easymesh",
+      "source_scope": "manual-package-prepare",
+      "expected_build_dir": "build_dir/target-aarch64_cortex-a53_musl/easymesh-n60-7.6.7.3",
+      "expected_patch_dir": "package/mtk/applications/easymesh-n60/patches"
+    },
+    {
+      "id": "mapd",
+      "archive": "mapd-6eca4331.tar.bz2",
+      "sha256": "39ab37cb347d372e352ade03181bc9c23429d4d849d32acbdff00973547d7e18",
+      "url": "https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3/mapd-6eca4331.tar.bz2",
+      "package_makefile": "package/mtk/applications/easymesh-n60/Makefile",
+      "extract_root": "mapd",
+      "extract_to": "easymesh",
+      "patch_set": "easymesh",
+      "source_scope": "manual-package-prepare",
+      "expected_build_dir": "build_dir/target-aarch64_cortex-a53_musl/easymesh-n60-7.6.7.3",
+      "expected_patch_dir": "package/mtk/applications/easymesh-n60/patches"
+    },
+    {
+      "id": "1905daemon",
+      "archive": "1905daemon-35234223.tar.bz2",
+      "sha256": "82f7cc4ad5731e750f87c9a4ad19a39d2456bb8fec0cf79bf4b3f3ccb4f14795",
+      "url": "https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3/1905daemon-35234223.tar.bz2",
+      "package_makefile": "package/mtk/applications/easymesh-n60/Makefile",
+      "extract_root": "1905daemon",
+      "extract_to": "easymesh",
+      "patch_set": "easymesh",
+      "source_scope": "manual-package-prepare",
+      "expected_build_dir": "build_dir/target-aarch64_cortex-a53_musl/easymesh-n60-7.6.7.3",
+      "expected_patch_dir": "package/mtk/applications/easymesh-n60/patches"
+    },
+    {
+      "id": "libmapd",
+      "archive": "libmapd-0132d199.tar.bz2",
+      "sha256": "d325b4a8dc2bf44bd3bd639a0c300380c0a6240f407807f8f2eea80d006c8dba",
+      "url": "https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3/libmapd-0132d199.tar.bz2",
+      "package_makefile": "package/mtk/applications/easymesh-n60/Makefile",
+      "extract_root": "libmapd",
+      "extract_to": "easymesh",
+      "patch_set": "easymesh",
+      "source_scope": "manual-package-prepare",
+      "expected_build_dir": "build_dir/target-aarch64_cortex-a53_musl/easymesh-n60-7.6.7.3",
+      "expected_patch_dir": "package/mtk/applications/easymesh-n60/patches"
+    },
+    {
+      "id": "bndstrg_plus",
+      "archive": "bndstrg_plus-8350508d.tar.bz2",
+      "sha256": "e6e64967c7dbc1b9c56183bcea279ad9718bc7267d61b7583965c2f700d179b4",
+      "url": "https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3/bndstrg_plus-8350508d.tar.bz2",
+      "package_makefile": "package/mtk/applications/easymesh-n60/Makefile",
+      "extract_root": "bndstrg_plus",
+      "extract_to": "bndstrg",
+      "patch_set": "auxiliary",
+      "source_scope": "auxiliary-audit-only",
+      "expected_build_dir": null,
+      "expected_patch_dir": null
+    },
+    {
+      "id": "fwdd",
+      "archive": "fwdd-bcbae0e4.tar.bz2",
+      "sha256": "26a7ad4f55ca0a779e4178b5b8f918df99de90217d9d98a840a20fddd4123a65",
+      "url": "https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/releases/download/dl-sources-7.6.7.3/fwdd-bcbae0e4.tar.bz2",
+      "package_makefile": "package/mtk/applications/easymesh-n60/Makefile",
+      "extract_root": "fwdd",
+      "extract_to": "fwdd",
+      "patch_set": "auxiliary",
+      "source_scope": "auxiliary-audit-only",
+      "expected_build_dir": null,
+      "expected_patch_dir": null
+    },
+    {
+      "id": "mtwifi",
+      "archive": "mt79xx_20250408-705eb4.tar.xz",
+      "sha256": "b029d7b43c498193092dc6a3c857361c8835ce34bb306561c550ac0539784a78",
+      "url": "https://raw.githubusercontent.com/hanwckf/immortalwrt-mt798x/refs/heads/openwrt-21.02/dl/mt79xx_20250408-705eb4.tar.xz",
+      "package_makefile": "package/mtk/drivers/mt_wifi/Makefile",
+      "source_var": "PKG_SOURCE",
+      "hash_var": "PKG_HASH",
+      "source_url_var": "REPO_URL",
+      "patch_set": "mtwifi-7673",
+      "expected_patch_dir": "package/mtk/drivers/mt_wifi/patches-7673",
+      "source_scope": "openwrt-package",
+      "expected_build_dir": "build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/mt_wifi"
+    },
+    {
+      "id": "conninfra",
+      "archive": "mt79xx_conninfra_20250408-f2fa25.tar.xz",
+      "sha256": "3a82cfa69e68c8e584723b604dda565b2c085239ba1ac834d6d3b0ebd987e58c",
+      "url": "https://raw.githubusercontent.com/immortalwrt-mt798x/immortalwrt/refs/heads/openwrt-21.02/dl/mt79xx_conninfra_20250408-f2fa25.tar.xz",
+      "package_makefile": "package/mtk/drivers/conninfra/Makefile",
+      "source_var": "PKG_SOURCE",
+      "hash_var": "PKG_HASH",
+      "patch_set": "conninfra",
+      "expected_patch_dir": "package/mtk/drivers/conninfra/patches",
+      "source_scope": "openwrt-package",
+      "expected_build_dir": "build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/conninfra"
+    },
+    {
+      "id": "warp",
+      "archive": "warp_20250408-5f71ec.tar.xz",
+      "sha256": "0954055e165dcb71cd2703f07b0c2d521ca3e9c8968d2b17b68e8c9a7853f9b2",
+      "url": "https://raw.githubusercontent.com/hanwckf/immortalwrt-mt798x/refs/heads/openwrt-21.02/dl/warp_20250408-5f71ec.tar.xz",
+      "package_makefile": "package/mtk/drivers/warp/Makefile",
+      "source_var": "PKG_SOURCE",
+      "hash_var": "PKG_HASH",
+      "patch_set": "warp",
+      "expected_patch_dir": "package/mtk/drivers/warp/patches",
+      "source_scope": "openwrt-package",
+      "expected_build_dir": "build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/warp"
+    },
+    {
+      "id": "datconf",
+      "archive": "datconf-757f9679.tar.bz2",
+      "sha256": "3cbb7489e3df1be52d184b600129a6081e7225981acdbcc5c2cb7149f11c37f1",
+      "url": "https://raw.githubusercontent.com/hanwckf/immortalwrt-mt798x/refs/heads/openwrt-21.02/dl/datconf-757f9679.tar.bz2",
+      "package_makefile": "package/mtk/applications/datconf/Makefile",
+      "source_var": "PKG_SOURCE",
+      "hash_var": "PKG_HASH",
+      "patch_set": "datconf",
+      "expected_patch_dir": "package/mtk/applications/datconf/patches",
+      "source_scope": "openwrt-package",
+      "expected_build_dir": "build_dir/target-aarch64_cortex-a53_musl/datconf"
+    },
+    {
+      "id": "mapfilter",
+      "archive": "mapfilter-96f2afed.tar.bz2",
+      "sha256": "3928c6614b84e74f1f1762cee61de8e422299e792f5f363dc369dfc0ed0f1714",
+      "url": "https://raw.githubusercontent.com/immortalwrt-mt798x/immortalwrt/refs/heads/openwrt-21.02/dl/mapfilter-96f2afed.tar.bz2",
+      "package_makefile": "package/kernel/mapfilter/Makefile",
+      "source_var": "PKG_SOURCE",
+      "hash_var": "PKG_HASH",
+      "patch_set": "mapfilter",
+      "expected_patch_dir": "package/kernel/mapfilter/patches",
+      "source_scope": "openwrt-package",
+      "expected_build_dir": "build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/mapfilter"
+    }
+  ],
+  "patch_sets": [
+    {
+      "id": "easymesh",
+      "directory": "package/mtk/applications/easymesh-n60/patches",
+      "application_order": [
+        "002-dpp-parser-safety.patch",
+        "007-openssl3-use-native-evp-pkey-get0-ec-key.patch",
+        "008-dpp-parser-bounds-and-secret-redaction.patch",
+        "009-dpp-null-guard-and-unused-cred-length.patch",
+        "010-dpp-wdev-config-allocation-rollback.patch",
+        "011-wapp-wts-security.patch",
+        "003-wapp-gcc14-copy-semantics.patch",
+        "004-libmapd-target-flags.patch",
+        "005-wapp-hotspot-realloc-pointer-arithmetic.patch"
+      ],
+      "scope": "EasyMesh Build/Prepare ordered vendor patch series",
+      "post_normalize_order": [
+        "006-p1905-libbridge-tool-propagation.patch",
+        "001-dsa-use-linux-mii-ioctl.patch"
+      ]
+    },
+    {
+      "id": "auxiliary",
+      "directory": "package/mtk/applications/easymesh-n60/auxiliary-patches",
+      "application_order": [
+        "001-bndstrg-gcc14-werror-and-init.patch",
+        "002-fwdd-gcc14-bounded-ifname-copy.patch"
+      ],
+      "scope": "bndstrg_plus and fwdd auxiliary patch series"
+    },
+    {
+      "id": "datconf",
+      "directory": "package/mtk/applications/datconf/patches",
+      "application_order": [
+        "002-update-cmake-minimum-required.patch"
+      ],
+      "scope": "datconf package patch series"
+    },
+    {
+      "id": "mtwifi-7673",
+      "directory": "package/mtk/drivers/mt_wifi/patches-7673",
+      "application_order": [
+        "001-eeprom-flash-api.patch",
+        "002-sort-site-survey-table.patch",
+        "003-fix-rxrate-stainfo.patch",
+        "004-remove-apcli-bgprotect-log.patch",
+        "005-use-ext-warp-code.patch",
+        "006-fix-stainfo_struct.patch",
+        "007-fix-tx-phymode.patch",
+        "008-fix-he-gi-stainfo.patch",
+        "009-add-secinfo-to-stainfo.patch",
+        "010-remove-addba-noisy-log.patch",
+        "011-fix-wext-txpwr.patch",
+        "012-add-mt7986-memory-shrink-aggress.patch",
+        "013-add-rssi-for-sitesurvey.patch",
+        "014-fix-iwrange.patch",
+        "015-fix-apcli-stainfo.patch",
+        "016-fix-apcli-scan-no-ascii-ssid.patch",
+        "017-fix-secinfo-for-iwinfo.patch",
+        "020-fix-6ghz-channel-list.patch",
+        "021-fix-return-type.patch",
+        "022-since-v5.18-drop-deprecated-mm_segment_t-usages.patch",
+        "023-since-v5.5-fix-printk-redefined-in-rt_linux.patch",
+        "024-since-v5.16-fix-stdarg_h-not-found-error.patch",
+        "025-since-v5.6-remove-rt_os-h-kernel-version-check.patch",
+        "026-since-v6.1-replace-deprecated-prandom_u32-usage.patch",
+        "027-since-v5.6-replace-deprecated-ioremap_nocache-usage.patch",
+        "028-since-v5.18-replace-deprecated-PCI_DMA_FROMDEVICE-macro.patch",
+        "029-since-v5.5-replace-deprecated-pr_warning-define.patch",
+        "030-since-v5.18-replace-deprecated-pci_set_dma_mask-usage.patch",
+        "031-remove-unused-and-deprecated-tim-in-bn_lib.patch",
+        "032-since-v6.3-remove-deprecated-compound_dtor-in-printk.patch",
+        "033-since-v5.17-replace-illegal-memmove-with-dev_addr_set.patch",
+        "034-since-v6.12-fix-unaligned_h-not-found-error.patch",
+        "035-since-v6.8-change-strlcpy-to-strscpy.patch",
+        "037-fix-fortify-warning-1-cmm_wpa.patch",
+        "037-fix-fortify-warning-2-pmf.patch",
+        "037-fix-fortify-warning-3-sta-sanity-memmove-overflow.patch",
+        "037-fix-fortify-warning-4-qos.patch",
+        "038-fix-rrm-snprintf-read-overflow.patch",
+        "039-fix-qos-peer_vendor_spec_action-frame-check.patch",
+        "040-ap_mgmt_assoc-dont-reject-oversized-supported-channels-ie.patch",
+        "041-fix-cmm_data-header-translated-port-security.patch",
+        "094-fix-wnm-fortify.patch",
+        "095-fix-wnm-fortify-rsp.patch",
+        "096-wnm-fix-send-btm-req-fortify.patch"
+      ],
+      "scope": "MT Wi-Fi 7.6.7.3 patch series"
+    },
+    {
+      "id": "conninfra",
+      "directory": "package/mtk/drivers/conninfra/patches",
+      "application_order": [
+        "001-fix-timeval-defination.patch",
+        "002-since-v6.4-remove-class_create-owner-parameter.patch",
+        "003-since-v5.6-replace-deprecated-ioremap_nocache-with-ioremap.patch",
+        "004-add-pull-up-mcu-and-ap2conn-manually.patch",
+        "006-since-v6.8-fix-missing-prototypes.patch",
+        "007-since-v6.11-fix-platform_driver-expect-void-in-remove-callback.patch",
+        "008-since-v6.8-fix-of_device-dont-implicitly-include-mod_devicetable.patch",
+        "009-fix-old-style-declaration.patch",
+        "010-use-wifi-utility-eeprom-backend.patch",
+        "011-keep-linux-612-werror-without-format-suppression.patch",
+        "012-propagate-eeprom-read-errors-and-zero-output.patch",
+        "013-bind-conninfra-to-mt7986-wmac-dt-node.patch",
+        "014-fail-module-init-when-platform-probe-fails.patch",
+        "099-1-fix-format-dont-match-warning.patch",
+        "100-fail-on-ioremap-or-invalid-emi-window.patch",
+        "101-unwind-partial-core-thread-initialization.patch",
+        "102-propagate-register-access-errors.patch"
+      ],
+      "scope": "Conninfra patch series; empty 096-A-probe placeholder is separately classified"
+    },
+    {
+      "id": "warp",
+      "directory": "package/mtk/drivers/warp/patches",
+      "application_order": [
+        "001-warp-ser-fix-high-load-average.patch",
+        "002-warp-fix-proc-dump.patch",
+        "003-since-v5.12-drop-MODULE_SUPPORTED_DEVICE-macro.patch",
+        "004-since-v5.16-fix-stdarg_h-not-found-error.patch",
+        "005-since-v5.17-fix-procfs-api-and-macro-incompatible.patch",
+        "006-since-v5.18-replace-deprecated-PCI_DMA_FROMDEVICE-macro.patch",
+        "007-unify-FOE_MAGIC_WED2-to-hnat-defination.patch",
+        "008-since-v6.11-fix-platform_driver-expect-void-remove-callback.patch",
+        "009-since-v6.10-fix-missing-explicitly-include-vmalloc-header.patch",
+        "099-1-fix-pointer-conversion-warning.patch",
+        "099-2-fix-incompatible-format-warning.patch",
+        "099-3-fix-unused-variable-warning.patch"
+      ],
+      "scope": "WARP patch series"
+    },
+    {
+      "id": "mapfilter",
+      "directory": "package/kernel/mapfilter/patches",
+      "application_order": [
+        "001-remove-cb-mutex.patch",
+        "002-sockptr-t-setsockopt.patch"
+      ],
+      "scope": "MAPFILTER patch series"
+    }
+  ]
+}

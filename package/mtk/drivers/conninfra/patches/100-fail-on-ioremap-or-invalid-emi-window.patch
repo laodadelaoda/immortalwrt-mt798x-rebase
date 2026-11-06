@@ -1,0 +1,147 @@
+--- a/src/conninfra_dev.c
++++ b/src/conninfra_dev.c
+@@ -17,6 +17,7 @@
+ */
+ 
+ #include <linux/cdev.h>
++#include <linux/err.h>
+ #include <linux/delay.h>
+ #include <linux/fb.h>
+ #include <linux/module.h>
+--- a/platform/consys_reg_mng.c
++++ b/platform/consys_reg_mng.c
+@@ -18,6 +18,8 @@
+ 
+ #define pr_fmt(fmt) KBUILD_MODNAME "@(%s:%d) " fmt, __func__, __LINE__
+ 
++#include <linux/errno.h>
++#include <linux/io.h>
+ #include "consys_hw.h"
+ #include "consys_reg_mng.h"
+ #include "consys_reg_util.h"
+@@ -89,7 +91,7 @@
+ 		g_consys_reg_ops->consys_reg_mng_init)
+ 		ret = g_consys_reg_ops->consys_reg_mng_init(pdev);
+ 	else
+-		ret = EFAULT;
++		ret = -EFAULT;
+ 
+ 	return ret;
+ }
+--- a/platform/mt7986/mt7986_consys_reg.c
++++ b/platform/mt7986/mt7986_consys_reg.c
+@@ -16,6 +16,8 @@
+ *    Any definitions in this file will be shared among GLUE Layer and internal Driver Stack.
+ */
+ 
++#include <linux/errno.h>
++#include <linux/io.h>
+ #include <linux/memblock.h>
+ #include <linux/platform_device.h>
+ #include <linux/of.h>
+@@ -108,7 +110,7 @@
+ 
+ static int consys_reg_init(struct platform_device *pdev)
+ {
+-	int ret = -1;
++	int ret = -ENODEV;
+ 	struct device_node *node = NULL;
+ 	struct consys_reg_base_addr *base_addr = NULL;
+ 	int i = 0;
+@@ -137,9 +139,27 @@
+ 		}
+ #else
+ 		for (i = 0; i < CONSYS_BASE_ADDR_MAX; i++) {
++			void __iomem *mapped;
++
+ 			base_addr = &conn_reg.reg_base_addr[i];
+-			if (base_addr->vir_addr == 0)
+-				base_addr->vir_addr = (unsigned long)ioremap(base_addr->phy_addr, base_addr->size);
++			if (!base_addr->phy_addr || !base_addr->size) {
++				pr_err("Invalid register window %d (%s): phys=0x%lx size=0x%llx\n",
++				       i, consys_base_addr_index_to_str[i],
++				       base_addr->phy_addr, base_addr->size);
++				ret = -EINVAL;
++				goto err_unmap;
++			}
++
++			if (!base_addr->vir_addr) {
++				mapped = ioremap(base_addr->phy_addr, base_addr->size);
++				if (!mapped) {
++					pr_err("ioremap failed for register window %d (%s)\n",
++					       i, consys_base_addr_index_to_str[i]);
++					ret = -ENOMEM;
++					goto err_unmap;
++				}
++				base_addr->vir_addr = (unsigned long)mapped;
++			}
+ 
+ 			pr_info("Get Index(%d-%s) phy_addr(0x%lx) vir_addr=(0x%lx) size=(0x%llx)\n",
+ 					i, consys_base_addr_index_to_str[i], base_addr->phy_addr,
+@@ -152,6 +172,16 @@
+ 	}
+ 
+ 	return 0;
++
++err_unmap:
++	while (i-- > 0) {
++		base_addr = &conn_reg.reg_base_addr[i];
++		if (base_addr->vir_addr) {
++			iounmap((void __iomem *)base_addr->vir_addr);
++			base_addr->vir_addr = 0;
++		}
++	}
++	return ret;
+ }
+ 
+ static int consys_reg_deinit(void)
+--- a/platform/emi_mng.c
++++ b/platform/emi_mng.c
+@@ -16,6 +16,7 @@
+ *    Any definitions in this file will be shared among GLUE Layer and internal Driver Stack.
+ */
+ 
++#include <linux/errno.h>
+ #include <linux/of.h>
+ #include <linux/of_reserved_mem.h>
+ #include <linux/io.h>
+@@ -113,16 +114,20 @@
+ 	struct device_node *np;
+ 	struct reserved_mem *rmem;
+ 
++	gConEmiPhyBase = 0;
++	gConEmiSize = 0;
++
+ 	np = of_parse_phandle(pdev->dev.of_node, "memory-region", 0);
+ 	if (!np) {
+-		pr_info("[%s] memory region not found.\n", __func__);
+-		return -1;
++		pr_err("[%s] memory region not found.\n", __func__);
++		return -ENODEV;
+ 	}
+ 
+ 	rmem = of_reserved_mem_lookup(np);
++	of_node_put(np);
+ 	if (!rmem) {
+-		pr_info("[%s] no memory-region\n", __func__);
+-		return -1;
++		pr_err("[%s] no reserved memory backing the conninfra device\n", __func__);
++		return -ENODEV;
+ 	} else {
+ 		gConEmiPhyBase = rmem->base;
+ 		gConEmiSize = rmem->size;
+@@ -138,6 +143,14 @@
+ 	if (consys_platform_emi_ops && consys_platform_emi_ops->consys_ic_emi_get_fw_emi_size)
+ 		fw_emi_size = consys_platform_emi_ops->consys_ic_emi_get_fw_emi_size();
+ 
++#ifdef CONFIG_CONNINFRA_EMI_SUPPORT
++	if (!gConEmiPhyBase || !fw_emi_size || gConEmiSize < fw_emi_size) {
++		pr_err("invalid conninfra EMI window: base=0x%llx size=0x%llx required=0x%x\n",
++		       gConEmiPhyBase, gConEmiSize, fw_emi_size);
++		return -EINVAL;
++	}
++#endif
++
+ 	pr_info("[emi_mng_init] gConEmiPhyBase = [0x%llx] size = [0x%llx] fw size = [0x%x] ops=[%p]\n",
+ 			gConEmiPhyBase, gConEmiSize, fw_emi_size, consys_platform_emi_ops);
+ 

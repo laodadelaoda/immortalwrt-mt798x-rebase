@@ -1,0 +1,172 @@
+name: Audit WAPP 7.6.7.3 source
+
+on:
+  push:
+    branches: ["n60pro-mtk-closed-driver"]
+    paths:
+      - ".github/workflows/wapp-source-audit.yml"
+      - "package/mtk/applications/easymesh-n60/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository binaries
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+      - name: Validate source-audit scripts and vendor patch declarations
+        shell: bash
+        run: |
+          set -euo pipefail
+          PKG="package/mtk/applications/easymesh-n60"
+          python3 -m py_compile "$PKG/tests/test-easymesh-static-contract.py" "$PKG/tests/test-dpp-source-contract.py" "$PKG/tests/test-vendor-artifact-inventory.py"
+          bash -n "$PKG/scripts/n60-auxiliary-source-audit.sh"
+          test -s "$PKG/patches/011-wapp-wts-security.patch"
+          python3 "$PKG/scripts/n60-vendor-source-transforms.py" verify-lock "$GITHUB_WORKSPACE"
+          grep -Fq 'apply_patch_strict' "$PKG/Makefile"
+          grep -Fq 'if (i >= content_len - 1)' "$PKG/patches/011-wapp-wts-security.patch"
+          grep -Fq 'key is configured' "$PKG/patches/011-wapp-wts-security.patch"
+          git apply --numstat "$PKG/auxiliary-patches/001-bndstrg-gcc14-werror-and-init.patch" >/dev/null
+          git apply --numstat "$PKG/auxiliary-patches/002-fwdd-gcc14-bounded-ifname-copy.patch" >/dev/null
+          echo "PASS: current WTS patch, Python source-contract tests and auxiliary audit script validate; removed WTS rewriter is no longer referenced."
+
+      - name: Download and verify exact WAPP source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wapp-audit"
+          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py download \
+            --repo "$GITHUB_WORKSPACE" --dl-dir "$RUNNER_TEMP/wapp-audit" \
+            --ids wappd mapd 1905daemon
+          cd "$RUNNER_TEMP/wapp-audit"
+          echo "===== ARCHIVE CONTENTS ====="
+          tar -tjf wappd-80ca5724.tar.bz2 | tee archive-files.txt
+          mkdir source
+          tar -xjf wappd-80ca5724.tar.bz2 -C source
+          echo "===== EXTRACTED FILE COUNT ====="
+          find source -type f | wc -l
+          mkdir -p binaries
+          for name in wapp mapd p1905_managerd; do
+            cp "$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/files/usr/bin/$name" "binaries/$name"
+            file "binaries/$name"
+            readelf -h "binaries/$name" | grep -E "Class:|Machine:" || true
+            echo "===== STRINGS: $name ====="
+            strings -a "binaries/$name" | grep -iE "WAPP_USER_GET_WTS_CONFIG|WAPP_WTS_CONFIG|wts_bss_info_config|wapp_read_wts_map_config|EVENT_REGISTER|/tmp/wapp_server|map_handler" | head -100 || true
+          done
+
+      - name: Audit WTS parser, events, interface registration and WTS writers
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/wapp-audit"
+          python3 - <<'PY'
+          import pathlib, re
+          root = pathlib.Path("source")
+          files = [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in {".c",".h",".cc",".cpp",".hpp",".mk"}]
+          print("SOURCE FILES:", len(files))
+          patterns = {
+              "WTS parser": re.compile(r"wapp_read_wts_map_config", re.I),
+              "WTS references and writers": re.compile(r"wts|bss_info_config", re.I),
+              "event registration/dispatch": re.compile(r"register.{0,50}event|event.{0,50}register|map_handler|event_handler|event_callback|notify.{0,30}event", re.I),
+              "interface registration": re.compile(r"register.{0,50}(interface|ifname|netdev)|(?:interface|ifname|netdev).{0,50}register", re.I),
+          }
+          for label, rx in patterns.items():
+              print("\n===== " + label + " =====")
+              count = 0
+              for p in files:
+                  try: lines = p.read_text(errors="replace").splitlines()
+                  except OSError as exc: raise SystemExit(f"cannot read audited source file {p}: {exc}") from exc
+                  for n,line in enumerate(lines,1):
+                      if rx.search(line):
+                          print(f"{p}:{n}:{line[:300]}")
+                          count += 1
+                          if count >= 180:
+                              print("... output capped at 180 matches")
+                              break
+                  if count >= 180: break
+              print("MATCHES PRINTED:", count)
+          print("\n===== COMPLETE WTS PARSER FUNCTION =====")
+          def print_function(filename, signature, label):
+              p = root / filename
+              s = p.read_text(errors="replace")
+              start = s.index(signature)
+              brace = s.index("{", start)
+              depth = 0
+              for i in range(brace, len(s)):
+                  if s[i] == "{": depth += 1
+                  elif s[i] == "}":
+                      depth -= 1
+                      if depth == 0:
+                          print("\\n===== " + label + " (" + filename + ") =====")
+                          print(s[start:i+1])
+                          return
+              raise RuntimeError("unterminated function " + signature)
+          print_function("wappd/common/main.c", "int wapp_read_wts_map_config(", "WTS PARSER")
+          print_function("wappd/common/wdev.c", "void wdev_wps_configuration_handle(", "WTS WRITER")
+          print_function("wappd/map/map_1905.c", "int map_handle_get_wts_config(", "WTS GET EVENT")
+          print_function("wappd/map/map_1905.c", "int map_build_wts_config(", "WTS EVENT BUILDER")
+          print_function("wappd/wapp_usr_intf/wapp_usr_intf.c", "int wapp_iface_process(", "USER SOCKET COMMAND DISPATCH")
+          print_function("wappd/wapp_usr_intf/wapp_usr_intf.c", "void send_event_dispatch(", "USER EVENT DISPATCH")
+          print("\\n===== WPS EVENT ROUTING =====")
+          p = root / "wappd/common/wapp_cmm.c"
+          lines = p.read_text(errors="replace").splitlines()
+          for n in range(1498, 1523):
+              print(f"{p}:{n+1}:{lines[n]}")
+          print("\\n===== WAPP STARTUP / INTERFACE INIT REFERENCES =====")
+          for p in files:
+              for n,line in enumerate(p.read_text(errors="replace").splitlines(),1):
+                  if "wapp_iface_init(wapp)" in line or "wapp_get_wireless_interfaces(wapp)" in line:
+                      print(f"{p}:{n}:{line}")
+          PY
+
+      - name: Download and audit exact MAPD and P1905 source archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/wapp-audit"
+          test -s mapd-6eca4331.tar.bz2
+          test -s 1905daemon-35234223.tar.bz2
+          mkdir -p mapd-source p1905-source
+          tar -xjf mapd-6eca4331.tar.bz2 -C mapd-source
+          tar -xjf 1905daemon-35234223.tar.bz2 -C p1905-source
+          echo "===== MAPD SOURCE MACROS / VERSION CONFIG ====="
+          grep -RInE 'CONFIG_MAP_R[234]_SUPPORT|MAP_R[234]_SUPPORT|map_ver|MAP_VERSION' mapd-source | head -240 || true
+          echo "===== P1905 SOURCE DSA / ETHERNET CONFIG REFERENCES ====="
+          grep -RInE 'SWTICH_DSA_ARCH|SWITCH_DSA_ARCH|ethernet_cfg\.txt|ext_phy_port|br_lan|lan_vid|wan_vid|CONFIG_MAP_R[234]_SUPPORT|MAP_R[234]_SUPPORT' p1905-source | head -300 || true
+          echo "===== P1905 CONFIG MAKEFILE ====="
+          find p1905-source -path '*/ethernet/config.mk' -o -path '*/ethernet/Makefile' | sort
+          for f in $(find p1905-source -path '*/ethernet/config.mk' -o -path '*/ethernet/Makefile' | sort); do
+            echo "--- $f ---"
+            sed -n '1,220p' "$f"
+          done
+
+          echo "===== VERIFY COMPLETE WTS PATCH ON ALL THREE PINNED SOURCE TREES ====="
+          PATCH_ROOT="$RUNNER_TEMP/wapp-audit/wts-patch-root"
+          rm -rf "$PATCH_ROOT"
+          mkdir -p "$PATCH_ROOT"
+          tar -xjf wappd-80ca5724.tar.bz2 -C "$PATCH_ROOT"
+          tar -xjf mapd-6eca4331.tar.bz2 -C "$PATCH_ROOT"
+          tar -xjf 1905daemon-35234223.tar.bz2 -C "$PATCH_ROOT"
+          WTS_PATCH="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/011-wapp-wts-security.patch"
+          patch --dry-run --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WTS_PATCH"
+          patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WTS_PATCH"
+          echo "PASS: complete WTS patch applied to pinned WAPP, MAPD and P1905 archives with zero fuzz."
+
+      - name: Upload verified source archive and audit inventory
+        uses: actions/upload-artifact@v6
+        with:
+          name: wappd-80ca5724-source-audit
+          path: |
+            ${{ runner.temp }}/wapp-audit/wappd-80ca5724.tar.bz2
+            ${{ runner.temp }}/wapp-audit/mapd-6eca4331.tar.bz2
+            ${{ runner.temp }}/wapp-audit/1905daemon-35234223.tar.bz2
+            ${{ runner.temp }}/wapp-audit/archive-files.txt
+            ${{ runner.temp }}/wapp-audit/binaries/*
+          if-no-files-found: error
+          retention-days: 7

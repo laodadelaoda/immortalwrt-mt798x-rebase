@@ -1,0 +1,285 @@
+--- a/wappd/common/main.c
++++ b/wappd/common/main.c
+@@ -805,6 +805,7 @@
+ 	u16 cred_len = 0, is_1905_conn = 0, is_normal = 0;
+ 	struct dl_list *dev_list;
+ 	dev_list = &wapp->dev_list;
++	os_memset(&auth, 0, sizeof(auth));
+ 	//char all_zero_mac[MAC_ADDR_LEN]={0};
+ #endif
+ 
+@@ -821,7 +822,8 @@
+ 		DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+ 		return -1;
+ 	}
+-	get_dpp_parameters(wapp->map, param, value, sizeof(value));
++	if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
++		goto error;
+ 	if (os_strcmp(value, "1"))
+ 		is_normal = 0;
+ 	else
+@@ -833,10 +835,11 @@
+ 		DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+ 		return -1;
+ 	}
+-	get_dpp_parameters(wapp->map, param, value, sizeof(value));
++	if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
++		goto error;
+ 	DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"%s _1905valid%s\n", __func__, value);
+ 	if (os_strcmp(value, "1"))
+-		return -1;
++		goto error;
+ 	is_1905_conn = 1;
+ 	if (is_normal) {
+ 		NdisZeroMemory(value, 1024);
+@@ -846,7 +849,8 @@
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+ 			return -1;
+ 		}
+-		get_dpp_parameters(wapp->map, param, value, sizeof(value));
++		if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
++			goto error;
+ 		config[k].ssid_len = os_strlen(value);
+ 		config[k].ssid = os_zalloc(config[k].ssid_len + 1);
+ 		if (!config[k].ssid)
+@@ -860,7 +864,8 @@
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+ 			goto error;
+ 		}
+-		get_dpp_parameters(wapp->map, param, value, sizeof(value));
++		if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
++			goto error;
+ 		config[k].akm = atoi(value);
+ 		NdisZeroMemory(value, 1024);
+ 		NdisZeroMemory(param, 64);
+@@ -869,7 +874,8 @@
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+ 			goto error;
+ 		}
+-		get_dpp_parameters(wapp->map, param, value, sizeof(value));
++		if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
++			goto error;
+ 		os_memcpy(config[k].psk, value, 32);
+ 		NdisZeroMemory(value, 1024);
+ 		NdisZeroMemory(param, 64);
+@@ -878,14 +884,22 @@
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+ 			goto error;
+ 		}
+-		get_dpp_parameters(wapp->map, param, value, sizeof(value));
+-		config[k].dpp_csign_len = os_strlen(value)/2;
++		if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
++			goto error;
++		if (!os_strlen(value) || (os_strlen(value) & 1)) {
++			DBGPRINT(RT_DEBUG_ERROR, "[%s] invalid DPP cSignKey hex length\n", __func__);
++			goto error;
++		}
++		config[k].dpp_csign_len = os_strlen(value) / 2;
+ 		config[k].dpp_csign = os_zalloc(config[k].dpp_csign_len + 1);
+ 		if (!config[k].dpp_csign) {
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_zalloc fail\n", __func__);
+ 			goto error;
+ 		}
+-		hexstr2bin(value, config[k].dpp_csign, config[k].dpp_csign_len);
++		if (hexstr2bin(value, config[k].dpp_csign, config[k].dpp_csign_len) < 0) {
++			DBGPRINT(RT_DEBUG_ERROR, "[%s] invalid DPP cSignKey hex data\n", __func__);
++			goto error;
++		}
+ 		NdisZeroMemory(value, 1024);
+ 		NdisZeroMemory(param, 64);
+ 		ret = os_snprintf(param, sizeof(param), "_netAccessKey");
+@@ -893,14 +907,22 @@
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+ 			goto error;
+ 		}
+-		get_dpp_parameters(wapp->map, param, value, sizeof(value));
+-		config[k].dpp_netaccesskey_len = os_strlen(value)/2;
++		if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
++			goto error;
++		if (!os_strlen(value) || (os_strlen(value) & 1)) {
++			DBGPRINT(RT_DEBUG_ERROR, "[%s] invalid DPP netAccessKey hex length\n", __func__);
++			goto error;
++		}
++		config[k].dpp_netaccesskey_len = os_strlen(value) / 2;
+ 		config[k].dpp_netaccesskey = os_zalloc(config[k].dpp_netaccesskey_len + 1);
+ 		if (!config[k].dpp_netaccesskey) {
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_zalloc fail\n", __func__);
+ 			goto error;
+ 		}
+-		hexstr2bin(value, config[k].dpp_netaccesskey, config[k].dpp_netaccesskey_len);
++		if (hexstr2bin(value, config[k].dpp_netaccesskey, config[k].dpp_netaccesskey_len) < 0) {
++			DBGPRINT(RT_DEBUG_ERROR, "[%s] invalid DPP netAccessKey hex data\n", __func__);
++			goto error;
++		}
+ 		NdisZeroMemory(value, 1024);
+ 		NdisZeroMemory(param, 64);
+ 		ret = os_snprintf(param, sizeof(param), "_connector");
+@@ -908,7 +930,8 @@
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+ 			goto error;
+ 		}
+-		get_dpp_parameters(wapp->map, param, value, sizeof(value));
++		if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
++			goto error;
+ 		config[k].dpp_connector = os_zalloc(os_strlen(value) + 1);
+ 		if (!config[k].dpp_connector) {
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_zalloc fail\n", __func__);
+@@ -920,13 +943,13 @@
+ 	if (is_1905_conn) {
+ 		NdisZeroMemory(value, 1024);
+ 		NdisZeroMemory(param, 64);
+-		os_memset(&auth, '\0', sizeof(struct dpp_authentication));
+ 		ret = os_snprintf(param, sizeof(param), "_netKeyExpiry");
+ 		if (os_snprintf_error(sizeof(param), ret)) {
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+ 			goto error;
+ 		}
+-		get_dpp_parameters(wapp->map, param, value, sizeof(value));
++		if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
++			goto error;
+ 		auth.net_access_key_expiry = atol(value);
+ 		NdisZeroMemory(value, 1024);
+ 		NdisZeroMemory(param, 64);
+@@ -935,7 +958,8 @@
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+ 			goto error;
+ 		}
+-		get_dpp_parameters(wapp->map, param, value, sizeof(value));
++		if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
++			goto error;
+ 		auth.decrypt_thresold = atoi(value);
+ 		NdisZeroMemory(value, 1024);
+ 		NdisZeroMemory(param, 64);
+@@ -944,7 +968,8 @@
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+ 			goto error;
+ 		}
+-		get_dpp_parameters(wapp->map, param, value, sizeof(value));
++		if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
++			goto error;
+ 		auth.connector = os_zalloc(os_strlen(value)+1);
+ 		if (!auth.connector) {
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+@@ -959,15 +984,24 @@
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+ 			goto error;
+ 		}
+-		get_dpp_parameters(wapp->map, param, value, sizeof(value));
+-		hexstr2bin(value, buf_temp, os_strlen(value));
+-		auth.net_access_key = wpabuf_alloc(os_strlen(value));
+-		if (!auth.net_access_key) {
+-			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
++		if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
+ 			goto error;
++		{
++			size_t hex_len = os_strlen(value);
++			size_t key_len;
++			if (!hex_len || (hex_len & 1) || hex_len / 2 > sizeof(buf_temp))
++				goto error;
++			key_len = hex_len / 2;
++			if (hexstr2bin(value, buf_temp, key_len) < 0)
++				goto error;
++			auth.net_access_key = wpabuf_alloc(key_len);
++			if (!auth.net_access_key)
++				goto error;
++			NdisCopyMemory(auth.net_access_key->buf, buf_temp, key_len);
++			auth.net_access_key->used = key_len;
+ 		}
+-		NdisCopyMemory(auth.net_access_key->buf, buf_temp, os_strlen(value));
+-		auth.net_access_key->used = os_strlen(value);
++		NdisZeroMemory(buf_temp, sizeof(buf_temp));
++		NdisZeroMemory(value, sizeof(value));
+ 		NdisZeroMemory(buf_temp, 1024);
+ 		NdisZeroMemory(value, 1024);
+ 		NdisZeroMemory(param, 64);
+@@ -976,18 +1010,24 @@
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+ 			goto error;
+ 		}
+-		get_dpp_parameters(wapp->map, param, value, sizeof(value));
+-		NdisZeroMemory(buf_temp, 1024);
+-		NdisZeroMemory(value, 1024);
+-		NdisZeroMemory(param, 64);
+-		hexstr2bin(value, buf_temp, os_strlen(value));
+-		auth.c_sign_key = wpabuf_alloc(os_strlen(value));
+-		if (!auth.c_sign_key) {
+-			DBGPRINT(RT_DEBUG_ERROR, "[%s] wpabuf_alloc fail\n", __func__);
++		if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
+ 			goto error;
++		{
++			size_t hex_len = os_strlen(value);
++			size_t key_len;
++			if (!hex_len || (hex_len & 1) || hex_len / 2 > sizeof(buf_temp))
++				goto error;
++			key_len = hex_len / 2;
++			if (hexstr2bin(value, buf_temp, key_len) < 0)
++				goto error;
++			auth.c_sign_key = wpabuf_alloc(key_len);
++			if (!auth.c_sign_key)
++				goto error;
++			NdisCopyMemory(auth.c_sign_key->buf, buf_temp, key_len);
++			auth.c_sign_key->used = key_len;
+ 		}
+-		NdisCopyMemory(auth.c_sign_key->buf, buf_temp, os_strlen(value));
+-		auth.c_sign_key->used = os_strlen(value);
++		NdisZeroMemory(buf_temp, sizeof(buf_temp));
++		NdisZeroMemory(value, sizeof(value));
+ 		cred = wapp_dpp_save_dpp_cred(&auth);
+ 		if (!cred) {
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] wapp_dpp_save_dpp_cred fail\n", __func__);
+@@ -1008,14 +1048,19 @@
+ 		DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+ 		goto error;
+ 	}
+-	get_dpp_parameters(wapp->map, param, value, sizeof(value));
++	if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
++		goto error;
+ 	config[k].dpp_ppkey_len = os_strlen(value)/2;
+ 	config[k].dpp_ppkey = os_zalloc(config[k].dpp_ppkey_len + 1);
+-	if (!config[k].dpp_ppkey)
+-		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"ppKey not found in dpp_cfg.txt\n");
+-	hexstr2bin(value, config[k].dpp_ppkey, config[k].dpp_ppkey_len);
+-
+-		printf("\n ppKey on rread frol dpp_cfg.txt - %s",config[k].dpp_ppkey);
++	if (!config[k].dpp_ppkey) {
++		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"ppKey allocation failed\n");
++		goto error;
++	}
++	if (!os_strlen(value) || (os_strlen(value) & 1) ||
++		hexstr2bin(value, config[k].dpp_ppkey, config[k].dpp_ppkey_len) < 0) {
++		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"invalid ppKey hex data\n");
++		goto error;
++	}
+ #endif
+ #endif
+ 	dl_list_for_each_safe(wdev, wdev_temp, dev_list, struct wapp_dev, list) {
+@@ -1187,6 +1232,10 @@
+ 		os_free(config[k].dpp_csign);
+ 	if (config[k].ssid)
+ 		os_free(config[k].ssid);
++#ifdef MAP_R3_RECONFIG
++	if (config[k].dpp_ppkey)
++		os_free(config[k].dpp_ppkey);
++#endif
+ 	if (cred)
+ 		os_free(cred);
+ 	return -1;
+
+--- a/wappd/map/map_1905.c
++++ b/wappd/map/map_1905.c
+@@ -6277,8 +6277,13 @@
+ 			read_backhaul_configs(wapp);
+ #ifdef MAP_R3
+ 			if (wapp->map && (wapp->map->map_version == DEV_TYPE_R3)
+-				&& (wapp->map->TurnKeyEnable == 1))
+-				dpp_read_config_file_for_connection(wapp);
++				&& (wapp->map->TurnKeyEnable == 1)) {
++				if (dpp_read_config_file_for_connection(wapp) < 0) {
++					DBGPRINT(RT_DEBUG_ERROR, "[%s] DPP configuration parsing failed\n", __func__);
++					ret = MAP_ERROR;
++					break;
++				}
++			}
+ #endif
+ 			ret = MAP_SUCCESS;
+ 			break;

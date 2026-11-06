@@ -1,0 +1,328 @@
+name: N60 Pro fixed-vendor-source patch audit
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-patch-audit:
+    name: Apply all pinned vendor patches without fuzz (no compilation)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Verify archives and audit all active patch stacks
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export LC_ALL=C
+          cp config/n60pro-1001.config .config
+          make defconfig
+          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-source-transforms.py verify-lock "$GITHUB_WORKSPACE"
+          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py verify-packages --repo "$GITHUB_WORKSPACE"
+          ROOT="$RUNNER_TEMP/n60-vendor-patch-audit"
+          INPUT="$ROOT/input"
+          SRC="$ROOT/source"
+          OUT="$ROOT/report"
+          mkdir -p "$INPUT" "$SRC" "$OUT"
+          : > "$OUT/PATCH-APPLICATION-REPORT.txt"
+          trap 'cp "$OUT/PATCH-APPLICATION-REPORT.txt" PATCH-APPLICATION-REPORT.txt 2>/dev/null || true' EXIT
+          FAILURES=0
+          CHECKED=0
+
+          fail() {
+            echo "FAIL: $*" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+            FAILURES=$((FAILURES + 1))
+          }
+          fetch_archive() {
+            name="$1"; url="$2"; sha="$3"
+            curl --fail --location --retry 3 --retry-delay 2 "$url" -o "$INPUT/$name"
+            printf '%s  %s\n' "$sha" "$INPUT/$name" | sha256sum --check -
+          }
+          apply_one() {
+            patch_file="$1"; patch_root="$2"
+            CHECKED=$((CHECKED + 1))
+            patch_name="$(basename "$patch_file")"
+            dry_log="$ROOT/$patch_name.dry-run.log"
+            apply_log="$ROOT/$patch_name.apply.log"
+            expected_hunks="$(grep -c '^@@ ' "$patch_file" || true)"
+            echo "===== PATCH $patch_file | expected_hunks=$expected_hunks =====" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+            if [ "$expected_hunks" -le 0 ]; then
+              fail "patch has no unified-diff hunks: $patch_file"
+              return 1
+            fi
+
+            if patch --verbose --dry-run --batch --forward --fuzz=0 -p1 -d "$patch_root" < "$patch_file" > "$dry_log" 2>&1; then
+              cat "$dry_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+            else
+              cat "$dry_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+              fail "zero-fuzz dry-run failed: $patch_file"
+              return 1
+            fi
+            if grep -Eiq 'Skipping patch|Reversed \(or previously applied\)|Ignoring previously applied' "$dry_log"; then
+              fail "dry-run skipped or treated patch as already applied: $patch_file"
+              return 1
+            fi
+            dry_hunks="$(grep -Ec 'Hunk #[0-9]+ succeeded' "$dry_log" || true)"
+            if [ "$dry_hunks" -ne "$expected_hunks" ]; then
+              fail "dry-run applied $dry_hunks/$expected_hunks hunks: $patch_file"
+              return 1
+            fi
+
+            if patch --verbose --batch --forward --fuzz=0 -p1 -d "$patch_root" < "$patch_file" > "$apply_log" 2>&1; then
+              cat "$apply_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+            else
+              cat "$apply_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+              fail "actual application failed after successful dry-run: $patch_file"
+              return 1
+            fi
+            if grep -Eiq 'Skipping patch|Reversed \(or previously applied\)|Ignoring previously applied' "$apply_log"; then
+              fail "actual application skipped or treated patch as already applied: $patch_file"
+              return 1
+            fi
+            applied_hunks="$(grep -Ec 'Hunk #[0-9]+ succeeded' "$apply_log" || true)"
+            if [ "$applied_hunks" -ne "$expected_hunks" ]; then
+              fail "actual application applied $applied_hunks/$expected_hunks hunks: $patch_file"
+              return 1
+            fi
+            echo "PASS: all $applied_hunks/$expected_hunks hunks dry-run and applied with zero fuzz: $patch_file" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+          }
+          apply_locked_series() {
+            set_id="$1"; patch_root="$2"; phase="$3"
+            patch_dir="$(python3 -c 'import json,sys; from pathlib import Path; d=json.loads((Path(sys.argv[1])/"package/mtk/vendor-sources.lock.json").read_text()); print(next(x["directory"] for x in d["patch_sets"] if x["id"]==sys.argv[2]))' "$GITHUB_WORKSPACE" "$set_id")"
+            echo "===== LOCKED SERIES $set_id phase=$phase dir=$patch_dir =====" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+            mapfile -t locked_names < <(python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py patch-order --repo "$GITHUB_WORKSPACE" --set "$set_id" --phase "$phase")
+            for name in "${locked_names[@]}"; do
+              test -s "$patch_dir/$name" || { fail "missing/empty locked patch: $patch_dir/$name"; continue; }
+              apply_one "$patch_dir/$name" "$patch_root"
+            done
+          }
+
+          while IFS="$(printf '\t')" read -r name url sha; do
+            [ -n "$name" ] || continue
+            fetch_archive "$name" "$url" "$sha"
+          done < <(python3 - "$GITHUB_WORKSPACE" <<'PY'
+          import json, sys
+          from pathlib import Path
+          lock = json.loads((Path(sys.argv[1]) / "package/mtk/vendor-sources.lock.json").read_text(encoding="utf-8"))
+          for item in lock["sources"]:
+              print(item["archive"] + "\t" + item["url"] + "\t" + item["sha256"])
+          PY
+          )
+
+          mkdir -p "$SRC/easymesh" "$SRC/mtwifi" "$SRC/conninfra" "$SRC/warp" "$SRC/datconf" "$SRC/mapfilter" "$SRC/bndstrg" "$SRC/fwdd"
+          for name in wappd-80ca5724 mapd-6eca4331 1905daemon-35234223 libmapd-0132d199; do
+            tar -xjf "$INPUT/$name.tar.bz2" -C "$SRC/easymesh"
+          done
+          tar -xJf "$INPUT/mt79xx_20250408-705eb4.tar.xz" -C "$SRC/mtwifi"
+          tar -xJf "$INPUT/mt79xx_conninfra_20250408-f2fa25.tar.xz" -C "$SRC/conninfra"
+          tar -xJf "$INPUT/warp_20250408-5f71ec.tar.xz" -C "$SRC/warp"
+          tar -xjf "$INPUT/datconf-757f9679.tar.bz2" -C "$SRC/datconf"
+          tar -xjf "$INPUT/mapfilter-96f2afed.tar.bz2" -C "$SRC/mapfilter"
+          tar -xjf "$INPUT/bndstrg_plus-8350508d.tar.bz2" -C "$SRC/bndstrg"
+          tar -xjf "$INPUT/fwdd-bcbae0e4.tar.bz2" -C "$SRC/fwdd"
+
+          # Keep immutable extracts for archive-to-source and patch-delta verification.
+          mkdir -p "$SRC/pristine"
+          cp -a "$SRC/mtwifi" "$SRC/pristine/mtwifi"
+          cp -a "$SRC/conninfra/conninfra" "$SRC/pristine/conninfra"
+          cp -a "$SRC/warp/warp" "$SRC/pristine/warp"
+          cp -a "$SRC/datconf/datconf" "$SRC/pristine/datconf"
+          cp -a "$SRC/mapfilter/mapfilter" "$SRC/pristine/mapfilter"
+          cp -a "$SRC/easymesh/wappd" "$SRC/pristine/wappd"
+          cp -a "$SRC/easymesh/mapd" "$SRC/pristine/mapd"
+          cp -a "$SRC/easymesh/1905daemon" "$SRC/pristine/1905daemon"
+          cp -a "$SRC/easymesh/libmapd" "$SRC/pristine/libmapd"
+          cp -a "$SRC/bndstrg/bndstrg_plus" "$SRC/pristine/bndstrg_plus"
+          cp -a "$SRC/fwdd/fwdd" "$SRC/pristine/fwdd"
+
+          # Lock is the sole ordered source for every vendor patch series.
+          apply_locked_series easymesh "$SRC/easymesh" application
+          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-source-transforms.py normalize "$SRC/easymesh"
+          # Lock order is shared, but the DSA patch is scoped to the 1905daemon subtree.
+          EASY_POST_DIR="$(python3 -c 'import json,sys; from pathlib import Path; d=json.loads((Path(sys.argv[1])/"package/mtk/vendor-sources.lock.json").read_text()); print(next(x["directory"] for x in d["patch_sets"] if x["id"]=="easymesh"))' "$GITHUB_WORKSPACE")"
+          mapfile -t easy_post_names < <(python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py patch-order --repo "$GITHUB_WORKSPACE" --set easymesh --phase post_normalize)
+          for name in "${easy_post_names[@]}"; do
+            case "$name" in
+              006-*) apply_one "$EASY_POST_DIR/$name" "$SRC/easymesh" ;;
+              001-*) apply_one "$EASY_POST_DIR/$name" "$SRC/easymesh/1905daemon" ;;
+              *) fail "unexpected EasyMesh post-normalize Lock patch: $name" ;;
+            esac
+          done
+          apply_locked_series mtwifi-7673 "$SRC/mtwifi" all
+          apply_locked_series conninfra "$SRC/conninfra/conninfra" all
+          apply_locked_series warp "$SRC/warp/warp" all
+          # Native OpenWrt Build/Prepare/Default: unpack -> ./src overlay -> Build/Patch.
+          cp -a package/mtk/applications/datconf/src/. "$SRC/datconf/datconf/"
+          echo "PASS: datconf ./src overlay applied before Package patch series" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+          apply_locked_series datconf "$SRC/datconf/datconf" all
+          apply_locked_series mapfilter "$SRC/mapfilter/mapfilter" all
+
+          # Auxiliary patch inputs are audited too; these sources are not added to firmware.
+          mapfile -t auxiliary_names < <(python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py patch-order --repo "$GITHUB_WORKSPACE" --set auxiliary --phase all)
+          for name in "${auxiliary_names[@]}"; do
+            case "$name" in
+              001-bndstrg*) apply_one "package/mtk/applications/easymesh-n60/auxiliary-patches/$name" "$SRC/bndstrg" ;;
+              002-fwdd*) apply_one "package/mtk/applications/easymesh-n60/auxiliary-patches/$name" "$SRC/fwdd" ;;
+              *) fail "unexpected auxiliary Lock patch: $name" ;;
+            esac
+          done
+
+          # Run only after every patch series, including auxiliary source patches,
+          # has been applied; compare the complete patched trees with pristine archives.
+          python3 package/mtk/applications/easymesh-n60/tests/test-vendor-archive-integrity.py \
+            "$INPUT" "$SRC" "$SRC/pristine" "$GITHUB_WORKSPACE"
+
+          # The exact same helper is invoked by package Build/Prepare.
+          # This prevents the audit's transformation logic drifting from the real build.
+          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-source-transforms.py finalize "$SRC/easymesh"
+
+          # Git's unified-diff parser must also accept every active patch.
+          while IFS= read -r patch_file; do
+            if git apply --numstat "$patch_file" >/dev/null 2>"$RUNNER_TEMP/git-apply-parse.err"; then
+              echo "PASS: git unified-diff parser: $patch_file"
+            else
+              cat "$RUNNER_TEMP/git-apply-parse.err"
+              fail "git apply parser rejected patch syntax: $patch_file"
+            fi
+          done < <(find \
+            package/mtk/applications/easymesh-n60/patches \
+            package/mtk/applications/easymesh-n60/auxiliary-patches \
+            package/mtk/applications/datconf/patches \
+            package/mtk/drivers/mt_wifi/patches-7673 \
+            package/mtk/drivers/conninfra/patches \
+            package/mtk/drivers/warp/patches \
+            package/kernel/mapfilter/patches \
+            -type f -name '*.patch' -print | sort)
+
+          # Kernel integration patches are syntax-checked here; applying them to
+          # the actual Linux 6.12 tree remains a Full-kernel validation task.
+          for kernel_patch in \
+            target/linux/mediatek/patches-6.12/999-zzz-5203-mtk-wifi_utility-add-universal-eeprom-read-write-backend.patch \
+            target/linux/mediatek/patches-6.12/999-mapfilter-add-kconfig.patch; do
+            test -s "$kernel_patch" || fail "missing kernel integration patch: $kernel_patch"
+            git apply --numstat "$kernel_patch" >/dev/null || fail "malformed kernel integration patch: $kernel_patch"
+          done
+
+          {
+            echo
+            echo "Repository revision: $(git rev-parse HEAD)"
+            echo "Active patch files checked: $CHECKED"
+            echo "Patch failures: $FAILURES"
+            echo "Patch mode: dry-run then actual apply; --batch --forward --fuzz=0; canonical Lock order per package."
+            echo "No feeds, host tools, target toolchain, kernel build or package compilation was run."
+            echo
+            echo "===== Non-patch source transformations in EasyMesh Build/Prepare (separately inventoried) ====="
+            grep -nE 'python3 -c|sed -i|tr -d|printf .*conf_list' package/mtk/applications/easymesh-n60/Makefile || true
+          } | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+          cp "$OUT/PATCH-APPLICATION-REPORT.txt" PATCH-APPLICATION-REPORT.txt
+          if [ "$FAILURES" -ne 0 ]; then
+            echo "::error::Vendor patch audit found $FAILURES failure(s); Quick compilation must remain gated."
+            exit 1
+          fi
+          echo "===== Execute the real OpenWrt Package prepare targets ====="
+          # Stage the already SHA256-verified Lock archives in OpenWrt's real DL_DIR.
+          # Do not reimplement unpack, ./src overlay, or Build/Patch here: invoke each
+          # Package's native prepare target so package.mk controls the actual sequence.
+          mkdir -p dl
+          cp -f "$INPUT"/* dl/
+          python3 - "$GITHUB_WORKSPACE" <<'PY' > "$ROOT/native-prepare-targets.tsv"
+          import json, sys
+          from pathlib import Path
+          repo = Path(sys.argv[1])
+          lock = json.loads((repo / "package/mtk/vendor-sources.lock.json").read_text(encoding="utf-8"))
+          targets = {}
+          for item in lock["sources"]:
+              if item.get("source_scope") == "auxiliary-audit-only":
+                  continue
+              package_dir = str(Path(item["package_makefile"]).parent)
+              targets.setdefault(package_dir, item["id"])
+
+          # EasyMesh declares PKG_BUILD_DEPENDS:=datconf openssl libnl-tiny.
+          # Its Build/Prepare inventory test inspects datconf's native PKG_BUILD_DIR,
+          # so prepare the independent datconf package before EasyMesh. This mirrors
+          # the dependency order already used by quick-prepare-audit.yml.
+          prepare_order = [
+              "package/mtk/applications/datconf",
+              "package/mtk/drivers/mt_wifi",
+              "package/mtk/drivers/conninfra",
+              "package/mtk/drivers/warp",
+              "package/kernel/mapfilter",
+              "package/mtk/applications/easymesh-n60",
+          ]
+          ordered = [p for p in prepare_order if p in targets]
+          ordered.extend(p for p in targets if p not in ordered)
+          for package_dir in ordered:
+              print(package_dir + "|" + targets[package_dir])
+          PY
+          while IFS='|' read -r package_dir source_id; do
+            [ -n "$package_dir" ] || continue
+            prepare_log="$ROOT/native-$source_id-prepare.log"
+            echo "===== make $package_dir/prepare (source representative: $source_id) ====="
+            if ! make --no-print-directory -j1 "$package_dir/prepare" V=s 2>&1 | tee "$prepare_log"; then
+              fail "native OpenWrt Prepare failed: $package_dir"
+              continue
+            fi
+            python3 - "$GITHUB_WORKSPACE" "$package_dir" "$source_id" <<'PY'
+          import json, sys
+          from pathlib import Path
+          repo, package_dir, source_id = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+          lock = json.loads((repo / "package/mtk/vendor-sources.lock.json").read_text(encoding="utf-8"))
+          item = next(x for x in lock["sources"] if x["id"] == source_id)
+          expected = repo / item["expected_build_dir"]
+          if not expected.is_dir():
+              raise SystemExit(f"FAIL: native Prepare did not create expected PKG_BUILD_DIR: {expected}")
+          related = [x for x in lock["sources"]
+                     if str(Path(x["package_makefile"]).parent) == package_dir
+                     and x.get("source_scope") != "auxiliary-audit-only"]
+          for source in related:
+              root_name = source.get("extract_root")
+              if root_name:
+                  extracted = expected / root_name
+                  if not extracted.is_dir():
+                      raise SystemExit(
+                          f"FAIL: Lock extract_root for {source['id']} is absent from native PKG_BUILD_DIR: {extracted}"
+                      )
+                  print(f"NATIVE EXTRACT ROOT PASS: {source['id']} -> {extracted}")
+          print(f"NATIVE PREPARE PASS: {package_dir} -> {expected}")
+          PY
+          done < "$ROOT/native-prepare-targets.tsv"
+          if [ "$FAILURES" -ne 0 ]; then
+            echo "::error::Native OpenWrt Package Prepare verification failed."
+            exit 1
+          fi
+          echo "PASS: real OpenWrt Package Prepare targets completed; no package compilation was run."
+          echo "PASS: every active fixed-vendor patch applied to its pinned archive with zero fuzz."
+          echo "Package preparation simulation: datconf archive -> ./src overlay -> Lock-ordered Build/Patch series."
+
+      - name: Create immutable audit attestation
+        if: success()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 package/mtk/applications/easymesh-n60/scripts/verify-vendor-audit-attestation.py create --repo "$GITHUB_WORKSPACE" --attestation vendor-audit-attestation.json
+
+      - name: Upload immutable audit attestation
+        if: success()
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-vendor-audit-attestation
+          path: vendor-audit-attestation.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload complete patch audit report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-fixed-vendor-patch-audit
+          path: PATCH-APPLICATION-REPORT.txt
+          if-no-files-found: warn
+          retention-days: 14

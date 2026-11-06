@@ -1,0 +1,128 @@
+name: Audit EasyMesh WTS template and runtime MAC binding
+
+on:
+  push:
+    branches: ["n60pro-mtk-closed-driver"]
+    paths:
+      - ".github/workflows/easymesh-wts-template-audit.yml"
+      - "package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Download and verify all remaining 7.6.7.3 EasyMesh source packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp config/n60pro-1001.config .config
+          make defconfig
+          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py verify-packages --repo "$GITHUB_WORKSPACE"
+          mkdir -p "$RUNNER_TEMP/wts-audit"/{archives,mapd,1905,mapfilter,libmapd,bndstrg_plus,fwdd}
+          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py download \
+            --repo "$GITHUB_WORKSPACE" --dl-dir "$RUNNER_TEMP/wts-audit/archives" \
+            --ids mapd 1905daemon libmapd bndstrg_plus fwdd
+          make -C package/mtk/applications/datconf TOPDIR="$GITHUB_WORKSPACE" DL_DIR="$RUNNER_TEMP/wts-audit/archives" download V=s
+          make -C package/kernel/mapfilter TOPDIR="$GITHUB_WORKSPACE" DL_DIR="$RUNNER_TEMP/wts-audit/archives" download V=s
+          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py verify-downloads \
+            --repo "$GITHUB_WORKSPACE" --dl-dir "$RUNNER_TEMP/wts-audit/archives" --ids datconf mapfilter
+          cd "$RUNNER_TEMP/wts-audit/archives"
+          tar -xjf mapd-6eca4331.tar.bz2 -C "$RUNNER_TEMP/wts-audit/mapd"
+          tar -xjf 1905daemon-35234223.tar.bz2 -C "$RUNNER_TEMP/wts-audit/1905"
+          tar -xjf mapfilter-96f2afed.tar.bz2 -C "$RUNNER_TEMP/wts-audit/mapfilter"
+          tar -xjf libmapd-0132d199.tar.bz2 -C "$RUNNER_TEMP/wts-audit/libmapd"
+          tar -xjf bndstrg_plus-8350508d.tar.bz2 -C "$RUNNER_TEMP/wts-audit/bndstrg_plus"
+          tar -xjf fwdd-bcbae0e4.tar.bz2 -C "$RUNNER_TEMP/wts-audit/fwdd"
+          echo "MAPD source files: $(find "$RUNNER_TEMP/wts-audit/mapd" -type f | wc -l)"
+          echo "P1905 source files: $(find "$RUNNER_TEMP/wts-audit/1905" -type f | wc -l)"
+          echo "mapfilter source files: $(find "$RUNNER_TEMP/wts-audit/mapfilter" -type f | wc -l)"
+          echo "libmapd source files: $(find "$RUNNER_TEMP/wts-audit/libmapd" -type f | wc -l)"
+          echo "bndstrg_plus source files: $(find "$RUNNER_TEMP/wts-audit/bndstrg_plus" -type f | wc -l)"
+          echo "fwdd source files: $(find "$RUNNER_TEMP/wts-audit/fwdd" -type f | wc -l)"
+          echo "===== BUILD ENTRYPOINT INVENTORY ====="
+          find "$RUNNER_TEMP/wts-audit" -type f \( -name Makefile -o -name makefile -o -name GNUmakefile -o -name CMakeLists.txt -o -name configure -o -name '*.mk' \) -print | sort
+
+      - name: Trace WTS template semantics and device-specific MAC registration
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/wts-audit"
+          python3 - <<'PY'
+          import pathlib, re
+          out = []
+          roots = {"MAPD": pathlib.Path("mapd"), "P1905": pathlib.Path("1905")}
+          patterns = re.compile(
+              r"wts_bss_info_config|wts.?bss|bss_config_num|bss_config_priority|"
+              r"temp.?bssid|bssid|al_inf|al.?mac|own.?mac|read_bss_conf|"
+              r"get_wireless_interfaces|need_to_update_wts|WAPP_OPERBSS_REPORT|"
+              r"topo_srv_update_wts_config|topo_srv_parse_wts_config",
+              re.I
+          )
+          for label, root in roots.items():
+              files = [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in {".c",".h",".cc",".cpp",".hpp"}]
+              out.append(f"===== {label}: {len(files)} C/C++ source files =====")
+              matches = 0
+              for p in files:
+                  lines = p.read_text(errors="replace").splitlines()
+                  for n, line in enumerate(lines, 1):
+                      if patterns.search(line):
+                          out.append(f"{p}:{n}:{line[:260]}")
+                          matches += 1
+                          if matches >= 500:
+                              out.append("MATCH LIMIT REACHED")
+                              break
+                  if matches >= 500:
+                      break
+              out.append(f"{label} MATCHES: {matches}")
+          out.append("\n===== FUNCTION BODIES: WTS / BSS / MAC / INTERFACE =====")
+          name_rx = re.compile(r"(wts|bss.*conf|conf.*bss|wireless_interfaces|al.?mac|own.*mac|mac.*addr|oper.*bss)", re.I)
+          for label, root in roots.items():
+              for p in root.rglob("*"):
+                  if not p.is_file() or p.suffix.lower() not in {".c",".h"}:
+                      continue
+                  try: s = p.read_text(errors="replace")
+                  except Exception: continue
+                  lines = s.splitlines()
+                  for i, line in enumerate(lines):
+                      if name_rx.search(line) and re.search(r"\)\s*\{\s*$", line):
+                          depth = 0
+                          started = False
+                          body = []
+                          for j in range(i, min(len(lines), i+500)):
+                              body.append(f"{p}:{j+1}:{lines[j]}")
+                              depth += lines[j].count("{") - lines[j].count("}")
+                              if "{" in lines[j]: started = True
+                              if started and depth == 0:
+                                  break
+                          out.append("\n--- " + label + " " + line.strip() + " ---")
+                          out.extend(body)
+          report = "\n".join(out)
+          pathlib.Path("wts-template-mac-audit.txt").write_text(report)
+          print(report[:120000])
+          PY
+
+      - name: Upload source audit report
+        uses: actions/upload-artifact@v6
+        with:
+          name: easymesh-wts-template-mac-audit
+          path: |
+            ${{ runner.temp }}/wts-audit/wts-template-mac-audit.txt
+            ${{ runner.temp }}/wts-audit/archives/*.tar.bz2
+            ${{ runner.temp }}/wts-audit/mapd/**
+            ${{ runner.temp }}/wts-audit/1905/**
+            ${{ runner.temp }}/wts-audit/mapfilter/**
+            ${{ runner.temp }}/wts-audit/libmapd/**
+            ${{ runner.temp }}/wts-audit/bndstrg_plus/**
+            ${{ runner.temp }}/wts-audit/fwdd/**
+          if-no-files-found: error
+          retention-days: 7

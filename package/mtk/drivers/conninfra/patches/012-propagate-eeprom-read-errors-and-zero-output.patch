@@ -1,0 +1,117 @@
+--- a/base/include/osal.h
++++ b/base/include/osal.h
+@@ -274,7 +274,7 @@
+ *                  F U N C T I O N   D E C L A R A T I O N S
+ ********************************************************************************
+ */
+-void FlashRead(char *name,unsigned char *value, unsigned long offset, unsigned long size);
++int FlashRead(char *name, unsigned char *value, unsigned long offset, unsigned long size);
+ void FlashWrite(char *name, unsigned char *p, unsigned long a, unsigned long b);
+ 
+ unsigned int osal_strlen(const char *str);
+--- a/base/osal.c
++++ b/base/osal.c
+@@ -33,2 +33,3 @@
+ #include <linux/delay.h>
++#include <linux/errno.h>
+ #include <linux/sched.h>
+@@ -96,9 +97,22 @@
+ 	return 0;
+ }
+ 
+-void FlashRead(char *name, unsigned char *value, unsigned long offset, unsigned long size)
++int FlashRead(char *name, unsigned char *value, unsigned long offset, unsigned long size)
+ {
+-	mt_eeprom_read_wifi(offset, size, value);
++	int ret;
++
++	if (!value && size)
++		return -EINVAL;
++	if (!size)
++		return 0;
++
++	memset(value, 0, size);
++	ret = mt_eeprom_read_wifi(offset, size, value);
++	if (ret)
++		pr_err("failed to read EEPROM name=%s offset=0x%lx size=0x%lx ret=%d\n",
++		       name ? name : "(null)", offset, size, ret);
++
++	return ret;
+ }
+ 
+ void FlashWrite(char *name, unsigned char *p, unsigned long a, unsigned long b)
+--- a/platform/mt7986/mt7986_pos.c
++++ b/platform/mt7986/mt7986_pos.c
+@@ -137,7 +137,13 @@
+ {
+ 	unsigned short eeFlashId = 0;
+ 
+-	FlashRead(MTD_WIFI_NM, (unsigned char*)&eeFlashId, EEPROM_CHIPID_OFFSET, sizeof(eeFlashId));
++	EEPROM_content_valid = false;
++	if (FlashRead(MTD_WIFI_NM, (unsigned char*)&eeFlashId,
++		      EEPROM_CHIPID_OFFSET, sizeof(eeFlashId))) {
++		pr_err("failed to read EEPROM chip ID; use default conninfra configuration\n");
++		return false;
++	}
++
+ 	if (eeFlashId == consys_soc_chipid_get()) {
+ 		EEPROM_content_valid = true;
+ 		printk(GRN("eeFlashId: 0x%x, EEPROM_content_valid = %d"), eeFlashId, EEPROM_content_valid);
+@@ -192,6 +198,8 @@
+ int consys_plt_hw_init(void)
+ {
+ 	unsigned int value = 0;
++	unsigned int eeprom_stream = 0;
++	unsigned int eeprom_lna_pa = 0;
+ 
+ 	value = CONSYS_REG_READ_BIT(REG_TOP_MISC_ADDR + TOP_MISC_RSRV_ALL1_3, (0x1 << 2));
+ 	if (value != 0)
+@@ -199,14 +207,16 @@
+ 	else
+ 		one_adie_dbdc = false;
+ 
+-	if (_is_flash_content_valid()) {
+-		FlashRead(MTD_WIFI_NM, (unsigned char*)&value, EEPROM_BAND0_STREAM_OFFSET, sizeof(value));
+-		tx_stream = ((value >> EEPROM_BAND0_STREAM_TX_BIT_OFFSET) & EEPROM_BAND0_STREAM_TX_MASK);
+-		rx_stream = ((value >> EEPROM_BAND0_STREAM_RX_BIT_OFFSET) & EEPROM_BAND0_STREAM_RX_MASK);
+-
+-		FlashRead(MTD_WIFI_NM, (unsigned char*)&value, EEPROM_LNA_PA_SELECT_OFFSET, sizeof(value));
+-		band0_pa_type = ((value >> EEPROM_LNA_PA_SELECT_BAND0_BIT_OFFSET) & EEPROM_LNA_PA_SELECT_BAND0_MASK);
+-		band1_pa_type = ((value >> EEPROM_LNA_PA_SELECT_BAND1_BIT_OFFSET) & EEPROM_LNA_PA_SELECT_BAND1_MASK);
++	if (_is_flash_content_valid() &&
++	    !FlashRead(MTD_WIFI_NM, (unsigned char*)&eeprom_stream,
++		       EEPROM_BAND0_STREAM_OFFSET, sizeof(eeprom_stream)) &&
++	    !FlashRead(MTD_WIFI_NM, (unsigned char*)&eeprom_lna_pa,
++		       EEPROM_LNA_PA_SELECT_OFFSET, sizeof(eeprom_lna_pa))) {
++		tx_stream = ((eeprom_stream >> EEPROM_BAND0_STREAM_TX_BIT_OFFSET) & EEPROM_BAND0_STREAM_TX_MASK);
++		rx_stream = ((eeprom_stream >> EEPROM_BAND0_STREAM_RX_BIT_OFFSET) & EEPROM_BAND0_STREAM_RX_MASK);
++
++		band0_pa_type = ((eeprom_lna_pa >> EEPROM_LNA_PA_SELECT_BAND0_BIT_OFFSET) & EEPROM_LNA_PA_SELECT_BAND0_MASK);
++		band1_pa_type = ((eeprom_lna_pa >> EEPROM_LNA_PA_SELECT_BAND1_BIT_OFFSET) & EEPROM_LNA_PA_SELECT_BAND1_MASK);
+ 
+ 		if (one_adie_dbdc) {
+ 			adie_cfg_type = ADIE_TYPE_ONE;
+@@ -220,6 +230,10 @@
+ 		pr_info("tx_stream = 0x%x, rx_stream = 0x%x, band0_pa_type = 0x%x, band1_pa_type = 0x%x\n",
+ 				tx_stream, rx_stream, band0_pa_type, band1_pa_type);
+ 	} else {
++		tx_stream = 0;
++		rx_stream = 0;
++		band0_pa_type = 0;
++		band1_pa_type = 0;
+ 		if (one_adie_dbdc) {
+ 			adie_cfg_type = ADIE_TYPE_ONE;
+ 		} else {
+--- a/platform/mt7981/mt7981_pos.c
++++ b/platform/mt7981/mt7981_pos.c
+@@ -120,7 +120,9 @@
+ {
+ 	unsigned short eeFlashId = 0;
+ 
+-	FlashRead(MTD_WIFI_NM, (unsigned char*)&eeFlashId, EEPROM_CHIPID_OFFSET, sizeof(eeFlashId));
++	if (FlashRead(MTD_WIFI_NM, (unsigned char*)&eeFlashId,
++		      EEPROM_CHIPID_OFFSET, sizeof(eeFlashId)))
++		return false;
+ 
+ 	if (eeFlashId == consys_soc_chipid_get())
+ 		return true;

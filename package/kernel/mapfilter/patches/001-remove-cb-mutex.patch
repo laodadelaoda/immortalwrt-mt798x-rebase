@@ -1,0 +1,10 @@
+--- a/mtkmapfilter.c
++++ b/mtkmapfilter.c
+@@ -906,7 +906,6 @@
+ 	.groups = 0,
+ 	.flags = 0,
+ 	.input = recv_nlmsg,
+-	.cb_mutex = NULL,
+ 	.bind = NULL,
+ };
+ #endif
