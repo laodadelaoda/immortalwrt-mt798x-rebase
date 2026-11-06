@@ -14,7 +14,12 @@ v1: Move openwrt-master files to openwrt-25.12 branch after OpenWrt official
 
 --- a/drivers/net/ppp/ppp_generic.c
 +++ b/drivers/net/ppp/ppp_generic.c
-@@ -1911,6 +1911,42 @@ ppp_send_frame(struct ppp *ppp, struct s
+@@ -53,3 +53,4 @@
+ #include <linux/nsproxy.h>
+ #include <net/net_namespace.h>
+ #include <net/netns/generic.h>
++#include <net/sock.h>
+@@ -1911,6 +1912,42 @@ ppp_send_frame(struct ppp *ppp, struct s
  	++ppp->dev->stats.tx_errors;
  }
  
@@ -59,7 +64,12 @@ v1: Move openwrt-master files to openwrt-25.12 branch after OpenWrt official
   * The caller should have the xmit path locked.
 --- a/include/linux/ppp_channel.h
 +++ b/include/linux/ppp_channel.h
-@@ -78,6 +78,9 @@ extern int ppp_unit_number(struct ppp_ch
+@@ -23,3 +23,4 @@
+ struct net_device_path;
+ struct net_device_path_ctx;
+ struct ppp_channel;
++struct sock;
+@@ -78,6 +79,9 @@ extern int ppp_unit_number(struct ppp_ch
  /* Get the device name associated with a channel, or NULL if none */
  extern char *ppp_dev_name(struct ppp_channel *);
  
