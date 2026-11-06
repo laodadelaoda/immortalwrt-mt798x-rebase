@@ -29,20 +29,22 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-@@ -1386,6 +1386,18 @@ static void *mtk_max_lro_buf_alloc(gfp_t
+@@ -1386,6 +1386,20 @@ static void *mtk_max_lro_buf_alloc(gfp_t
  	return (void *)data;
  }
  
 +static bool mtk_validate_sram_range(struct mtk_eth *eth, u64 offset, u64 size)
 +{
-+	u64 start, end;
++	u64 start = (u64)eth->phy_sram_base;
 +
-+	start = (u64)eth->phy_sram_base;
-+	end = (u64)eth->phy_sram_base + eth->sram_size - 1;
-+	if ((offset >= start) && (offset + size - 1 <= end))
-+		return true;
++	if (!size || offset < start)
++		return false;
 +
-+	return false;
++	offset -= start;
++	if (offset > eth->sram_size)
++		return false;
++
++	return size <= eth->sram_size - offset;
 +}
 +
  /* the qdma core needs scratch memory to be setup */
