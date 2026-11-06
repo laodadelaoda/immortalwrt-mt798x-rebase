@@ -77,7 +77,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  {
  	return container_of(pcs, struct mtk_pcs_lynxi, pcs);
  }
-@@ -138,13 +107,70 @@ static unsigned int mtk_pcs_lynxi_inband
+@@ -138,13 +107,71 @@ static unsigned int mtk_pcs_lynxi_inband
  	}
  }
  
@@ -90,7 +90,8 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +	unsigned int val;
 +
 +	mutex_lock(&mpcs->regmap_lock);
-+	regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &val);
++	if (regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &val))
++		val = 0;
 +	mutex_unlock(&mpcs->regmap_lock);
 +
 +	return FIELD_GET(SGMII_LINK_STATUS, val);
@@ -152,7 +153,10 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	/* Read the BMSR and LPA */
  	if (regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &bm) ||
  	    regmap_read(mpcs->regmap, SGMSYS_PCS_ADVERTISE, &adv)) {
-@@ -152,19 +178,33 @@ static void mtk_pcs_lynxi_get_state(stru
+@@ -152,19 +178,36 @@ static void mtk_pcs_lynxi_get_state(stru
++		state.link = false;
++		mutex_unlock(&mpcs->regmap_lock);
++		mtk_pcs_lynxi_store_mpcs_state(mpcs, &state);
  		return;
  	}
  
@@ -367,14 +371,15 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +	}
 +
 +exit:
-+	if (!delayed_work_pending(&mpcs->link_poll))
++	mpcs->poll = true;
++	if (mpcs->poll && !delayed_work_pending(&mpcs->link_poll))
 +		schedule_delayed_work(&mpcs->link_poll, msecs_to_jiffies(1000));
 +}
 +
  static int mtk_pcs_lynxi_enable(struct phylink_pcs *pcs)
  {
  	struct mtk_pcs_lynxi *mpcs = pcs_to_mtk_pcs_lynxi(pcs);
-@@ -340,6 +427,9 @@ static int mtk_pcs_lynxi_enable(struct p
+@@ -340,6 +427,10 @@ static int mtk_pcs_lynxi_enable(struct p
  	if (mpcs->xfi_tphy)
  		phy_power_on(mpcs->xfi_tphy);
  
@@ -384,10 +389,11 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	return 0;
  }
  
-@@ -347,6 +437,10 @@ static void mtk_pcs_lynxi_disable(struct
+@@ -347,6 +437,11 @@ static void mtk_pcs_lynxi_disable(struct
  {
  	struct mtk_pcs_lynxi *mpcs = pcs_to_mtk_pcs_lynxi(pcs);
  
++	mpcs->poll = false;
 +	cancel_delayed_work_sync(&mpcs->link_poll);
 +
 +	mpcs->state.link = false;
