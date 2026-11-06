@@ -361,8 +361,8 @@ def main():
             attest(repo,out,a.kernel_src.resolve(),a.patch_log.resolve(),a.kernel_archive.resolve(),a.run_id,a.run_attempt)
             print("PASS: immutable kernel patch-stack attestation created")
         else:
-            if not all((a.attestation,a.source_audit_report,a.run_id,a.run_attempt)): raise RuntimeError("verify requires attestation, source audit report, run id and attempt")
-            verify(repo,a.attestation.resolve(),a.run_id,a.run_attempt,a.source_audit_report.resolve())
+            if not all((a.attestation,a.source_audit_report,a.intermediate_audit_dir,a.run_id,a.run_attempt)): raise RuntimeError("verify requires attestation, source audit report, intermediate audit directory, run id and attempt")
+            verify(repo,a.attestation.resolve(),a.run_id,a.run_attempt,a.source_audit_report.resolve(),a.intermediate_audit_dir.resolve())
         return 0
     except Exception as e:
         print("ERROR: " + str(e), file=sys.stderr); return 1
