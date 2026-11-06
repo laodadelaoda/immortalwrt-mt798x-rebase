@@ -15,13 +15,11 @@ missing = [name for name in required if not (dsa / name).is_file()]
 if missing:
     raise SystemExit("FAIL: missing patched MT7530 source: " + ", ".join(missing))
 
-def function(source, signature):
-    start = source.find(signature)
-    if start < 0:
+def function(source, name):
+    match = re.search(r"\\b" + re.escape(name) + r"\\s*\\([^;]*?\\)\\s*\\{", source, re.S)
+    if not match:
         return ""
-    opening = source.find("{", start)
-    if opening < 0:
-        return ""
+    opening = source.find("{", match.start())
     depth = 0
     for i in range(opening, len(source)):
         if source[i] == "{":
@@ -46,9 +44,9 @@ mmio = (dsa / "mt7530-mmio.c").read_text(errors="replace")
 decls = re.findall(r"\bvoid\s+mt7530_write\s*\(\s*struct mt7530_priv\s*\*\s*priv\s*,\s*u32\s+reg\s*,\s*u32\s+val\s*\)\s*;", header)
 check(len(decls) == 1, f"mt7530_write prototype must occur exactly once (found {len(decls)})")
 
-init = function(nl, "int mt7530_nl_init")
-exit_fn = function(nl, "void mt7530_nl_exit")
-response = function(nl, "static int mt7530_nl_response")
+init = function(nl, "mt7530_nl_init")
+exit_fn = function(nl, "mt7530_nl_exit")
+response = function(nl, "mt7530_nl_response")
 check(bool(init), "mt7530_nl_init is missing")
 check(bool(exit_fn), "mt7530_nl_exit is missing")
 check(bool(response), "mt7530_nl_response is missing")
@@ -73,7 +71,7 @@ check("if (!sw_priv)" in response or "if (!READ_ONCE(sw_priv))" in response,
 check("mt7530_nl_init(priv)" in mdio, "MDIO probe does not initialize MT7530 Netlink")
 check("mt7530_nl_init(priv)" in mmio, "MMIO probe does not initialize MT7530 Netlink")
 mdio_remove = function(mdio, "mt7530_remove")
-mmio_remove = function(mmio, "static void mt7988_remove")
+mmio_remove = function(mmio, "mt7988_remove")
 check(mdio_remove.find("mt7530_nl_exit") >= 0 and
       mdio_remove.find("mt7530_nl_exit") < mdio_remove.find("mt7530_remove_common"),
       "MDIO remove releases MT7530 resources before Netlink teardown")
@@ -82,9 +80,9 @@ check(mmio_remove.find("mt7530_nl_exit") >= 0 and
       "MMIO remove releases MT7530 resources before Netlink teardown")
 
 # User-supplied register and PHY selectors must be bounded before access.
-read_fn = function(nl, "static int mt7530_nl_reply_read")
-write_fn = function(nl, "static int mt7530_nl_reply_write")
-validate_fn = function(nl, "static int mt7530_nl_validate_access")
+read_fn = function(nl, "mt7530_nl_reply_read")
+write_fn = function(nl, "mt7530_nl_reply_write")
+validate_fn = function(nl, "mt7530_nl_validate_access")
 operations = validate_fn + read_fn + write_fn
 check(bool(re.search(r"phy\s*<\s*-1\s*\|\|\s*phy\s*>=", operations)),
       "Netlink PHY operations lack an explicit upper-bound check")
