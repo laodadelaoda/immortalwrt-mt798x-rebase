@@ -60,6 +60,17 @@ v1: Add L2TP tunnel hardware offload support
  			/* DEV_PATH_VLAN and DEV_PATH_PPPOE */
  			if (info->num_encaps >= NF_FLOW_TABLE_ENCAP_MAX) {
  				info->indev = NULL;
+@@ -280,5 +287,8 @@ static int nft_dev_forward_path(const struct nft_pktinfo *pkt,
+ 	if (nft_dev_fill_forward_path(&ctx, route, dst, ct, dir, ha, &stack) >= 0)
+ 		nft_dev_path_info(&stack, &info, ha, &ft->data);
+ 
+ 	if (!info.indev || !nft_flowtable_find_dev(info.indev, ft))
+-		return -ENOENT;
++	{
++		dst_release(info.dst);
++		return -ENOENT;
++	}
+
 @@ -381,6 +395,8 @@ static int nft_dev_forward_path(const st
  		route->tuple[dir].out.hw_ifindex = info.hw_outdev->ifindex;
  		route->tuple[dir].xmit_type = info.xmit_type;
