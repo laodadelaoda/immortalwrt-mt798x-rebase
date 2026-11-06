@@ -71,7 +71,7 @@ v1: Add SKB headroom copy support for tunnel packets
  	skb_put(skb2, len + state->hlen);
  	skb_reset_network_header(skb2);
  	skb2->transport_header = skb2->network_header + state->hlen;
-@@ -754,6 +757,13 @@ struct sk_buff *ip_frag_next(struct sk_b
+@@ -754,6 +757,14 @@ struct sk_buff *ip_frag_next(struct sk_b
  
  	ip_send_check(iph);
  
@@ -110,7 +110,7 @@ v1: Add SKB headroom copy support for tunnel packets
  
 --- a/drivers/net/ethernet/mediatek/mtk_tnl.h
 +++ b/drivers/net/ethernet/mediatek/mtk_tnl.h
-@@ -45,4 +45,36 @@ struct mtk_tnl_desc {
+@@ -45,4 +45,37 @@ struct mtk_tnl_desc {
  #define is_tnl_tag_valid(skb) (skb_tnl_magic_tag(skb) == TNL_MAGIC_TAG)
  #define skb_tnl_is_pppoe(skb) (((struct mtk_tnl_desc *)((skb)->head))->is_pppoe)
  
