@@ -151,17 +151,17 @@ check("an8855_read(struct an8855_priv *priv, u32 reg, u32 *val)" in an8855_h,
       "AN8855 register-read declaration does not expose an error return/out value")
 check("int an8855_write(struct an8855_priv *priv" in an8855_h,
       "AN8855 register-write declaration does not expose an error return")
-check(bool(re.search(r"phy\\s*<\\s*-1\\s*\\|\\|\\s*phy\\s*>=", an_validate)),
+check(bool(re.search(r"phy\s*<\s*-1\s*\|\|\s*phy\s*>=", an_validate)),
       "AN8855 Netlink PHY index lacks bounds validation")
-check(bool(re.search(r"devad\\s*<\\s*-1\\s*\\|\\|\\s*devad\\s*>", an_validate)),
+check(bool(re.search(r"devad\s*<\s*-1\s*\|\|\s*devad\s*>", an_validate)),
       "AN8855 Netlink DEVAD lacks bounds validation")
-check(bool(re.search(r"reg\\s*>", an_validate)),
+check(bool(re.search(r"reg\s*>", an_validate)),
       "AN8855 Netlink register address lacks bounds validation")
-check(bool(re.search(r"ret\\s*=\\s*an8855_phy_cl22_write\\s*\\(", an_write)),
+check(bool(re.search(r"ret\s*=\s*an8855_phy_cl22_write\s*\(", an_write)),
       "AN8855 Clause-22 PHY write return value is ignored")
-check(bool(re.search(r"ret\\s*=\\s*an8855_phy_cl45_write\\s*\\(", an_write)),
+check(bool(re.search(r"ret\s*=\s*an8855_phy_cl45_write\s*\(", an_write)),
       "AN8855 Clause-45 PHY write return value is ignored")
-check(bool(re.search(r"ret\\s*=\\s*an8855_write\\s*\\(", an_write)),
+check(bool(re.search(r"ret\s*=\s*an8855_write\s*\(", an_write)),
       "AN8855 switch-register write return value is ignored")
 check("AN8855_CMD_REQUEST" not in an8855_nl[an8855_nl.index("static const struct genl_ops"):an8855_nl.index("static struct genl_family")],
       "AN8855 advertises an unsupported REQUEST operation")
