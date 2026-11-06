@@ -23,10 +23,9 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-@@ -3564,5 +3564,6 @@ static void mtk_tx_timeout(struct net_de
+@@ -3564,4 +3564,5 @@ static void mtk_tx_timeout(struct net_de
  	eth->netdev[mac->id]->stats.tx_errors++;
  	netif_err(eth, tx_err, dev, "transmit timed out\n");
- 
 -	schedule_work(&eth->pending_work);
 +	if (atomic_read(&eth->reset.force))
 +		schedule_work(&eth->pending_work);
