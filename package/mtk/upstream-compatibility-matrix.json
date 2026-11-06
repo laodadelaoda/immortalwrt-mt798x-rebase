@@ -1,0 +1,337 @@
+{
+  "schema_version": 1,
+  "components": {
+    "mtwifi": {
+      "sources": [
+        "mtwifi"
+      ],
+      "risks": [
+        "linux_kernel_api",
+        "mtk_driver_abi",
+        "toolchain_abi"
+      ],
+      "evidence": [
+        "native_package_prepare",
+        "linux_6_12_module_compile",
+        "modpost_symbol_and_vermagic",
+        "n60_pro_wifi_runtime"
+      ]
+    },
+    "conninfra": {
+      "sources": [
+        "conninfra"
+      ],
+      "risks": [
+        "linux_kernel_api",
+        "mtk_driver_abi",
+        "toolchain_abi"
+      ],
+      "evidence": [
+        "native_package_prepare",
+        "linux_6_12_module_compile",
+        "modpost_symbol_and_vermagic",
+        "n60_pro_conninfra_runtime"
+      ]
+    },
+    "warp": {
+      "sources": [
+        "warp"
+      ],
+      "risks": [
+        "linux_kernel_api",
+        "mtk_driver_abi",
+        "toolchain_abi"
+      ],
+      "evidence": [
+        "native_package_prepare",
+        "linux_6_12_module_compile",
+        "modpost_symbol_and_vermagic",
+        "n60_pro_warp_runtime"
+      ]
+    },
+    "easymesh": {
+      "sources": [
+        "wappd",
+        "mapd",
+        "1905daemon",
+        "libmapd"
+      ],
+      "risks": [
+        "openssl_3_abi",
+        "libnl_abi",
+        "linux_userspace_api",
+        "mtk_vendor_api",
+        "toolchain_abi"
+      ],
+      "evidence": [
+        "native_package_prepare",
+        "easymesh_cross_compile_link",
+        "elf_needed_soname_symbols",
+        "openssl_3_linkage",
+        "wapp_mapd_p1905_runtime"
+      ]
+    },
+    "datconf": {
+      "sources": [
+        "datconf"
+      ],
+      "risks": [
+        "package_prepare",
+        "cmake_toolchain_abi"
+      ],
+      "evidence": [
+        "native_package_prepare",
+        "datconf_compile_link"
+      ]
+    },
+    "mapfilter": {
+      "sources": [
+        "mapfilter"
+      ],
+      "risks": [
+        "linux_kernel_api",
+        "kernel_kconfig_abi",
+        "toolchain_abi"
+      ],
+      "evidence": [
+        "native_package_prepare",
+        "linux_6_12_module_compile",
+        "modpost_symbol_and_vermagic",
+        "mapfilter_runtime"
+      ]
+    },
+    "auxiliary": {
+      "sources": [
+        "bndstrg_plus",
+        "fwdd"
+      ],
+      "risks": [
+        "mtk_vendor_api",
+        "toolchain_abi"
+      ],
+      "evidence": [
+        "zero_fuzz_patch_apply",
+        "auxiliary_source_compile_if_integrated"
+      ]
+    }
+  },
+  "path_rules": [
+    {
+      "pattern": "target/linux/**",
+      "risks": [
+        "linux_kernel_api",
+        "kernel_kconfig_abi",
+        "mtk_driver_abi"
+      ],
+      "components": [
+        "mtwifi",
+        "conninfra",
+        "warp",
+        "mapfilter"
+      ]
+    },
+    {
+      "pattern": "include/kernel-version.mk",
+      "risks": [
+        "linux_kernel_api"
+      ],
+      "components": [
+        "mtwifi",
+        "conninfra",
+        "warp",
+        "mapfilter"
+      ]
+    },
+    {
+      "pattern": "package/kernel/**",
+      "risks": [
+        "linux_kernel_api",
+        "kernel_kconfig_abi",
+        "package_prepare"
+      ],
+      "components": [
+        "mapfilter"
+      ]
+    },
+    {
+      "pattern": "package/mtk/drivers/**",
+      "risks": [
+        "mtk_driver_abi",
+        "linux_kernel_api",
+        "package_prepare"
+      ],
+      "components": [
+        "mtwifi",
+        "conninfra",
+        "warp"
+      ]
+    },
+    {
+      "pattern": "package/mtk/applications/**",
+      "risks": [
+        "mtk_vendor_api",
+        "linux_userspace_api",
+        "openssl_3_abi",
+        "package_prepare"
+      ],
+      "components": [
+        "easymesh",
+        "datconf"
+      ]
+    },
+    {
+      "pattern": "package/libs/openssl/**",
+      "risks": [
+        "openssl_3_abi"
+      ],
+      "components": [
+        "easymesh"
+      ]
+    },
+    {
+      "pattern": "package/libs/libnl-tiny/**",
+      "risks": [
+        "libnl_abi"
+      ],
+      "components": [
+        "easymesh"
+      ]
+    },
+    {
+      "pattern": "toolchain/**",
+      "risks": [
+        "toolchain_abi"
+      ],
+      "components": [
+        "mtwifi",
+        "conninfra",
+        "warp",
+        "easymesh",
+        "datconf",
+        "mapfilter",
+        "auxiliary"
+      ]
+    },
+    {
+      "pattern": "tools/**",
+      "risks": [
+        "toolchain_abi",
+        "package_prepare"
+      ],
+      "components": [
+        "mtwifi",
+        "conninfra",
+        "warp",
+        "easymesh",
+        "datconf",
+        "mapfilter"
+      ]
+    },
+    {
+      "pattern": "include/**",
+      "risks": [
+        "toolchain_abi",
+        "package_prepare",
+        "linux_userspace_api"
+      ],
+      "components": [
+        "mtwifi",
+        "conninfra",
+        "warp",
+        "easymesh",
+        "datconf",
+        "mapfilter"
+      ]
+    },
+    {
+      "pattern": "rules.mk",
+      "risks": [
+        "toolchain_abi",
+        "package_prepare"
+      ],
+      "components": [
+        "mtwifi",
+        "conninfra",
+        "warp",
+        "easymesh",
+        "datconf",
+        "mapfilter"
+      ]
+    },
+    {
+      "pattern": "Makefile",
+      "risks": [
+        "package_prepare",
+        "toolchain_abi"
+      ],
+      "components": [
+        "mtwifi",
+        "conninfra",
+        "warp",
+        "easymesh",
+        "datconf",
+        "mapfilter"
+      ]
+    },
+    {
+      "pattern": "scripts/**",
+      "risks": [
+        "package_prepare",
+        "toolchain_abi"
+      ],
+      "components": [
+        "mtwifi",
+        "conninfra",
+        "warp",
+        "easymesh",
+        "datconf",
+        "mapfilter"
+      ]
+    },
+    {
+      "pattern": "feeds.conf.default",
+      "risks": [
+        "package_prepare",
+        "mtk_vendor_api"
+      ],
+      "components": [
+        "mtwifi",
+        "conninfra",
+        "warp",
+        "easymesh",
+        "datconf",
+        "mapfilter"
+      ]
+    },
+    {
+      "pattern": "config/**",
+      "risks": [
+        "kernel_kconfig_abi",
+        "firmware_configuration"
+      ],
+      "components": [
+        "mtwifi",
+        "conninfra",
+        "warp",
+        "mapfilter",
+        "easymesh"
+      ]
+    },
+    {
+      "pattern": ".github/workflows/**",
+      "risks": [
+        "audit_pipeline"
+      ],
+      "components": []
+    }
+  ],
+  "protected_roots": [
+    "target/",
+    "package/",
+    "toolchain/",
+    "tools/",
+    "include/",
+    "scripts/",
+    "config/"
+  ]
+}
