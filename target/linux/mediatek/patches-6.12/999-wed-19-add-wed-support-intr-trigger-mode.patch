@@ -13,7 +13,7 @@ Date: Fri, 24 Apr 2026 17:15:40 +0800
 Subject: [PATCH] add wed support intr trigger mode
 
 ---
- drivers/net/ethernet/mediatek/mtk_wed.c | 43 +++++++++++++++++++++++--
+ drivers/net/ethernet/mediatek/mtk_wed.c | 45 +++++++++++++++++++++++++--
  include/linux/soc/mediatek/mtk_wed.h    |  6 +++-
  2 files changed, 46 insertions(+), 3 deletions(-)
 
@@ -21,7 +21,7 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_wed.c b/drivers/net/ethernet/medi
 index e4fc718..8b9243f 100644
 --- a/drivers/net/ethernet/mediatek/mtk_wed.c
 +++ b/drivers/net/ethernet/mediatek/mtk_wed.c
-@@ -1145,6 +1145,41 @@ mtk_wed_dma_disable(struct mtk_wed_device *dev)
+@@ -1145,6 +1145,43 @@ mtk_wed_dma_disable(struct mtk_wed_device *dev)
  	mtk_wed_set_512_support(dev, false);
  }
  
@@ -29,33 +29,37 @@ index e4fc718..8b9243f 100644
 +mtk_wed_set_pcie_mask(struct mtk_wed_device *dev, bool enable)
 +{
 +#define IRQ_MASK_APMCU		0x1000301c
-+	unsigned long addr;
++	void __iomem *addr;
 +	u32 value;
 +
 +	if (!dev->wlan.intr_mode)
 +		return;
 +
 +	/* set mask apmcu*/
-+	addr = (unsigned long)ioremap(IRQ_MASK_APMCU, 4);
-+	value = readl((void *)addr);
++	addr = ioremap(IRQ_MASK_APMCU, 4);
++	if (!addr)
++		return;
++	value = readl(addr);
 +	if (enable)
 +		value |= BIT(dev->hw->index);
 +	else
 +		value &= ~BIT(dev->hw->index);
 +
-+	writel(value, (void *)addr);
-+	iounmap((void *)addr);
++	writel(value, addr);
++	iounmap(addr);
 +
 +	/* set pcie auto clear */
-+	addr = (unsigned long)ioremap((dev->hw->pcie_base + 0x1ac), 4);
-+	value = readl((void *)addr);
++	addr = ioremap(dev->hw->pcie_base + 0x1ac, 4);
++	if (!addr)
++		return;
++	value = readl(addr);
 +	if (enable)
 +		value |= BIT(3);
 +	else
 +		value &= ~BIT(3);
 +
-+	writel(value, (void *)addr);
-+	iounmap((void *)addr);
++	writel(value, addr);
++	iounmap(addr);
 +
 +	return;
 +}
