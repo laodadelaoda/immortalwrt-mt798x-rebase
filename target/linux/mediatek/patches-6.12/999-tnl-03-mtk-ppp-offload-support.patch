@@ -14,40 +14,41 @@ v1: Move openwrt-master files to openwrt-25.12 branch after OpenWrt official
 
 --- a/drivers/net/ppp/ppp_generic.c
 +++ b/drivers/net/ppp/ppp_generic.c
-@@ -1911,6 +1911,41 @@ ppp_send_frame(struct ppp *ppp, struct s
+@@ -1911,6 +1911,42 @@ ppp_send_frame(struct ppp *ppp, struct s
  	++ppp->dev->stats.tx_errors;
  }
  
 +struct sock *ppp_netdev_get_sock(struct net_device *dev)
 +{
-+	struct list_head *list;
 +	struct channel *pch;
++	struct ppp_channel *chan;
 +	struct ppp *ppp;
-+	struct sock *sk;
++	struct sock *sk = ERR_PTR(-EINVAL);
 +
 +	if (!dev)
 +		return ERR_PTR(-EINVAL);
 +
 +	ppp = netdev_priv(dev);
 +
-+	list = &ppp->channels;
-+	if (list_empty(list))
-+		 /* nowhere to send the packet */
-+		return ERR_PTR(-EINVAL);
++	spin_lock_bh(&ppp->wlock);
++	if (ppp->flags & SC_MULTILINK) {
++		sk = ERR_PTR(-EPERM);
++		goto out;
++	}
 +
-+	if (ppp->flags & SC_MULTILINK)
-+		/* not doing multilink: send it down the first channel */
-+		return ERR_PTR(-EPERM);
++	pch = list_first_entry_or_null(&ppp->channels, struct channel, clist);
++	if (!pch)
++		goto out;
 +
-+	list = list->next;
-+	pch = list_entry(list, struct channel, clist);
-+
-+	spin_lock(&pch->downl);
-+	if (pch->chan)
-+		sk = (struct sock *)pch->chan->private;
-+	else
-+		sk = ERR_PTR(-EINVAL);
-+	spin_unlock(&pch->downl);
++	spin_lock_bh(&pch->downl);
++	chan = pch->chan;
++	if (chan && chan->private) {
++		sk = chan->private;
++		sock_hold(sk);
++	}
++	spin_unlock_bh(&pch->downl);
++out:
++	spin_unlock_bh(&ppp->wlock);
 +
 +	return sk;
 +}
@@ -62,7 +63,7 @@ v1: Move openwrt-master files to openwrt-25.12 branch after OpenWrt official
  /* Get the device name associated with a channel, or NULL if none */
  extern char *ppp_dev_name(struct ppp_channel *);
  
-+/* Get the socket structure of a given ppp netdev */
++/* Get a referenced socket for a PPP netdev; caller must sock_put(). */
 +extern struct sock *ppp_netdev_get_sock(struct net_device *dev);
 +
  /*
