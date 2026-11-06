@@ -117,7 +117,8 @@ jobs:
             echo "BASE_CONFIG=$BASE_CONFIG"
           } >> "$GITHUB_ENV"
           echo "Selected model: $DEVICE ($TARGET/$SUBTARGET), feature config: $BASE_CONFIG"
-      - name: Pin Node.js 24        uses: actions/setup-node@v5
+      - name: Pin Node.js 24
+        uses: actions/setup-node@v5
         with:
           node-version: 24
 
@@ -237,6 +238,7 @@ jobs:
           grep -Fq 'Multi-AP-5HG-2' "$WTS"
           ! grep -Eq '13x|Multi-AP-6G-' "$WTS"
           test ! -e "$ROOT/usr/sbin/generate-wts-bss-info"
+
           # Static binary audit: the shipped 7.6.7.3 daemons must contain the
           # WAPP event/socket, 11k/11v, MAP steering and P1905 topology paths.
           for symbol in wapp_socket_and_ctrl_inf_init wapp_ctrl_iface_init wapp_ctrl_iface_event_register /tmp/wapp_server /tmp/wapp_ctrl driver_rrm_onoff driver_wnm_btm_onoff wapp_send_btm_req_11kv_api event_btm_req event_btm_rsp event_btm_query event_neighbor_report_pool_update; do
@@ -474,7 +476,8 @@ jobs:
 
           echo "PASS: 094, 095, 096 applied."
 
-          echo "===== Step 4: source-build EasyMesh 7.6.7.3 stack ====="          EASYMESH_LOG="artifacts/$DEVICE/$PROFILE/easymesh-source-compile.log"
+          echo "===== Step 4: source-build EasyMesh 7.6.7.3 stack ====="
+          EASYMESH_LOG="artifacts/$DEVICE/$PROFILE/easymesh-source-compile.log"
           : > "$EASYMESH_LOG"
           echo "===== Step 4a: install OpenWrt host tools before isolated package compilation ====="
           make tools/install -j"$(nproc)" V=s
@@ -593,7 +596,8 @@ jobs:
             echo "Source build directory: $EASYMESH_SRC_DIR"
             find "$EASYMESH_SRC_DIR" -maxdepth 3 -type f -print | sort
             echo "===== WAPP NEEDED ====="
-            readelf -d "$WAPP_BIN" | grep NEEDED            echo "===== P1905 NEEDED ====="
+            readelf -d "$WAPP_BIN" | grep NEEDED
+            echo "===== P1905 NEEDED ====="
             readelf -d "$P1905_BIN" | grep NEEDED
           } >> "$EASYMESH_LOG"
 
@@ -712,7 +716,8 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: ${{ env.DEVICE }}-${{ env.PROFILE }}-${{ github.run_number }}
-          path: artifacts/${{ env.DEVICE }}/${{ env.PROFILE }}/          if-no-files-found: warn
+          path: artifacts/${{ env.DEVICE }}/${{ env.PROFILE }}/
+          if-no-files-found: warn
           retention-days: 14
 
       - name: Report ccache statistics
