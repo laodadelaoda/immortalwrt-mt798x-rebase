@@ -18,15 +18,10 @@ v1: Add L2TP flow offload support for NPU
  #include <uapi/linux/netdevice.h>
 +#include <uapi/linux/netfilter.h>
  #include <uapi/linux/if_bonding.h>
-@@ -840,8 +841,10 @@ enum net_device_path_type {
- 	DEV_PATH_DSA,
- 	DEV_PATH_MACVLAN,
- 	DEV_PATH_DSLITE,
- 	DEV_PATH_6RD,
+@@ -846,1 +847,3 @@ enum net_device_path_type {
  	DEV_PATH_MTK_WDMA,
 +	DEV_PATH_L2TP,
 +	DEV_PATH_PPTP,
- };
  
  struct net_device_path {
 @@ -873,8 +876,34 @@ struct net_device_path {
@@ -66,10 +61,7 @@ v1: Add L2TP flow offload support for NPU
  
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
-@@ -164,5 +164,8 @@
- #include "devmem.h"
- #include "net-sysfs.h"
- 
+@@ -167,1 +167,4 @@
 +int (*mtk_flow_tnl_offloadable)(const struct net_device_path *path);
 +EXPORT_SYMBOL(mtk_flow_tnl_offloadable);
 +
