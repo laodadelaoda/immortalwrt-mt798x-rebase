@@ -67,6 +67,15 @@ jobs:
           grep -q "^SUBLEVEL = 112$" "$KERNEL_MAKEFILE"
           echo "PASS: complete OpenWrt generic and MediaTek kernel patch stacks applied to Linux 6.12.112 with zero fuzz, before kernel_oldconfig and compilation."
 
+      - name: Audit MT7530 DSA Netlink declarations, bounds and lifecycle
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          KERNEL_MAKEFILE="$(find build_dir -type f -path "*/linux-6.12.112/Makefile" -print -quit)"
+          test -n "$KERNEL_MAKEFILE" || { echo "::error::Patched Linux 6.12.112 source tree is missing."; exit 1; }
+          KERNEL_SRC="$(dirname "$KERNEL_MAKEFILE")"
+          python3 target/linux/mediatek/tests/test-dsa-mt7530-netlink.py "$KERNEL_SRC"
+
       - name: Verify actual GNU Make package variables and fetch manual EasyMesh archives
         shell: bash
         run: |
