@@ -58,6 +58,12 @@ jobs:
               echo "===== $reject ====="
               sed -n "1,220p" "$reject"
             done
+            for source in $(find build_dir -type f -path "*/drivers/net/ethernet/mediatek/mtk_eth_soc.c"); do
+              echo "===== ACTUAL PATCHED SOURCE: mtk_tx_timeout ($source) ====="
+              grep -n -B 12 -A 28 "static void mtk_tx_timeout" "$source" || true
+              echo "===== ALL pending_work scheduling sites ($source) ====="
+              grep -n -B 5 -A 5 "schedule_work(&eth->pending_work)" "$source" || true
+            done
             exit 1
           fi
           if grep -Eiq "with fuzz [1-9]|fuzz [1-9]" "$KERNEL_PATCH_LOG"; then
