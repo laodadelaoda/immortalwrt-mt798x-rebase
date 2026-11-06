@@ -458,6 +458,14 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	schedule_delayed_work(&eth->reset.monitor_work,
  			      MTK_DMA_MONITOR_TIMEOUT);
  
+@@ -7610,3 +7685,6 @@ static void mtk_remove(struct platform_device *pdev)
+ {
+ 	struct mtk_eth *eth = platform_get_drvdata(pdev);
++#if defined(CONFIG_NET_MEDIATEK_HNAT) || defined(CONFIG_NET_MEDIATEK_HNAT_MODULE)
++	mtk_eth_netdevice_event_exit(eth);
++#endif
+ 	struct mtk_mac *mac;
+
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.h
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.h
 @@ -1806,7 +1806,11 @@ struct mtk_eth {
