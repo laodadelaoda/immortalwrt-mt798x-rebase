@@ -71,6 +71,8 @@ check("FLOW_ACTION_NPU_ENCAP" in flow_h and "npu_entry" in flow_h,
       "NPU flow action contract is absent from flow_offload.h")
 check("flow_offload_check" in ppp_h and "fill_forward_path" in ppp_h,
       "PPP channel callback extensions are missing")
+check("sock_put()" in read("include/linux/ppp_channel.h"),
+      "PPP socket helper contract does not document the required socket reference release")
 
 xfrm_state = ""
 m = re.search(r"struct xfrm_state\s*\{", xfrm_h)
@@ -94,6 +96,8 @@ check("sk_dst_get" in l2tp_path and "dst_xfrm(dst)" in l2tp_path,
       "L2TP forward-path callback does not obtain and classify a referenced dst")
 check("path->tunnel.dst = dst" in l2tp_path and "dst_release(dst)" in l2tp_path,
       "L2TP XFRM dst ownership transfer/release paths are incomplete")
+check("NUD_VALID" in l2tp_path and "neigh_release(n)" in l2tp_path,
+      "L2TP forward path can offload using an unresolved neighbor entry")
 check("l2tp_session_put(session)" in l2tp_path,
       "L2TP forward-path callback leaks its session reference")
 
@@ -103,6 +107,8 @@ nft_path = body(nft, "nft_dev_path_info")
 nft_forward = body(nft, "nft_dev_forward_path")
 check("path->tunnel.dst" in nft_path and "info->dst" in nft_path,
       "nft path walker does not carry the NPU tunnel dst")
+check("dst_release(path->tunnel.dst)" in nft_path and "path->tunnel.dst = NULL" in nft_path,
+      "nft path walker leaks the L2TP XFRM dst when the NPU callback rejects the path")
 check("route->tuple[dir].npu.dst = info.dst" in nft_forward,
       "nft forward path does not transfer NPU dst into the route")
 check("dst_release(route.tuple[dir].npu.dst)" in nft and
@@ -215,6 +221,19 @@ check("rtnl_lock()" in teardown and "mutex_lock(&flowtable_lock)" in teardown an
       teardown.find("rtnl_lock()") < teardown.find("mutex_lock(&flowtable_lock)") and
       "mutex_unlock(&flowtable_lock)" in teardown and "rtnl_unlock()" in teardown,
       "PPE tuple teardown does not serialize netdevice and flowtable iteration in RTNL-to-flowtable lock order")
+check("rcu_read_lock()" in teardown and "rcu_read_unlock()" in teardown and
+      teardown.find("rcu_read_lock()") < teardown.find("flow_offload_lookup(") <
+      teardown.find("rcu_read_unlock()"),
+      "PPE tuple teardown calls rhashtable lookup without an RCU read-side critical section")
+
+ppp_generic = read("drivers/net/ppp/ppp_generic.c")
+ppp_sock = body(ppp_generic, "ppp_netdev_get_sock")
+check("spin_lock_bh(&ppp->wlock)" in ppp_sock and
+      "spin_lock_bh(&pch->downl)" in ppp_sock and
+      "list_first_entry_or_null(&ppp->channels" in ppp_sock,
+      "PPP socket helper does not serialize channel-list and channel-pointer access")
+check("sock_hold(sk)" in ppp_sock,
+      "PPP socket helper returns an unreferenced socket that can be freed after channel unlock")
 
 if failures:
     for item in failures:
