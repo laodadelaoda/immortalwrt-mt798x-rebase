@@ -136,7 +136,7 @@ support
  	return 0;
  }
 @@ -7080,6 +7083,8 @@ static int mtk_probe(struct platform_dev
- 				   eth->netdev[i]->base_addr, eth->irq_fe[0]);
+ 				   eth->netdev[i]->base_addr, eth->irq_fe[MTK_FE_IRQ_SHARED]);
  	}
  
 +	eth->rx_buf_len = MTK_MAX_RX_LENGTH;
