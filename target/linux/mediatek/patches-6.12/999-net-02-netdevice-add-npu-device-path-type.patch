@@ -14,7 +14,7 @@ v1: Add L2TP flow offload support for NPU
 
 --- a/include/linux/netdevice.h
 +++ b/include/linux/netdevice.h
-@@ -46,6 +46,7 @@
+@@ -46,2 +46,3 @@
  #include <uapi/linux/netdevice.h>
 +#include <uapi/linux/netfilter.h>
  #include <uapi/linux/if_bonding.h>
@@ -66,7 +66,7 @@ v1: Add L2TP flow offload support for NPU
  
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
-@@ -164,6 +164,9 @@
+@@ -164,5 +164,8 @@
  #include "devmem.h"
  #include "net-sysfs.h"
  
