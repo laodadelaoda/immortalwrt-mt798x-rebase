@@ -41,6 +41,21 @@ The wrapper also runs targeted contracts after the relevant dependency points:
 MT7530 base Netlink patch, MT7530 hardening patch, AN8855 hardening patch and
 PCIe Gen3 IRQ-affinity sequence.
 
+## Batch revisions already made
+
+- The duplicate `mt7530_write()` prototype was removed from the MT7530 base
+  patch (#02); the later hardening patch (#09) no longer carries a cleanup
+  hunk for a defect that the base patch should not introduce.
+- PCIe IRQ-affinity patch #02 was regenerated against the reconstructed
+  post-#01 Linux 6.12 source from the failed prepare artifact. The three rejected
+  areas (IRQ teardown, grouped MSI handler and multi-IRQ setup/rollback) now
+  use the actual surrounding source context. The MSI affinity callback also
+  validates parent IRQ data and updates effective affinity only on success.
+- The regenerated PCIe file diff was applied to the reconstructed pre-#02
+  source with zero fuzz and compared byte-for-byte with the intended result.
+  This is a targeted patch reconstruction check, not the final full-stack
+  verification.
+
 ## Final source gates
 
 Before issuing an attestation, the workflow runs:
