@@ -11,19 +11,16 @@ diff --git a/arch/arm64/boot/dts/mediatek/mt7988a.dtsi b/arch/arm64/boot/dts/med
 index 3cf1bb793fc2..7af909565b31 100644
 --- a/arch/arm64/boot/dts/mediatek/mt7988a.dtsi
 +++ b/arch/arm64/boot/dts/mediatek/mt7988a.dtsi
-@@ -1408,6 +1408,12 @@ crypto: crypto@15600000 {
- 			status = "okay";
- 			eth = <&eth>;
- 		};
-+
+@@ -1413,3 +1413,8 @@
+-	};
+ 
+ 	thermal-zones {
 +		devapc: devapc@1a110000 {
 +			compatible = "mediatek,mt7988-devapc";
 +			reg = <0 0x1a110000 0 0x1000>;
 +			interrupts = <GIC_SPI 174 IRQ_TYPE_LEVEL_HIGH>;
 +		};
- 	};
- 
- 	thermal-zones {
++	};
 -- 
 2.45.2
 
