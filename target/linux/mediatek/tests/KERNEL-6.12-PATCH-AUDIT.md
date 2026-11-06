@@ -94,3 +94,28 @@ or this static audit succeeds.
 
 No Quick or Full compile is authorized until the patch-stack audit and its
 immutable attestation pass.
+
+
+## Ethernet/HNAT/PPE/NPU, PHY/WED and TNL API contracts
+
+The next network-offload gate checks the prepared Linux 6.12 source, rather than
+grepping patch descriptions. It verifies:
+
+- XFRM lookup and state-release APIs used by PPE, plus the XFRM fields consumed
+  by the IPsec rekey path;
+- destination/neighbour and route APIs used by L2TP/PPTP tunnel path discovery;
+- the patched HNAT, NPU and PPP callback structures in their final headers;
+- L2TP dst reference acquisition and transfer, nft route transfer, flow creation
+  transfer, and both-direction teardown release;
+- PPE XFRM state lookup/put pairing and Ethernet RX callback error/null fallback;
+- GRE/VXLAN single-tunnel recursion guards and callback registration.
+
+A missing in-tree assignment to the nullable MediaTek tunnel-offload hooks is
+reported for review rather than treated as a Linux API failure: the provider may
+be supplied by the separately built WED/WARP vendor component. That external
+provider must be audited against the same callback contract before claiming
+end-to-end NPU/WED offload compatibility.
+
+The verifier also requires the intermediate per-patch report directory.
+An attestation cannot be verified from the whole-tree report alone; every patch
+report must be present and hash-match.
