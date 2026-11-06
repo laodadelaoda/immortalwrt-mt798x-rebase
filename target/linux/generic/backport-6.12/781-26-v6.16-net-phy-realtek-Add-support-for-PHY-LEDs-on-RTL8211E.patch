@@ -11,8 +11,8 @@ Reviewed-by: Andrew Lunn <andrew@lunn.ch>
 Link: https://patch.msgid.link/20250504172916.243185-7-michael@fossekall.de
 Signed-off-by: Paolo Abeni <pabeni@redhat.com>
 ---
- drivers/net/phy/realtek/realtek_main.c | 125 +++++++++++++++++++++++--
- 1 file changed, 119 insertions(+), 6 deletions(-)
+ drivers/net/phy/realtek/realtek_main.c | 127 +++++++++++++++++++++++++--
+ 1 file changed, 121 insertions(+), 6 deletions(-)
 
 --- a/drivers/net/phy/realtek/realtek_main.c
 +++ b/drivers/net/phy/realtek/realtek_main.c
@@ -100,16 +100,17 @@ Signed-off-by: Paolo Abeni <pabeni@redhat.com>
  		return -EINVAL;
  
  	val = phy_read_paged(phydev, 0xd04, RTL8211F_LEDCR);
-@@ -681,7 +713,7 @@ static int rtl8211f_led_hw_control_set(s
- 	const u16 mask = RTL8211F_LEDCR_MASK << (RTL8211F_LEDCR_SHIFT * index);
+@@ -681,7 +713,8 @@ static int rtl8211f_led_hw_control_set(s
+-	const u16 mask = RTL8211F_LEDCR_MASK << (RTL8211F_LEDCR_SHIFT * index);
++	u16 mask;
  	u16 reg = 0;
  
--	if (index >= RTL8211F_LED_COUNT)
-+	if (index >= RTL8211x_LED_COUNT)
+ 	if (index >= RTL8211x_LED_COUNT)
  		return -EINVAL;
++	mask = RTL8211F_LEDCR_MASK << (RTL8211F_LEDCR_SHIFT * index);
  
  	if (test_bit(TRIGGER_NETDEV_LINK_10, &rules))
-@@ -704,6 +736,84 @@ static int rtl8211f_led_hw_control_set(s
+@@ -704,6 +736,85 @@ static int rtl8211f_led_hw_control_set(s
  	return phy_modify_paged(phydev, 0xd04, RTL8211F_LEDCR, mask, reg);
  }
  
@@ -154,15 +155,15 @@ Signed-off-by: Paolo Abeni <pabeni@redhat.com>
 +static int rtl8211e_led_hw_control_set(struct phy_device *phydev, u8 index,
 +				       unsigned long rules)
 +{
-+	const u16 cr1mask =
-+		RTL8211E_LEDCR1_MASK << (RTL8211E_LEDCR1_SHIFT * index);
-+	const u16 cr2mask =
-+		RTL8211E_LEDCR2_MASK << (RTL8211E_LEDCR2_SHIFT * index);
++	u16 cr1mask, cr2mask;
 +	u16 cr1 = 0, cr2 = 0;
 +	int ret;
 +
 +	if (index >= RTL8211x_LED_COUNT)
 +		return -EINVAL;
++
++	cr1mask = RTL8211E_LEDCR1_MASK << (RTL8211E_LEDCR1_SHIFT * index);
++	cr2mask = RTL8211E_LEDCR2_MASK << (RTL8211E_LEDCR2_SHIFT * index);
 +
 +	if (test_bit(TRIGGER_NETDEV_RX, &rules) ||
 +	    test_bit(TRIGGER_NETDEV_TX, &rules)) {
