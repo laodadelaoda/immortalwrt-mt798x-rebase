@@ -36,21 +36,21 @@ def body(text, name):
                 return text[start:pos + 1]
     return ""
 
-# Linux phylink callback contract introduced by the 6.14 backport series.
+# Linux 6.12 phylink callback contract after the selected backports.
 phylink_h = read("include/linux/phylink.h")
 phylink_c = read("drivers/net/phy/phylink.c")
 check(bool(re.search(
     r"pcs_get_state\s*\)\s*\(\s*struct phylink_pcs\s*\*\s*pcs\s*,\s*"
     r"struct phylink_link_state\s*\*\s*state",
     phylink_h, re.S)),
-    "phylink_pcs_ops pcs_get_state callback does not expose the Linux 6.14 neg_mode parameter")
+    "phylink_pcs_ops pcs_get_state callback does not match the Linux 6.12 two-argument contract")
 check(bool(re.search(
     r"phylink_mii_c22_pcs_decode_state\s*\(\s*struct phylink_link_state\s*\*\s*state\s*,\s*"
     r"u16\s+bmsr\s*,\s*u16\s+lpa", phylink_h, re.S)),
     "phylink_mii_c22_pcs_decode_state signature is incompatible with the backported callers")
 
 # SGMII PCS: regmap errors must release the mutex and publish link-down state.
-# The Linux 6.12 phylink_pcs_ops callback has no neg_mode argument.
+# MediaTek PCS callbacks must retain the Linux 6.12 two-argument signature.
 check(bool(re.search(r"mtk_pcs_lynxi_get_state\s*\(\s*struct phylink_pcs\s*\*\s*pcs\s*,\s*struct phylink_link_state\s*\*\s*state", lynxi, re.S)),
       "SGMII PCS get_state callback does not match Linux 6.12 phylink_pcs_ops")
 check(bool(re.search(r"phylink_mii_c22_pcs_decode_state\s*\(\s*&state\s*,\s*FIELD_GET", lynxi, re.S)),
@@ -81,6 +81,25 @@ check("mpcs->poll = false" in lynxi,
 
 check(bool(re.search(r"mtk_usxgmii_pcs_get_state\s*\(\s*struct phylink_pcs\s*\*\s*pcs\s*,\s*struct phylink_link_state\s*\*\s*state", usx, re.S)),
       "USXGMII PCS get_state callback does not match Linux 6.12 phylink_pcs_ops")
+# Cached link state and delayed-work flags are shared with phylink/workqueue.
+check(lynxi_update.find("mutex_lock(&mpcs->regmap_lock)") <
+      lynxi_update.find("state = mpcs->state") and
+      lynxi_update.rfind("mtk_pcs_lynxi_store_mpcs_state") <
+      lynxi_update.rfind("mutex_unlock(&mpcs->regmap_lock)"),
+      "SGMII cached link state is copied or published outside regmap_lock")
+check(lynxi_get := body(lynxi, "mtk_pcs_lynxi_get_state"))
+check(lynxi_get.find("mutex_lock(&mpcs->regmap_lock)") <
+      lynxi_get.find("linkmode_copy") <
+      lynxi_get.find("mtk_pcs_lynxi_load_mpcs_state") <
+      lynxi_get.find("mutex_unlock(&mpcs->regmap_lock)"),
+      "SGMII get_state accesses cached advertising/state without regmap_lock")
+check("READ_ONCE(mpcs->poll)" in lynxi_poll and
+      "WRITE_ONCE(mpcs->poll, true)" in lynxi_enable and
+      "WRITE_ONCE(mpcs->poll, false)" in lynxi_disable and
+      lynxi_disable.find("WRITE_ONCE(mpcs->poll, false)") <
+      lynxi_disable.find("cancel_delayed_work_sync"),
+      "SGMII poll flag is not accessed with ordered READ_ONCE/WRITE_ONCE lifecycle")
+
 # USXGMII PCS uses the same enable/disable contract.
 usx = read("drivers/net/pcs/pcs-mtk-usxgmii.c")
 usx_poll = body(usx, "mtk_usxgmii_pcs_link_poll")
@@ -95,6 +114,23 @@ check("mpcs->poll = false" in usx_disable and
       "USXGMII PCS disable does not stop requeueing before cancelling work")
 check("mpcs->poll = false" in usx,
       "USXGMII PCS polling is not initialized disabled")
+
+check(usx_update.find("mutex_lock(&mpcs->regmap_lock)") <
+      usx_update.find("state = mpcs->state") and
+      usx_update.rfind("mtk_usxgmii_pcs_store_mpcs_state") <
+      usx_update.rfind("mutex_unlock(&mpcs->regmap_lock)"),
+      "USXGMII cached link state is copied or published outside regmap_lock")
+check(usx_get := body(usx, "mtk_usxgmii_pcs_get_state"))
+check(usx_get.find("mutex_lock(&mpcs->regmap_lock)") <
+      usx_get.find("mtk_usxgmii_pcs_load_mpcs_state") <
+      usx_get.find("mutex_unlock(&mpcs->regmap_lock)"),
+      "USXGMII get_state reads cached state without regmap_lock")
+check("READ_ONCE(mpcs->poll)" in usx_poll and
+      "WRITE_ONCE(mpcs->poll, true)" in usx_enable and
+      "WRITE_ONCE(mpcs->poll, false)" in usx_disable and
+      usx_disable.find("WRITE_ONCE(mpcs->poll, false)") <
+      usx_disable.find("cancel_delayed_work_sync"),
+      "USXGMII poll flag is not accessed with ordered READ_ONCE/WRITE_ONCE lifecycle")
 
 # Generic PHY API declarations used by the PCS drivers must remain available.
 phy_h = read("include/linux/phy/phy.h")
