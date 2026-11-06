@@ -17,8 +17,8 @@ v1: Add L2TP flow offload support for NPU
 @@ -840,8 +840,10 @@ enum net_device_path_type {
  	DEV_PATH_DSA,
  	DEV_PATH_MACVLAN,
-+	DEV_PATH_DSLITE,
-+	DEV_PATH_6RD,
+ 	DEV_PATH_DSLITE,
+ 	DEV_PATH_6RD,
  	DEV_PATH_MTK_WDMA,
 +	DEV_PATH_L2TP,
 +	DEV_PATH_PPTP,
