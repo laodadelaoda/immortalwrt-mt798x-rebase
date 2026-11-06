@@ -36,9 +36,12 @@ for i in ${patchdir}/${patchpattern} ; do
     esac
     [ -d "${i}" ] && echo "Ignoring subdirectory ${i}" && continue	
     echo ""
-    echo "Applying ${i} using ${type}: " 
+    echo "Applying ${i} using ${type}: "
+    export KERNEL_PATCH_AUDIT_PATCH="${i}"
     ${uncomp} ${i} | ${PATCH:-patch} --fuzz=0 -f -p1 -d ${targetdir}
-    if [ $? != 0 ] ; then
+    patch_status=$?
+    unset KERNEL_PATCH_AUDIT_PATCH
+    if [ "$patch_status" != 0 ] ; then
         echo "Patch failed!  Please fix $i!"
 	exit 1
     fi

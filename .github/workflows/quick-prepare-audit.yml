@@ -51,7 +51,34 @@ jobs:
           KERNEL_PATCH_LOG="$RUNNER_TEMP/n60-linux-6.12-patch-prepare.log"
           echo "===== OpenWrt Kernel/Prepare: pristine source plus generic and MediaTek patch stacks ====="
           python3 target/linux/mediatek/tests/audit-kernel-patch-stack.py inventory --repo "$GITHUB_WORKSPACE" --output-dir "$GITHUB_WORKSPACE/kernel-patch-audit"
-          export PATCH="patch --fuzz=0"
+          AUDIT_WRAPPER="$GITHUB_WORKSPACE/target/linux/mediatek/tests/kernel-patch-audit-wrapper.sh"
+          python3 - <<'PY'
+          from pathlib import Path
+          files = [
+              "target/linux/mediatek/tests/audit-kernel-patch-stack.py",
+              "target/linux/mediatek/tests/audit-kernel-source-structure.py",
+              "target/linux/mediatek/tests/test-kernel-source-structure.py",
+              "target/linux/mediatek/tests/test-kernel-patch-audit-wrapper.py",
+              "target/linux/mediatek/tests/test-dsa-mt7530-netlink-base.py",
+              "target/linux/mediatek/tests/test-dsa-mt7530-netlink.py",
+              "target/linux/mediatek/tests/test-dsa-an8855-netlink.py",
+              "target/linux/mediatek/tests/test-pcie-gen3-irq-lifecycle.py",
+          ]
+          for name in files:
+              path = Path(name)
+              compile(path.read_text(), str(path), "exec")
+          print("PASS: all kernel patch audit Python entrypoints parse")
+          PY
+          bash -n "$AUDIT_WRAPPER"
+          sh -n scripts/patch-kernel.sh
+          python3 target/linux/mediatek/tests/test-kernel-source-structure.py
+          python3 target/linux/mediatek/tests/test-kernel-patch-audit-wrapper.py
+          chmod +x "$AUDIT_WRAPPER"
+          export PATCH="$AUDIT_WRAPPER"
+          export REAL_PATCH_BIN="$(command -v patch)"
+          export PATCH_AUDIT_REPORT_DIR="$GITHUB_WORKSPACE/kernel-patch-audit/intermediate"
+          export PATCH_AUDIT_SCANNER="$GITHUB_WORKSPACE/target/linux/mediatek/tests/audit-kernel-source-structure.py"
+          export PATCH_AUDIT_TESTS_DIR="$GITHUB_WORKSPACE/target/linux/mediatek/tests"
           if ! make target/linux/prepare V=s 2>&1 | tee "$KERNEL_PATCH_LOG"; then
             echo "::error::Linux 6.12 source preparation or complete kernel patch application failed."
             tail -n 250 "$KERNEL_PATCH_LOG"
@@ -88,6 +115,32 @@ jobs:
               echo "===== ALL pending_work scheduling sites ($source) ====="
               grep -n -B 5 -A 5 "schedule_work(&eth->pending_work)" "$source" || true
             done
+            # Do not let the first patch failure suppress independent source
+            # audits. The tree is diagnostic-only and must never be attested.
+            set +e
+            KERNEL_MAKEFILE="$(find build_dir -type f -path "*/linux-6.12.112/Makefile" -print -quit)"
+            if [ -n "$KERNEL_MAKEFILE" ]; then
+              KERNEL_SRC="$(dirname "$KERNEL_MAKEFILE")"
+              AUDIT_DIR="$GITHUB_WORKSPACE/kernel-patch-audit"
+              mkdir -p "$AUDIT_DIR"
+              python3 target/linux/mediatek/tests/audit-kernel-source-structure.py \
+                --kernel-src "$KERNEL_SRC" --output "$AUDIT_DIR/partial-source-structure-audit.json" \
+                > "$AUDIT_DIR/partial-source-structure-audit.log" 2>&1
+              echo "SOURCE STRUCTURE AUDIT EXIT: $?"
+              python3 target/linux/mediatek/tests/test-dsa-mt7530-netlink.py "$KERNEL_SRC" \
+                > "$AUDIT_DIR/partial-dsa-netlink-audit.log" 2>&1
+              echo "DSA AUDIT EXIT: $?"
+              python3 target/linux/mediatek/tests/test-pcie-gen3-irq-lifecycle.py "$KERNEL_SRC" \
+                > "$AUDIT_DIR/partial-pcie-lifecycle-audit.log" 2>&1
+              echo "PCIe AUDIT EXIT: $?"
+              for report in "$AUDIT_DIR"/partial-*-audit.log; do
+                echo "===== $report ====="
+                cat "$report"
+              done
+            else
+              echo "::warning::No prepared kernel source tree exists; source-level follow-up audits cannot run."
+            fi
+            set -e
             exit 1
           fi
           if grep -Eiq "with fuzz [1-9]|fuzz [1-9]" "$KERNEL_PATCH_LOG"; then
@@ -108,22 +161,8 @@ jobs:
             --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
           echo "PASS: complete OpenWrt generic and MediaTek kernel patch stacks applied to Linux 6.12.112 with zero fuzz, before kernel_oldconfig and compilation."
 
-      - name: Audit MT7530 DSA Netlink declarations, bounds and lifecycle
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          KERNEL_MAKEFILE="$(find build_dir -type f -path "*/linux-6.12.112/Makefile" -print -quit)"
-          test -n "$KERNEL_MAKEFILE" || { echo "::error::Patched Linux 6.12.112 source tree is missing."; exit 1; }
-          KERNEL_SRC="$(dirname "$KERNEL_MAKEFILE")"
-          python3 target/linux/mediatek/tests/test-dsa-mt7530-netlink.py "$KERNEL_SRC"
-
-      - name: Audit PCIe Gen3 MSI bounds and soft-power IRQ lifecycle
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          KERNEL_MAKEFILE="$(find build_dir -type f -path "*/linux-6.12.112/Makefile" -print -quit)"
-          test -n "$KERNEL_MAKEFILE" || { echo "::error::Patched Linux 6.12.112 source tree is missing."; exit 1; }
-          python3 target/linux/mediatek/tests/test-pcie-gen3-irq-lifecycle.py "$(dirname "$KERNEL_MAKEFILE")"
+      # DSA, PCIe and whole-tree structure checks execute inside the
+      # attestation command. The certificate is emitted only after all pass.
 
       - name: Verify actual GNU Make package variables and fetch manual EasyMesh archives
         shell: bash

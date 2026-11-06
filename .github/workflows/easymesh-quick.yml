@@ -51,6 +51,23 @@ jobs:
           set -Eeuo pipefail
           python3 package/mtk/applications/easymesh-n60/scripts/verify-vendor-audit-attestation.py verify --repo "$GITHUB_WORKSPACE" --attestation .audit-attestation/vendor-audit-attestation.json --expected-run-id "$GITHUB_RUN_ID" --expected-run-attempt "$GITHUB_RUN_ATTEMPT"
 
+      - name: Download the exact Linux 6.12 patch attestation from Quick Prepare
+        uses: actions/download-artifact@v6
+        with:
+          name: n60-kernel-patch-attestation
+          path: kernel-patch-audit
+
+      - name: Verify the same Linux patch and source audit certificate used by Full
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 target/linux/mediatek/tests/audit-kernel-patch-stack.py verify \
+            --repo "$GITHUB_WORKSPACE" \
+            --attestation kernel-patch-audit/kernel-patch-attestation.json \
+            --source-audit-report kernel-patch-audit/source-structure-audit.json \
+            --intermediate-audit-dir kernel-patch-audit/intermediate \
+            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
+
       - name: Run shared Quick compatibility and EasyMesh source-build gate
         uses: ./.github/actions/easymesh-quick
         with:

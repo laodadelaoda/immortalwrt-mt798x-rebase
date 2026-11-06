@@ -25,8 +25,8 @@ N/A
 
 Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
 ---
- drivers/pci/controller/pcie-mediatek-gen3.c | 270 ++++++++++++++++++--
- 1 file changed, 246 insertions(+), 24 deletions(-)
+ drivers/pci/controller/pcie-mediatek-gen3.c | 251 ++++++++++++++++++++++++---
+ 1 file changed, 224 insertions(+), 27 deletions(-)
 
 --- a/drivers/pci/controller/pcie-mediatek-gen3.c
 +++ b/drivers/pci/controller/pcie-mediatek-gen3.c
@@ -294,13 +294,14 @@ Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
  	.name			= "INTx",
  };
  
-@@ -778,7 +907,17 @@ out_put_node:
- 
+@@ -778,27 +910,59 @@
+
  static void mtk_pcie_irq_teardown(struct mtk_gen3_pcie *pcie)
  {
-+	int i;
-+
 -	irq_set_chained_handler_and_data(pcie->irq, NULL, NULL);
++	int i;
+ 
+-	if (pcie->intx_domain)
 +	if (pcie->irqs) {
 +		for (i = 0; i < pcie->num_irqs; i++) {
 +			if (pcie->irqs[i].irq < 0)
@@ -308,25 +309,21 @@ Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
 +			irq_set_chained_handler_and_data(pcie->irqs[i].irq, NULL, NULL);
 +		}
 +	}
- 
--	if (pcie->intx_domain)
--		irq_domain_remove(pcie->intx_domain);
++
 +	if (pcie->intx_domain) {
-+		irq_domain_remove(pcie->intx_domain);
+ 		irq_domain_remove(pcie->intx_domain);
 +		pcie->intx_domain = NULL;
 +	}
-@@ -786,19 +925,41 @@ static void mtk_pcie_irq_teardown(struct mtk_gen3_pcie *pcie)
+ 
 -	if (pcie->msi_domain)
--		irq_domain_remove(pcie->msi_domain);
 +	if (pcie->msi_domain) {
-+		irq_domain_remove(pcie->msi_domain);
+ 		irq_domain_remove(pcie->msi_domain);
 +		pcie->msi_domain = NULL;
 +	}
  
 -	if (pcie->msi_bottom_domain)
--		irq_domain_remove(pcie->msi_bottom_domain);
 +	if (pcie->msi_bottom_domain) {
-+		irq_domain_remove(pcie->msi_bottom_domain);
+ 		irq_domain_remove(pcie->msi_bottom_domain);
 +		pcie->msi_bottom_domain = NULL;
 +	}
  
@@ -364,7 +361,7 @@ Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
  
  	do {
  		msi_status = readl_relaxed(msi_set->base +
-@@ -829,14 +990,101 @@ static void mtk_pcie_irq_handler(struct irq_desc *desc)
+@@ -829,12 +993,22 @@
  		generic_handle_domain_irq(pcie->intx_domain,
  					  irq_bit - PCIE_INTX_SHIFT);
  
@@ -392,86 +389,7 @@ Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
  	}
  
  	chained_irq_exit(irqchip, desc);
- }
- 
-+static int mtk_pcie_parse_msi(struct mtk_gen3_pcie *pcie)
-+{
-+	struct device *dev = pcie->dev;
-+	struct device_node *node = dev->of_node;
-+	struct platform_device *pdev = to_platform_device(dev);
-+	const char *msi_type;
-+	u32 mask_check = 0, *msimap;
-+	int count, err, i;
-+
-+	/* Get MSI group type */
-+	pcie->msi_group_type = group0_merge_msi;
-+	if (of_find_property(node, "msi_type", NULL)) {
-+		err = of_property_read_string(node, "msi_type", &msi_type);
-+		if (err)
-+			return err;
-+
-+		if (!strcmp(msi_type, "direct_msi"))
-+			pcie->msi_group_type = group1_direct_msi;
-+		else if (!strcmp(msi_type, "binding_msi"))
-+			pcie->msi_group_type = group_binding_msi;
-+		else if (!strcmp(msi_type, "group0_merge_msi"))
-+			pcie->msi_group_type = group0_merge_msi;
-+		else
-+			return -EINVAL;
-+	}
-+
-+	pcie->num_irqs = platform_irq_count(pdev);
-+	if (pcie->num_irqs <= 0)
-+		return pcie->num_irqs ? pcie->num_irqs : -EINVAL;
-+
-+	pcie->irqs = devm_kcalloc(dev, pcie->num_irqs,
-+				  sizeof(*pcie->irqs), GFP_KERNEL);
-+	if (!pcie->irqs)
-+		return -ENOMEM;
-+
-+	for (i = 0; i < pcie->num_irqs; i++)
-+		pcie->irqs[i].irq = -1;
-+
-+	/* Merge MSI doesn't need a map table */
-+	if (pcie->msi_group_type == group0_merge_msi) {
-+		if (pcie->num_irqs != 1)
-+			return -EINVAL;
-+
-+		pcie->irqs[0].group = 0;
-+		pcie->irqs[0].mapped_table = GENMASK(31, 0);
-+
-+		return 0;
-+	}
-+
-+	/* Parse MSI map table from DTS */
-+	count = of_property_count_elems_of_size(node, "msi-map", sizeof(u32));
-+	if (count <= 0 || (count % 2) ||
-+	    (count / 2 != pcie->num_irqs))
-+		return -EINVAL;
-+
-+	msimap = devm_kcalloc(dev, count, sizeof(*msimap), GFP_KERNEL);
-+	if (!msimap)
-+		return -ENOMEM;
-+
-+	err = of_property_read_u32_array(node, "msi-map", msimap, count);
-+	if (err)
-+		return err;
-+
-+	for (i = 0; i < pcie->num_irqs; i++) {
-+		if (msimap[i * 2] >= PCIE_MSI_GROUP_NUM ||
-+		    !msimap[i * 2 + 1] ||
-+		    (msimap[i * 2 + 1] & mask_check))
-+			return -EINVAL;
-+
-+		pcie->irqs[i].group = msimap[i * 2];
-+		pcie->irqs[i].mapped_table = msimap[i * 2 + 1];
-+		mask_check |= msimap[i * 2 + 1];
-+	}
-+
-+	return 0;
-+}
-+
-@@ -854,17 +1102,32 @@ static int mtk_pcie_setup_irq(struct mtk_gen3_pcie *pcie)
+@@ -844,7 +1018,7 @@
  {
  	struct device *dev = pcie->dev;
  	struct platform_device *pdev = to_platform_device(dev);
@@ -480,9 +398,7 @@ Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
  
  	pcie->irq = platform_get_irq(pdev, 0);
  	if (pcie->irq < 0)
- 		return pcie->irq;
- 
- 	err = mtk_pcie_init_irq_domains(pcie);
+@@ -854,9 +1028,24 @@
  	if (err)
  		return err;
  
@@ -506,7 +422,9 @@ Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
 +	mtk_pcie_irq_teardown(pcie);
 +	return err;
  }
-@@ -928,6 +1191,12 @@ static int mtk_pcie_parse_port(struct mt
+ 
+ static int mtk_pcie_parse_port(struct mtk_gen3_pcie *pcie)
+@@ -928,6 +1117,12 @@ static int mtk_pcie_parse_port(struct mt
  	if (pcie->max_link_width < 0)
  		dev_err(dev, "failed to get max link width\n");
  
@@ -519,7 +437,7 @@ Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
  	return 0;
  }
  
-@@ -1168,7 +1437,7 @@ static void mtk_pcie_remove(struct platf
+@@ -1168,7 +1363,7 @@ static void mtk_pcie_remove(struct platf
  
  static void mtk_pcie_irq_save(struct mtk_gen3_pcie *pcie)
  {
@@ -528,7 +446,7 @@ Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
  
  	raw_spin_lock(&pcie->irq_lock);
  
-@@ -1177,8 +1446,9 @@ static void mtk_pcie_irq_save(struct mtk
+@@ -1177,8 +1372,9 @@ static void mtk_pcie_irq_save(struct mtk
  	for (i = 0; i < PCIE_MSI_SET_NUM; i++) {
  		struct mtk_msi_set *msi_set = &pcie->msi_sets[i];
  
@@ -540,7 +458,7 @@ Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
  	}
  
  	raw_spin_unlock(&pcie->irq_lock);
-@@ -1186,7 +1456,7 @@ static void mtk_pcie_irq_save(struct mtk
+@@ -1186,7 +1382,7 @@ static void mtk_pcie_irq_save(struct mtk
  
  static void mtk_pcie_irq_restore(struct mtk_gen3_pcie *pcie)
  {
@@ -549,7 +467,7 @@ Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
  
  	raw_spin_lock(&pcie->irq_lock);
  
-@@ -1195,8 +1465,9 @@ static void mtk_pcie_irq_restore(struct
+@@ -1195,8 +1391,9 @@ static void mtk_pcie_irq_restore(struct
  	for (i = 0; i < PCIE_MSI_SET_NUM; i++) {
  		struct mtk_msi_set *msi_set = &pcie->msi_sets[i];
  

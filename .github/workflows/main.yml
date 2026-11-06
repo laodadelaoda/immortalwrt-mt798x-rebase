@@ -88,6 +88,8 @@ jobs:
           python3 target/linux/mediatek/tests/audit-kernel-patch-stack.py verify \
             --repo "$GITHUB_WORKSPACE" \
             --attestation kernel-patch-audit/kernel-patch-attestation.json \
+            --source-audit-report kernel-patch-audit/source-structure-audit.json \
+            --intermediate-audit-dir kernel-patch-audit/intermediate \
             --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
 
       - name: Preflight MediaTek closed-driver Linux 6.12 patches
