@@ -77,7 +77,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  {
  	return container_of(pcs, struct mtk_pcs_lynxi, pcs);
  }
-@@ -138,12 +107,71 @@ static unsigned int mtk_pcs_lynxi_inband
+@@ -138,12 +107,58 @@ static unsigned int mtk_pcs_lynxi_inband
  	}
  }
  
@@ -103,59 +103,46 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +	mpcs->state.duplex = state->duplex;
 +	mpcs->state.interface = state->interface;
 +	mpcs->state.an_complete = state->an_complete;
-+
-+	/* Publish the link flag last, so that a concurrent
-+	 * mtk_pcs_lynxi_load_mpcs_state() seeing the link as up also sees the
-+	 * speed, duplex and an_complete that belong to it.
-+	 */
-+	smp_wmb();
 +	mpcs->state.link = state->link;
 +}
 +
 +static void mtk_pcs_lynxi_load_mpcs_state(struct mtk_pcs_lynxi *mpcs,
 +					  struct phylink_link_state *state)
 +{
-+	/* When the interface of the mpcs is not initialized,
-+	 * we should not report the states.
-+	 */
 +	if (mpcs->state.interface == PHY_INTERFACE_MODE_NA) {
 +		state->link = false;
 +		return;
 +	}
 +
 +	state->link = mpcs->state.link;
-+
-+	/* Pair with the smp_wmb() in mtk_pcs_lynxi_store_mpcs_state(): once
-+	 * the link flag has been read, the speed, duplex and an_complete that
-+	 * belong to it are visible as well.
-+	 */
-+	smp_rmb();
 +	state->speed = mpcs->state.speed;
 +	state->duplex = mpcs->state.duplex;
 +	state->interface = mpcs->state.interface;
 +	state->an_complete = mpcs->state.an_complete;
 +}
 +
-+static void mtk_pcs_lynxi_update_state(struct mtk_pcs_lynxi *mpcs)
+++static void mtk_pcs_lynxi_update_state(struct mtk_pcs_lynxi *mpcs)
 +{
-+	struct phylink_link_state state = mpcs->state;
++	struct phylink_link_state state;
  	unsigned int bm, adv;
  
++	mutex_lock(&mpcs->regmap_lock);
++	state = mpcs->state;
 +	/* An empty advertisement means mtk_pcs_lynxi_get_state() has not run
 +	 * yet. Decoding now would report the link as up with speed 0.
 +	 */
-+	if (linkmode_empty(state.advertising))
++	if (linkmode_empty(state.advertising)) {
++		mutex_unlock(&mpcs->regmap_lock);
 +		return;
-+
-+	mutex_lock(&mpcs->regmap_lock);
++	}
 +
  	/* Read the BMSR and LPA */
  	if (regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &bm) ||
  	    regmap_read(mpcs->regmap, SGMSYS_PCS_ADVERTISE, &adv)) {
 @@ -152,19 +178,35 @@ static void mtk_pcs_lynxi_get_state(stru
 +		state.link = false;
-+		mutex_unlock(&mpcs->regmap_lock);
 +		mtk_pcs_lynxi_store_mpcs_state(mpcs, &state);
++		mutex_unlock(&mpcs->regmap_lock);
  		return;
  	}
  
@@ -171,9 +158,8 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 -	}
 +	state.interface = mpcs->interface;
 +
-+	mutex_unlock(&mpcs->regmap_lock);
-+
 +	mtk_pcs_lynxi_store_mpcs_state(mpcs, &state);
++	mutex_unlock(&mpcs->regmap_lock);
  }
 +
 +static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
@@ -184,10 +170,11 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +	/* Passing the advertising and lp_advertising parameters to
 +	 * phylink_mii_c22_pcs_decode_state()in mtk_pcs_lynxi_update_state().
 +	 */
++	mutex_lock(&mpcs->regmap_lock);
 +	linkmode_copy(mpcs->state.advertising, state->advertising);
 +	linkmode_copy(mpcs->state.lp_advertising, state->lp_advertising);
-+
 +	mtk_pcs_lynxi_load_mpcs_state(mpcs, state);
++	mutex_unlock(&mpcs->regmap_lock);
  }
  
 -static void mtk_sgmii_reset(struct mtk_pcs_lynxi *mpcs)
@@ -337,7 +324,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	if (neg_mode != PHYLINK_PCS_NEG_INBAND_ENABLED) {
  		/* Force the speed and duplex setting */
  		if (speed == SPEED_10)
-@@ -322,12 +383,38 @@ static void mtk_pcs_lynxi_link_up(struct
+@@ -322,12 +383,51 @@ static void mtk_pcs_lynxi_link_up(struct
  		if (duplex != DUPLEX_FULL)
  			sgm_mode |= SGMII_DUPLEX_HALF;
  
@@ -353,23 +340,36 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +{
 +	struct mtk_pcs_lynxi *mpcs = container_of(work, struct mtk_pcs_lynxi,
 +						  link_poll.work);
++	__ETHTOOL_DECLARE_LINK_MODE_MASK(advertising);
++	phy_interface_t interface;
++	unsigned int neg_mode;
++	bool poll;
 +
-+	if ((mpcs->interface != PHY_INTERFACE_MODE_SGMII &&
-+	     mpcs->interface != PHY_INTERFACE_MODE_1000BASEX &&
-+	     mpcs->interface != PHY_INTERFACE_MODE_2500BASEX) ||
-+	    (mpcs->poll == false))
++	mutex_lock(&mpcs->regmap_lock);
++	poll = READ_ONCE(mpcs->poll);
++	interface = mpcs->interface;
++	neg_mode = mpcs->neg_mode;
++	linkmode_copy(advertising, mpcs->advertising);
++	mutex_unlock(&mpcs->regmap_lock);
++
++	if (!poll ||
++	    (interface != PHY_INTERFACE_MODE_SGMII &&
++	     interface != PHY_INTERFACE_MODE_1000BASEX &&
++	     interface != PHY_INTERFACE_MODE_2500BASEX))
 +		goto exit;
 +
 +	if (mtk_pcs_lynxi_link_status(mpcs)) {
 +		mtk_pcs_lynxi_update_state(mpcs);
 +	} else {
++		mutex_lock(&mpcs->regmap_lock);
 +		mpcs->state.link = false;
-+		mtk_pcs_lynxi_config(&mpcs->pcs, mpcs->neg_mode, mpcs->interface,
-+				     mpcs->advertising, false);
++		mutex_unlock(&mpcs->regmap_lock);
++		mtk_pcs_lynxi_config(&mpcs->pcs, neg_mode, interface,
++				     advertising, false);
 +	}
 +
 +exit:
-+	if (mpcs->poll && !delayed_work_pending(&mpcs->link_poll))
++	if (READ_ONCE(mpcs->poll) && !delayed_work_pending(&mpcs->link_poll))
 +		schedule_delayed_work(&mpcs->link_poll, msecs_to_jiffies(1000));
 +}
 +
@@ -380,21 +380,23 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	if (mpcs->xfi_tphy)
  		phy_power_on(mpcs->xfi_tphy);
  
-+	mpcs->poll = true;
++	WRITE_ONCE(mpcs->poll, true);
 +	if (!delayed_work_pending(&mpcs->link_poll))
 +		schedule_delayed_work(&mpcs->link_poll, msecs_to_jiffies(1000));
 +
  	return 0;
  }
  
-@@ -347,6 +437,11 @@ static void mtk_pcs_lynxi_disable(struct
+@@ -347,6 +437,13 @@ static void mtk_pcs_lynxi_disable(struct
  {
  	struct mtk_pcs_lynxi *mpcs = pcs_to_mtk_pcs_lynxi(pcs);
  
-+	mpcs->poll = false;
++	WRITE_ONCE(mpcs->poll, false);
 +	cancel_delayed_work_sync(&mpcs->link_poll);
 +
++	mutex_lock(&mpcs->regmap_lock);
 +	mpcs->state.link = false;
++	mutex_unlock(&mpcs->regmap_lock);
 +
  	regmap_set_bits(mpcs->regmap, SGMSYS_QPHY_PWR_STATE_CTRL, SGMII_PHYA_PWD);
  
