@@ -16,7 +16,7 @@ Subject: [PATCH] net: pcs: mtk_usxgmii: add link_poll mechanism
 
 Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 ---
- drivers/net/pcs/pcs-mtk-usxgmii.c    | 168 +++++++++++++++++++--------
+ drivers/net/pcs/pcs-mtk-usxgmii.c    | 170 +++++++++++++++++++++--------
  include/linux/pcs/pcs-mtk-usxgmii.h  |  29 +++++
  include/linux/phy/phy-mtk-xfi-tphy.h |  23 ++++
  3 files changed, 171 insertions(+), 51 deletions(-)
@@ -339,7 +339,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	if (IS_ERR(mpcs->clk))
 --- a/include/linux/pcs/pcs-mtk-usxgmii.h
 +++ b/include/linux/pcs/pcs-mtk-usxgmii.h
-@@ -4,6 +4,35 @@
+@@ -4,7 +4,36 @@
  
  #include <linux/phylink.h>
  
