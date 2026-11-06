@@ -161,6 +161,24 @@ for path in all_c:
 if not provider_hits:
     reviews.append("no in-tree assignment to the nullable MediaTek tunnel-offload hooks; confirm the external WED/WARP provider registers them")
 
+
+# SKB headroom metadata-copy callbacks must propagate allocation failures.
+dev_c = read("net/core/dev.c")
+validate = body(dev_c, "validate_xmit_skb")
+check("mtk_gso_skb_copy_head && mtk_gso_skb_copy_head(segs, skb)" in validate and
+      "kfree_skb_list(segs)" in validate and "goto out_kfree_skb" in validate,
+      "GSO headroom-copy failure is ignored or leaks the generated segment list")
+ip_output = read("net/ipv4/ip_output.c")
+frag_next = body(ip_output, "ip_frag_next")
+check("int ret = mtk_ip_frag_skb_copy_head(skb2, skb)" in frag_next and
+      "kfree_skb(skb2)" in frag_next and "return ERR_PTR(ret)" in frag_next,
+      "IP-fragment headroom-copy failure is ignored or leaks the new fragment")
+tnl_h = read("drivers/net/ethernet/mediatek/mtk_tnl.h")
+copy_head = body(tnl_h, "mtk_skb_copy_head")
+check("if (!need_copy)" in copy_head and
+      copy_head.find("if (!need_copy)") < copy_head.find("while (temp)"),
+      "SKB headroom helper performs unnecessary copy-on-write when no tunnel metadata exists")
+
 if failures:
     for item in failures:
         print("FAIL: " + item, file=sys.stderr)
