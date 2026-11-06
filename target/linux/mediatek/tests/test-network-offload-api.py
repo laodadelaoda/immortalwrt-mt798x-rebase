@@ -179,6 +179,26 @@ check("if (!need_copy)" in copy_head and
       copy_head.find("if (!need_copy)") < copy_head.find("while (temp)"),
       "SKB headroom helper performs unnecessary copy-on-write when no tunnel metadata exists")
 
+
+# PPE global flow-table lifetime and tuple teardown iteration are serialized.
+ppe_core = read("drivers/net/ethernet/mediatek/mtk_ppe.c")
+ppe_deinit = body(ppe_core, "mtk_ppe_deinit")
+ppe_offload = read("drivers/net/ethernet/mediatek/mtk_ppe_offload.c")
+ppe_init = body(ppe_offload, "mtk_eth_offload_init")
+check("continue;" in ppe_deinit and "flow_table_initialized" in ppe_deinit and
+      "rhashtable_destroy(&eth->flow_table)" in ppe_deinit,
+      "PPE deinit can return early on an empty PPE slot or destroy an uninitialized global flow table")
+check("rhashtable_init(&eth->flow_table" in ppe_init and
+      "if (!ret)" in ppe_init and "eth->flow_table_initialized = true" in ppe_init,
+      "PPE global flow-table initialization state is not recorded after successful init")
+
+nf_core = read("net/netfilter/nf_flow_table_core.c")
+teardown = body(nf_core, "flow_offload_teardown_by_tuple")
+check("rtnl_lock()" in teardown and "mutex_lock(&flowtable_lock)" in teardown and
+      teardown.find("rtnl_lock()") < teardown.find("mutex_lock(&flowtable_lock)") and
+      "mutex_unlock(&flowtable_lock)" in teardown and "rtnl_unlock()" in teardown,
+      "PPE tuple teardown does not serialize netdevice and flowtable iteration in RTNL-to-flowtable lock order")
+
 if failures:
     for item in failures:
         print("FAIL: " + item, file=sys.stderr)
