@@ -11,8 +11,8 @@ Reviewed-by: Andrew Lunn <andrew@lunn.ch>
 Link: https://patch.msgid.link/20250504172916.243185-7-michael@fossekall.de
 Signed-off-by: Paolo Abeni <pabeni@redhat.com>
 ---
- drivers/net/phy/realtek/realtek_main.c | 127 +++++++++++++++++++++++++--
- 1 file changed, 121 insertions(+), 6 deletions(-)
+ drivers/net/phy/realtek/realtek_main.c | 126 +++++++++++++++++++++++++-
+ 1 file changed, 120 insertions(+), 6 deletions(-)
 
 --- a/drivers/net/phy/realtek/realtek_main.c
 +++ b/drivers/net/phy/realtek/realtek_main.c
@@ -110,7 +110,7 @@ Signed-off-by: Paolo Abeni <pabeni@redhat.com>
 +	mask = RTL8211F_LEDCR_MASK << (RTL8211F_LEDCR_SHIFT * index);
  
  	if (test_bit(TRIGGER_NETDEV_LINK_10, &rules))
-@@ -704,6 +736,85 @@ static int rtl8211f_led_hw_control_set(s
+@@ -704,6 +736,84 @@ static int rtl8211f_led_hw_control_set(s
  	return phy_modify_paged(phydev, 0xd04, RTL8211F_LEDCR, mask, reg);
  }
  
