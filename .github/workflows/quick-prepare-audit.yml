@@ -50,6 +50,7 @@ jobs:
           export LC_ALL=C
           KERNEL_PATCH_LOG="$RUNNER_TEMP/n60-linux-6.12-patch-prepare.log"
           echo "===== OpenWrt Kernel/Prepare: pristine source plus generic and MediaTek patch stacks ====="
+          python3 target/linux/mediatek/tests/audit-kernel-patch-stack.py inventory --repo "$GITHUB_WORKSPACE" --output-dir "$GITHUB_WORKSPACE/.kernel-patch-audit"
           export PATCH="patch --fuzz=0"
           if ! make target/linux/prepare V=s 2>&1 | tee "$KERNEL_PATCH_LOG"; then
             echo "::error::Linux 6.12 source preparation or complete kernel patch application failed."
@@ -77,6 +78,13 @@ jobs:
           grep -q "^VERSION = 6$" "$KERNEL_MAKEFILE"
           grep -q "^PATCHLEVEL = 12$" "$KERNEL_MAKEFILE"
           grep -q "^SUBLEVEL = 112$" "$KERNEL_MAKEFILE"
+          KERNEL_SRC="$(dirname "$KERNEL_MAKEFILE")"
+          KERNEL_ARCHIVE="$GITHUB_WORKSPACE/dl/linux-6.12.112.tar.xz"
+          test -s "$KERNEL_ARCHIVE" || { echo "::error::Pinned Linux 6.12.112 source archive is missing."; exit 1; }
+          python3 target/linux/mediatek/tests/audit-kernel-patch-stack.py attest \
+            --repo "$GITHUB_WORKSPACE" --output-dir "$GITHUB_WORKSPACE/.kernel-patch-audit" \
+            --kernel-src "$KERNEL_SRC" --patch-log "$KERNEL_PATCH_LOG" --kernel-archive "$KERNEL_ARCHIVE" \
+            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
           echo "PASS: complete OpenWrt generic and MediaTek kernel patch stacks applied to Linux 6.12.112 with zero fuzz, before kernel_oldconfig and compilation."
 
       - name: Audit MT7530 DSA Netlink declarations, bounds and lifecycle
@@ -139,3 +147,12 @@ jobs:
             make -C "$pkg" TOPDIR="$GITHUB_WORKSPACE" -j1 prepare V=s
           done
           echo "PASS: all fixed vendor Package Build/Prepare targets completed; no compile target was invoked."
+
+      - name: Upload Linux kernel patch inventory and attestation
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-kernel-patch-attestation
+          path: .kernel-patch-audit/
+          if-no-files-found: warn
+          retention-days: 30

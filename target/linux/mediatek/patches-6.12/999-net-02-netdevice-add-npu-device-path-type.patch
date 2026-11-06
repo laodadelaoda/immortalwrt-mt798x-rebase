@@ -18,11 +18,11 @@ v1: Add L2TP flow offload support for NPU
  #include <uapi/linux/netdevice.h>
 +#include <uapi/linux/netfilter.h>
  #include <uapi/linux/if_bonding.h>
-@@ -846,1 +847,3 @@ enum net_device_path_type {
+@@ -846,2 +847,4 @@ enum net_device_path_type {
  	DEV_PATH_MTK_WDMA,
 +	DEV_PATH_L2TP,
 +	DEV_PATH_PPTP,
- struct net_device_path {
+ };
 @@ -873,8 +876,34 @@ struct net_device_path {
  			u8 amsdu;
  		} mtk_wdma;
