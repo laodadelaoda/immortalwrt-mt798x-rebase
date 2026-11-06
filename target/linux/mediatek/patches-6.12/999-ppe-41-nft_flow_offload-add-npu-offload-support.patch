@@ -52,10 +52,10 @@ v1: Add L2TP tunnel hardware offload support
 +				memcpy(info->h_dest, path->tunnel.h_dest, ETH_ALEN);
 +				info->dst = path->tunnel.dst;
 +				break;
-+} else if (path->tunnel.dst) {
-+	dst_release(path->tunnel.dst);
-+	path->tunnel.dst = NULL;
-+}
++			} else if (path->tunnel.dst) {
++				dst_release(path->tunnel.dst);
++				path->tunnel.dst = NULL;
++			}
 +
  			/* DEV_PATH_VLAN and DEV_PATH_PPPOE */
  			if (info->num_encaps >= NF_FLOW_TABLE_ENCAP_MAX) {
