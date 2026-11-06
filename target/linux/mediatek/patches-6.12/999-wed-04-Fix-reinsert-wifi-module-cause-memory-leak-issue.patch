@@ -26,7 +26,7 @@ Subject: [PATCH 04/15] Fix reinsert wifi module cause memory leak issue
 +	int i;
 +
 +	for (i = 0; i < ARRAY_SIZE(dev->rx_ring); i++)
-+		if ((dev->tx_ring[i].flags & MTK_WED_RING_CONFIGURED))
++		if ((dev->rx_ring[i].flags & MTK_WED_RING_CONFIGURED))
 +			mtk_wed_free_ring(dev, &dev->rx_ring[i]);
 +
 +	for (i = 0; i < ARRAY_SIZE(dev->tx_wdma); i++)
