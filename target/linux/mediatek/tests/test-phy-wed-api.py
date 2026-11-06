@@ -115,11 +115,17 @@ check("mtk_wed_set_pcie_mask(dev, true)" in body(wed, "mtk_wed_start") and
 
 # Realtek PHY backports must preserve Linux 6.12 MDIO/PHY/PM API contracts.
 eth_phy_h = read("include/linux/phy.h")
+hwmon_h = read("include/linux/hwmon.h")
 mdio_h = read("include/linux/mdio.h")
 wakeirq_h = read("include/linux/pm_wakeirq.h")
 device_h = read("include/linux/device.h")
 for symbol, header in (
     ("phy_read_mmd_poll_timeout", eth_phy_h),
+    ("phy_save_page", eth_phy_h),
+    ("phy_restore_page", eth_phy_h),
+    ("phy_select_page", eth_phy_h),
+    ("devm_hwmon_sanitize_name", hwmon_h),
+    ("devm_hwmon_device_register_with_info", hwmon_h),
     ("__mdiobus_c45_read", mdio_h),
     ("dev_pm_set_wake_irq", wakeirq_h),
     ("dev_pm_clear_wake_irq", wakeirq_h),
@@ -133,6 +139,9 @@ hwmon_read = body(realtek_hwmon, "rtl822x_hwmon_read")
 hwmon_init = body(realtek_hwmon, "rtl822x_hwmon_init")
 check(hwmon_read.count("phy_read_mmd(") == 2 and hwmon_read.count("if (raw < 0)") == 2,
       "RTL822x hwmon treats negative MDIO errors as temperature values")
+check("devm_hwmon_sanitize_name" in hwmon_init and
+      "devm_hwmon_device_register_with_info" in hwmon_init,
+      "RTL822x hwmon uses a registration API not present in Linux 6.12")
 check("ret = phy_clear_bits_mmd" in hwmon_init and "if (ret < 0)" in hwmon_init,
       "RTL822x hwmon initialization ignores over-temperature alarm reset failure")
 
