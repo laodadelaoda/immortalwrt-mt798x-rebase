@@ -104,8 +104,7 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: add 9k jumbo frame support
  
  			if (!data)
  				return -ENOMEM;
-@@ -6496,7 +6516,7 @@ static int mtk_add_mac(struct mtk_eth *e
- 	eth->netdev[id]->irq = eth->irq_fe[0];
+@@ -6496,6 +6516,6 @@ static int mtk_add_mac(struct mtk_eth *e
  	eth->netdev[id]->dev.of_node = np;
  
 -	eth->netdev[id]->max_mtu = MTK_MAX_RX_LENGTH - MTK_RX_ETH_HLEN;
