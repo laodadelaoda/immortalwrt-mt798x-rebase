@@ -97,8 +97,7 @@ support
  			MTK_RX_CFG_SDL_OFFSET), reg_map->pdma.rx_cfg);
  
  		lro_ctrl_dw0 |= MTK_PDMA_LRO_SDL << MTK_CTRL_DW0_SDL_OFFSET;
-@@ -5486,10 +5483,17 @@ static void mtk_uninit(struct net_device
- 
+@@ -5486,22 +5483,36 @@ static void mtk_uninit(struct net_device
  static int mtk_change_mtu(struct net_device *dev, int new_mtu)
  {
 -	int length = new_mtu + MTK_RX_ETH_HLEN;
@@ -107,20 +106,29 @@ support
 -	int max_mtu, i;
 +	int max_mtu, i, length;
 +
-+	WRITE_ONCE(dev->mtu, new_mtu);
-+
-+	max_mtu = mtk_max_gmac_mtu(eth);
-+	for (i = 0; i < ARRAY_SIZE(eth->ppe); i++)
-+		mtk_ppe_update_mtu(eth->ppe[i], max_mtu);
++	max_mtu = max_t(int, new_mtu, ETH_DATA_LEN);
++	for (i = 0; i < ARRAY_SIZE(eth->netdev); i++)
++		if (eth->netdev[i] && eth->netdev[i] != dev)
++			max_mtu = max(max_mtu, READ_ONCE(eth->netdev[i]->mtu));
 +
 +	length = max_mtu + MTK_RX_ETH_HLEN;
++
++	if (rcu_access_pointer(eth->prog) &&
++	    length > MTK_PP_MAX_BUF_SIZE) {
++		netdev_err(dev, "Invalid MTU for XDP mode\\n");
++		return -EINVAL;
++	}
++
++	WRITE_ONCE(dev->mtu, new_mtu);
++	for (i = 0; i < ARRAY_SIZE(eth->ppe); i++)
++		mtk_ppe_update_mtu(eth->ppe[i], max_mtu);
  
- 	if (rcu_access_pointer(eth->prog) &&
- 	    length > MTK_PP_MAX_BUF_SIZE) {
-@@ -5497,12 +5501,11 @@ static int mtk_change_mtu(struct net_dev
- 		return -EINVAL;
- 	}
- 
+-	if (rcu_access_pointer(eth->prog) &&
+-	    length > MTK_PP_MAX_BUF_SIZE) {
+-		netdev_err(dev, "Invalid MTU for XDP mode\\n");
+-		return -EINVAL;
+-	}
+-
 -	mtk_set_mcr_max_rx(mac, length);
 -	WRITE_ONCE(dev->mtu, new_mtu);
 -
@@ -132,6 +140,11 @@ support
 +	else
 +		eth->rx_buf_len = DIV_ROUND_UP(length, MTK_MAX_RX_LENGTH_UNIT) *
 +				  MTK_MAX_RX_LENGTH_UNIT;
++
++	for (i = 0; i < ARRAY_SIZE(eth->netdev); i++)
++		if (eth->netdev[i] && netif_running(eth->netdev[i]))
++			mtk_set_mcr_max_rx(netdev_priv(eth->netdev[i]),
++					   eth->rx_buf_len);
  
  	return 0;
  }
