@@ -55,7 +55,8 @@ require("pcie->irqs[i].irq = pcie->irq" in setup and "platform_get_irq(pdev, i)"
         "setup must map every declared IRQ and reuse the first acquired IRQ")
 
 teardown = body(src, "static void mtk_pcie_irq_teardown(")
-require("pcie->irqs[i].irq < 0" in teardown and "irq_dispose_mapping" in teardown,
+require("int i;" in teardown and "pcie->irqs[i].irq < 0" in teardown
+        and "irq_set_chained_handler_and_data" in teardown and "irq_dispose_mapping" in teardown,
         "teardown must skip uninitialized IRQ entries and dispose acquired mappings")
 require("pcie->intx_domain = NULL" in teardown and "pcie->msi_domain = NULL" in teardown
         and "pcie->msi_bottom_domain = NULL" in teardown,
