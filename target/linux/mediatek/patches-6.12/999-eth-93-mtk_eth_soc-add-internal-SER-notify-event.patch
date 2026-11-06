@@ -41,7 +41,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  		break;
  	case 1:
  		if (atomic_read(&eth->reset.force) && !test_bit(MTK_RESETTING, &eth->state)) {
-+			eth->reset.event = MTK_FE_START_RESET;
++			WRITE_ONCE(eth->reset.event, MTK_FE_START_RESET);
  			mtk_reset_event_update(eth, MTK_EVENT_FORCE);
  			schedule_work(&eth->pending_work);
  		} else
@@ -51,7 +51,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  		break;
 +	case 3:
 +		if (atomic_read(&eth->reset.force) && !test_bit(MTK_RESETTING, &eth->state)) {
-+			eth->reset.event = MTK_FE_STOP_TRAFFIC;
++			WRITE_ONCE(eth->reset.event, MTK_FE_STOP_TRAFFIC);
 +			mtk_reset_event_update(eth, MTK_EVENT_FORCE);
 +			schedule_work(&eth->pending_work);
 +		} else
@@ -292,7 +292,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  			rst_mask |= RSTCTRL_PPE2;
  
 -		rst_mask |= RSTCTRL_WDMA0 | RSTCTRL_WDMA1 | RSTCTRL_WDMA2;
-+		if (eth->reset.event == MTK_FE_START_RESET)
++		if (READ_ONCE(eth->reset.event) == MTK_FE_START_RESET)
 +			rst_mask |= RSTCTRL_WDMA0 | RSTCTRL_WDMA1 | RSTCTRL_WDMA2;
  	} else if (mtk_is_netsys_v2_or_greater(eth)) {
  		rst_mask = RSTCTRL_PPE0_V2;
@@ -301,7 +301,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  		    wtx_busy && cdm_busy && oq_free) {
  			if (++eth->reset.wdma_hang_count[i] > 2) {
  				dev_warn(eth->dev, "detect WDMA%d Tx hang!\n", i);
-+				eth->reset.event = MTK_FE_START_RESET;
++				WRITE_ONCE(eth->reset.event, MTK_FE_START_RESET);
  				eth->reset.wdma_hang_count[i] = 0;
  				ret = true;
  			}
@@ -309,7 +309,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  		    (rxfc_cnt == eth->reset.gdm_rxfc_cnt[i])) {
  			if (++eth->reset.mac_tx_hang_count[i] > 2) {
  				dev_warn(eth->dev, "detect GMAC%d Tx hang!\n", i + 1);
-+				eth->reset.event = MTK_FE_STOP_TRAFFIC;
++				WRITE_ONCE(eth->reset.event, MTK_FE_STOP_TRAFFIC);
  				eth->reset.mac_tx_hang_count[i] = 0;
  				ret = true;
  			}
@@ -317,7 +317,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  		if (gmac_rx && (rxgp_cnt == eth->reset.gdm_rxgp_cnt[i])) {
  			if (++eth->reset.mac_rx_hang_count[i] > 2) {
  				dev_warn(eth->dev, "detect GMAC%d Rx hang!\n", i + 1);
-+				eth->reset.event = MTK_FE_STOP_TRAFFIC;
++				WRITE_ONCE(eth->reset.event, MTK_FE_STOP_TRAFFIC);
  				eth->reset.mac_rx_hang_count[i] = 0;
  				ret = true;
  			}
@@ -325,7 +325,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  		    ((gdm_txfsm == eth->reset.gdm_txfsm[i]) && (gdm_txfsm == 0x1033))) {
  			if (++eth->reset.gdm_tx_hang_count[i] > 2) {
  				dev_warn(eth->dev, "detect GDM%d Tx hang!\n", i + 1);
-+				eth->reset.event = MTK_FE_STOP_TRAFFIC;
++				WRITE_ONCE(eth->reset.event, MTK_FE_STOP_TRAFFIC);
  				eth->reset.gdm_tx_hang_count[i] = 0;
  				ret = true;
  			}
@@ -333,7 +333,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  		     (gdm_rxfsm == 0x23 || gdm_rxfsm == 0x24))) {
  			if (++eth->reset.gdm_rx_hang_count[i] > 2) {
  				dev_warn(eth->dev, "detect GDM%d Rx hang!\n", i + 1);
-+				eth->reset.event = MTK_FE_STOP_TRAFFIC;
++				WRITE_ONCE(eth->reset.event, MTK_FE_STOP_TRAFFIC);
  				eth->reset.gdm_rx_hang_count[i] = 0;
  				ret = true;
  			}
@@ -341,7 +341,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	    ((cdma_rxfsm != 0) && (cdma_rxfsm == eth->reset.cdma_rxfsm))) {
  		if (++eth->reset.adma_hang_count > 2) {
  			dev_warn(eth->dev, "detect ADMA Rx hang!\n");
-+			eth->reset.event = MTK_FE_STOP_TRAFFIC;
++			WRITE_ONCE(eth->reset.event, MTK_FE_STOP_TRAFFIC);
  			eth->reset.adma_hang_count = 0;
  			ret = true;
  		}
@@ -349,21 +349,29 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	if (!gdm_rxfc && qfsm_hang && qfwd_hang) {
  		if (++eth->reset.qdma_hang_count > 2) {
  			dev_warn(eth->dev, "detect QDMA Tx hang !\n");
-+			eth->reset.event = MTK_FE_STOP_TRAFFIC;
++			WRITE_ONCE(eth->reset.event, MTK_FE_STOP_TRAFFIC);
  			eth->reset.qdma_hang_count = 0;
  			ret = true;
  		}
-@@ -6097,7 +6106,41 @@ static void mtk_pending_work(struct work
+@@ -6013,2 +6054,5 @@ static int mtk_cleanup(struct mtk_eth *eth)
+ {
++#if defined(CONFIG_NET_MEDIATEK_HNAT) || defined(CONFIG_NET_MEDIATEK_HNAT_MODULE)
++	mtk_eth_netdevice_event_exit(eth);
++#endif
+ 	cancel_work_sync(&eth->pending_work);
+
+@@ -6097,7 +6106,45 @@ static void mtk_pending_work(struct work
  
  	mtk_save_qdma_cfg(eth);
  	mtk_prepare_for_reset(eth);
 +#if defined(CONFIG_NET_MEDIATEK_HNAT) || defined(CONFIG_NET_MEDIATEK_HNAT_MODULE)
++	mtk_eth_reset_reinit();
 +	for (i = 0; i < MTK_MAX_DEVS; i++) {
 +		if (!eth->netdev[i])
 +			continue;
 +
 +		pr_info("send event:%x !\n", eth->reset.event);
-+		if (eth->reset.event == MTK_FE_STOP_TRAFFIC)
++		if (READ_ONCE(eth->reset.event) == MTK_FE_STOP_TRAFFIC)
 +			call_netdevice_notifiers(MTK_FE_STOP_TRAFFIC,
 +						 eth->netdev[i]);
 +		else
@@ -371,20 +379,23 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +						 eth->netdev[i]);
 +
 +		rtnl_unlock();
-+		if (mtk_wifi_num > 0) {
++		if (READ_ONCE(mtk_wifi_num) > 0) {
 +			pr_info("waiting event from wifi\n");
-+			wait_for_completion(&wait_ser_done);
-+			if (mtk_is_netsys_v3_or_greater(eth) && mtk_stop_fail) {
++			if (!wait_for_completion_timeout(&wait_ser_done, msecs_to_jiffies(5000)))
++				pr_warn("timed out waiting for WiFi SER completion\\n");
++			if (mtk_is_netsys_v3_or_greater(eth) && READ_ONCE(mtk_stop_fail)) {
 +				rtnl_lock();
++				reinit_completion(&wait_ser_done);
 +				call_netdevice_notifiers(MTK_FE_START_RESET,
 +							 eth->netdev[i]);
 +				rtnl_unlock();
 +				pr_info("waiting event when stop fail\n");
-+				wait_for_completion(&wait_ser_done);
-+				mtk_stop_fail = 0;
++				if (!wait_for_completion_timeout(&wait_ser_done, msecs_to_jiffies(5000)))
++					pr_warn("timed out waiting for WiFi reset completion\\n");
++				WRITE_ONCE(mtk_stop_fail, false);
 +			}
 +		}
-+		if (!try_wait_for_completion(&wait_tops_done))
++		if (!wait_for_completion_timeout(&wait_tops_done, msecs_to_jiffies(5000)))
 +			pr_warn("wait for TOPS response timeout !\n");
 +		rtnl_lock();
 +		break;
@@ -395,7 +406,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	/* Run again reset preliminary configuration in order to avoid any
  	 * possible race during FE reset since it can run releasing RTNL lock.
  	 */
-@@ -6138,6 +6181,34 @@ static void mtk_pending_work(struct work
+@@ -6138,6 +6181,35 @@ static void mtk_pending_work(struct work
  
  	mtk_mac_fe_reset_complete(eth, restart);
  
@@ -414,10 +425,11 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +						 eth->netdev[i]);
 +
 +			if (mtk_is_netsys_v3_or_greater(eth) &&
-+			    mtk_wifi_num > 0) {
++			    READ_ONCE(mtk_wifi_num) > 0) {
 +				pr_info("waiting done ack from wifi\n");
 +				rtnl_unlock();
-+				wait_for_completion(&wait_ack_done);
++				if (!wait_for_completion_timeout(&wait_ack_done, msecs_to_jiffies(5000)))
++					pr_warn("timed out waiting for WiFi L1 SER acknowledgement\\n");
 +				rtnl_lock();
 +			}
 +		}
@@ -430,23 +442,31 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	clear_bit(MTK_RESETTING, &eth->state);
  
  	mtk_wed_fe_reset_complete();
-@@ -7566,6 +7637,9 @@ static int mtk_probe(struct platform_dev
+@@ -7566,6 +7637,15 @@ static int mtk_probe(struct platform_dev
  	eth->rx_buf_len = MTK_MAX_RX_LENGTH;
  
  	platform_set_drvdata(pdev, eth);
 +#if defined(CONFIG_NET_MEDIATEK_HNAT) || defined(CONFIG_NET_MEDIATEK_HNAT_MODULE)
-+	mtk_eth_netdevice_event_init(eth);
++	err = mtk_eth_netdevice_event_init(eth);
++	if (err) {
++		netif_napi_del(&eth->tx_napi);
++		netif_napi_del(&eth->rx_napi);
++		free_netdev(eth->dummy_dev);
++		goto err_unreg_netdev;
++	}
 +#endif
  	schedule_delayed_work(&eth->reset.monitor_work,
  			      MTK_DMA_MONITOR_TIMEOUT);
  
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.h
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.h
-@@ -1806,7 +1806,9 @@ struct mtk_eth {
+@@ -1806,7 +1806,11 @@ struct mtk_eth {
  
  	struct {
  		struct delayed_work monitor_work;
 +		struct notifier_block netdevice_notifier;
++		bool notifier_registered;
++		bool shutting_down;
  		atomic_t force;
 +		u32 event;
  		u32 count[32];
