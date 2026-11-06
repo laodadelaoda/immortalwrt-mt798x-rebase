@@ -43,6 +43,15 @@ mmio = (dsa / "mt7530-mmio.c").read_text(errors="replace")
 # Declaration, implementation and family lifecycle.
 decls = re.findall(r"\bvoid\s+mt7530_write\s*\(\s*struct mt7530_priv\s*\*\s*priv\s*,\s*u32\s+reg\s*,\s*u32\s+val\s*\)\s*;", header)
 check(len(decls) == 1, f"mt7530_write prototype must occur exactly once (found {len(decls)})")
+nl_header = (dsa / "mt7530_nl.h").read_text(errors="replace")
+check("int mt7530_nl_init(struct mt7530_priv *priv);" in nl_header,
+      "MT7530 Netlink init declaration does not match the audited implementation")
+check("void mt7530_nl_exit(struct mt7530_priv *priv);" in nl_header,
+      "MT7530 Netlink exit declaration does not match the audited implementation")
+check("int mt7530_nl_init(struct mt7530_priv *priv)" in nl,
+      "MT7530 Netlink init definition has a mismatched signature")
+check("void mt7530_nl_exit(struct mt7530_priv *priv)" in nl,
+      "MT7530 Netlink exit definition has a mismatched signature")
 
 init = function(nl, "mt7530_nl_init")
 exit_fn = function(nl, "mt7530_nl_exit")
@@ -165,6 +174,15 @@ check(bool(re.search(r"ret\s*=\s*an8855_write\s*\(", an_write)),
       "AN8855 switch-register write return value is ignored")
 check("AN8855_CMD_REQUEST" not in an8855_nl[an8855_nl.index("static const struct genl_ops"):an8855_nl.index("static struct genl_family")],
       "AN8855 advertises an unsupported REQUEST operation")
+
+check("int an8855_nl_init(struct an8855_priv *priv);" in an8855_nlh,
+      "AN8855 Netlink init declaration does not match the audited implementation")
+check("void an8855_nl_exit(struct an8855_priv *priv);" in an8855_nlh,
+      "AN8855 Netlink exit declaration does not match the audited implementation")
+check("an8855_nl_init(struct an8855_priv *priv)" in an8855_nl,
+      "AN8855 Netlink init definition has a mismatched signature")
+check("an8855_nl_exit(struct an8855_priv *priv)" in an8855_nl,
+      "AN8855 Netlink exit definition has a mismatched signature")
 
 if failures:
     print("MT7530 DSA/Generic Netlink source audit: FAIL")
