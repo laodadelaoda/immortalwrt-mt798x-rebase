@@ -80,14 +80,14 @@ jobs:
         uses: actions/download-artifact@v6
         with:
           name: n60-kernel-patch-attestation
-          path: .kernel-patch-audit
+          path: kernel-patch-audit
       - name: Verify exact Linux kernel patch stack used by Quick
         shell: bash
         run: |
           set -Eeuo pipefail
           python3 target/linux/mediatek/tests/audit-kernel-patch-stack.py verify \
             --repo "$GITHUB_WORKSPACE" \
-            --attestation .kernel-patch-audit/kernel-patch-attestation.json \
+            --attestation kernel-patch-audit/kernel-patch-attestation.json \
             --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
 
       - name: Preflight MediaTek closed-driver Linux 6.12 patches
