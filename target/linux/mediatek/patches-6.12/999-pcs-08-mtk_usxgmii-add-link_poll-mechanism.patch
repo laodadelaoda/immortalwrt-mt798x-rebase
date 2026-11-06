@@ -19,7 +19,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  drivers/net/pcs/pcs-mtk-usxgmii.c    | 168 +++++++++++++++++++--------
  include/linux/pcs/pcs-mtk-usxgmii.h  |  29 +++++
  include/linux/phy/phy-mtk-xfi-tphy.h |  23 ++++
- 3 files changed, 169 insertions(+), 51 deletions(-)
+ 3 files changed, 171 insertions(+), 51 deletions(-)
  create mode 100644 include/linux/phy/phy-mtk-xfi-tphy.h
 
 --- a/drivers/net/pcs/pcs-mtk-usxgmii.c
@@ -300,12 +300,13 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +	}
 +
 +exit:
-+	if (!delayed_work_pending(&mpcs->link_poll))
++	mpcs->poll = true;
++	if (mpcs->poll && !delayed_work_pending(&mpcs->link_poll))
 +		schedule_delayed_work(&mpcs->link_poll, msecs_to_jiffies(1000));
  }
  
  static int mtk_usxgmii_pcs_enable(struct phylink_pcs *pcs)
-@@ -338,6 +435,9 @@ static int mtk_usxgmii_pcs_enable(struct
+@@ -338,6 +435,10 @@ static int mtk_usxgmii_pcs_enable(struct
  
  	phy_power_on(mpcs->xfi_tphy);
  
@@ -315,10 +316,11 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	return 0;
  }
  
-@@ -345,6 +445,9 @@ static void mtk_usxgmii_pcs_disable(stru
+@@ -345,6 +445,10 @@ static void mtk_usxgmii_pcs_disable(stru
  {
  	struct mtk_usxgmii_pcs *mpcs = pcs_to_mtk_usxgmii_pcs(pcs);
  
++	mpcs->poll = false;
 +	cancel_delayed_work_sync(&mpcs->link_poll);
 +
 +	mpcs->state.link = false;
