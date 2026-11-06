@@ -43,7 +43,7 @@ v2: Add L2TP over IPSec hardware offload support
  };
  
  static const struct proto_ops pppol2tp_ops;
-@@ -373,6 +379,86 @@ abort:
+@@ -373,6 +379,90 @@ abort:
  	return 1;
  }
  
@@ -94,6 +94,10 @@ v2: Add L2TP over IPSec hardware offload support
 +		goto err_put_dst;
 +	}
 +
++if (!(READ_ONCE(n->nud_state) & NUD_VALID)) {
++	neigh_release(n);
++	goto err_put_dst;
++}
 +	neigh_ha_snapshot(path->tunnel.h_dest, n, n->dev);
 +	memcpy(path->tunnel.h_source, n->dev->dev_addr, ETH_ALEN);
 +
