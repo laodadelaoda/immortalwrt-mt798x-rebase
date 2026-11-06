@@ -191,12 +191,11 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  static void mtk_usxgmii_pcs_get_fixed_speed(struct mtk_usxgmii_pcs *mpcs,
  					    struct phylink_link_state *state)
  {
-@@ -281,42 +348,41 @@ static void mtk_usxgmii_pcs_get_an_state
+@@ -281,41 +348,40 @@ static void mtk_usxgmii_pcs_get_an_state
  	phylink_decode_usxgmii_word(state, lpa);
  }
  
 -static void mtk_usxgmii_pcs_get_state(struct phylink_pcs *pcs,
--				      unsigned int neg_mode,
 -				      struct phylink_link_state *state)
 +static void mtk_usxgmii_pcs_update_state(struct mtk_usxgmii_pcs *mpcs)
  {
@@ -238,7 +237,6 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +}
 +
 +static void mtk_usxgmii_pcs_get_state(struct phylink_pcs *pcs,
-+				      unsigned int neg_mode,
 +				      struct phylink_link_state *state)
 +{
 +	struct mtk_usxgmii_pcs *mpcs = pcs_to_mtk_usxgmii_pcs(pcs);
@@ -339,7 +337,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	if (IS_ERR(mpcs->clk))
 --- a/include/linux/pcs/pcs-mtk-usxgmii.h
 +++ b/include/linux/pcs/pcs-mtk-usxgmii.h
-@@ -4,6 +4,35 @@
+@@ -4,7 +4,36 @@
  
  #include <linux/phylink.h>
  
