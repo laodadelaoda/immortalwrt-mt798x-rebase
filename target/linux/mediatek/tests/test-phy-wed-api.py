@@ -114,10 +114,11 @@ check("mtk_wed_set_pcie_mask(dev, true)" in body(wed, "mtk_wed_start") and
 
 
 # Realtek PHY backports must preserve Linux 6.12 MDIO/PHY/PM API contracts.
+eth_phy_h = read("include/linux/phy.h")
 mdio_h = read("include/linux/mdio.h")
 wakeirq_h = read("include/linux/pm_wakeirq.h")
 for symbol, header in (
-    ("phy_read_mmd_poll_timeout", phy_h),
+    ("phy_read_mmd_poll_timeout", eth_phy_h),
     ("__mdiobus_c45_read", mdio_h),
     ("devm_pm_set_wake_irq", wakeirq_h),
 ):
