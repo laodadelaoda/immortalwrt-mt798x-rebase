@@ -49,8 +49,9 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: add mtkhnat driver support
 +obj-$(CONFIG_NET_MEDIATEK_HNAT) += mtk_hnat/
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-@@ -40,6 +40,10 @@
- #include "mtk_eth_reset.h"
+@@ -36,7 +36,11 @@
+ #include "mtk_eth_soc.h"
+ #include "mtk_eth_dbg.h"
  #include "mtk_wed.h"
  
 +#if defined(CONFIG_NET_MEDIATEK_HNAT) || defined(CONFIG_NET_MEDIATEK_HNAT_MODULE)
