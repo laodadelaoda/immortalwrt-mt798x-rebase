@@ -52,8 +52,8 @@ index ec2fbd1..f361b52 100644
  static const struct net_device_ops ppp_netdev_ops = {
  	.ndo_init	 = ppp_dev_init,
  	.ndo_uninit      = ppp_dev_uninit,
-@@ -1423,6 +1450,9 @@ static const struct net_device_ops ppp_netdev_ops = {
- 	.ndo_do_ioctl    = ppp_net_ioctl,
+@@ -1450,4 +1477,7 @@ static const struct net_device_ops ppp_netdev_ops = {
+ 	.ndo_siocdevprivate = ppp_net_siocdevprivate,
  	.ndo_get_stats64 = ppp_get_stats64,
  	.ndo_fill_forward_path = ppp_fill_forward_path,
 +#if IS_ENABLED(CONFIG_NF_FLOW_TABLE)
