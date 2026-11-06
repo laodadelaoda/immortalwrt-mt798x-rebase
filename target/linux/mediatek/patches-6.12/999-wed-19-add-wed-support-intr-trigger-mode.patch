@@ -37,33 +37,33 @@ index e4fc718..8b9243f 100644
 +		return;
 +
 +	/* set mask apmcu*/
-+/* Map both registers before changing either one. */
-+apmcu = ioremap(IRQ_MASK_APMCU, 4);
-+if (!apmcu)
++	/* Map both registers before changing either one. */
++	apmcu = ioremap(IRQ_MASK_APMCU, 4);
++	if (!apmcu)
 +	return;
-+
-+pcie = ioremap(dev->hw->pcie_base + 0x1ac, 4);
-+if (!pcie) {
++	
++	pcie = ioremap(dev->hw->pcie_base + 0x1ac, 4);
++	if (!pcie) {
 +	iounmap(apmcu);
 +	return;
-+}
-+
-+value = readl(apmcu);
-+if (enable)
++	}
++	
++	value = readl(apmcu);
++	if (enable)
 +	value |= BIT(dev->hw->index);
-+else
++	else
 +	value &= ~BIT(dev->hw->index);
-+writel(value, apmcu);
-+
-+value = readl(pcie);
-+if (enable)
++	writel(value, apmcu);
++	
++	value = readl(pcie);
++	if (enable)
 +	value |= BIT(3);
-+else
++	else
 +	value &= ~BIT(3);
-+writel(value, pcie);
-+
-+iounmap(pcie);
-+iounmap(apmcu);
++	writel(value, pcie);
++	
++	iounmap(pcie);
++	iounmap(apmcu);
 +
 +	return;
 +}
