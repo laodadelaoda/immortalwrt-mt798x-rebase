@@ -108,6 +108,14 @@ jobs:
           KERNEL_SRC="$(dirname "$KERNEL_MAKEFILE")"
           python3 target/linux/mediatek/tests/test-dsa-mt7530-netlink.py "$KERNEL_SRC"
 
+      - name: Audit PCIe Gen3 MSI bounds and soft-power IRQ lifecycle
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          KERNEL_MAKEFILE="$(find build_dir -type f -path "*/linux-6.12.112/Makefile" -print -quit)"
+          test -n "$KERNEL_MAKEFILE" || { echo "::error::Patched Linux 6.12.112 source tree is missing."; exit 1; }
+          python3 target/linux/mediatek/tests/test-pcie-gen3-irq-lifecycle.py "$(dirname "$KERNEL_MAKEFILE")"
+
       - name: Verify actual GNU Make package variables and fetch manual EasyMesh archives
         shell: bash
         run: |
