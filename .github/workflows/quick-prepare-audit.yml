@@ -60,6 +60,10 @@ jobs:
               sed -n "1,220p" "$reject"
             done
             for source in $(find build_dir -type f -path "*/drivers/pci/controller/pcie-mediatek-gen3.c"); do
+              echo "===== ACTUAL PCIe IRQ teardown context ($source) ====="
+              grep -n -B 45 -A 70 "static void mtk_pcie_irq_teardown" "$source" || true
+              echo "===== ACTUAL PCIe IRQ handler/setup context ($source) ====="
+              sed -n '880,1035p' "$source"
               echo "===== ACTUAL PATCHED SOURCE: mtk_pcie_irq_handler ($source) ====="
               grep -n -B 12 -A 65 "static void mtk_pcie_irq_handler" "$source" || true
               echo "===== ACTUAL PATCHED SOURCE: mtk_pcie_setup_irq ($source) ====="
