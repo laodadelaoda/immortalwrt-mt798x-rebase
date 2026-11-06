@@ -87,7 +87,7 @@ check(lynxi_update.find("mutex_lock(&mpcs->regmap_lock)") <
       lynxi_update.rfind("mtk_pcs_lynxi_store_mpcs_state") <
       lynxi_update.rfind("mutex_unlock(&mpcs->regmap_lock)"),
       "SGMII cached link state is copied or published outside regmap_lock")
-check(lynxi_get := body(lynxi, "mtk_pcs_lynxi_get_state"))
+lynxi_get = body(lynxi, "mtk_pcs_lynxi_get_state")
 check(lynxi_get.find("mutex_lock(&mpcs->regmap_lock)") <
       lynxi_get.find("linkmode_copy") <
       lynxi_get.find("mtk_pcs_lynxi_load_mpcs_state") <
@@ -120,7 +120,7 @@ check(usx_update.find("mutex_lock(&mpcs->regmap_lock)") <
       usx_update.rfind("mtk_usxgmii_pcs_store_mpcs_state") <
       usx_update.rfind("mutex_unlock(&mpcs->regmap_lock)"),
       "USXGMII cached link state is copied or published outside regmap_lock")
-check(usx_get := body(usx, "mtk_usxgmii_pcs_get_state"))
+usx_get = body(usx, "mtk_usxgmii_pcs_get_state")
 check(usx_get.find("mutex_lock(&mpcs->regmap_lock)") <
       usx_get.find("mtk_usxgmii_pcs_load_mpcs_state") <
       usx_get.find("mutex_unlock(&mpcs->regmap_lock)"),
