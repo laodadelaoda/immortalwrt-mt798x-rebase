@@ -138,7 +138,7 @@ total CPU usage.
  		mtk_w32(eth, MAC_MCR_FORCE_LINK_DOWN, MTK_MAC_MCR(i));
  
  		if (mtk_is_netsys_v3_or_greater(eth) && eth->soc->caps == MT7988_CAPS)
-@@ -6493,8 +6496,5 @@ static int mtk_add_mac(struct mtk_eth *e
+@@ -6493,9 +6496,6 @@ static int mtk_add_mac(struct mtk_eth *e
  	eth->netdev[id]->dev.of_node = np;
  
 -	if (MTK_HAS_CAPS(eth->soc->caps, MTK_SOC_MT7628))
