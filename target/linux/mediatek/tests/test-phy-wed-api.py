@@ -41,15 +41,21 @@ phylink_h = read("include/linux/phylink.h")
 phylink_c = read("drivers/net/phy/phylink.c")
 check(bool(re.search(
     r"pcs_get_state\s*\)\s*\(\s*struct phylink_pcs\s*\*\s*pcs\s*,\s*"
-    r"unsigned int\s+neg_mode\s*,\s*struct phylink_link_state\s*\*\s*state",
+    r"struct phylink_link_state\s*\*\s*state",
     phylink_h, re.S)),
     "phylink_pcs_ops pcs_get_state callback does not expose the Linux 6.14 neg_mode parameter")
 check(bool(re.search(
     r"phylink_mii_c22_pcs_decode_state\s*\(\s*struct phylink_link_state\s*\*\s*state\s*,\s*"
-    r"unsigned int\s+neg_mode", phylink_c, re.S)),
+    r"u16\s+bmsr\s*,\s*u16\s+lpa", phylink_h, re.S)),
     "phylink_mii_c22_pcs_decode_state signature is incompatible with the backported callers")
 
 # SGMII PCS: regmap errors must release the mutex and publish link-down state.
+# The Linux 6.12 phylink_pcs_ops callback has no neg_mode argument.
+check(bool(re.search(r"mtk_pcs_lynxi_get_state\s*\(\s*struct phylink_pcs\s*\*\s*pcs\s*,\s*struct phylink_link_state\s*\*\s*state", lynxi, re.S)),
+      "SGMII PCS get_state callback does not match Linux 6.12 phylink_pcs_ops")
+check(bool(re.search(r"phylink_mii_c22_pcs_decode_state\s*\(\s*&state\s*,\s*FIELD_GET", lynxi, re.S)),
+      "SGMII PCS decoder call passes arguments incompatible with Linux 6.12")
+
 lynxi = read("drivers/net/pcs/pcs-mtk-lynxi.c")
 lynxi_status = body(lynxi, "mtk_pcs_lynxi_link_status")
 lynxi_update = body(lynxi, "mtk_pcs_lynxi_update_state")
@@ -73,6 +79,8 @@ check("mpcs->poll = false" in lynxi_disable and
 check("mpcs->poll = false" in lynxi,
       "SGMII PCS polling is not initialized disabled")
 
+check(bool(re.search(r"mtk_usxgmii_pcs_get_state\s*\(\s*struct phylink_pcs\s*\*\s*pcs\s*,\s*struct phylink_link_state\s*\*\s*state", usx, re.S)),
+      "USXGMII PCS get_state callback does not match Linux 6.12 phylink_pcs_ops")
 # USXGMII PCS uses the same enable/disable contract.
 usx = read("drivers/net/pcs/pcs-mtk-usxgmii.c")
 usx_poll = body(usx, "mtk_usxgmii_pcs_link_poll")
