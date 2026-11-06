@@ -110,12 +110,18 @@ check("dev->rx_ring[i].flags" in free_rx and "dev->tx_ring[i].flags" not in free
 
 # WED interrupt-trigger mode must use typed MMIO pointers and check both mappings.
 pcie_mask = body(wed, "mtk_wed_set_pcie_mask")
-check("void __iomem *addr" in pcie_mask and pcie_mask.count("ioremap(") == 2 and
-      pcie_mask.count("if (!addr)") == 2 and pcie_mask.count("iounmap(addr)") == 2,
-      "WED PCIe interrupt-mask path lacks typed MMIO mapping or complete map/unmap checks")
-check("readl(addr)" in pcie_mask and "writel(value, addr)" in pcie_mask and
-      "(void *)addr" not in pcie_mask and "unsigned long addr" not in pcie_mask,
+check("void __iomem *apmcu" in pcie_mask and "void __iomem *pcie" in pcie_mask and
+      pcie_mask.count("ioremap(") == 2 and "if (!apmcu)" in pcie_mask and
+      "if (!pcie)" in pcie_mask and "iounmap(apmcu)" in pcie_mask and
+      "iounmap(pcie)" in pcie_mask,
+      "WED PCIe interrupt-mask path lacks typed MMIO mappings or complete map/unmap checks")
+check("readl(apmcu)" in pcie_mask and "readl(pcie)" in pcie_mask and
+      "writel(value, apmcu)" in pcie_mask and "writel(value, pcie)" in pcie_mask and
+      "(void *)" not in pcie_mask and "unsigned long addr" not in pcie_mask,
       "WED PCIe interrupt-mask path casts an MMIO pointer through an integer")
+check(pcie_mask.find("ioremap(IRQ_MASK_APMCU") < pcie_mask.find("ioremap(dev->hw->pcie_base") <
+      pcie_mask.find("writel(value, apmcu)"),
+      "WED interrupt mask is modified before both register mappings succeed")
 check("mtk_wed_set_pcie_mask(dev, true)" in body(wed, "mtk_wed_start") and
       "mtk_wed_set_pcie_mask(dev, false)" in body(wed, "mtk_wed_stop"),
       "WED PCIe interrupt mask is not paired across start/stop")
