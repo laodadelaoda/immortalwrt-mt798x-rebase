@@ -54,6 +54,7 @@ jobs:
           if ! make target/linux/prepare V=s 2>&1 | tee "$KERNEL_PATCH_LOG"; then
             echo "::error::Linux 6.12 source preparation or complete kernel patch application failed."
             tail -n 250 "$KERNEL_PATCH_LOG"
+            find build_dir -type f -name "*.rej" -print -exec sed -n "1,220p" {} \\; || true
             exit 1
           fi
           if grep -Eiq "with fuzz [1-9]|fuzz [1-9]" "$KERNEL_PATCH_LOG"; then
