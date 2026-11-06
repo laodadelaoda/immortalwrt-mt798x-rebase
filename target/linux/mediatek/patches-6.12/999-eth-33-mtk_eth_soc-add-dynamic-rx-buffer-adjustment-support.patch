@@ -125,7 +125,7 @@ support
  
 -	if (rcu_access_pointer(eth->prog) &&
 -	    length > MTK_PP_MAX_BUF_SIZE) {
--		netdev_err(dev, "Invalid MTU for XDP mode\\n");
+-		netdev_err(dev, "Invalid MTU for XDP mode\n");
 -		return -EINVAL;
 -	}
 -
