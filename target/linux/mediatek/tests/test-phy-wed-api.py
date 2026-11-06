@@ -117,10 +117,13 @@ check("mtk_wed_set_pcie_mask(dev, true)" in body(wed, "mtk_wed_start") and
 eth_phy_h = read("include/linux/phy.h")
 mdio_h = read("include/linux/mdio.h")
 wakeirq_h = read("include/linux/pm_wakeirq.h")
+device_h = read("include/linux/device.h")
 for symbol, header in (
     ("phy_read_mmd_poll_timeout", eth_phy_h),
     ("__mdiobus_c45_read", mdio_h),
-    ("devm_pm_set_wake_irq", wakeirq_h),
+    ("dev_pm_set_wake_irq", wakeirq_h),
+    ("dev_pm_clear_wake_irq", wakeirq_h),
+    ("devm_add_action_or_reset", device_h),
 ):
     check(bool(re.search(r"\b" + symbol + r"\s*\(", header)),
           "Linux 6.12 Realtek PHY API declaration missing: " + symbol)
@@ -154,10 +157,13 @@ check("phy_save_page" in wol_set and "phy_restore_page" in wol_set and
       "RTL8211F set_wol does not preserve page state and propagate MDIO failures")
 
 rtl_probe = body(realtek_main, "rtl8211f_probe")
-check("ret = devm_pm_set_wake_irq(dev, phydev->irq)" in rtl_probe and
-      "if (ret)" in rtl_probe and
+clear_wake = body(realtek_main, "rtl8211f_clear_wake_irq")
+check("dev_pm_clear_wake_irq" in clear_wake and
+      "ret = dev_pm_set_wake_irq(dev, phydev->irq)" in rtl_probe and
+      "devm_add_action_or_reset(dev, rtl8211f_clear_wake_irq, dev)" in rtl_probe and
+      "devm_pm_set_wake_irq" not in realtek_main and
       rtl_probe.find("if (ret)") < rtl_probe.find("device_set_wakeup_capable(dev, true)"),
-      "RTL8211F probe ignores failure to register the PHY wake IRQ")
+      "RTL8211F probe does not use the Linux 6.12 wake-IRQ API with managed cleanup")
 
 if failures:
     for failure in failures:
