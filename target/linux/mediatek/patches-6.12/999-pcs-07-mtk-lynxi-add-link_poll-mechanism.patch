@@ -17,7 +17,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 ---
  drivers/net/pcs/pcs-mtk-lynxi.c   | 217 +++++++++++++++++++-----------
  include/linux/pcs/pcs-mtk-lynxi.h |  38 ++++++
- 2 files changed, 174 insertions(+), 81 deletions(-)
+ 2 files changed, 180 insertions(+), 81 deletions(-)
 
 --- a/drivers/net/pcs/pcs-mtk-lynxi.c
 +++ b/drivers/net/pcs/pcs-mtk-lynxi.c
@@ -371,7 +371,6 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +	}
 +
 +exit:
-+	mpcs->poll = true;
 +	if (mpcs->poll && !delayed_work_pending(&mpcs->link_poll))
 +		schedule_delayed_work(&mpcs->link_poll, msecs_to_jiffies(1000));
 +}
@@ -413,7 +412,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	mpcs->pcs.neg_mode = true;
  	mpcs->pcs.poll = true;
  	mpcs->interface = PHY_INTERFACE_MODE_NA;
-+	mpcs->poll = true;
++	mpcs->poll = false;
 +	mutex_init(&mpcs->regmap_lock);
 +	INIT_DELAYED_WORK(&mpcs->link_poll, mtk_pcs_lynxi_link_poll);
  
