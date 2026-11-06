@@ -70,8 +70,8 @@ check("if (!sw_priv)" in response or "if (!READ_ONCE(sw_priv))" in response,
 
 # Both probe paths must initialize the same interface; teardown must precede
 # release of the hardware/private state.
-check("mt7530_nl_init(&priv)" in mdio, "MDIO probe does not initialize MT7530 Netlink")
-check("mt7530_nl_init(&priv)" in mmio, "MMIO probe does not initialize MT7530 Netlink")
+check("mt7530_nl_init(priv)" in mdio, "MDIO probe does not initialize MT7530 Netlink")
+check("mt7530_nl_init(priv)" in mmio, "MMIO probe does not initialize MT7530 Netlink")
 mdio_remove = function(mdio, "mt7530_remove")
 mmio_remove = function(mmio, "static void mt7988_remove")
 check(mdio_remove.find("mt7530_nl_exit") >= 0 and
