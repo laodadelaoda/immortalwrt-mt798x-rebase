@@ -33,9 +33,9 @@ RX buffer length immediately.
 Without this patch, the adjustment of RX buffer length would not
 take effect until a network restart was triggered in user space.
 ---
- mtk_eth_soc.c | 41 +++++++++++++++++++++++++++++++++++++++++
+ mtk_eth_soc.c | 45 +++++++++++++++++++++++++++++++++++++++++++---
  mtk_eth_soc.h |  1 +
- 2 files changed, 42 insertions(+)
+ 2 files changed, 44 insertions(+), 2 deletions(-)
 
 diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.c b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 index 74a6fe5..42e28be 100644
