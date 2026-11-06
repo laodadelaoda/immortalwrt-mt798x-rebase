@@ -77,12 +77,11 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  {
  	return container_of(pcs, struct mtk_pcs_lynxi, pcs);
  }
-@@ -138,13 +107,71 @@ static unsigned int mtk_pcs_lynxi_inband
+@@ -138,12 +107,71 @@ static unsigned int mtk_pcs_lynxi_inband
  	}
  }
  
 -static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
--				    unsigned int neg_mode,
 -				    struct phylink_link_state *state)
 +static int mtk_pcs_lynxi_link_status(struct mtk_pcs_lynxi *mpcs)
  {
@@ -153,7 +152,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	/* Read the BMSR and LPA */
  	if (regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &bm) ||
  	    regmap_read(mpcs->regmap, SGMSYS_PCS_ADVERTISE, &adv)) {
-@@ -152,19 +178,36 @@ static void mtk_pcs_lynxi_get_state(stru
+@@ -152,19 +178,35 @@ static void mtk_pcs_lynxi_get_state(stru
 +		state.link = false;
 +		mutex_unlock(&mpcs->regmap_lock);
 +		mtk_pcs_lynxi_store_mpcs_state(mpcs, &state);
@@ -161,7 +160,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	}
  
 -	phylink_mii_c22_pcs_decode_state(state, neg_mode,
-+	phylink_mii_c22_pcs_decode_state(&state, mpcs->neg_mode,
++	phylink_mii_c22_pcs_decode_state(&state,
  					 FIELD_GET(SGMII_BMSR, bm),
  					 FIELD_GET(SGMII_LPA, adv));
  
@@ -178,7 +177,6 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  }
 +
 +static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
-+				    unsigned int neg_mode,
 +				    struct phylink_link_state *state)
 +{
 +	struct mtk_pcs_lynxi *mpcs = pcs_to_mtk_pcs_lynxi(pcs);
