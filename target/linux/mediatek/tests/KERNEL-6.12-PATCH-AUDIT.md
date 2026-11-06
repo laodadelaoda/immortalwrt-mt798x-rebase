@@ -149,7 +149,7 @@ converted into regression contracts:
 | SGMII/USXGMII PCS #07/#08 | Delayed work could requeue after PCS disable | Initialize polling disabled; enable starts it; disable clears the flag before synchronous work cancellation |
 | Realtek RTL822x hwmon | Negative MDIO read values could be converted into bogus temperatures; alarm-reset failure was ignored | Propagate both MDIO read errors and initialization failure |
 | Realtek RTL8211E/F LEDs | LED index was shifted into a register mask before the bounds check | Validate index before calculating either LED mask |
-| Realtek RTL8211F WoL | Wake IRQ registration failure was ignored | Propagate devm_pm_set_wake_irq() failure |
+| Realtek RTL8211F WoL | Wake IRQ registration failure was ignored | Use dev_pm_set_wake_irq() with devm-managed dev_pm_clear_wake_irq() cleanup |
 | Ethernet SKB headroom | GSO/IP-fragment callbacks ignored allocation failure | Free generated SKBs and propagate the callback error |
 | PPE flow table | Teardown could return early on an empty PPE slot and destroy an uninitialized table after init failure | Continue over absent PPE slots and track successful rhashtable initialization |
 | Flow-offload tuple teardown | Iterated global flowtables and netdevices without their required serialization | Take RTNL before the flowtable mutex; regression gate checks lock order |
