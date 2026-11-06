@@ -44,6 +44,7 @@ flow_h = read("include/net/flow_offload.h")
 netdev_h = read("include/linux/netdevice.h")
 flow_table_h = read("include/net/netfilter/nf_flow_table.h")
 ppp_h = read("include/linux/ppp_channel.h")
+eth_soc = read("drivers/net/ethernet/mediatek/mtk_eth_soc.c")
 
 for symbol, header in (
     ("xfrm_state_lookup_byaddr", xfrm_h),
@@ -237,6 +238,59 @@ check("spin_lock_bh(&ppp->wlock)" in ppp_sock and
       "PPP socket helper does not serialize channel-list and channel-pointer access")
 check("sock_hold(sk)" in ppp_sock,
       "PPP socket helper returns an unreferenced socket that can be freed after channel unlock")
+
+# Ethernet SRAM, QDMA shaper and dynamic MTU contracts.
+sram_range = body(eth_soc, "mtk_validate_sram_range")
+check("!size" in sram_range and "offset < start" in sram_range and
+      "offset -= start" in sram_range and
+      "size <= eth->sram_size - offset" in sram_range and
+      "offset + size" not in sram_range and "size - 1" not in sram_range,
+      "Ethernet SRAM range validation is vulnerable to zero-size or integer-overflow bounds")
+
+shaper = body(eth_soc, "mtk_shaper_is_available")
+shaper_ref = body(eth_soc, "mtk_shaper_update_refcnt")
+queue_speed = body(eth_soc, "mtk_set_queue_speed")
+check("idx < 0" in shaper and "idx >= MTK_QDMA_NUM_QUEUES" in shaper and
+      "spin_lock_bh(&eth->qdma_shaper.lock)" in shaper and
+      shaper.find("spin_lock_bh") < shaper.find("atomic_read") <
+      shaper.find("spin_unlock_bh"),
+      "QDMA shaper availability check lacks bounds validation or serialized accounting")
+check("idx < 0" in shaper_ref and "idx >= MTK_QDMA_NUM_QUEUES" in shaper_ref and
+      "spin_lock_bh(&eth->qdma_shaper.lock)" in shaper_ref and
+      "spin_unlock_bh(&eth->qdma_shaper.lock)" in shaper_ref,
+      "QDMA shaper reference-count update can index out of bounds or race")
+check("idx < MTK_QDMA_NUM_QUEUES" in queue_speed and
+      "spin_lock_bh(&eth->qdma_shaper.lock)" in queue_speed and
+      "spin_unlock_bh(&eth->qdma_shaper.lock)" in queue_speed,
+      "QDMA shaper speed update is not bounds-checked and serialized")
+
+change_mtu = body(eth_soc, "mtk_change_mtu")
+check(change_mtu.find("if (rcu_access_pointer(eth->prog)") >= 0 and
+      change_mtu.find("if (rcu_access_pointer(eth->prog)") <
+      change_mtu.find("WRITE_ONCE(dev->mtu, new_mtu)") <
+      change_mtu.find("mtk_ppe_update_mtu"),
+      "MTU/XDP validation must complete before committing netdev MTU or PPE state")
+check("max_mtu = max_t(int, new_mtu, ETH_DATA_LEN)" in change_mtu and
+      "READ_ONCE(eth->netdev[i]->mtu)" in change_mtu and
+      "eth->rx_buf_len" in change_mtu and
+      "mtk_set_mcr_max_rx(netdev_priv(eth->netdev[i])," in change_mtu,
+      "Dynamic MTU update does not calculate shared maximum, update RX buffer length and reprogram active MACs")
+
+pppq_show = body(eth_soc, "mtk_qdma_pppq_show")
+pppq_write = body(eth_soc, "mtk_qdma_pppq_write")
+check(pppq_show.find("spin_lock_bh(&eth->qdma_shaper.lock)") <
+      pppq_show.find("eth->qdma_shaper.speed[i]") <
+      pppq_show.find("spin_unlock_bh(&eth->qdma_shaper.lock)") <
+      pppq_show.find("seq_printf"),
+      "PPPQ debugfs show reads shaper state without a locked snapshot")
+check("count >= sizeof(buf)" in pppq_write and "buf[count] = '\\0'" in pppq_write and
+      "kstrtou32" in pppq_write and "threshold > 10000" in pppq_write and
+      pppq_write.find("spin_lock_bh(&eth->qdma_shaper.lock)") <
+      pppq_write.find("eth->qdma_shaper.threshold = threshold") <
+      pppq_write.find("spin_unlock_bh(&eth->qdma_shaper.lock)"),
+      "PPPQ debugfs threshold parser or update is unsafe")
+check("#include <net/sock.h>" in ppp_generic and "sock_put()" in ppp_h,
+      "PPP socket helper lacks socket reference API include or caller release contract")
 
 if failures:
     for item in failures:
