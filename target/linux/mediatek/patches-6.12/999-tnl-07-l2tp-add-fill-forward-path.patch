@@ -94,10 +94,10 @@ v2: Add L2TP over IPSec hardware offload support
 +		goto err_put_dst;
 +	}
 +
-+if (!(READ_ONCE(n->nud_state) & NUD_VALID)) {
-+	neigh_release(n);
-+	goto err_put_dst;
-+}
++	if (!(READ_ONCE(n->nud_state) & NUD_VALID)) {
++		neigh_release(n);
++		goto err_put_dst;
++	}
 +	neigh_ha_snapshot(path->tunnel.h_dest, n, n->dev);
 +	memcpy(path->tunnel.h_source, n->dev->dev_addr, ETH_ALEN);
 +
