@@ -172,3 +172,42 @@ repository tree, so its provider registration, callback signatures, module
 lifetime, and WED/NPU ownership paths remain unverified. Do not claim end-to-end
 WED/WARP/NPU/TNL compatibility until that exact hash-pinned archive has been
 inspected and its callback implementation checked against the kernel API.
+
+## Ethernet/HNAT/PPE/NPU/TNL and PHY/WED follow-up
+
+The current static contract set has been expanded to cover the following
+identified defects and compatibility boundaries:
+
+- Ethernet SRAM validation now rejects zero-length ranges and uses
+  subtraction-based bounds checks to avoid overflow in offset-plus-size.
+- QDMA shaper queue indices are checked against the actual queue count.
+  Reference counts, per-queue speed, and the PPPQ threshold share the shaper
+  spinlock. The debugfs reader snapshots values before emitting seq_file
+  output; the writer uses a bounded NUL-terminated buffer and kstrtou32().
+- Dynamic MTU changes calculate the prospective maximum across GMAC devices
+  and validate XDP buffer limits before mutating the netdev MTU or PPE state.
+  The new RX buffer length is then programmed into every running MAC.
+- PPE flowtable tuple lookup now has an explicit RCU read-side critical
+  section. L2TP forwarding rejects unresolved neighbours, and both NPU
+  callback rejection and flowtable-device rejection release the held XFRM
+  destination reference.
+- The PPP socket helper serializes PPP/channel access and returns a referenced
+  socket; callers must release it with sock_put().
+- SGMII and USXGMII PCS callbacks now use the Linux 6.12 two-argument
+  pcs_get_state signature. The LynxI decoder call uses the Linux 6.12
+  phylink_mii_c22_pcs_decode_state(state, bmsr, lpa) contract. Cached PCS
+  state is serialized by regmap_lock, and poll state uses READ_ONCE /
+  WRITE_ONCE with disable-before-cancel ordering.
+- WED interrupt-trigger mode maps both MMIO registers before modifying either,
+  checks both mappings, and unwinds the first mapping if the second fails.
+
+The test-network-offload-api.py and test-phy-wed-api.py checks are wired
+into the Quick Prepare preflight and final kernel-patch attestation gates.
+They are static source/API contracts, not substitutes for a real kernel
+compile, lockdep/KCSAN run, DMA stress test, or hardware link negotiation.
+
+**Verification status:** these changes have been committed on the isolated
+audit branch, but the complete Linux 6.12.112 patch stack has not yet been
+applied and validated with fuzz=0. No Quick/Full build or Actions run has
+been started. Do not treat the static gates as passed until they execute
+against the prepared source tree and the attestation is generated.
