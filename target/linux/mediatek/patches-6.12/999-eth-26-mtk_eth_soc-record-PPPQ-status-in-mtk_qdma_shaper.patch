@@ -23,7 +23,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-@@ -818,6 +818,40 @@ static void mtk_mac_link_down(struct phy
+@@ -818,6 +818,50 @@ static void mtk_mac_link_down(struct phy
  	}
  }
  
@@ -31,9 +31,17 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +{
 +	int active = 0;
 +	int i;
++	bool available = false;
 +
-+	if (!mtk_is_netsys_v3_or_greater(eth) || idx > MTK_QDMA_NUM_QUEUES)
++	if (!mtk_is_netsys_v3_or_greater(eth) ||
++	    idx < 0 || idx >= MTK_QDMA_NUM_QUEUES)
++		return false;
++
++	spin_lock_bh(&eth->qdma_shaper.lock);
++	if (atomic_read(&eth->qdma_shaper.refcnt[idx])) {
++		available = true;
 +		goto out;
++	}
 +
 +	for (i = 0; i < MTK_QDMA_NUM_QUEUES; i++) {
 +		if (!atomic_read(&eth->qdma_shaper.refcnt[i]))
@@ -42,34 +50,39 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +		active += eth->qdma_shaper.speed[i];
 +	}
 +
-+	if (atomic_read(&eth->qdma_shaper.refcnt[idx]) ||
-+	    active + eth->qdma_shaper.speed[idx] <= eth->qdma_shaper.threshold)
-+		return true;
-+
++	available = active + eth->qdma_shaper.speed[idx] <=
++		    eth->qdma_shaper.threshold;
 +out:
-+	return false;
++	spin_unlock_bh(&eth->qdma_shaper.lock);
++	return available;
 +}
 +
 +void mtk_shaper_update_refcnt(struct mtk_eth *eth, int idx, bool add)
 +{
-+	if (!mtk_is_netsys_v3_or_greater(eth))
++	if (!mtk_is_netsys_v3_or_greater(eth) ||
++	    idx < 0 || idx >= MTK_QDMA_NUM_QUEUES)
 +		return;
 +
++	spin_lock_bh(&eth->qdma_shaper.lock);
 +	if (add)
 +		atomic_inc(&eth->qdma_shaper.refcnt[idx]);
 +	else if (atomic_read(&eth->qdma_shaper.refcnt[idx]))
 +		atomic_dec(&eth->qdma_shaper.refcnt[idx]);
++	spin_unlock_bh(&eth->qdma_shaper.lock);
 +}
 +
  static void mtk_set_queue_speed(struct mtk_eth *eth, unsigned int idx,
  				int speed)
  {
-@@ -928,6 +962,10 @@ static void mtk_set_queue_speed(struct m
+@@ -928,6 +962,13 @@ static void mtk_set_queue_speed(struct m
  		}
  	}
  
-+	if (speed <= SPEED_2500)
-+		eth->qdma_shaper.speed[idx] = speed;
++	if (idx < MTK_QDMA_NUM_QUEUES) {
++		spin_lock_bh(&eth->qdma_shaper.lock);
++		eth->qdma_shaper.speed[idx] = max_t(int, speed, 0);
++		spin_unlock_bh(&eth->qdma_shaper.lock);
++	}
 +
 +out:
  	ofs = MTK_QTX_OFFSET * idx;
