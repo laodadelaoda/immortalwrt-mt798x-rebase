@@ -14,18 +14,19 @@ v1: Add L2TP flow offload support for NPU
 
 --- a/include/linux/netdevice.h
 +++ b/include/linux/netdevice.h
-@@ -840,6 +840,8 @@ enum net_device_path_type {
+@@ -840,8 +840,10 @@ enum net_device_path_type {
  	DEV_PATH_DSA,
  	DEV_PATH_MACVLAN,
++	DEV_PATH_DSLITE,
++	DEV_PATH_6RD,
  	DEV_PATH_MTK_WDMA,
 +	DEV_PATH_L2TP,
 +	DEV_PATH_PPTP,
  };
  
  struct net_device_path {
-@@ -873,9 +875,35 @@ struct net_device_path {
+@@ -873,8 +875,34 @@ struct net_device_path {
  			u8 amsdu;
- 			u8 tid;
  		} mtk_wdma;
 +		struct {
 +			u8 h_source[ETH_ALEN];
@@ -70,4 +71,3 @@ v1: Add L2TP flow offload support for NPU
 +
  static DEFINE_SPINLOCK(ptype_lock);
  struct list_head ptype_base[PTYPE_HASH_SIZE] __read_mostly;
- 
