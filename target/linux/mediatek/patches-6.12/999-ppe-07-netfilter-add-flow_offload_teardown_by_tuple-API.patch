@@ -33,7 +33,9 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
                        void (*iter)(struct nf_flowtable *flowtable,
 --- a/net/netfilter/nf_flow_table_core.c
 +++ b/net/netfilter/nf_flow_table_core.c
-@@ -349,6 +349,29 @@ void flow_offload_teardown(struct flow_o
+@@ -1,3 +1,4 @@
++#include <linux/rtnetlink.h>
+@@ -349,6 +350,32 @@ void flow_offload_teardown(struct flow_o
  }
  EXPORT_SYMBOL_GPL(flow_offload_teardown);
  
@@ -45,6 +47,8 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +	struct flow_offload *flow;
 +	int dir;
 +
++	rtnl_lock();
++	mutex_lock(&flowtable_lock);
 +	list_for_each_entry(flowtable, &flowtables, list) {
 +		for_each_netdev(&init_net, netdev) {
 +			tuple->iifidx = netdev->ifindex;
@@ -56,7 +60,9 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +			flow = container_of(tuplehash, struct flow_offload, tuplehash[dir]);
 +			flow_offload_teardown(flow);
 +		}
-+	};
++	}
++	mutex_unlock(&flowtable_lock);
++	rtnl_unlock();
 +}
 +EXPORT_SYMBOL_GPL(flow_offload_teardown_by_tuple);
 +
