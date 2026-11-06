@@ -294,7 +294,7 @@ Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
  	.name			= "INTx",
  };
  
-@@ -907,7 +1036,17 @@ out_put_node:
+@@ -778,7 +907,17 @@ out_put_node:
  
  static void mtk_pcie_irq_teardown(struct mtk_gen3_pcie *pcie)
  {
@@ -364,7 +364,7 @@ Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
  
  	do {
  		msi_status = readl_relaxed(msi_set->base +
-@@ -980,14 +1141,101 @@ static void mtk_pcie_irq_handler(struct irq_desc *desc)
+@@ -829,14 +990,101 @@ static void mtk_pcie_irq_handler(struct irq_desc *desc)
  		generic_handle_domain_irq(pcie->intx_domain,
  					  irq_bit - PCIE_INTX_SHIFT);
  
@@ -471,7 +471,7 @@ Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
 +	return 0;
 +}
 +
-@@ -995,17 +1243,32 @@ static int mtk_pcie_setup_irq(struct mtk_gen3_pcie *pcie)
+@@ -854,17 +1102,32 @@ static int mtk_pcie_setup_irq(struct mtk_gen3_pcie *pcie)
  {
  	struct device *dev = pcie->dev;
  	struct platform_device *pdev = to_platform_device(dev);
