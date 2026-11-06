@@ -14,7 +14,11 @@ v1: Add L2TP flow offload support for NPU
 
 --- a/include/linux/netdevice.h
 +++ b/include/linux/netdevice.h
-@@ -840,8 +840,10 @@ enum net_device_path_type {
+@@ -42,6 +42,7 @@
+ #include <uapi/linux/netdevice.h>
++#include <uapi/linux/netfilter.h>
+ #include <uapi/linux/if_bonding.h>
+@@ -840,8 +841,10 @@ enum net_device_path_type {
  	DEV_PATH_DSA,
  	DEV_PATH_MACVLAN,
  	DEV_PATH_DSLITE,
@@ -25,7 +29,7 @@ v1: Add L2TP flow offload support for NPU
  };
  
  struct net_device_path {
-@@ -873,8 +875,34 @@ struct net_device_path {
+@@ -873,8 +876,34 @@ struct net_device_path {
  			u8 amsdu;
  		} mtk_wdma;
 +		struct {
