@@ -57,11 +57,20 @@ Reviewed-by: Andrew Lunn <andrew@lunn.ch>
 Link: https://patch.msgid.link/E1um8Ld-008jxD-Mc@rmk-PC.armlinux.org.uk
 Signed-off-by: Jakub Kicinski <kuba@kernel.org>
 ---
- drivers/net/phy/realtek/realtek_main.c | 174 +++++++++++++++++++++-----
- 1 file changed, 142 insertions(+), 32 deletions(-)
+ drivers/net/phy/realtek/realtek_main.c | 181 +++++++++++++++++++++++++-----
+ 1 file changed, 149 insertions(+), 32 deletions(-)
 
 --- a/drivers/net/phy/realtek/realtek_main.c
 +++ b/drivers/net/phy/realtek/realtek_main.c
+@@ -9,6 +9,8 @@
+ #include <linux/bitops.h>
++#include <linux/device.h>
+ #include <linux/of.h>
+ #include <linux/phy.h>
++#include <linux/pm_wakeirq.h>
+ #include <linux/module.h>
+ #include <linux/delay.h>
+ #include <linux/clk.h>
 @@ -10,6 +10,7 @@
  #include <linux/bitops.h>
  #include <linux/of.h>
@@ -110,10 +119,15 @@ Signed-off-by: Jakub Kicinski <kuba@kernel.org>
  };
  
  static int rtl821x_read_page(struct phy_device *phydev)
-@@ -255,6 +254,36 @@ static int rtl821x_probe(struct phy_devi
+@@ -255,6 +254,43 @@ static int rtl821x_probe(struct phy_devi
  	return 0;
  }
  
++static void rtl8211f_clear_wake_irq(void *data)
++{
++	dev_pm_clear_wake_irq(data);
++}
++
 +static int rtl8211f_probe(struct phy_device *phydev)
 +{
 +	struct device *dev = &phydev->mdio.dev;
@@ -135,7 +149,10 @@ Signed-off-by: Jakub Kicinski <kuba@kernel.org>
 +	 */
 +	if (device_property_read_bool(dev, "wakeup-source") &&
 +	    phy_interrupt_is_valid(phydev)) {
-+		ret = devm_pm_set_wake_irq(dev, phydev->irq);
++		ret = dev_pm_set_wake_irq(dev, phydev->irq);
++		if (ret)
++			return ret;
++		ret = devm_add_action_or_reset(dev, rtl8211f_clear_wake_irq, dev);
 +		if (ret)
 +			return ret;
 +		device_set_wakeup_capable(dev, true);
