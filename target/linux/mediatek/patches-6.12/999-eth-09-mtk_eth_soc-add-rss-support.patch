@@ -397,15 +397,14 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: add rss support
  	for (i = 0; i < DIV_ROUND_UP(soc->tx.fq_dma_size, MTK_FQ_DMA_LENGTH); i++) {
  		kfree(eth->scratch_head[i]);
  		eth->scratch_head[i] = NULL;
-@@ -3605,4 +3696,8 @@ static int mtk_get_irqs(struct platform_
+@@ -3605,2 +3696,6 @@ static int mtk_get_irqs(struct platform_
  	if (eth->irq[MTK_FE_IRQ_TX] >= 0 && eth->irq[MTK_FE_IRQ_RX] >= 0)
  		return 0;
 +	if (MTK_HAS_CAPS(eth->soc->caps, MTK_PDMA_INT)) {
 +		for (i = 0; i < MTK_PDMA_IRQ_NUM; i++)
 +			eth->irq_pdma[i] = platform_get_irq(pdev, i);
 +	}
- 
-+	/* only use legacy mode if platform_get_irq_byname_optional returned -ENXIO */
+
 @@ -3613,11 +3709,14 @@ static int mtk_get_irqs(struct platform_
  	 */
  	for (i = 0; i < MTK_FE_IRQ_NUM; i++) {
