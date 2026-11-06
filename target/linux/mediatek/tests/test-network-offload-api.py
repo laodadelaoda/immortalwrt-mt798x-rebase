@@ -111,6 +111,9 @@ check("dst_release(path->tunnel.dst)" in nft_path and "path->tunnel.dst = NULL" 
       "nft path walker leaks the L2TP XFRM dst when the NPU callback rejects the path")
 check("route->tuple[dir].npu.dst = info.dst" in nft_forward,
       "nft forward path does not transfer NPU dst into the route")
+check("dst_release(info.dst)" in nft_forward and
+      nft_forward.find("dst_release(info.dst)") < nft_forward.find("return -ENOENT"),
+      "nft forward path leaks a held XFRM dst when the flowtable device is unavailable")
 check("dst_release(route.tuple[dir].npu.dst)" in nft and
       "dst_release(route.tuple[!dir].npu.dst)" in nft,
       "nft route failure path does not release both direction-specific NPU dst references")
