@@ -309,6 +309,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  
  	phy_power_on(mpcs->xfi_tphy);
  
++	mpcs->poll = true;
 +	if (!delayed_work_pending(&mpcs->link_poll))
 +		schedule_delayed_work(&mpcs->link_poll, msecs_to_jiffies(1000));
 +
