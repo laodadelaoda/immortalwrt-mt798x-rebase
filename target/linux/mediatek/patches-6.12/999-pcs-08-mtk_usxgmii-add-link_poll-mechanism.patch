@@ -136,7 +136,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  
  	/* Configure the interface polarity */
  	mtk_m32(mpcs, RG_PHY_TOP_CTRL0,
-@@ -211,9 +233,54 @@ static int mtk_usxgmii_pcs_config(struct
+@@ -211,9 +233,39 @@ static int mtk_usxgmii_pcs_config(struct
  	if (an_ctrl & USXGMII_AN_ENABLE)
  		mtk_m32(mpcs, RG_PHY_TOP_SPEED_CTRL1, USXGMII_IF_FORCE_EN, 0);
  
@@ -155,33 +155,18 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +	mpcs->state.duplex = state->duplex;
 +	mpcs->state.interface = state->interface;
 +	mpcs->state.an_complete = state->an_complete;
-+
-+	/* Publish the link flag last, so that a concurrent
-+	 * mtk_pcs_lynxi_load_mpcs_state() seeing the link as up also sees the
-+	 * speed, duplex and an_complete that belong to it.
-+	 */
-+	smp_wmb();
 +	mpcs->state.link = state->link;
 +}
 +
 +static void mtk_usxgmii_pcs_load_mpcs_state(struct mtk_usxgmii_pcs *mpcs,
 +					    struct phylink_link_state *state)
 +{
-+	/* When the interface of the mpcs is not initialized,
-+	 * we should not report the states.
-+	 */
 +	if (mpcs->state.interface == PHY_INTERFACE_MODE_NA) {
 +		state->link = false;
 +		return;
 +	}
 +
 +	state->link = mpcs->state.link;
-+
-+	/* Pair with the smp_wmb() in mtk_pcs_lynxi_store_mpcs_state(): once
-+	 * the link flag has been read, the speed, duplex and an_complete that
-+	 * belong to it are visible as well.
-+	 */
-+	smp_rmb();
 +	state->speed = mpcs->state.speed;
 +	state->duplex = mpcs->state.duplex;
 +	state->interface = mpcs->state.interface;
@@ -191,7 +176,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  static void mtk_usxgmii_pcs_get_fixed_speed(struct mtk_usxgmii_pcs *mpcs,
  					    struct phylink_link_state *state)
  {
-@@ -281,41 +348,40 @@ static void mtk_usxgmii_pcs_get_an_state
+@@ -281,41 +348,44 @@ static void mtk_usxgmii_pcs_get_an_state
  	phylink_decode_usxgmii_word(state, lpa);
  }
  
@@ -207,12 +192,16 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 -	ndelay(1020);
 -	mtk_m32(mpcs, RG_PCS_RX_STATUS0, RG_PCS_RX_STATUS_UPDATE, 0);
 -	ndelay(1020);
-+	struct phylink_link_state state = mpcs->state;
++	struct phylink_link_state state;
++	int link;
  
 -	/* Read USXGMII link status */
 -	state->link = FIELD_GET(RG_PCS_RX_LINK_STATUS,
 -				mtk_r32(mpcs, RG_PCS_RX_STATUS0));
-+	state.link = mtk_usxgmii_pcs_link_status(mpcs);
++	link = mtk_usxgmii_pcs_link_status(mpcs);
++	mutex_lock(&mpcs->regmap_lock);
++	state = mpcs->state;
++	state.link = link;
 +	state.interface = mpcs->interface;
  
 -	/* Continuously repeat re-configuration sequence until link comes up */
@@ -222,7 +211,6 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 -		phy_set_mode_ext(mpcs->xfi_tphy, PHY_MODE_ETHERNET, state->interface);
 -		return;
 -	}
-+	mutex_lock(&mpcs->regmap_lock);
  
  	if (FIELD_GET(USXGMII_AN_ENABLE, mtk_r32(mpcs, RG_PCS_AN_CTRL0)))
 -		mtk_usxgmii_pcs_get_an_state(mpcs, state);
@@ -231,9 +219,8 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 -		mtk_usxgmii_pcs_get_fixed_speed(mpcs, state);
 +		mtk_usxgmii_pcs_get_fixed_speed(mpcs, &state);
 +
-+	mutex_unlock(&mpcs->regmap_lock);
-+
 +	mtk_usxgmii_pcs_store_mpcs_state(mpcs, &state);
++	mutex_unlock(&mpcs->regmap_lock);
 +}
 +
 +static void mtk_usxgmii_pcs_get_state(struct phylink_pcs *pcs,
@@ -241,7 +228,9 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +{
 +	struct mtk_usxgmii_pcs *mpcs = pcs_to_mtk_usxgmii_pcs(pcs);
 +
++	mutex_lock(&mpcs->regmap_lock);
 +	mtk_usxgmii_pcs_load_mpcs_state(mpcs, state);
++	mutex_unlock(&mpcs->regmap_lock);
  }
  
  static void mtk_usxgmii_pcs_restart_an(struct phylink_pcs *pcs)
@@ -254,7 +243,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  }
  
  static void mtk_usxgmii_pcs_link_up(struct phylink_pcs *pcs, unsigned int neg_mode,
-@@ -324,12 +390,43 @@ static void mtk_usxgmii_pcs_link_up(stru
+@@ -324,10 +390,53 @@ static void mtk_usxgmii_pcs_link_up(stru
  				    int speed, int duplex)
  {
  	struct mtk_usxgmii_pcs *mpcs = pcs_to_mtk_usxgmii_pcs(pcs);
@@ -281,49 +270,63 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +{
 +	struct mtk_usxgmii_pcs *mpcs = container_of(work, struct mtk_usxgmii_pcs,
 +						   link_poll.work);
++	phy_interface_t interface;
++	unsigned int neg_mode;
++	bool poll;
 +
-+	if ((mpcs->interface != PHY_INTERFACE_MODE_5GBASER &&
-+	     mpcs->interface != PHY_INTERFACE_MODE_10GBASER &&
-+	     mpcs->interface != PHY_INTERFACE_MODE_10GKR &&
-+	     mpcs->interface != PHY_INTERFACE_MODE_USXGMII) ||
-+	    (mpcs->poll == false))
++	mutex_lock(&mpcs->regmap_lock);
++	poll = READ_ONCE(mpcs->poll);
++	interface = mpcs->interface;
++	neg_mode = mpcs->neg_mode;
++	mutex_unlock(&mpcs->regmap_lock);
++
++	if (!poll ||
++	    (interface != PHY_INTERFACE_MODE_5GBASER &&
++	     interface != PHY_INTERFACE_MODE_10GBASER &&
++	     interface != PHY_INTERFACE_MODE_10GKR &&
++	     interface != PHY_INTERFACE_MODE_USXGMII))
 +		goto exit;
 +
 +	if (mtk_usxgmii_pcs_link_status(mpcs) && mtk_usxgmii_pcs_is_valid_ctle(mpcs)) {
 +		mtk_usxgmii_pcs_update_state(mpcs);
 +	} else {
++		mutex_lock(&mpcs->regmap_lock);
 +		mpcs->state.link = false;
-+		mtk_usxgmii_pcs_config(&mpcs->pcs, mpcs->neg_mode,
-+				       mpcs->interface, NULL, false);
++		mutex_unlock(&mpcs->regmap_lock);
++		mtk_usxgmii_pcs_config(&mpcs->pcs, neg_mode, interface, NULL, false);
 +	}
 +
 +exit:
-+	if (mpcs->poll && !delayed_work_pending(&mpcs->link_poll))
++	if (READ_ONCE(mpcs->poll) && !delayed_work_pending(&mpcs->link_poll))
 +		schedule_delayed_work(&mpcs->link_poll, msecs_to_jiffies(1000));
- }
- 
++}
++
  static int mtk_usxgmii_pcs_enable(struct phylink_pcs *pcs)
 @@ -338,6 +435,10 @@ static int mtk_usxgmii_pcs_enable(struct
  
  	phy_power_on(mpcs->xfi_tphy);
  
-+	mpcs->poll = true;
++	WRITE_ONCE(mpcs->poll, true);
 +	if (!delayed_work_pending(&mpcs->link_poll))
 +		schedule_delayed_work(&mpcs->link_poll, msecs_to_jiffies(1000));
 +
  	return 0;
  }
  
-@@ -345,6 +445,10 @@ static void mtk_usxgmii_pcs_disable(stru
+@@ -345,6 +445,12 @@ static void mtk_usxgmii_pcs_disable(stru
  {
  	struct mtk_usxgmii_pcs *mpcs = pcs_to_mtk_usxgmii_pcs(pcs);
  
-+	mpcs->poll = false;
++	WRITE_ONCE(mpcs->poll, false);
 +	cancel_delayed_work_sync(&mpcs->link_poll);
 +
++	mutex_lock(&mpcs->regmap_lock);
 +	mpcs->state.link = false;
- 	mpcs->interface = PHY_INTERFACE_MODE_NA;
- 	mpcs->neg_mode = -1;
+-	mpcs->interface = PHY_INTERFACE_MODE_NA;
+-	mpcs->neg_mode = -1;
++	mpcs->interface = PHY_INTERFACE_MODE_NA;
++	mpcs->neg_mode = -1;
++	mutex_unlock(&mpcs->regmap_lock);
  
 @@ -387,6 +490,9 @@ static int mtk_usxgmii_probe(struct plat
  	mpcs->pcs.neg_mode = true;
