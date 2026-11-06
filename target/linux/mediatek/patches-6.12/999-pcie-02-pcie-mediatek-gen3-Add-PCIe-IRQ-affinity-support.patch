@@ -201,8 +201,8 @@ Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
 +		return -EINVAL;
 +
 +	ret = port_chip->irq_set_affinity(port_data, mask, force);
-+
-+	irq_data_update_effective_affinity(data, mask);
++	if (ret >= 0)
++		irq_data_update_effective_affinity(data, mask);
 +
 +	return ret;
 +}
