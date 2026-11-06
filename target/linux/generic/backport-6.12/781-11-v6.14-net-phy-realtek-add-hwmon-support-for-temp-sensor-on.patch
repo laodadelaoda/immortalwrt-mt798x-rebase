@@ -16,9 +16,9 @@ Signed-off-by: Jakub Kicinski <kuba@kernel.org>
  drivers/net/phy/realtek/Kconfig         |  6 ++
  drivers/net/phy/realtek/Makefile        |  1 +
  drivers/net/phy/realtek/realtek.h       | 10 ++++
- drivers/net/phy/realtek/realtek_hwmon.c | 79 +++++++++++++++++++++++++
+ drivers/net/phy/realtek/realtek_hwmon.c | 86 +++++++++++++++++++++++++++++
  drivers/net/phy/realtek/realtek_main.c  | 12 ++++
- 5 files changed, 108 insertions(+)
+ 5 files changed, 115 insertions(+)
  create mode 100644 drivers/net/phy/realtek/realtek.h
  create mode 100644 drivers/net/phy/realtek/realtek_hwmon.c
 
@@ -56,7 +56,7 @@ Signed-off-by: Jakub Kicinski <kuba@kernel.org>
 +#endif /* REALTEK_H */
 --- /dev/null
 +++ b/drivers/net/phy/realtek/realtek_hwmon.c
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,86 @@
 +// SPDX-License-Identifier: GPL-2.0+
 +/*
 + * HWMON support for Realtek PHY's
@@ -89,12 +89,18 @@ Signed-off-by: Jakub Kicinski <kuba@kernel.org>
 +
 +	switch (attr) {
 +	case hwmon_temp_input:
-+		raw = phy_read_mmd(phydev, MDIO_MMD_VEND2, RTL822X_VND2_TSRR) & 0x3ff;
++		raw = phy_read_mmd(phydev, MDIO_MMD_VEND2, RTL822X_VND2_TSRR);
++		if (raw < 0)
++			return raw;
++		raw &= 0x3ff;
 +		*val = rtl822x_hwmon_get_temp(raw);
 +		break;
 +	case hwmon_temp_max:
 +		/* Chip reduces speed to 1G if threshold is exceeded */
-+		raw = phy_read_mmd(phydev, MDIO_MMD_VEND2, RTL822X_VND2_TSSR) >> 6;
++		raw = phy_read_mmd(phydev, MDIO_MMD_VEND2, RTL822X_VND2_TSSR);
++		if (raw < 0)
++			return raw;
++		raw >>= 6;
 +		*val = rtl822x_hwmon_get_temp(raw);
 +		break;
 +	default:
@@ -123,9 +129,12 @@ Signed-off-by: Jakub Kicinski <kuba@kernel.org>
 +{
 +	struct device *hwdev, *dev = &phydev->mdio.dev;
 +	const char *name;
++	int ret;
 +
 +	/* Ensure over-temp alarm is reset. */
-+	phy_clear_bits_mmd(phydev, MDIO_MMD_VEND2, RTL822X_VND2_TSALRM, 3);
++	ret = phy_clear_bits_mmd(phydev, MDIO_MMD_VEND2, RTL822X_VND2_TSALRM, 3);
++	if (ret < 0)
++		return ret;
 +
 +	name = devm_hwmon_sanitize_name(dev, dev_name(dev));
 +	if (IS_ERR(name))
