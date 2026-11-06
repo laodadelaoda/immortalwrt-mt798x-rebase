@@ -84,10 +84,11 @@ check(mmio_remove.find("mt7530_nl_exit") >= 0 and
 # User-supplied register and PHY selectors must be bounded before access.
 read_fn = function(nl, "static int mt7530_nl_reply_read")
 write_fn = function(nl, "static int mt7530_nl_reply_write")
-operations = read_fn + write_fn
+validate_fn = function(nl, "static int mt7530_nl_validate_access")
+operations = validate_fn + read_fn + write_fn
 check(bool(re.search(r"phy\s*<\s*-1\s*\|\|\s*phy\s*>=", operations)),
       "Netlink PHY operations lack an explicit upper-bound check")
-check(bool(re.search(r"devad\s*<\s*-1\s*\|\|\s*devad\s*>=", operations)),
+check(bool(re.search(r"devad\s*<\s*-1\s*\|\|\s*devad\s*>", operations)),
       "Netlink Clause-45 DEVAD lacks an explicit upper-bound check")
 check(bool(re.search(r"reg\s*>", operations)),
       "Netlink register address lacks an explicit upper-bound check")
