@@ -37,6 +37,22 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: fix mtk_eth_offload_init memory
  		err = mtk_ppe_internal_debugfs_init(eth);
  		if (err)
  			goto err_deinit_ppe;
+--- a/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
++++ b/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
+@@ -672,6 +672,9 @@
+-int mtk_eth_offload_init(struct mtk_eth *eth, u8 id)
++int mtk_eth_offload_init(struct mtk_eth *eth)
+ {
+-	if (!eth->ppe[id] || !eth->ppe[id]->foe_table)
+-		return 0;
+-	return rhashtable_init(&eth->flow_table, &mtk_flow_ht_params);
++	int i;
++
++	for (i = 0; i < ARRAY_SIZE(eth->ppe); i++)
++		if (eth->ppe[i] && eth->ppe[i]->foe_table)
++			return rhashtable_init(&eth->flow_table, &mtk_flow_ht_params);
++	return 0;
+ }
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.h
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.h
 @@ -1980,7 +1980,7 @@ int mtk_ptp_hwtstamp_get_config(struct n
