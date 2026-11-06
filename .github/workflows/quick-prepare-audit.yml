@@ -43,143 +43,29 @@ jobs:
           cp config/n60pro-1001.config .config
           make defconfig
 
-      - name: Apply the complete Linux 6.12 kernel patch stack before any kernel configuration or compilation
+      - name: Apply the complete Linux 6.12 kernel patch stack before kernel configuration
         shell: bash
         run: |
           set -Eeuo pipefail
           export LC_ALL=C
           KERNEL_PATCH_LOG="$RUNNER_TEMP/n60-linux-6.12-patch-prepare.log"
-          echo "===== Exact OpenWrt Kernel/Prepare path: extract pristine source, then generic and MediaTek patches ====="
-          echo "PATCH strict mode: patch --fuzz=0"
+          echo "===== OpenWrt Kernel/Prepare: pristine source plus generic and MediaTek patch stacks ====="
           export PATCH="patch --fuzz=0"
           if ! make target/linux/prepare V=s 2>&1 | tee "$KERNEL_PATCH_LOG"; then
-            echo "::error::Linux 6.12 kernel source preparation or complete generic/MediaTek patch application failed."
-            echo "===== Last 250 lines of kernel patch log ====="
+            echo "::error::Linux 6.12 source preparation or complete kernel patch application failed."
             tail -n 250 "$KERNEL_PATCH_LOG"
             exit 1
           fi
-          if grep -Eiq 'with fuzz [1-9]|fuzz [1-9]' "$KERNEL_PATCH_LOG"; then
-            echo "::error::A kernel patch was applied with non-zero fuzz despite strict mode."
+          if grep -Eiq "with fuzz [1-9]|fuzz [1-9]" "$KERNEL_PATCH_LOG"; then
+            echo "::error::Non-zero patch fuzz detected in kernel patch log."
             exit 1
           fi
-          KERNEL_MAKEFILE="$(find build_dir -type f -path '*/linux-*/Makefile' -print -quit)"
-          test -n "$KERNEL_MAKEFILE" || {
-            echo "::error::Kernel Prepare did not leave an extracted Linux source Makefile."
-            exit 1
-          }
-          KERNEL_SRC="$(dirname "$KERNEL_MAKEFILE")"
-          grep -q '^VERSION = 6
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py verify-packages --repo "$GITHUB_WORKSPACE"
-          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py download \
-            --repo "$GITHUB_WORKSPACE" --dl-dir "$GITHUB_WORKSPACE/dl" \
-            --ids wappd mapd 1905daemon libmapd
-
-      - name: Download native OpenWrt Package sources and verify Lock hashes
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          for pkg in \
-            package/mtk/drivers/warp \
-            package/mtk/drivers/conninfra \
-            package/mtk/drivers/mt_wifi \
-            package/mtk/applications/datconf \
-            package/kernel/mapfilter \
-            package/libs/openssl \
-            package/libs/libnl-tiny; do
-            echo "===== Native download: $pkg ====="
-            make -C "$pkg" TOPDIR="$GITHUB_WORKSPACE" download V=s
-          done
-          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py verify-downloads \
-            --repo "$GITHUB_WORKSPACE" --dl-dir "$GITHUB_WORKSPACE/dl" \
-            --ids mtwifi conninfra warp datconf mapfilter
-
-      - name: Verify executable build-system scripts
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          for script in scripts/feeds scripts/download.pl scripts/patch-kernel.sh; do
-            test -x "$script" || { echo "::error::Required OpenWrt build script is not executable: $script"; exit 1; }
-          done
-
-      - name: Run native Build Prepare for all fixed vendor packages (no compile)
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          for pkg in \
-            package/mtk/drivers/warp \
-            package/mtk/drivers/conninfra \
-            package/mtk/drivers/mt_wifi \
-            package/kernel/mapfilter \
-            package/mtk/applications/datconf \
-            package/mtk/applications/easymesh-n60; do
-            echo "===== Native Build/Prepare only: $pkg ====="
-            make -C "$pkg" TOPDIR="$GITHUB_WORKSPACE" -j1 prepare V=s
-          done
-          echo "PASS: all fixed vendor Package Build/Prepare targets completed; no compile target was invoked."
- "$KERNEL_MAKEFILE"
-          grep -q '^PATCHLEVEL = 12
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py verify-packages --repo "$GITHUB_WORKSPACE"
-          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py download \
-            --repo "$GITHUB_WORKSPACE" --dl-dir "$GITHUB_WORKSPACE/dl" \
-            --ids wappd mapd 1905daemon libmapd
-
-      - name: Download native OpenWrt Package sources and verify Lock hashes
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          for pkg in \
-            package/mtk/drivers/warp \
-            package/mtk/drivers/conninfra \
-            package/mtk/drivers/mt_wifi \
-            package/mtk/applications/datconf \
-            package/kernel/mapfilter \
-            package/libs/openssl \
-            package/libs/libnl-tiny; do
-            echo "===== Native download: $pkg ====="
-            make -C "$pkg" TOPDIR="$GITHUB_WORKSPACE" download V=s
-          done
-          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py verify-downloads \
-            --repo "$GITHUB_WORKSPACE" --dl-dir "$GITHUB_WORKSPACE/dl" \
-            --ids mtwifi conninfra warp datconf mapfilter
-
-      - name: Verify executable build-system scripts
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          for script in scripts/feeds scripts/download.pl scripts/patch-kernel.sh; do
-            test -x "$script" || { echo "::error::Required OpenWrt build script is not executable: $script"; exit 1; }
-          done
-
-      - name: Run native Build Prepare for all fixed vendor packages (no compile)
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          for pkg in \
-            package/mtk/drivers/warp \
-            package/mtk/drivers/conninfra \
-            package/mtk/drivers/mt_wifi \
-            package/kernel/mapfilter \
-            package/mtk/applications/datconf \
-            package/mtk/applications/easymesh-n60; do
-            echo "===== Native Build/Prepare only: $pkg ====="
-            make -C "$pkg" TOPDIR="$GITHUB_WORKSPACE" -j1 prepare V=s
-          done
-          echo "PASS: all fixed vendor Package Build/Prepare targets completed; no compile target was invoked."
- "$KERNEL_MAKEFILE"
-          {
-            echo "Kernel source: $KERNEL_SRC"
-            echo "Kernel source version:"
-            grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) = ' "$KERNEL_MAKEFILE"
-            echo "Patch application diagnostics:"
-            grep -Ei 'Applying .*patch|Hunk #[0-9]+ succeeded|fuzz|offset|FAILED' "$KERNEL_PATCH_LOG" || true
-          } | tee "$RUNNER_TEMP/n60-linux-6.12-patch-summary.txt"
-          echo "PASS: the real OpenWrt Kernel/Prepare path applied the complete generic and MediaTek Linux 6.12 patch stack with zero fuzz, before kernel_oldconfig and before compilation."
+          KERNEL_MAKEFILE="$(find build_dir -type f -path "*/linux-6.12.112/Makefile" -print -quit)"
+          test -n "$KERNEL_MAKEFILE" || { echo "::error::Expected Linux 6.12.112 source tree was not prepared."; exit 1; }
+          grep -q "^VERSION = 6$" "$KERNEL_MAKEFILE"
+          grep -q "^PATCHLEVEL = 12$" "$KERNEL_MAKEFILE"
+          grep -q "^SUBLEVEL = 112$" "$KERNEL_MAKEFILE"
+          echo "PASS: complete OpenWrt generic and MediaTek kernel patch stacks applied to Linux 6.12.112 with zero fuzz, before kernel_oldconfig and compilation."
 
       - name: Verify actual GNU Make package variables and fetch manual EasyMesh archives
         shell: bash
