@@ -178,4 +178,4 @@ if failures:
     for failure in failures:
         print("FAIL: " + failure, file=sys.stderr)
     raise SystemExit(1)
-print("PASS: Linux phylink/PHY APIs, PCS poll lifecycle and WED resource contracts")
+print("PASS: Linux phylink/PHY APIs, Realtek MDIO/WoL/hwmon/LED, PCS lifecycle and WED resource contracts")
