@@ -13,15 +13,15 @@ Date: Fri, 24 Apr 2026 17:15:40 +0800
 Subject: [PATCH] add wed support intr trigger mode
 
 ---
- drivers/net/ethernet/mediatek/mtk_wed.c | 45 +++++++++++++++++++++++++--
+ drivers/net/ethernet/mediatek/mtk_wed.c | 47 +++++++++++++++++++++++++++--
  include/linux/soc/mediatek/mtk_wed.h    |  6 +++-
- 2 files changed, 48 insertions(+), 3 deletions(-)
+ 2 files changed, 50 insertions(+), 3 deletions(-)
 
 diff --git a/drivers/net/ethernet/mediatek/mtk_wed.c b/drivers/net/ethernet/mediatek/mtk_wed.c
 index e4fc718..8b9243f 100644
 --- a/drivers/net/ethernet/mediatek/mtk_wed.c
 +++ b/drivers/net/ethernet/mediatek/mtk_wed.c
-@@ -1145,6 +1145,43 @@ mtk_wed_dma_disable(struct mtk_wed_device *dev)
+@@ -1145,6 +1145,45 @@ mtk_wed_dma_disable(struct mtk_wed_device *dev)
  	mtk_wed_set_512_support(dev, false);
  }
  
@@ -133,7 +133,7 @@ index 75da4dd..0721ca5 100644
  #else
  static inline bool mtk_wed_device_active(struct mtk_wed_device *dev)
  {
-@@ -381,6 +384,7 @@ static inline bool mtk_wed_device_active(struct mtk_wed_device *dev)
+@@ -381,7 +384,7 @@ static inline bool mtk_wed_device_active(struct mtk_wed_device *dev)
  #define mtk_wed_device_msdu_pg_rx_ring_setup(_dev, _ring, _regs) -ENODEV
  #define mtk_wed_device_ind_rx_ring_setup(_dev, _regs) -ENODEV
  #define mtk_wed_device_rro_3_1_rx_ring_setup(_dev, _regs) -ENODEV
