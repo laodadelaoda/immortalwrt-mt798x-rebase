@@ -65,6 +65,10 @@ affinity = body(src, "static int mtk_pcie_intx_set_affinity(")
 require("if (!port_data)" in affinity and "if (ret >= 0)" in affinity,
         "INTx affinity callback must validate parent IRQ data and propagate failure")
 
+msi_affinity = body(src, "static int mtk_pcie_msi_set_affinity(")
+require("if (IS_ERR_OR_NULL(irqs))" in msi_affinity and "if (ret >= 0)" in msi_affinity,
+        "MSI affinity callback must validate its parent IRQ mapping and update effective affinity only on success")
+
 read = body(src, "static int mtk_pcie_config_read(")
 write = body(src, "static int mtk_pcie_config_write(")
 require("READ_ONCE(pcie->soft_off)" in read and "*val = ~0U" in read
