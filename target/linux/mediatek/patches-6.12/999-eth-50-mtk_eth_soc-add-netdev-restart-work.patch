@@ -102,11 +102,13 @@ index 74a6fe5..42e28be 100644
  }
  
 @@ -6013,6 +6052,7 @@ static int mtk_cleanup(struct mtk_eth *eth)
++	cancel_work_sync(&eth->pending_work);
++	cancel_work_sync(&eth->netdev_restart_work);
++	cancel_delayed_work_sync(&eth->reset.monitor_work);
  	mtk_unreg_dev(eth);
  	mtk_free_dev(eth);
- 	cancel_work_sync(&eth->pending_work);
-+	cancel_work_sync(&eth->netdev_restart_work);
- 	cancel_delayed_work_sync(&eth->reset.monitor_work);
+-	cancel_work_sync(&eth->pending_work);
+-	cancel_delayed_work_sync(&eth->reset.monitor_work);
  
  	return 0;
 @@ -7210,6 +7250,7 @@ static int mtk_probe(struct platform_device *pdev)
