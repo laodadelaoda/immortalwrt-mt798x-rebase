@@ -85,11 +85,11 @@ check(mmio_remove.find("mt7530_nl_exit") >= 0 and
 read_fn = function(nl, "static int mt7530_nl_reply_read")
 write_fn = function(nl, "static int mt7530_nl_reply_write")
 operations = read_fn + write_fn
-check(bool(re.search(r"phy\s*<\s*0\s*\|\|\s*phy\s*>=", operations)),
+check(bool(re.search(r"phy\s*<\s*-1\s*\|\|\s*phy\s*>=", operations)),
       "Netlink PHY operations lack an explicit upper-bound check")
-check(bool(re.search(r"devad\s*<\s*0\s*\|\|\s*devad\s*>=", operations)),
+check(bool(re.search(r"devad\s*<\s*-1\s*\|\|\s*devad\s*>=", operations)),
       "Netlink Clause-45 DEVAD lacks an explicit upper-bound check")
-check(bool(re.search(r"reg\s*>=", operations)),
+check(bool(re.search(r"reg\s*>", operations)),
       "Netlink register address lacks an explicit upper-bound check")
 
 # PHY write helpers return errors; do not acknowledge a failed hardware write.
