@@ -58,7 +58,7 @@ jobs:
             tail -n 250 "$KERNEL_PATCH_LOG"
             exit 1
           fi
-          if grep -Eiq 'with fuzz [1-9]|fuzz [1-9]'; then
+          if grep -Eiq 'with fuzz [1-9]|fuzz [1-9]' "$KERNEL_PATCH_LOG"; then
             echo "::error::A kernel patch was applied with non-zero fuzz despite strict mode."
             exit 1
           fi
