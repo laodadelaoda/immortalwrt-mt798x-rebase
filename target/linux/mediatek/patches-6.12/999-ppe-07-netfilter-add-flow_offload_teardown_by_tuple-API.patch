@@ -55,14 +55,14 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +	list_for_each_entry(flowtable, &flowtables, list) {
 +		for_each_netdev(&init_net, netdev) {
 +			tuple->iifidx = netdev->ifindex;
-+rcu_read_lock();
-+tuplehash = flow_offload_lookup(flowtable, tuple);
-+if (tuplehash) {
-+	dir = tuplehash->tuple.dir;
-+	flow = container_of(tuplehash, struct flow_offload, tuplehash[dir]);
-+	flow_offload_teardown(flow);
-+}
-+rcu_read_unlock();
++			rcu_read_lock();
++			tuplehash = flow_offload_lookup(flowtable, tuple);
++			if (tuplehash) {
++				dir = tuplehash->tuple.dir;
++				flow = container_of(tuplehash, struct flow_offload, tuplehash[dir]);
++				flow_offload_teardown(flow);
++			}
++			rcu_read_unlock();
 +		}
 +	}
 +	mutex_unlock(&flowtable_lock);
