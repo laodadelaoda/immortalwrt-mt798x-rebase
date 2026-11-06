@@ -97,9 +97,9 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: support proprietary debugfs
 +
 +	seq_puts(m, "Usage of the QDMA PPPQ for the HW path:\n");
 +	for (i = 0; i < MTK_QDMA_NUM_QUEUES; i++)
-+		seq_printf(m, "qdma_txq%d:\t%5d Mbps %8d refcnt\n",
++		seq_printf(m, "qdma_txq%d:\t%5u Mbps %8d refcnt\n",
 +			   i, speed[i], refcnt[i]);
-+	seq_printf(m, "qdma_thres:\t%5d Mbps\n", threshold);
++	seq_printf(m, "qdma_thres:\t%5u Mbps\n", threshold);
 +
 +	return 0;
 +}
