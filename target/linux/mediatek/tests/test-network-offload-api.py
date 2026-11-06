@@ -162,6 +162,23 @@ if not provider_hits:
     reviews.append("no in-tree assignment to the nullable MediaTek tunnel-offload hooks; confirm the external WED/WARP provider registers them")
 
 
+
+# MTK netdev restart/reset work must be drained before netdev teardown.
+restart_work = body(eth, "mtk_netdev_restart_work")
+cleanup = body(eth, "mtk_cleanup")
+check("!netif_running(eth->netdev[i])" in restart_work and
+      "if (mtk_open(eth->netdev[i]))" in restart_work and
+      "dev_close(eth->netdev[i])" in restart_work,
+      "MTK restart work does not preserve administratively-down interfaces or close a failed restart")
+for work_call in (
+    "cancel_work_sync(&eth->pending_work)",
+    "cancel_work_sync(&eth->netdev_restart_work)",
+    "cancel_delayed_work_sync(&eth->reset.monitor_work)",
+):
+    check(work_call in cleanup and cleanup.find(work_call) < cleanup.find("mtk_unreg_dev(eth)") and
+          cleanup.find(work_call) < cleanup.find("mtk_free_dev(eth)"),
+          "MTK cleanup frees netdevs before draining work: " + work_call)
+
 # SKB headroom metadata-copy callbacks must propagate allocation failures.
 dev_c = read("net/core/dev.c")
 validate = body(dev_c, "validate_xmit_skb")
