@@ -144,6 +144,15 @@ check("if (index >= RTL8211x_LED_COUNT)" in led_set_e and
       led_set_e.find("if (index >= RTL8211x_LED_COUNT)") < led_set_e.find("cr2mask = RTL8211E_LEDCR2_MASK"),
       "RTL8211E LED index is shifted before its bounds check")
 
+
+wol_get = body(realtek_main, "rtl8211f_get_wol")
+wol_set = body(realtek_main, "rtl8211f_set_wol")
+check("wol->wolopts = 0" in wol_get and "wol_events < 0" in wol_get,
+      "RTL8211F get_wol does not clear stale state and handle MDIO read failure")
+check("phy_save_page" in wol_set and "phy_restore_page" in wol_set and
+      "ret < 0" in wol_set,
+      "RTL8211F set_wol does not preserve page state and propagate MDIO failures")
+
 rtl_probe = body(realtek_main, "rtl8211f_probe")
 check("ret = devm_pm_set_wake_irq(dev, phydev->irq)" in rtl_probe and
       "if (ret)" in rtl_probe and
