@@ -63,9 +63,6 @@ index 6163be7..5a99a68 100644
  }
  
  static void
-@@ -235,1 +249,2 @@ mt7530_remove(struct mdio_device *mdiodev)
- 	mt7530_remove_common(priv);
-+	mt7530_nl_exit();
 diff --git a/drivers/net/dsa/mt7530-mmio.c b/drivers/net/dsa/mt7530-mmio.c
 index 10dc499..7e7a033 100644
 --- a/drivers/net/dsa/mt7530-mmio.c
