@@ -29,12 +29,14 @@ v1: Add SKB headroom copy support for tunnel packets
  static inline void dev_base_seq_inc(struct net *net)
  {
  	unsigned int val = net->dev_base_seq + 1;
-@@ -3792,6 +3795,9 @@ static struct sk_buff *validate_xmit_skb
+@@ -3792,6 +3795,11 @@ static struct sk_buff *validate_xmit_skb
  		if (IS_ERR(segs)) {
  			goto out_kfree_skb;
  		} else if (segs) {
-+			if (mtk_gso_skb_copy_head)
-+				mtk_gso_skb_copy_head(segs, skb);
++			if (mtk_gso_skb_copy_head && mtk_gso_skb_copy_head(segs, skb)) {
++				kfree_skb_list(segs);
++				goto out_kfree_skb;
++			}
 +
  			consume_skb(skb);
  			skb = segs;
@@ -69,12 +71,17 @@ v1: Add SKB headroom copy support for tunnel packets
  	skb_put(skb2, len + state->hlen);
  	skb_reset_network_header(skb2);
  	skb2->transport_header = skb2->network_header + state->hlen;
-@@ -754,6 +757,9 @@ struct sk_buff *ip_frag_next(struct sk_b
+@@ -754,6 +757,13 @@ struct sk_buff *ip_frag_next(struct sk_b
  
  	ip_send_check(iph);
  
-+	if (mtk_ip_frag_skb_copy_head)
-+		mtk_ip_frag_skb_copy_head(skb2, skb);
++	if (mtk_ip_frag_skb_copy_head) {
++		int ret = mtk_ip_frag_skb_copy_head(skb2, skb);
++		if (ret) {
++			kfree_skb(skb2);
++			return ERR_PTR(ret);
++		}
++	}
 +
  	return skb2;
  }
@@ -103,7 +110,7 @@ v1: Add SKB headroom copy support for tunnel packets
  
 --- a/drivers/net/ethernet/mediatek/mtk_tnl.h
 +++ b/drivers/net/ethernet/mediatek/mtk_tnl.h
-@@ -45,4 +45,34 @@ struct mtk_tnl_desc {
+@@ -45,4 +45,36 @@ struct mtk_tnl_desc {
  #define is_tnl_tag_valid(skb) (skb_tnl_magic_tag(skb) == TNL_MAGIC_TAG)
  #define skb_tnl_is_pppoe(skb) (((struct mtk_tnl_desc *)((skb)->head))->is_pppoe)
  
@@ -121,6 +128,9 @@ v1: Add SKB headroom copy support for tunnel packets
 +		need_copy = 1;
 +		is_esp = 1;
 +	}
++
++	if (!need_copy)
++		return 0;
 +
 +	while (temp) {
 +		if (skb_cow_head(temp, skb_headroom(old)))
