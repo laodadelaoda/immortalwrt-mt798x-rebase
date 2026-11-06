@@ -516,7 +516,7 @@ diff --git a/drivers/net/dsa/mt7530_nl.c b/drivers/net/dsa/mt7530_nl.c
 +	if (ret < 0)
 +		goto err;
 +
-+	ret = nla_put_s32(rep_skb, MT7530_ATTR_TYPE_VAL, value);
++	ret = nla_put_u32(rep_skb, MT7530_ATTR_TYPE_VAL, (u32)value);
 +	if (ret < 0)
 +		goto err;
 +
