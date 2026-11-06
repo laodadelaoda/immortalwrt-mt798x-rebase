@@ -821,14 +821,9 @@ diff --git a/drivers/net/dsa/mt7530-mdio.c b/drivers/net/dsa/mt7530-mdio.c
 @@ -223,1 +223,1 @@ mt7530_probe(struct mdio_device *mdiodev)
 -	ret = mt7530_nl_init(&priv);
 +	ret = mt7530_nl_init(priv);
-@@ -245,5 +245,5 @@ mt7530_remove(struct mdio_device *mdiodev)
--	mt7530_remove_common(priv);
--	mt7530_nl_exit();
+@@ -245,1 +245,2 @@ mt7530_remove(struct mdio_device *mdiodev)
 +	mt7530_nl_exit(priv);
-+	mt7530_remove_common(priv);
- 
- 	for (i = 0; i < 2; ++i)
- 		mtk_pcs_lynxi_destroy(priv->ports[5 + i].sgmii_pcs);
+ 	mt7530_remove_common(priv);
 diff --git a/drivers/net/dsa/mt7530-mmio.c b/drivers/net/dsa/mt7530-mmio.c
 --- a/drivers/net/dsa/mt7530-mmio.c
 +++ b/drivers/net/dsa/mt7530-mmio.c
