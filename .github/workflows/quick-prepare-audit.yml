@@ -60,6 +60,11 @@ jobs:
               sed -n "1,220p" "$reject"
             done
             for source in $(find build_dir -type f -path "*/drivers/pci/controller/pcie-mediatek-gen3.c"); do
+              mkdir -p kernel-patch-audit/failure-source
+              cp -f "$source" kernel-patch-audit/failure-source/pcie-mediatek-gen3.c
+              if test -s "$source.rej"; then cp -f "$source.rej" kernel-patch-audit/failure-source/pcie-mediatek-gen3.c.rej; fi
+              cp -f target/linux/mediatek/patches-6.12/999-pcie-02-pcie-mediatek-gen3-Add-PCIe-IRQ-affinity-support.patch kernel-patch-audit/failure-source/
+              sha256sum kernel-patch-audit/failure-source/* || true
               echo "===== ACTUAL PCIe IRQ teardown context ($source) ====="
               grep -n -B 45 -A 70 "static void mtk_pcie_irq_teardown" "$source" || true
               echo "===== ACTUAL PCIe IRQ handler/setup context ($source) ====="
