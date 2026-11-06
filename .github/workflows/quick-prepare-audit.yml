@@ -61,6 +61,8 @@ jobs:
             for source in $(find build_dir -type f -path "*/drivers/net/ethernet/mediatek/mtk_eth_soc.c"); do
               echo "===== ACTUAL PATCHED SOURCE: mtk_tx_timeout ($source) ====="
               grep -n -B 12 -A 28 "static void mtk_tx_timeout" "$source" || true
+              echo "===== ACTUAL PATCHED SOURCE: mtk_get_irqs ($source) ====="
+              grep -n -B 8 -A 42 "static int mtk_get_irqs" "$source" || true
               echo "===== ALL pending_work scheduling sites ($source) ====="
               grep -n -B 5 -A 5 "schedule_work(&eth->pending_work)" "$source" || true
             done
