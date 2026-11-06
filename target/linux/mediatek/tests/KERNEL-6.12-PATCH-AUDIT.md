@@ -134,3 +134,41 @@ being freed, and verifies typed MMIO mapping, NULL checks, and unmapping in the
 PCIe interrupt-trigger path. These checks cover the identified regressions in
 the current patch set; they do not replace a full PHY link negotiation test or
 hardware WED DMA/RRO stress test.
+
+
+## Batch findings and revisions
+
+The following high-overlap regressions were identified by source/patch review and
+converted into regression contracts:
+
+| Patch group | Finding | Revision / gate |
+|---|---|---|
+| WED #04 | RX ring cleanup tested the TX ring configured flag | Test the RX ring flag actually being freed |
+| WED #19 | PCIe interrupt-mask code dereferenced unchecked ioremap results and cast MMIO pointers through integers | Use typed __iomem pointers, check both mappings, and unmap each successful mapping |
+| SGMII PCS #03/#07 | Autoneg state member access was inconsistent; regmap error return leaked the mutex and left stale link state | Correct member access, unlock on read failure, publish link-down state |
+| SGMII/USXGMII PCS #07/#08 | Delayed work could requeue after PCS disable | Initialize polling disabled; enable starts it; disable clears the flag before synchronous work cancellation |
+| Realtek RTL822x hwmon | Negative MDIO read values could be converted into bogus temperatures; alarm-reset failure was ignored | Propagate both MDIO read errors and initialization failure |
+| Realtek RTL8211E/F LEDs | LED index was shifted into a register mask before the bounds check | Validate index before calculating either LED mask |
+| Realtek RTL8211F WoL | Wake IRQ registration failure was ignored | Propagate devm_pm_set_wake_irq() failure |
+| Ethernet SKB headroom | GSO/IP-fragment callbacks ignored allocation failure | Free generated SKBs and propagate the callback error |
+| PPE flow table | Teardown could return early on an empty PPE slot and destroy an uninitialized table after init failure | Continue over absent PPE slots and track successful rhashtable initialization |
+| Flow-offload tuple teardown | Iterated global flowtables and netdevices without their required serialization | Take RTNL before the flowtable mutex; regression gate checks lock order |
+
+Patch hunk counts were independently recounted after each edit. The revised
+patches have internally consistent unified-diff hunk lengths. This is a
+format-integrity check only; it does not prove that every patch applies to the
+real prepared Linux 6.12.112 tree with zero fuzz.
+
+## External WARP/WED provider boundary
+
+The WARP package is pinned by its Makefile to archive
+warp_20250408-5f71ec.tar.xz with SHA256
+0954055e165dcb71cd2703f07b0c2d521ca3e9c8968d2b17b68e8c9a7853f9b2.
+Its in-repository compatibility patches include the procfs API conversion,
+the Linux 6.11 platform_driver.remove return-type fix, and the explicit
+vmalloc header include. None of those patch files contains an assignment to
+the nullable NPU/TNL provider hooks. The archive itself is not part of the
+repository tree, so its provider registration, callback signatures, module
+lifetime, and WED/NPU ownership paths remain unverified. Do not claim end-to-end
+WED/WARP/NPU/TNL compatibility until that exact hash-pinned archive has been
+inspected and its callback implementation checked against the kernel API.
