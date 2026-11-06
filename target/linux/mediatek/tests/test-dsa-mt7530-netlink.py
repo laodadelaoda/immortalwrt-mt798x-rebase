@@ -97,6 +97,75 @@ for name in ("mt7531_ind_c22_phy_write", "mt7531_ind_c45_phy_write"):
                re.search(r"if\s*\(\s*" + name + r"\s*\(", write_fn))
     check(bool(checked), name + " return value is ignored")
 
+
+# AN8855 is another active DSA Generic Netlink implementation in this patch
+# stack. Audit it independently; do not assume the MT7530 checks cover it.
+an8855_c = (dsa / "an8855.c").read_text(errors="replace")
+an8855_h = (dsa / "an8855.h").read_text(errors="replace")
+an8855_nl = (dsa / "an8855_nl.c").read_text(errors="replace")
+an8855_nlh = (dsa / "an8855_nl.h").read_text(errors="replace")
+
+an_init = function(an8855_nl, "an8855_nl_init")
+an_exit = function(an8855_nl, "an8855_nl_exit")
+an_response = function(an8855_nl, "an8855_nl_response")
+an_validate = function(an8855_nl, "an8855_nl_validate_access")
+an_read = function(an8855_nl, "an8855_nl_reply_read")
+an_write = function(an8855_nl, "an8855_nl_reply_write")
+check(bool(an_init), "AN8855 Netlink init implementation is missing")
+check(bool(an_exit), "AN8855 Netlink exit implementation is missing")
+check(bool(an_response), "AN8855 Netlink response implementation is missing")
+check(an_init.find("genl_register_family") >= 0 and
+      an_init.find("an8855_sw_priv = priv") > an_init.find("genl_register_family"),
+      "AN8855 publishes its private pointer before successful family registration")
+check("if (!ret)" in an_init and "return ret" in an_init,
+      "AN8855 Netlink init does not propagate family-registration failure")
+check(an_exit.find("genl_unregister_family") >= 0 and
+      an_exit.find("an8855_sw_priv = NULL") > an_exit.find("genl_unregister_family"),
+      "AN8855 clears its private pointer before family unregistration")
+check("mutex_lock" in an_exit or "an8855_lock" in an_exit,
+      "AN8855 Netlink teardown is not synchronized")
+check("if (!an8855_sw_priv)" in an_response,
+      "AN8855 Netlink handler lacks a null-device guard")
+check("an8855_nl_init(priv)" in an8855_c,
+      "AN8855 probe does not use the audited Netlink initializer")
+an_probe = function(an8855_c, "an8855_switch_probe")
+an_remove = function(an8855_c, "an8855_switch_remove")
+check("ret = an8855_proc_device_init()" in an_probe and "if (ret)" in an_probe,
+      "AN8855 probe does not unwind when procfs creation fails")
+check(an_remove.find("an8855_nl_exit(priv)") >= 0 and
+      an_remove.find("an8855_nl_exit(priv)") < an_remove.find("dsa_unregister_switch"),
+      "AN8855 removes the DSA switch before Netlink teardown")
+proc_init = function(an8855_c, "an8855_proc_device_init")
+proc_exit = function(an8855_c, "an8855_proc_device_exit")
+check("proc_create" in proc_init and "proc_remove" in proc_init,
+      "AN8855 procfs creation is not transactional")
+check("proc_remove" in proc_exit,
+      "AN8855 procfs teardown does not remove its owned subtree")
+read_api = function(an8855_c, "an8855_read")
+write_api = function(an8855_c, "an8855_write")
+check("return regmap_read" in read_api,
+      "AN8855 register-read API does not propagate regmap errors")
+check("return regmap_write" in write_api,
+      "AN8855 register-write API does not propagate regmap errors")
+check("an8855_read(struct an8855_priv *priv, u32 reg, u32 *val)" in an8855_h,
+      "AN8855 register-read declaration does not expose an error return/out value")
+check("int an8855_write(struct an8855_priv *priv" in an8855_h,
+      "AN8855 register-write declaration does not expose an error return")
+check(bool(re.search(r"phy\\s*<\\s*-1\\s*\\|\\|\\s*phy\\s*>=", an_validate)),
+      "AN8855 Netlink PHY index lacks bounds validation")
+check(bool(re.search(r"devad\\s*<\\s*-1\\s*\\|\\|\\s*devad\\s*>", an_validate)),
+      "AN8855 Netlink DEVAD lacks bounds validation")
+check(bool(re.search(r"reg\\s*>", an_validate)),
+      "AN8855 Netlink register address lacks bounds validation")
+check(bool(re.search(r"ret\\s*=\\s*an8855_phy_cl22_write\\s*\\(", an_write)),
+      "AN8855 Clause-22 PHY write return value is ignored")
+check(bool(re.search(r"ret\\s*=\\s*an8855_phy_cl45_write\\s*\\(", an_write)),
+      "AN8855 Clause-45 PHY write return value is ignored")
+check(bool(re.search(r"ret\\s*=\\s*an8855_write\\s*\\(", an_write)),
+      "AN8855 switch-register write return value is ignored")
+check("AN8855_CMD_REQUEST" not in an8855_nl[an8855_nl.index("static const struct genl_ops"):an8855_nl.index("static struct genl_family")],
+      "AN8855 advertises an unsupported REQUEST operation")
+
 if failures:
     print("MT7530 DSA/Generic Netlink source audit: FAIL")
     for item in failures:
