@@ -63,14 +63,9 @@ index 6163be7..5a99a68 100644
  }
  
  static void
-@@ -235,6 +249,7 @@ mt7530_remove(struct mdio_device *mdiodev)
- 			ret);
- 
+@@ -235,1 +249,2 @@ mt7530_remove(struct mdio_device *mdiodev)
  	mt7530_remove_common(priv);
 +	mt7530_nl_exit();
- 
- 	for (i = 0; i < 2; ++i)
- 		mtk_pcs_lynxi_destroy(priv->ports[5 + i].sgmii_pcs);
 diff --git a/drivers/net/dsa/mt7530-mmio.c b/drivers/net/dsa/mt7530-mmio.c
 index 10dc499..7e7a033 100644
 --- a/drivers/net/dsa/mt7530-mmio.c
@@ -138,46 +133,22 @@ index 93bf085..f8e6ca3 100644
  {
  	struct mt7530_dummy_poll p;
  
-@@ -573,8 +571,7 @@ static int mt7530_phy_write_c45(struct mt7530_priv *priv, int port, int devad,
- 	return mdiobus_c45_write_nested(priv->bus, port, devad, regnum, val);
- }
- 
+@@ -573,2 +571,1 @@
 -static int
 -mt7531_ind_c45_phy_read(struct mt7530_priv *priv, int port, int devad,
 +int mt7531_ind_c45_phy_read(struct mt7530_priv *priv, int port, int devad,
- 			int regnum)
- {
- 	struct mt7530_dummy_poll p;
-@@ -621,8 +618,7 @@ mt7531_ind_c45_phy_read(struct mt7530_priv *priv, int port, int devad,
- 	return ret;
- }
- 
+@@ -621,2 +618,1 @@
 -static int
 -mt7531_ind_c45_phy_write(struct mt7530_priv *priv, int port, int devad,
 +int mt7531_ind_c45_phy_write(struct mt7530_priv *priv, int port, int devad,
- 			 int regnum, u16 data)
- {
- 	struct mt7530_dummy_poll p;
-@@ -668,8 +664,7 @@ mt7531_ind_c45_phy_write(struct mt7530_priv *priv, int port, int devad,
- 	return ret;
- }
- 
+@@ -668,2 +664,1 @@
 -static int
 -mt7531_ind_c22_phy_read(struct mt7530_priv *priv, int port, int regnum)
 +int mt7531_ind_c22_phy_read(struct mt7530_priv *priv, int port, int regnum)
- {
- 	struct mt7530_dummy_poll p;
- 	int ret;
-@@ -705,8 +700,7 @@ mt7531_ind_c22_phy_read(struct mt7530_priv *priv, int port, int regnum)
- 	return ret;
- }
- 
+@@ -705,2 +700,1 @@
 -static int
 -mt7531_ind_c22_phy_write(struct mt7530_priv *priv, int port, int regnum,
 +int mt7531_ind_c22_phy_write(struct mt7530_priv *priv, int port, int regnum,
- 			 u16 data)
- {
- 	struct mt7530_dummy_poll p;
 diff --git a/drivers/net/dsa/mt7530.h b/drivers/net/dsa/mt7530.h
 index 6ad33a9..2aac404 100644
 --- a/drivers/net/dsa/mt7530.h
