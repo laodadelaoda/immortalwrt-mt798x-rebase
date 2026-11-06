@@ -21,7 +21,7 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_wed.c b/drivers/net/ethernet/medi
 index e4fc718..8b9243f 100644
 --- a/drivers/net/ethernet/mediatek/mtk_wed.c
 +++ b/drivers/net/ethernet/mediatek/mtk_wed.c
-@@ -1145,6 +1145,45 @@ mtk_wed_dma_disable(struct mtk_wed_device *dev)
+@@ -1145,6 +1145,49 @@ mtk_wed_dma_disable(struct mtk_wed_device *dev)
  	mtk_wed_set_512_support(dev, false);
  }
  
@@ -29,37 +29,41 @@ index e4fc718..8b9243f 100644
 +mtk_wed_set_pcie_mask(struct mtk_wed_device *dev, bool enable)
 +{
 +#define IRQ_MASK_APMCU		0x1000301c
-+	void __iomem *addr;
++void __iomem *apmcu;
++void __iomem *pcie;
 +	u32 value;
 +
 +	if (!dev->wlan.intr_mode)
 +		return;
 +
 +	/* set mask apmcu*/
-+	addr = ioremap(IRQ_MASK_APMCU, 4);
-+	if (!addr)
-+		return;
-+	value = readl(addr);
-+	if (enable)
-+		value |= BIT(dev->hw->index);
-+	else
-+		value &= ~BIT(dev->hw->index);
++/* Map both registers before changing either one. */
++apmcu = ioremap(IRQ_MASK_APMCU, 4);
++if (!apmcu)
++	return;
 +
-+	writel(value, addr);
-+	iounmap(addr);
++pcie = ioremap(dev->hw->pcie_base + 0x1ac, 4);
++if (!pcie) {
++	iounmap(apmcu);
++	return;
++}
 +
-+	/* set pcie auto clear */
-+	addr = ioremap(dev->hw->pcie_base + 0x1ac, 4);
-+	if (!addr)
-+		return;
-+	value = readl(addr);
-+	if (enable)
-+		value |= BIT(3);
-+	else
-+		value &= ~BIT(3);
++value = readl(apmcu);
++if (enable)
++	value |= BIT(dev->hw->index);
++else
++	value &= ~BIT(dev->hw->index);
++writel(value, apmcu);
 +
-+	writel(value, addr);
-+	iounmap(addr);
++value = readl(pcie);
++if (enable)
++	value |= BIT(3);
++else
++	value &= ~BIT(3);
++writel(value, pcie);
++
++iounmap(pcie);
++iounmap(apmcu);
 +
 +	return;
 +}
