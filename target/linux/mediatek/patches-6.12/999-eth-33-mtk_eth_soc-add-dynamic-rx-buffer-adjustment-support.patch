@@ -97,7 +97,7 @@ support
  			MTK_RX_CFG_SDL_OFFSET), reg_map->pdma.rx_cfg);
  
  		lro_ctrl_dw0 |= MTK_PDMA_LRO_SDL << MTK_CTRL_DW0_SDL_OFFSET;
-@@ -5486,22 +5483,36 @@ static void mtk_uninit(struct net_device
+@@ -5486,22 +5483,44 @@ static void mtk_uninit(struct net_device
  static int mtk_change_mtu(struct net_device *dev, int new_mtu)
  {
 -	int length = new_mtu + MTK_RX_ETH_HLEN;
@@ -105,6 +105,7 @@ support
  	struct mtk_eth *eth = mac->hw;
 -	int max_mtu, i;
 +	int max_mtu, i, length;
++	u32 old_rx_buf_len;
 +
 +	max_mtu = max_t(int, new_mtu, ETH_DATA_LEN);
 +	for (i = 0; i < ARRAY_SIZE(eth->netdev); i++)
@@ -145,6 +146,13 @@ support
 +		if (eth->netdev[i] && netif_running(eth->netdev[i]))
 +			mtk_set_mcr_max_rx(netdev_priv(eth->netdev[i]),
 +					   eth->rx_buf_len);
++
++	if (eth->rx_buf_len != old_rx_buf_len && refcount_read(&eth->dma_refcnt) > 0) {
++		netdev_info(dev,
++			    "RX buffer length changed (%u -> %u), scheduling netdevs restart\\n",
++			    old_rx_buf_len, eth->rx_buf_len);
++		schedule_work(&eth->netdev_restart_work);
++	}
  
  	return 0;
  }
