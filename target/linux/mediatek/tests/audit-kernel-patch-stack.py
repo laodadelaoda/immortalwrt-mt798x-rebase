@@ -75,9 +75,16 @@ def targets(text):
         if line.startswith("diff --git "):
             m = re.match(r"diff --git a/(.+?) b/(.+)$", line)
             if m: out.update((m.group(1), m.group(2)))
+        elif line.startswith("Index: "):
+            # Quilt-style patches use Index: and versioned ---/+++ headers.
+            value = line[len("Index: "):].strip()
+            value = re.sub(r"^linux-[^/]+/", "", value)
+            if value and value != "/dev/null": out.add(value)
         elif line.startswith(("--- ", "+++ ")):
             value = line[4:].split("\t", 1)[0].split(" ", 1)[0]
             if value.startswith(("a/", "b/")): out.add(value[2:])
+            elif re.match(r"^linux-[^/]+(?:\.orig)?/", value):
+                out.add(re.sub(r"^linux-[^/]+(?:\.orig)?/", "", value))
     return sorted(x for x in out if x and x != "/dev/null")
 
 def inventory(repo):
@@ -113,6 +120,11 @@ def inventory(repo):
         for a, b in zip(ps, ps[1:]):
             edges.append({"target_file": target, "previous_patch": a["path"], "next_patch": b["path"],
                           "previous_order": a["order"], "next_order": b["order"]})
+    empty_targets = [p["path"] for p in patches if not p["target_files"]]
+    if empty_targets: raise RuntimeError("Patch target parser left files unclassified: " + ", ".join(empty_targets))
+    name_groups = _groups([p["name"] for p in patches], [p["path"] for p in patches])
+    duplicate_names = sorted(n for n, paths in name_groups.items() if len(paths) > 1)
+    if duplicate_names: raise RuntimeError("Duplicate patch basenames make dependency references ambiguous: " + ", ".join(duplicate_names))
     names = {p["name"] for p in patches}
     order = {p["name"]: p["order"] for p in patches}
     semantic = [{"prerequisite": a, "consumer": b, "reason": why, "prerequisite_order": order[a], "consumer_order": order[b], "prerequisite_applied_before_consumer": order[a] < order[b]} for a, b, why in SEMANTIC if a in names and b in names]
@@ -136,6 +148,7 @@ def inventory(repo):
         "patches": patches, "overlays": overlays, "file_overlap_matrix": overlap, "file_overlap_edges": edges,
         "overlay_collision_matrix": {k:v for k,v in sorted(overlay_targets.items()) if len(v)>1},
         "semantic_dependencies": semantic, "missing_semantic_dependencies": missing,
+        "semantic_dependency_order_violations": [x for x in semantic if not x["prerequisite_applied_before_consumer"]],
         "duplicate_patch_content": [v for v in _groups([p["sha256"] for p in patches], [p["path"] for p in patches]).values() if len(v)>1],
     }
 
