@@ -69,7 +69,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  
 --- /dev/null
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_reset.c
-@@ -0,0 +1,98 @@
+@@ -0,0 +1,167 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (c) 2022 MediaTek Inc.
@@ -77,10 +77,14 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 + */
 +
 +#include <linux/regmap.h>
++#include <linux/mutex.h>
++#include <linux/spinlock.h>
 +#include "mtk_eth_soc.h"
 +#include "mtk_eth_reset.h"
 +
-+struct mtk_eth *g_eth;
++static struct mtk_eth *g_eth;
++static DEFINE_MUTEX(mtk_eth_reset_mutex);
++static DEFINE_SPINLOCK(mtk_reset_event_lock);
 +
 +static int mtk_rest_cnt;
 +int mtk_wifi_num;
@@ -95,7 +99,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +
 +void mtk_set_pse_drop(u32 config)
 +{
-+	struct mtk_eth *eth = g_eth;
++	struct mtk_eth *eth = READ_ONCE(g_eth);
 +
 +	if (!eth || mtk_is_netsys_v1(eth))
 +		return;
@@ -111,6 +115,12 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +static int mtk_eth_netdevice_event(struct notifier_block *n, unsigned long event, void *ptr)
 +{
 +	struct mtk_eth *eth = container_of(n, struct mtk_eth, reset.netdevice_notifier);
++	bool done = false;
++
++	(void)ptr;
++
++	if (READ_ONCE(eth->reset.shutting_down))
++		return NOTIFY_DONE;
 +
 +	switch (event) {
 +	case MTK_TOPS_DUMP_DONE:
@@ -118,38 +128,49 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +		break;
 +	case MTK_WIFI_RESET_DONE:
 +	case MTK_FE_STOP_TRAFFIC_DONE:
-+		pr_info("%s rcv done event:%lx\n", __func__, event);
-+		mtk_rest_cnt--;
-+		if (!mtk_rest_cnt) {
-+			complete(&wait_ser_done);
++		spin_lock_bh(&mtk_reset_event_lock);
++		if (mtk_rest_cnt > 0)
++			mtk_rest_cnt--;
++		done = !mtk_rest_cnt;
++		if (done)
 +			mtk_rest_cnt = mtk_wifi_num;
-+		}
++		spin_unlock_bh(&mtk_reset_event_lock);
++		if (done)
++			complete(&wait_ser_done);
 +		break;
 +	case MTK_WIFI_CHIP_ONLINE:
++		spin_lock_bh(&mtk_reset_event_lock);
 +		mtk_wifi_num++;
 +		mtk_rest_cnt = mtk_wifi_num;
++		spin_unlock_bh(&mtk_reset_event_lock);
 +		break;
 +	case MTK_WIFI_CHIP_OFFLINE:
-+		mtk_wifi_num--;
++		spin_lock_bh(&mtk_reset_event_lock);
++		if (mtk_wifi_num > 0)
++			mtk_wifi_num--;
 +		mtk_rest_cnt = mtk_wifi_num;
++		done = !mtk_wifi_num;
++		spin_unlock_bh(&mtk_reset_event_lock);
++		if (done)
++			complete(&wait_ser_done);
 +		break;
 +	case MTK_FE_STOP_TRAFFIC_DONE_FAIL:
-+		mtk_stop_fail = true;
-+		eth->reset.event = MTK_FE_START_RESET;
-+		pr_info("%s rcv done event:%lx\n", __func__, event);
-+		complete(&wait_ser_done);
++		WRITE_ONCE(mtk_stop_fail, true);
++		WRITE_ONCE(eth->reset.event, MTK_FE_START_RESET);
++		spin_lock_bh(&mtk_reset_event_lock);
 +		mtk_rest_cnt = mtk_wifi_num;
++		spin_unlock_bh(&mtk_reset_event_lock);
++		complete(&wait_ser_done);
 +		break;
 +	case MTK_FE_START_RESET_INIT:
-+		pr_info("%s rcv fe start reset init event:%lx\n", __func__, event);
-+		if (!test_bit(MTK_RESETTING, &eth->state)) {
-+			eth->reset.event = MTK_FE_START_RESET;
++		if (!READ_ONCE(eth->reset.shutting_down) &&
++		    !test_bit(MTK_RESETTING, &eth->state)) {
++			WRITE_ONCE(eth->reset.event, MTK_FE_START_RESET);
 +			mtk_reset_event_update(eth, MTK_EVENT_FORCE);
 +			schedule_work(&eth->pending_work);
 +		}
 +		break;
 +	case MTK_WIFI_L1SER_DONE:
-+		pr_info("%s rcv wifi done ack :%lx\n", __func__, event);
 +		complete(&wait_ack_done);
 +		break;
 +	default:
@@ -161,16 +182,64 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +
 +int mtk_eth_netdevice_event_init(struct mtk_eth *eth)
 +{
-+	g_eth = eth;
++	int ret;
++
++	if (eth->reset.notifier_registered)
++		return -EALREADY;
++
++	mutex_lock(&mtk_eth_reset_mutex);
++	if (g_eth && g_eth != eth) {
++		mutex_unlock(&mtk_eth_reset_mutex);
++		return -EBUSY;
++	}
++	WRITE_ONCE(g_eth, eth);
++	WRITE_ONCE(eth->reset.shutting_down, false);
++	mutex_unlock(&mtk_eth_reset_mutex);
 +
 +	eth->reset.netdevice_notifier.notifier_call = mtk_eth_netdevice_event;
-+	register_netdevice_notifier(&eth->reset.netdevice_notifier);
++	ret = register_netdevice_notifier(&eth->reset.netdevice_notifier);
++	if (ret) {
++		mutex_lock(&mtk_eth_reset_mutex);
++		if (g_eth == eth)
++			WRITE_ONCE(g_eth, NULL);
++		mutex_unlock(&mtk_eth_reset_mutex);
++		return ret;
++	}
 +
++	eth->reset.notifier_registered = true;
 +	return 0;
 +}
++
++void mtk_eth_netdevice_event_exit(struct mtk_eth *eth)
++{
++	WRITE_ONCE(eth->reset.shutting_down, true);
++
++	if (eth->reset.notifier_registered) {
++		unregister_netdevice_notifier(&eth->reset.netdevice_notifier);
++		eth->reset.notifier_registered = false;
++	}
++
++	mutex_lock(&mtk_eth_reset_mutex);
++	if (g_eth == eth)
++		WRITE_ONCE(g_eth, NULL);
++	mutex_unlock(&mtk_eth_reset_mutex);
++}
++
++void mtk_eth_reset_reinit(void)
++{
++	spin_lock_bh(&mtk_reset_event_lock);
++	mtk_rest_cnt = mtk_wifi_num;
++	WRITE_ONCE(mtk_stop_fail, false);
++	spin_unlock_bh(&mtk_reset_event_lock);
++
++	reinit_completion(&wait_ser_done);
++	reinit_completion(&wait_ack_done);
++	reinit_completion(&wait_tops_done);
++}
++
 --- /dev/null
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_reset.h
-@@ -0,0 +1,34 @@
+@@ -0,0 +1,36 @@
 +/* SPDX-License-Identifier: GPL-2.0
 + *
 + * Copyright (c) 2022 MediaTek Inc.
@@ -203,8 +272,11 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +
 +void mtk_set_pse_drop(u32 config);
 +int mtk_eth_netdevice_event_init(struct mtk_eth *eth);
++void mtk_eth_netdevice_event_exit(struct mtk_eth *eth);
++void mtk_eth_reset_reinit(void);
 +
 +#endif		/* MTK_ETH_RESET_H */
+
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 @@ -37,6 +37,7 @@
