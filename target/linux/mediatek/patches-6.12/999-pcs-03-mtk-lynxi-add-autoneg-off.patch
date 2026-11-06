@@ -42,7 +42,7 @@ Subject: [PATCH] net: pcs: mtk-lynxi: add autoneg off
 -
 +	if (regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &bm) ||
 +	    regmap_read(mpcs->regmap, SGMSYS_PCS_ADVERTISE, &adv)) {
-+\t\tstate->link = false;
++		state->link = false;
  		return;
  	}
  
