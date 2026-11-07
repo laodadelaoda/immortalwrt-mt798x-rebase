@@ -166,6 +166,7 @@ jobs:
           echo "PASS: complete WTS patch applied to pinned WAPP, MAPD and P1905 archives with zero fuzz."
 
       - name: Upload exact P1905 post-011 parser source for patch rebasing
+        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: p1905-post-011-parser-source
