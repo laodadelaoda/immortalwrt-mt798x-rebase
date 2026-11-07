@@ -213,6 +213,7 @@ jobs:
           # The exact same helper is invoked by package Build/Prepare.
           # This prevents the audit's transformation logic drifting from the real build.
           python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-source-transforms.py finalize "$SRC/easymesh"
+          python3 package/mtk/applications/easymesh-n60/scripts/test-dpp-cred-len-preprocess.py "$SRC/easymesh" "$GITHUB_WORKSPACE" "$OUT/cred-len-preprocess"
 
           # Preserve an independently reviewable DPP source pair: pristine vendor
           # WAPP and the exact fully patched/normalized WAPP tree used by Prepare.
@@ -366,6 +367,15 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 package/mtk/applications/easymesh-n60/scripts/verify-vendor-audit-attestation.py create --repo "$GITHUB_WORKSPACE" --attestation vendor-audit-attestation.json
+
+      - name: Upload MAP_R3 cred_len preprocessing evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-map-r3-cred-len-preprocess
+          path: ${{ runner.temp }}/n60-vendor-patch-audit/report/cred-len-preprocess/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload immutable audit attestation
         if: success()
