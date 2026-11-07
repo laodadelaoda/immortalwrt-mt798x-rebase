@@ -1,14 +1,31 @@
 --- a/wappd/common/main.c
 +++ b/wappd/common/main.c
-@@ -805 +805 @@
+@@ -811,9 +811,8 @@
+ 	struct dpp_sec_cred *cred = NULL;
+ 	struct dpp_authentication auth;
+ 	//struct dpp_bss_cred *bss_cred = NULL;
 -	u16 cred_len = 0, is_1905_conn = 0, is_normal = 0;
 +	u16 is_1905_conn = 0, is_normal = 0;
-@@ -807 +806,0 @@
+ 	struct dl_list *dev_list;
 -	dev_list = &wapp->dev_list;
-@@ -846,1 +846,4 @@
+ 	os_memset(&auth, 0, sizeof(auth));
+ 	//char all_zero_mac[MAC_ADDR_LEN]={0};
+ #endif
+@@ -825,6 +824,9 @@
+ 		return WAPP_INVALID_ARG;
+ 	}
+ 
 +#ifdef MAP_R3
 +	dev_list = &wapp->dev_list;
 +#endif
  	os_memset(config, 0, 3 * sizeof(struct dpp_config));
-@@ -996 +997,0 @@
+ 	ret = os_snprintf(param, sizeof(param), "_valid");
+ 	if (os_snprintf_error(sizeof(param), ret)) {
+@@ -1042,7 +1044,6 @@
+ 			DBGPRINT(RT_DEBUG_ERROR, "[%s] wapp_dpp_save_dpp_cred fail\n", __func__);
+ 			goto error;
+ 		}
 -		cred_len = sizeof(*cred) + cred->payload_len;
+ 		wpabuf_clear_free(auth.net_access_key);
+ 		wpabuf_clear_free(auth.c_sign_key);
+ 		os_free(auth.connector);
