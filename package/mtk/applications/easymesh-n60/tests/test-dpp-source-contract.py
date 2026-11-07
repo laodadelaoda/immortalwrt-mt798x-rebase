@@ -144,4 +144,15 @@ require(re.search(r"} else {\n[ \t]+goto error;", parser) is not None,
         "failure to allocate the per-interface dpp_config object is silently ignored")
 
 
+
+conf_start = src["dpp_wdev"].find("int wapp_dpp_get_conf_frm_file(")
+conf_end = src["dpp_wdev"].find("\\nvoid wapp_dpp_get_uri_frm_file", conf_start)
+require(conf_start >= 0 and conf_end > conf_start,
+        "DPP config-file accessor function boundary is missing")
+conf_fn = src["dpp_wdev"][conf_start:conf_end]
+require("char param[64] = {0}, value[64] = {0};" in conf_fn and
+        "if (!wapp || !wapp->map || !str)" in conf_fn and
+        "get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0" in conf_fn,
+        "DPP config-file accessor lacks initialized output, NULL guard or error handling")
+
 print("PASS: DPP parser bounds, hex decoding lengths, error propagation, OpenSSL 3 accessor and secret redaction")
