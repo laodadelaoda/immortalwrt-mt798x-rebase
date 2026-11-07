@@ -53,7 +53,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/wapp-audit"
           python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py download \
             --repo "$GITHUB_WORKSPACE" --dl-dir "$RUNNER_TEMP/wapp-audit" \
-            --ids wappd mapd 1905daemon
+            --ids wappd mapd 1905daemon libmapd
           cd "$RUNNER_TEMP/wapp-audit"
           echo "===== ARCHIVE CONTENTS ====="
           tar -tjf wappd-80ca5724.tar.bz2 | tee archive-files.txt
@@ -61,6 +61,9 @@ jobs:
           tar -xjf wappd-80ca5724.tar.bz2 -C source
           mkdir dpp-patch-root
           tar -xjf wappd-80ca5724.tar.bz2 -C dpp-patch-root
+          tar -xjf mapd-6eca4331.tar.bz2 -C dpp-patch-root
+          tar -xjf 1905daemon-35234223.tar.bz2 -C dpp-patch-root
+          tar -xjf libmapd-0132d199.tar.bz2 -C dpp-patch-root
           LOCK_HELPER="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py"
           TRANSFORM_HELPER="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/scripts/n60-vendor-source-transforms.py"
           patch_names="$(python3 "$LOCK_HELPER" patch-order --repo "$GITHUB_WORKSPACE" --set easymesh --phase application)"
