@@ -268,9 +268,15 @@ def vendor_inventory(repo):
                     if root_suffix:
                         matches = [s for s in set_sources if s.get("extract_root") == root_suffix]
                     else:
-                        matches = [s for s in set_sources
-                                   if s.get("extract_root") and
-                                   (target == s["extract_root"] or target.startswith(s["extract_root"] + "/"))]
+                        matches = []
+                        for source in set_sources:
+                            prefixes = ([source["extract_root"]] if source.get("extract_root") else [])
+                            prefixes.extend(source.get("patch_target_prefixes", []))
+                            if any(
+                                prefix == "" or target == prefix or target.startswith(prefix + "/")
+                                for prefix in prefixes
+                            ):
+                                matches.append(source)
                     if len(matches) != 1:
                         reason = "unmapped" if not matches else "ambiguous: " + ", ".join(s["id"] for s in matches)
                         raise RuntimeError(
@@ -325,10 +331,12 @@ def vendor_inventory(repo):
                             "source_scope": s.get("source_scope"),
                             "package_makefile": s["package_makefile"],
                             "source_directory": s.get("expected_build_dir") or
-                                               ("audit-only/" + str(s.get("extract_to") or "")).rstrip("/"),
+                                               ("audit-only/" + str(s.get("extract_to") or "") + "/" +
+                                                str(s.get("extract_root") or "")).rstrip("/"),
                             "expected_build_directory": s.get("expected_build_dir"),
                             "extract_to": s.get("extract_to"),
                             "archive_root": s.get("extract_root"),
+                            "patch_target_prefixes": s.get("patch_target_prefixes", []),
                         }
                         for s in set_sources if s["id"] in source_ids
                     ],
