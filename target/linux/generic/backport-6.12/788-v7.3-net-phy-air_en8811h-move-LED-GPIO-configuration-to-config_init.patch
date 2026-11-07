@@ -42,7 +42,11 @@ Signed-off-by: Paolo Abeni <pabeni@redhat.com>
  	return 0;
  }
 
-@@ -908,5 +901,15 @@
+@@ -904,9 +897,19 @@
+ 	ret = air_leds_init(phydev, EN8811H_LED_COUNT, AIR_PHY_LED_DUR,
+ 			    AIR_LED_MODE_USER_DEFINE);
+ 	if (ret < 0) {
++		phydev_err(phydev, "Failed to initialize leds: %d\\n", ret);
  		return ret;
  	}
 
