@@ -47,7 +47,8 @@ for dead_token in (
     "wapp_dpp_save_dpp_cred(&auth)",
 ):
     require(dead_token not in parser,
-            f"main DPP config loader retains the removed key('"_1905cSignKey"', None, "c_sign_key")
+            f"main DPP config loader retains the removed duplicate credential path: {dead_token}")
+
 
 require("dpp_read_config_file_for_connection(wapp) < 0" in src["map"],
         "MAP event handler ignores DPP parser failure")
