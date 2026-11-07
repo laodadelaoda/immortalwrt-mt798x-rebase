@@ -120,6 +120,15 @@ def patch_set(repo,sid):
     if not directory.is_dir(): fail("locked patch directory missing: "+entry["directory"])
     order=list(entry.get("application_order",[]))+list(entry.get("post_normalize_order",[]))
     if len(order)!=len(set(order)): fail(sid+" Lock has duplicate patch entries")
+    post_order=list(entry.get("post_normalize_order",[]))
+    root_suffixes=entry.get("post_normalize_root_suffixes",{})
+    if post_order and (not isinstance(root_suffixes,dict) or set(root_suffixes)!=set(post_order)):
+        fail(sid+" Lock must declare exactly one post_normalize_root_suffixes entry per post-normalize patch")
+    if not post_order and root_suffixes:
+        fail(sid+" declares post-normalize roots without post-normalize patches")
+    for patch_name,suffix in root_suffixes.items():
+        if not isinstance(suffix,str) or suffix.startswith("/") or ".." in Path(suffix).parts:
+            fail(sid+" has unsafe post-normalize root suffix for "+patch_name)
     actual=sorted(p.name for p in directory.glob("*.patch"))
     if sorted(order)!=actual:
         fail(sid+" Lock inventory mismatch; missing="+repr(sorted(set(order)-set(actual)))+" unlisted="+repr(sorted(set(actual)-set(order))))
@@ -143,15 +152,27 @@ def print_patch_order(repo,sid,phase):
     if not names: fail(sid+" has no patches in phase "+phase)
     for name in names: print(name)
 
+def print_patch_root(repo,sid,phase,name):
+    if phase!="post_normalize": fail("patch-root is only valid for post_normalize")
+    entry=patch_set(repo,sid)
+    if name not in entry.get("post_normalize_order",[]):
+        fail(sid+" patch is not in post_normalize order: "+name)
+    roots=entry.get("post_normalize_root_suffixes",{})
+    if set(roots)!=set(entry.get("post_normalize_order",[])):
+        fail(sid+" post-normalize root mapping is incomplete")
+    print(roots[name])
+
 def main():
     p=argparse.ArgumentParser(); sub=p.add_subparsers(dest="cmd",required=True)
     d=sub.add_parser("download"); d.add_argument("--repo",required=True,type=Path); d.add_argument("--dl-dir",required=True,type=Path); d.add_argument("--ids",nargs="+",required=True)
     v=sub.add_parser("verify-packages"); v.add_argument("--repo",required=True,type=Path)
     x=sub.add_parser("verify-downloads"); x.add_argument("--repo",required=True,type=Path); x.add_argument("--dl-dir",required=True,type=Path); x.add_argument("--ids",nargs="+",required=True)
     q=sub.add_parser("patch-order"); q.add_argument("--repo",required=True,type=Path); q.add_argument("--set",required=True); q.add_argument("--phase",choices=("application","post_normalize","all"),default="all")
+    r=sub.add_parser("patch-root"); r.add_argument("--repo",required=True,type=Path); r.add_argument("--set",required=True); r.add_argument("--phase",choices=("post_normalize",),required=True); r.add_argument("--name",required=True)
     a=p.parse_args()
     if a.cmd=="download": download(a.repo,a.dl_dir,a.ids)
     elif a.cmd=="verify-packages": verify_packages(a.repo)
     elif a.cmd=="verify-downloads": verify_downloads(a.repo,a.dl_dir,a.ids)
+    elif a.cmd=="patch-root": print_patch_root(a.repo,a.set,a.phase,a.name)
     else: print_patch_order(a.repo,a.set,a.phase)
 if __name__=="__main__": main()

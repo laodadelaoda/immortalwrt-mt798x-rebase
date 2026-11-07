@@ -169,7 +169,11 @@
       "post_normalize_order": [
         "006-p1905-libbridge-tool-propagation.patch",
         "001-dsa-use-linux-mii-ioctl.patch"
-      ]
+      ],
+      "post_normalize_root_suffixes": {
+        "006-p1905-libbridge-tool-propagation.patch": "",
+        "001-dsa-use-linux-mii-ioctl.patch": "1905daemon"
+      }
     },
     {
       "id": "auxiliary",

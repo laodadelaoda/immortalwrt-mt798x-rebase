@@ -61,6 +61,12 @@ SEMANTIC = [
     ("999-ppe-40-netfilter-add-npu-flow-offload-support.patch", "999-ppe-42-mtk_ppe-add-npu-offload-support.patch", "PPE driver consumes NPU action and tuple fields"),
     ("999-ppe-41-nft_flow_offload-add-npu-offload-support.patch", "999-ppe-42-mtk_ppe-add-npu-offload-support.patch", "PPE driver consumes the NPU action data path"),
     ("999-eth-46-mtk_eth_soc-add-tnl-offload-support.patch", "999-ppe-42-mtk_ppe-add-npu-offload-support.patch", "PPE NPU path uses TPORT_NPU_* definitions"),
+    ("736-04-net-ethernet-mediatek-fix-ppe-flow-accounting-for-L2.patch", "999-ppe-02-mtk_ppe-change-to-internal-ppe-debugfs.patch", "PPE debugfs patch extends the PPE implementation after generic L2 flow-accounting changes"),
+    ("736-05-net-ethernet-mtk_eth_soc-zero-initialize-PPE-flow-ta.patch", "999-ppe-02-mtk_ppe-change-to-internal-ppe-debugfs.patch", "PPE debugfs implementation follows the generic PPE flow-table initialization change"),
+    ("999-ppe-02-mtk_ppe-change-to-internal-ppe-debugfs.patch", "999-ppe-20-mtk_ppe-add-adaptive-PPPQ-mode.patch", "Adaptive PPPQ extends the QoS debugfs interface introduced by the base PPE debugfs patch"),
+    ("999-ppe-04-mtk_ppe-add-qos-toggle-for-debugfs.patch", "999-ppe-20-mtk_ppe-add-adaptive-PPPQ-mode.patch", "Adaptive PPPQ consumes qos_toggle and QDMA shaper state introduced by the QoS patch"),
+    ("999-ppe-11-mtk_ppe-dispatch-short-packets-a-high-priority.patch", "999-ppe-20-mtk_ppe-add-adaptive-PPPQ-mode.patch", "Adaptive PPPQ calls the queue getter exported by the short-packet priority patch"),
+    ("999-ppe-14-mtk_ppe-add-PPE-cache-preserved-line-lock.patch", "999-ppe-20-mtk_ppe-add-adaptive-PPPQ-mode.patch", "Adaptive PPPQ refcount release uses the FOE state captured by the cache-preserved clear patch"),
 ]
 
 def digest(data):
@@ -178,10 +184,12 @@ def vendor_inventory(repo):
                 raw = patch_path.read_bytes()
                 txt = raw.decode("utf-8", errors="replace")
                 audit_only = all(s.get("source_scope") == "auxiliary-audit-only" for s in set_sources)
-                root_suffix = "1905daemon" if (
-                    set_id == "easymesh" and phase == "post_normalize"
-                    and name == "001-dsa-use-linux-mii-ioctl.patch"
-                ) else ""
+                root_suffix = ""
+                if phase == "post_normalize":
+                    roots = patch_set.get("post_normalize_root_suffixes", {})
+                    if set(roots) != set(patch_set.get("post_normalize_order", [])):
+                        raise RuntimeError("Post-normalize application roots are incomplete in vendor Lock: " + set_id)
+                    root_suffix = roots[name]
                 application_root = "audit-only" if audit_only else (
                     "PKG_BUILD_DIR" + ("/" + root_suffix if root_suffix else "")
                 )
@@ -208,9 +216,10 @@ def vendor_inventory(repo):
                     normalized = (root_suffix + "/" + target) if root_suffix else target
                     target_records.append(normalized)
                     target_owners.append({"target_file": normalized, "source_id": matched["id"]})
-                    overlaps[(set_id, matched["id"], normalized)].append({
+                    overlaps[(matched["id"], normalized)].append({
                         "path": patch_path.relative_to(repo).as_posix(),
-                        "sequence": sequence, "phase": phase,
+                        "patch_set_id": set_id, "directory": directory,
+                        "patch_set_order": set_order, "sequence": sequence, "phase": phase,
                     })
                 source_ids = sorted({x["source_id"] for x in target_owners})
                 item = {
@@ -250,18 +259,28 @@ def vendor_inventory(repo):
         })
 
     overlap_matrix = {
-        f"{set_id}:{source_id}:{target}": [x["path"] for x in sorted(items, key=lambda x: x["sequence"])]
-        for (set_id, source_id, target), items in sorted(overlaps.items()) if len(items) > 1
+        f"{source_id}:{target}": [x["path"] for x in sorted(items, key=lambda x: (x["patch_set_order"], x["sequence"]))]
+        for (source_id, target), items in sorted(overlaps.items()) if len(items) > 1
     }
     overlap_edges = []
-    for (set_id, source_id, target), items in sorted(overlaps.items()):
-        ordered = sorted(items, key=lambda x: x["sequence"])
+    cross_directory_edges = []
+    cross_directory_matrix = {}
+    for (source_id, target), items in sorted(overlaps.items()):
+        ordered = sorted(items, key=lambda x: (x["patch_set_order"], x["sequence"]))
+        if len({x["directory"] for x in ordered}) > 1:
+            cross_directory_matrix[f"{source_id}:{target}"] = [x["path"] for x in ordered]
         for previous, following in zip(ordered, ordered[1:]):
-            overlap_edges.append({
-                "patch_set_id": set_id, "source_id": source_id, "target_file": target,
+            edge = {
+                "source_id": source_id, "target_file": target,
                 "previous_patch": previous["path"], "next_patch": following["path"],
+                "previous_patch_set": previous["patch_set_id"], "next_patch_set": following["patch_set_id"],
+                "previous_directory": previous["directory"], "next_directory": following["directory"],
                 "previous_order": previous["sequence"], "next_order": following["sequence"],
-            })
+                "dependency_basis": "same-source-same-file-application-order",
+            }
+            overlap_edges.append(edge)
+            if previous["directory"] != following["directory"]:
+                cross_directory_edges.append(edge)
     return {
         "release": lock.get("release"),
         "lock_path": lock_path.relative_to(repo).as_posix(),
@@ -274,6 +293,8 @@ def vendor_inventory(repo):
         "patch_manifest_sha256": digest(json.dumps(patches, sort_keys=True, separators=(",", ":")).encode()),
         "file_overlap_matrix": overlap_matrix,
         "file_overlap_edges": overlap_edges,
+        "cross_directory_overlap_matrix": cross_directory_matrix,
+        "cross_directory_overlap_edges": cross_directory_edges,
         "duplicate_patch_content": [
             paths for paths in _groups([p["sha256"] for p in patches], [p["path"] for p in patches]).values()
             if len(paths) > 1
@@ -310,10 +331,19 @@ def inventory(repo):
         for target in p["target_files"]: by_target[target].append(p)
     overlap = {target: [p["path"] for p in ps] for target, ps in sorted(by_target.items()) if len(ps) > 1}
     edges = []
+    cross_directory_edges = []
+    cross_directory_matrix = {}
     for target, ps in sorted(by_target.items()):
+        if len({p["directory"] for p in ps}) > 1:
+            cross_directory_matrix[target] = [p["path"] for p in ps]
         for a, b in zip(ps, ps[1:]):
-            edges.append({"target_file": target, "previous_patch": a["path"], "next_patch": b["path"],
-                          "previous_order": a["order"], "next_order": b["order"]})
+            edge = {"target_file": target, "previous_patch": a["path"], "next_patch": b["path"],
+                    "previous_directory": a["directory"], "next_directory": b["directory"],
+                    "previous_order": a["order"], "next_order": b["order"],
+                    "dependency_basis": "same-kernel-source-same-file-application-order"}
+            edges.append(edge)
+            if a["directory"] != b["directory"]:
+                cross_directory_edges.append(edge)
     empty_targets = [p["path"] for p in patches if not p["target_files"]]
     if empty_targets: raise RuntimeError("Patch target parser left files unclassified: " + ", ".join(empty_targets))
     name_groups = _groups([p["name"] for p in patches], [p["path"] for p in patches])
@@ -334,7 +364,15 @@ def inventory(repo):
     core = {"kernel_version": kernel, "kernel_archive_sha256": hm.group(2),
             "patch_directories_in_application_order": PATCH_DIRS, "overlay_directories_in_application_order": OVERLAY_DIRS,
             "patches": patches, "vendor": vendor, "overlays": overlays,
-            "file_overlap_matrix": overlap, "semantic_dependencies": semantic}
+            "file_overlap_matrix": overlap, "cross_directory_overlap_matrix": cross_directory_matrix,
+            "vendor_cross_directory_overlap_matrix": vendor["cross_directory_overlap_matrix"],
+            "semantic_dependencies": semantic}
+    all_patch_records = patches + vendor["patches"]
+    repository_duplicate_patch_content = [
+        group for group in _groups([p["sha256"] for p in all_patch_records],
+                                   [p["path"] for p in all_patch_records]).values()
+        if len(group) > 1
+    ]
     return {
         "schema_version": 1, "kernel_version": kernel, "kernel_archive_sha256": hm.group(2),
         "patch_directories_in_application_order": PATCH_DIRS, "overlay_directories_in_application_order": OVERLAY_DIRS,
@@ -342,8 +380,12 @@ def inventory(repo):
         "overlay_manifest_sha256": overlay_sha, "input_manifest_sha256": digest(json.dumps(core, sort_keys=True, separators=(",", ":")).encode()),
         "patches": patches, "vendor": vendor, "repository_patch_count": len(patches) + vendor["patch_count"],
         "repository_patch_hunk_count": sum(p["hunks"] for p in patches) + vendor["patch_hunk_count"],
+        "cross_directory_dependency_count": len(cross_directory_edges) + len(vendor["cross_directory_overlap_edges"]),
+        "repository_duplicate_patch_content": repository_duplicate_patch_content,
         "repository_patch_manifest_sha256": digest(json.dumps({"kernel": patches, "vendor": vendor["patches"], "vendor_lock_sha256": vendor["lock_sha256"]}, sort_keys=True, separators=(",", ":")).encode()),
         "overlays": overlays, "file_overlap_matrix": overlap, "file_overlap_edges": edges,
+        "cross_directory_overlap_matrix": cross_directory_matrix,
+        "cross_directory_overlap_edges": cross_directory_edges,
         "overlay_collision_matrix": {k:v for k,v in sorted(overlay_targets.items()) if len(v)>1},
         "semantic_dependencies": semantic, "missing_semantic_dependencies": missing,
         "semantic_dependency_order_violations": [x for x in semantic if not x["prerequisite_applied_before_consumer"]],
@@ -387,9 +429,13 @@ def write_inventory(inv, out):
             "patch_directories_in_application_order": inv["patch_directories_in_application_order"],
             "patches": inv["patches"], "file_overlap_matrix": inv["file_overlap_matrix"],
             "same_file_dependency_edges": inv["file_overlap_edges"],
+            "cross_directory_overlap_matrix": inv["cross_directory_overlap_matrix"],
+            "cross_directory_dependency_edges": inv["cross_directory_overlap_edges"],
             "semantic_dependencies": inv["semantic_dependencies"],
         },
         "fixed_vendor": inv["vendor"],
+        "cross_directory_dependency_count": inv["cross_directory_dependency_count"],
+        "repository_duplicate_patch_content": inv["repository_duplicate_patch_content"],
         "overlays": inv["overlays"],
         "repository_patch_count": inv["repository_patch_count"],
         "repository_patch_hunk_count": inv["repository_patch_hunk_count"],
@@ -399,7 +445,9 @@ def write_inventory(inv, out):
     (out / "repository-patch-manifest.json").write_text(json.dumps(repository_manifest, indent=2) + "\n")
     for filename, rows, fields in [
         ("file-overlap-dependencies.csv", inv["file_overlap_edges"], ["target_file","previous_patch","next_patch","previous_order","next_order"]),
-        ("vendor-file-overlap-dependencies.csv", inv["vendor"]["file_overlap_edges"], ["patch_set_id","source_id","target_file","previous_patch","next_patch","previous_order","next_order"]),
+        ("vendor-file-overlap-dependencies.csv", inv["vendor"]["file_overlap_edges"], ["source_id","target_file","previous_patch","next_patch","previous_patch_set","next_patch_set","previous_directory","next_directory","previous_order","next_order","dependency_basis"]),
+        ("cross-directory-dependencies.csv", inv["cross_directory_overlap_edges"], ["target_file","previous_patch","next_patch","previous_directory","next_directory","previous_order","next_order","dependency_basis"]),
+        ("vendor-cross-directory-dependencies.csv", inv["vendor"]["cross_directory_overlap_edges"], ["source_id","target_file","previous_patch","next_patch","previous_patch_set","next_patch_set","previous_directory","next_directory","previous_order","next_order","dependency_basis"]),
         ("overlay-inventory.csv", inv["overlays"], ["directory_order","directory","source_path","target_path","sha256","bytes"]),
         ("semantic-dependencies.csv", inv["semantic_dependencies"], ["prerequisite","consumer","reason","prerequisite_order","consumer_order","prerequisite_applied_before_consumer"]),
     ]:
@@ -413,6 +461,8 @@ def write_inventory(inv, out):
         f"- Pre-patch overlay files: {inv['overlay_file_count']}\n"
         f"- Kernel same-file dependency edges: {len(inv['file_overlap_edges'])}\n"
         f"- Vendor same-file dependency edges: {len(inv['vendor']['file_overlap_edges'])}\n"
+        f"- Cross-directory same-source dependency edges: {inv['cross_directory_dependency_count']}\n"
+        f"- Exact duplicate patch-content groups: {len(inv['repository_duplicate_patch_content'])}\n"
         f"- Curated semantic dependency edges: {len(inv['semantic_dependencies'])}\n"
         f"- Patch manifest SHA256: {inv['patch_manifest_sha256']}\n"
         f"- Overlay manifest SHA256: {inv['overlay_manifest_sha256']}\n"
