@@ -222,7 +222,7 @@ jobs:
               block = loop[pos:block_end + 1] if pos >= 0 and block_end >= 0 else ""
               assert "goto err;" in block and "break;" not in block, f"WAPP field must fail closed: {field_error}"
           wps = (root / "wappd/common/wdev.c").read_text()
-          assert "key is configured, len = %d" in wps and "event_data->wps_conf_info.Key," not in wps, "WAPP WPS credential log redaction missing"
+          assert "key is configured, len = %d" in wps and "\\nSSID = %s, key = %s, len = %d" not in wps, "WAPP WPS credential log redaction missing"
           m = (root / "mapd/src/topologySrv/topologySrv.c").read_text()
           assert "key is configured" in m and "key=%s" not in m, "MAPD secret-log redaction missing"
           print("PASS: WAPP pre-write record bound, malformed-input fail-closed path and MAPD key-log redaction")
