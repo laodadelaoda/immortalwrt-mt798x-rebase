@@ -99,11 +99,10 @@
  		wapp->dpp->qr_cmd = 1;
 --- a/wappd/dpp/dpp.c
 +++ b/wappd/dpp/dpp.c
-@@ -10377,6 +10377,29 @@
- 		return 0;
+@@ -10378,6 +10378,29 @@
  }
  
-+#ifdef MAP_R3
+ #ifdef MAP_R3
 +static int dpp_read_qr_count(struct wifi_app *wapp, unsigned int *count)
 +{
 +	char value[16] = {0};
@@ -128,6 +127,8 @@
 +}
 +
  int  dpp_reset_dpp_config_file(struct wifi_app *wapp)
+ {
+ 
 @@ -10385,8 +10408,7 @@
  	char qr_param[20] = "0";
  	char value[150] = "0";
@@ -148,7 +149,10 @@
 +		uri_cnt = 0;
 +	}
 +	if (uri_cnt != 0) {
-@@ -10529,23 +10553,26 @@
+ 		for(uri_num = 1; uri_num <= uri_cnt; uri_num++) {
+ 			os_memset(qr_param, 0, 20);
+ 			res = os_snprintf(qr_param, sizeof(qr_param), "%s_%u", param_str, uri_num);
+@@ -10529,23 +10553,31 @@
      char qr_param[20] = "0";
  	char value[150] = "0";
  	char param_str[15] = "agt_qr_code";
@@ -156,7 +160,9 @@
 -	int uri_cnt = 0, ret = 0;
 +	unsigned int uri_num = 1, uri_cnt = 0;
 +	int ret = 0;
+ 
  	char *strbuf = NULL;
+    
 +	int found = 0;
 +
 +	if (!wapp || !wapp->map || !wapp->dpp || !uri_temp)
@@ -173,17 +179,25 @@
 -	uri_cnt = atoi(value);
 -	
 -	int found =0;
++#ifdef MAP_R3
 +	if (dpp_read_qr_count(wapp, &uri_cnt) < 0) {
 +		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"invalid or unavailable QR code count\n");
 +		os_free_mem(NULL, strbuf);
 +		return;
 +	}
- 	//If passed URI found , overwritng it with succesive URI
-@@ -10558,9 +10585,12 @@
++#else
++	os_free_mem(NULL, strbuf);
++	return;
++#endif
+ 	//If passed URI found , overwritng it with succesive URI 
+ 	//Also updating the successive URIs in the same manner
+ 	if(uri_cnt != 0) {
+@@ -10558,9 +10590,12 @@
  			if (os_snprintf_error(sizeof(qr_param), ret))
  				DBGPRINT(RT_DEBUG_TRACE, DPP_MAP_PREX"%s %d os_snprintf error1\n", __func__, __LINE__);
--
+ 
 -			 get_dpp_parameters(wapp->map, qr_param, value, sizeof(value));
+-			
 -			 if(memcmp(uri_temp,value,strlen(value))==0)
 +			if (get_dpp_parameters(wapp->map, qr_param, value, sizeof(value)) < 0) {
 +				DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"QR code parameter %u could not be read\n", uri_num);
@@ -191,10 +205,13 @@
 +				return;
 +			}
 +			if (value[0] && memcmp(uri_temp, value, strlen(value)) == 0)
-@@ -10571,8 +10601,12 @@
+ 			 	{
+ 			 	  DBGPRINT(RT_DEBUG_TRACE, DPP_MAP_PREX"strings matched : going to update qr codes \n");
+ 			 	found=1;
+@@ -10571,8 +10606,12 @@
  			if (os_snprintf_error(sizeof(qr_param), ret))
  				DBGPRINT(RT_DEBUG_TRACE, DPP_MAP_PREX"%s %d os_snprintf error2\n", __func__, __LINE__);
--
+ 
 -			get_dpp_parameters(wapp->map, qr_param, value, sizeof(value));
 -			if(!is_str_null(value))
 +			if (get_dpp_parameters(wapp->map, qr_param, value, sizeof(value)) < 0) {
@@ -203,7 +220,11 @@
 +				return;
 +			}
 +			if (!is_str_null(value))
-@@ -10582,7 +10616,11 @@
+ 			
+ 			{
+ 				os_memset(qr_param, 0, 20);
+@@ -10582,7 +10621,11 @@
+ 
  				dpp_save_config(wapp, (const char *)qr_param, (const char *)value, NULL);
  				os_memset(value, 0, 150);
 -				get_dpp_parameters(wapp->map, qr_param, value, sizeof(value));
@@ -213,4 +234,5 @@
 +					return;
 +				}
  			}
----END PATCH-
+ 			
+ 		  	}
