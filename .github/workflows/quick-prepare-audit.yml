@@ -152,7 +152,7 @@ jobs:
           netdevice_patch=0
           patch_digest="$(sha256sum "$patch_input" | awk '{print $1}')"
           patch_name="$(basename "${patch_file:-stdin.patch}")-${patch_digest:0:16}"
-          if grep -Eq '^(\+\+\+|---) ([ab]/)?include/linux/netdevice\.h([[:space:]]|$)' "$patch_input"; then
+          if grep -Fq 'include/linux/netdevice.h' "$patch_input"; then
             netdevice_patch=1
             snapshot_netdevice "pre" "$patch_name"
           fi
@@ -242,6 +242,22 @@ jobs:
               sha256sum kernel-patch-audit/failure-source/ppe/nf_flow_table_core.c*
             done
             for source in $(find build_dir -type f -path "*/include/linux/netdevice.h"); do
+              out="kernel-patch-audit/failure-source/netdevice"
+              mkdir -p "$out"
+              cp -f "$source" "$out/netdevice.h.pre-wed"
+              cp -f "$source.rej" "$out/netdevice.h.rej" 2>/dev/null || true
+              cp -f target/linux/mediatek/patches-6.12/999-hnat-13-netdevice-add-ndo_flow_offload_stats64_add-for-offload-stats-correction.patch "$out/"
+              cp -f target/linux/mediatek/patches-6.12/999-net-01-netdevice-add-macvlan-device-path-type.patch "$out/"
+              cp -f target/linux/mediatek/patches-6.12/999-net-02-netdevice-add-dslite-device-path-type.patch "$out/"
+              cp -f target/linux/mediatek/patches-6.12/999-net-02-netdevice-add-npu-device-path-type.patch "$out/"
+              cp -f target/linux/mediatek/patches-6.12/999-net-03-netdevice-add-tnl-device-path-type.patch "$out/"
+              cp -f target/linux/mediatek/patches-6.12/999-ppe-01-xt_FLOWOFFLOAD-add-bridging-support.patch "$out/"
+              cp -f target/linux/mediatek/patches-6.12/999-wed-07-mtk-wed-add-hwpath-wmm-support.patch "$out/"
+              sed -n '835,930p' "$source" > "$out/netdevice-path-context.txt"
+              (cd "$out" && sha256sum netdevice.h.pre-wed netdevice.h.rej *.patch netdevice-path-context.txt 2>/dev/null > SHA256SUMS)
+              echo "===== PRE-WED netdevice.h SHA256 and complete path layout ($source) ====="
+              cat "$out/SHA256SUMS"
+              cat "$out/netdevice-path-context.txt"
               echo "===== ACTUAL SOURCE: net_device_path_type ($source) ====="
               grep -n -B 5 -A 18 "enum net_device_path_type" "$source" || true
             done
