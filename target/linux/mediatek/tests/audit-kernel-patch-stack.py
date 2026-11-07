@@ -194,6 +194,11 @@ def vendor_inventory(repo):
                     "PKG_BUILD_DIR" + ("/" + root_suffix if root_suffix else "")
                 )
                 target_files = targets(txt)
+                if not target_files:
+                    raise RuntimeError(
+                        "Vendor patch has no parseable source target; refusing unowned patch: " +
+                        patch_path.relative_to(repo).as_posix()
+                    )
                 target_records = []
                 target_owners = []
                 for target in target_files:
@@ -220,6 +225,11 @@ def vendor_inventory(repo):
                         "patch_set_order": set_order, "sequence": sequence, "phase": phase,
                     })
                 source_ids = sorted({x["source_id"] for x in target_owners})
+                if not source_ids or len(target_owners) != len(target_files):
+                    raise RuntimeError(
+                        "Vendor patch target-to-archive ownership is incomplete: " +
+                        patch_path.relative_to(repo).as_posix()
+                    )
                 item = {
                     "scope": "fixed-vendor-package",
                     "patch_set_id": set_id,
