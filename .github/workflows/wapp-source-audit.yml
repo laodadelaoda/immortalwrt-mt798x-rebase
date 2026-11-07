@@ -34,6 +34,8 @@ jobs:
           git apply --numstat "$PKG/patches/012-p1905-wts-hardening.patch" >/dev/null
           git apply --numstat "$PKG/patches/013-wapp-wts-parser-fail-closed.patch" >/dev/null
           git apply --numstat "$PKG/patches/014-wapp-wps-key-log-redaction.patch" >/dev/null
+          test -s "$PKG/patches/015-dpp-config-lookup-null-and-error-guard.patch"
+          git apply --numstat "$PKG/patches/015-dpp-config-lookup-null-and-error-guard.patch" >/dev/null
           python3 "$PKG/scripts/n60-vendor-source-transforms.py" verify-lock "$GITHUB_WORKSPACE"
           grep -Fq 'apply_patch_strict' "$PKG/Makefile"
           grep -Fq 'if (i >= content_len - 1)' "$PKG/patches/011-wapp-wts-security.patch"
@@ -176,6 +178,9 @@ jobs:
           WPS_PATCH="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/014-wapp-wps-key-log-redaction.patch"
           patch --dry-run --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WPS_PATCH"
           patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WPS_PATCH"
+          DPP_CONFIG_PATCH="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/015-dpp-config-lookup-null-and-error-guard.patch"
+          patch --dry-run --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$DPP_CONFIG_PATCH"
+          patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$DPP_CONFIG_PATCH"
           python3 - "$PATCH_ROOT" <<'PY'
           import pathlib, re, sys
           root = pathlib.Path(sys.argv[1])
