@@ -59,6 +59,10 @@ jobs:
           tar -xjf wappd-80ca5724.tar.bz2 -C source
           echo "===== EXTRACTED FILE COUNT ====="
           find source -type f | wc -l
+          echo "===== EXACT DPP QR COUNT SOURCE CONTEXT (PINNED WAPP ARCHIVE) ====="
+          grep -RIn -C 45 --include='*.c' --include='*.h' 'qr_count' source/wappd/dpp | head -700
+          echo "===== DPP QR COUNT CALLS AND TYPES ====="
+          grep -RInE --include='*.c' --include='*.h' 'atoi\(value\)|uri_num|uri_cnt|MAP_MAX_DPP_URI_COUNT|qr_count' source/wappd/dpp | head -300
           mkdir -p binaries
           for name in wapp mapd p1905_managerd; do
             cp "$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/files/usr/bin/$name" "binaries/$name"
