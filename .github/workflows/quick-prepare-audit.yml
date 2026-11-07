@@ -151,7 +151,7 @@ jobs:
 
           netdevice_patch=0
           patch_name="$(basename "${patch_file:-stdin.patch}")"
-          if grep -Eq '^(\+\+\+|---) [ab/]?include/linux/netdevice\\.h([[:space:]]|$)' "$patch_input"; then
+          if grep -Eq '^(\+\+\+|---) ([ab]/)?include/linux/netdevice\.h([[:space:]]|$)' "$patch_input"; then
             netdevice_patch=1
             snapshot_netdevice "pre" "$patch_name"
           fi
