@@ -662,7 +662,7 @@ def validate_patch_application_log(inv, log, repo):
         # status; OpenWrt prepare succeeding therefore proves all hunks in
         # this invocation were accepted. Verify the complete target-file set
         # here, and reject failed/skipped/fuzzy applications above.
-        patched_files = re.findall(r"^patching file (.+?)\\s*$", block, re.M)
+        patched_files = re.findall(r"^patching file (.+?)\s*$", block, re.M)
         expected_files = patch["target_files"]
         if sorted(patched_files) != sorted(expected_files):
             raise RuntimeError(
