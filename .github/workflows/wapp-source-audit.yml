@@ -172,7 +172,7 @@ jobs:
           patch --dry-run --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WAPP_PATCH"
           patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WAPP_PATCH"
           python3 - "$PATCH_ROOT" <<'PY'
-          import pathlib, sys
+          import pathlib, re, sys
           root = pathlib.Path(sys.argv[1])
           p = (root / "1905daemon/src/file_io.c").read_text()
           start = p.index("int _1905_read_set_config(")
@@ -197,7 +197,7 @@ jobs:
           assert loop.index("if (i >= max_bss_num)") < loop.index("bss_info[i].operating_chan"), "WAPP record bound is not checked before array writes"
           assert "i--;" not in loop and "too much bss wireless setting info" not in loop, "WAPP legacy post-write truncation remains"
           assert loop.count("break;") == 1, "WAPP parser loop contains non-EOF break"
-          assert 'wrong format hidden ssid\\n");\n\t\t\t\tgoto err;' in loop, "WAPP malformed hidden-SSID path is not fail-closed"
+          assert re.search(r'wrong format hidden ssid\\n"\);\s*goto err;', loop), "WAPP malformed hidden-SSID path is not fail-closed"
           err = wfn[wfn.index("err:"):]
           assert "*config_bss_num = 0;" in err and "memset(bss_info, 0, sizeof(*bss_info) * max_bss_num);" in err
           assert "if (ferror(f))\n\t\tgoto err;" in wfn
