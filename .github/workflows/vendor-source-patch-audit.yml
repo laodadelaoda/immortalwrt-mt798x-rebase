@@ -116,7 +116,7 @@ jobs:
               fail "actual application applied $applied_hunks/$expected_hunks hunks: $patch_file"
               return 1
             fi
-            if grep -Eiq 'Hunk #[0-9]+ succeeded at .*\\(offset [+-]?[1-9][0-9]* lines?\\)' "$dry_log" "$apply_log"; then
+            if grep -Eiq 'Hunk #[0-9]+ succeeded at .*\(offset [+-]?[1-9][0-9]* lines?\)' "$dry_log" "$apply_log"; then
               ctx_out="$OUT/offset-context/$patch_name"
               mkdir -p "$ctx_out"
               cp -a "$ctx_tmp/before" "$ctx_out/"
@@ -127,7 +127,7 @@ jobs:
                   mkdir -p "$ctx_out/after/$(dirname "$rel")"
                   cp -p "$patch_root/$rel" "$ctx_out/after/$rel"
                 fi
-              done < <(sed -n 's/^+++ b\\///p' "$patch_file" | sort -u)
+              done < <(sed -n 's/^+++ b\///p' "$patch_file" | sort -u)
               cp "$patch_file" "$ctx_out/"
               cp "$dry_log" "$ctx_out/dry-run.log"
               cp "$apply_log" "$ctx_out/actual-apply.log"
