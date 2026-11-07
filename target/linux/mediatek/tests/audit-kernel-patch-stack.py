@@ -64,7 +64,7 @@ SEMANTIC = [
     ("736-04-net-ethernet-mediatek-fix-ppe-flow-accounting-for-L2.patch", "999-ppe-02-mtk_ppe-change-to-internal-ppe-debugfs.patch", "PPE debugfs patch extends the PPE implementation after generic L2 flow-accounting changes"),
     ("736-05-net-ethernet-mtk_eth_soc-zero-initialize-PPE-flow-ta.patch", "999-ppe-02-mtk_ppe-change-to-internal-ppe-debugfs.patch", "PPE debugfs implementation follows the generic PPE flow-table initialization change"),
     ("999-ppe-02-mtk_ppe-change-to-internal-ppe-debugfs.patch", "999-ppe-20-mtk_ppe-add-adaptive-PPPQ-mode.patch", "Adaptive PPPQ extends the QoS debugfs interface introduced by the base PPE debugfs patch"),
-    ("999-ppe-04-mtk_ppe-add-qos-toggle-for-debugfs.patch", "999-ppe-20-mtk_ppe-add-adaptive-PPPQ-mode.patch", "Adaptive PPPQ consumes qos_toggle and QDMA shaper state introduced by the QoS patch"),
+    ("999-ppe-04-mtk_ppe-change-to-internal-QoS-mode.patch", "999-ppe-20-mtk_ppe-add-adaptive-PPPQ-mode.patch", "Adaptive PPPQ consumes qos_toggle and QDMA shaper state introduced by the QoS patch"),
     ("999-ppe-11-mtk_ppe-dispatch-short-packets-a-high-priority.patch", "999-ppe-20-mtk_ppe-add-adaptive-PPPQ-mode.patch", "Adaptive PPPQ calls the queue getter exported by the short-packet priority patch"),
     ("999-ppe-14-mtk_ppe-add-PPE-cache-preserved-line-lock.patch", "999-ppe-20-mtk_ppe-add-adaptive-PPPQ-mode.patch", "Adaptive PPPQ refcount release uses the FOE state captured by the cache-preserved clear patch"),
 ]
@@ -255,6 +255,7 @@ def vendor_inventory(repo):
             "source_ids": [s["id"] for s in set_sources],
             "application_order": patch_set.get("application_order", []),
             "post_normalize_order": patch_set.get("post_normalize_order", []),
+            "post_normalize_root_suffixes": patch_set.get("post_normalize_root_suffixes", {}),
             "scope": patch_set.get("scope", ""),
         })
 
