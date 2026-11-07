@@ -122,16 +122,19 @@
  		}
  		*pos2 = '\0';
  		if (sscanf(pos1, "%d", &resv1) != 1) {
-@@ -333,7 +343,7 @@
- 
+@@ -333,7 +343,9 @@
+
  		end_line = strchr(pos1, '\n');
- 		if (!end_line)
+-		if (!end_line)
 -			break;
++		if (!end_line) {
++			debug(DEBUG_ERROR, "end line not found\n");
 +			goto err;
- 
++		}
+
  		// no ts, no hiddden-ssid, to next line
  		if (end_line - pos2 == 1) {
-@@ -353,7 +363,7 @@
+@@ -353,7 +365,7 @@
  				pos2 = strstr(pos1, "0x");
  				if (pos2 == NULL) {
  					debug(DEBUG_ERROR, "default vlan tlv len not found\n");
@@ -140,7 +143,7 @@
  				}
  				pos2 += 2;
  				pos1 = pos2;
-@@ -366,7 +376,7 @@
+@@ -366,7 +378,7 @@
  				pos2 = strstr(pos1, "0x");
  				if (pos2 == NULL) {
  					debug(DEBUG_ERROR, "default vlan not found\n");
@@ -149,7 +152,7 @@
  				}
  				pos2 += 2;
  				pos1 = pos2;
-@@ -379,7 +389,7 @@
+@@ -379,7 +391,7 @@
  				pos2 = strstr(pos1, "0x");
  				if (pos2 == NULL) {
  					debug(DEBUG_ERROR, "default pcp not found\n");
@@ -158,7 +161,7 @@
  				}
  				pos2 += 2;
  				pos1 = pos2;
-@@ -400,7 +410,7 @@
+@@ -400,7 +412,7 @@
  				pos2 = strstr(pos1, "0x");
  				if (pos2 == NULL) {
  					debug(DEBUG_ERROR, "traffic separation length not found\n");
@@ -167,7 +170,7 @@
  				}
  				pos2 += 2;
  				pos1 = pos2;
-@@ -413,7 +423,7 @@
+@@ -413,7 +425,7 @@
  				pos2 = strstr(pos1, "0x");
  				if (pos2 == NULL) {
  					debug(DEBUG_ERROR, "num of ssid not found\n");
@@ -176,7 +179,7 @@
  				}
  				pos2 += 2;
  				pos1 = pos2;
-@@ -426,7 +436,7 @@
+@@ -426,7 +438,7 @@
  				pos2 = strstr(pos1, "0x");
  				if (pos2 == NULL) {
  					debug(DEBUG_ERROR, "ssid len not found\n");
@@ -185,7 +188,7 @@
  				}
  				pos2 += 2;
  				pos1 = pos2;
-@@ -439,7 +449,7 @@
+@@ -439,7 +451,7 @@
  				pos2 = strchr(pos1, ' ');
  				if (pos2 == NULL) {
  					debug(DEBUG_ERROR, "ssid not found\n");
@@ -194,7 +197,7 @@
  				}
  				pos2 ++;
  				pos1 = pos2;
-@@ -455,7 +465,7 @@
+@@ -455,7 +467,7 @@
  				pos2 = strstr(pos1, "0x");
  				if (pos2 == NULL) {
  					debug(DEBUG_ERROR, "vlan not found\n");
@@ -203,7 +206,7 @@
  				}
  				pos2 += 2;
  				pos1 = pos2;
-@@ -467,7 +477,7 @@
+@@ -467,7 +479,7 @@
  				/* end of vlan */
  				pos2 = strchr(pos1, '\n');
  				if (!pos2)
@@ -212,7 +215,7 @@
  				else
  					pos2 ++;
  				pos1 = pos2;
-@@ -486,7 +496,7 @@
+@@ -486,7 +498,7 @@
  				pos1 = pos2;
  			} else {
  				debug(DEBUG_ERROR, "wrong format hidden ssid\n");
@@ -221,7 +224,7 @@
  			}
  		}
  #ifdef MAP_R2
-@@ -517,14 +527,14 @@
+@@ -517,14 +529,14 @@
  				pos2 = strstr(pos1, "pvid");
  				if (pos2 != NULL && (pos2 - pos1) < 10) {
  					debug(DEBUG_ERROR, "default vlan found\n");
@@ -238,7 +241,7 @@
  					}
  					pos2++;
  					pos1 = pos2;
-@@ -532,11 +542,11 @@
+@@ -532,11 +544,11 @@
  						debug(DEBUG_ERROR, "[%d]sscanf fail!\n", __LINE__);
  						goto err;
  					}
@@ -252,7 +255,7 @@
  				} else {
  					debug(DEBUG_TRACE, "pvid not found or too far\n");
  				}
-@@ -592,11 +602,6 @@
+@@ -592,11 +604,6 @@
  				fh_bss_unhidden |= bss_info[i].band_support;
  
  		i++;
@@ -264,7 +267,7 @@
  	}
  
  	*config_bss_num = i;
-@@ -604,8 +609,15 @@
+@@ -604,8 +611,15 @@
  	os_free(content);
  	if (fclose(f) < 0) {
  		debug(DEBUG_ERROR, "[%d]fclose fail!\n", __LINE__);
@@ -280,7 +283,7 @@
  
  	if (!(fh_bss_unhidden & BAND_2G_CAP)) {
  		debug(DEBUG_OFF, "2G bss is hidden or empty! wps may fail!\n");
-@@ -628,6 +640,8 @@
+@@ -628,6 +642,8 @@
  #endif
  	return 0;
  err:
