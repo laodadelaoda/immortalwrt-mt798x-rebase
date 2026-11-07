@@ -1,6 +1,7 @@
 --- a/1905daemon/src/file_io.c
 +++ b/1905daemon/src/file_io.c
-@@ -101,5 +101,8 @@
+@@ -101,6 +101,9 @@
+ 	char *pos1 = NULL, *pos2 = NULL, *end_line = NULL;
  #ifdef MAP_R2
  	char *pos3 = NULL;
 +	int pending_primary_vid = 0;
@@ -28,57 +29,56 @@
 +#endif
  
  	content_len = 100 * max_bss_num;
- 	content = os_zalloc(content_len);
-@@ -145,9 +154,6 @@
+ 	content = (char *)os_zalloc(content_len);
+@@ -132,10 +141,6 @@
+ 		debug(DEBUG_ERROR, "open file %s fail\n", name);
  		os_free(content);
  		return -1;
- 	}
+-	}
+-
 -	for (i = 0; i < max_bss_num; i++) {
 -		memset(&bss_info[i], 0, sizeof(struct set_config_bss_info));
--	}
+ 	}
  
  	i = 0;
- 	while ((ch = fgetc(f)) != EOF) {
-@@ -195,13 +200,17 @@
- 				pos2++;
- 				pos1 = pos2;
- 				continue;
- 			}
+@@ -190,11 +195,16 @@
+ 			continue;
+ 		}
+ 
 +		if (*pos1 == '\0')
 +			break;
 +		if (i >= max_bss_num)
 +			goto err;
- 
++
  		/*index*/
  		pos2 = strchr(pos1, ',');
  		if (pos2 == NULL) {
- 			debug(DEBUG_ERROR, "index not found\n");
+ 			debug(DEBUG_TRACE, "index not found\n");
 -			break;
 +			goto err;
  		}
  		*pos2 = '\0';
  		if (sscanf(pos1, "%d", &index) != 1) {
-@@ -207,3 +218,3 @@
- 		}
- 		pos2++;
- 		pos1 = pos2;
-@@ -218,6 +229,6 @@
+@@ -208,7 +218,7 @@
+ 		pos2 = strchr(pos1, ' ');
  		if (pos2 == NULL) {
  			debug(DEBUG_ERROR, "mac not found\n");
 -			break;
 +			goto err;
  		}
  		*pos2 = '\0';
- 		if (sscanf(pos1, "%02x:%02x:%02x:%02x:%02x:%02x", &mac_int[0], &mac_int[1],
-@@ -235,6 +246,6 @@
+ 		if (sscanf(pos1, "%02x:%02x:%02x:%02x:%02x:%02x", mac_int,
+@@ -227,7 +237,7 @@
+ 		pos2 = strchr(pos1, ' ');
  		if (pos2 == NULL) {
  			debug(DEBUG_ERROR, "opclass not found\n");
 -			break;
 +			goto err;
  		}
  		*pos2 = '\0';
- 		if (sscanf(pos1, "%03s", op_class) != 1) {
-@@ -252,6 +263,6 @@
+ 
+@@ -246,7 +256,7 @@
+ 		pos2 = strchr(pos1, ' ');
  		if (pos2 == NULL) {
  			debug(DEBUG_ERROR, "ssid not found\n");
 -			break;
@@ -86,23 +86,26 @@
  		}
  		*pos2 = '\0';
  		if (sscanf(pos1, "%32s", ssid) != 1) {
-@@ -270,6 +281,6 @@
+@@ -266,7 +276,7 @@
+ 		pos2 = strchr(pos1, ' ');
  		if (pos2 == NULL) {
  			debug(DEBUG_ERROR, "authmode not found\n");
 -			break;
 +			goto err;
  		}
  		*pos2 = '\0';
- 		if (sscanf(pos1, "%04x", &authmode) != 1) {
-@@ -287,6 +298,6 @@
+ 		if (sscanf(pos1, "0x%04x", &authmode) != 1) {
+@@ -280,7 +290,7 @@
+ 		pos2 = strchr(pos1, ' ');
  		if (pos2 == NULL) {
  			debug(DEBUG_ERROR, "encrytype not found\n");
 -			break;
 +			goto err;
  		}
  		*pos2 = '\0';
- 		if (sscanf(pos1, "%04x", &encrytype) != 1) {
-@@ -304,6 +315,6 @@
+ 		if (sscanf(pos1, "0x%04x", &encrytype) != 1) {
+@@ -294,7 +304,7 @@
+ 		pos2 = strchr(pos1, ' ');
  		if (pos2 == NULL) {
  			debug(DEBUG_ERROR, "key not found\n");
 -			break;
@@ -110,7 +113,8 @@
  		}
  		*pos2 = '\0';
  		if (sscanf(pos1, "%64s", key) != 1) {
-@@ -321,6 +332,6 @@
+@@ -314,7 +324,7 @@
+ 		pos2 = strchr(pos1, ' ');
  		if (pos2 == NULL) {
  			debug(DEBUG_ERROR, "resv1 not found\n");
 -			break;
@@ -118,117 +122,138 @@
  		}
  		*pos2 = '\0';
  		if (sscanf(pos1, "%d", &resv1) != 1) {
-@@ -339,6 +350,6 @@
+@@ -333,7 +343,7 @@
+ 
  		end_line = strchr(pos1, '\n');
- 		if (!end_line) {
- 			debug(DEBUG_ERROR, "end line not found\n");
+ 		if (!end_line)
 -			break;
 +			goto err;
- 		}
+ 
+ 		// no ts, no hiddden-ssid, to next line
  		if (end_line - pos2 == 1) {
-@@ -363,6 +374,6 @@
- 			if (pos2 == NULL) {
- 				debug(DEBUG_ERROR, "b5 tlv length not found\n");
--				break;
-+				goto err;
- 			}
- 			*pos2 = '\0';
- 			if (sscanf(pos1, "%d", &tlv_len) != 1) {
-@@ -377,6 +388,6 @@
- 			if (pos2 == NULL) {
- 				debug(DEBUG_ERROR, "b5 vlan id not found\n");
--				break;
-+				goto err;
- 			}
- 			*pos2 = '\0';
- 			if (sscanf(pos1, "%d", &vlan_id) != 1) {
-@@ -391,6 +402,6 @@
- 			if (pos2 == NULL) {
- 				debug(DEBUG_ERROR, "b5 pcp not found\n");
--				break;
-+				goto err;
- 			}
- 			*pos2 = '\0';
- 			if (sscanf(pos1, "%d", &pcp) != 1) {
-@@ -415,6 +426,6 @@
- 			if (pos2 == NULL) {
- 				debug(DEBUG_ERROR, "b6 tlv length not found\n");
--				break;
-+				goto err;
- 			}
- 			*pos2 = '\0';
- 			if (sscanf(pos1, "%d", &tlv_len) != 1) {
-@@ -429,6 +440,6 @@
- 			if (pos2 == NULL) {
- 				debug(DEBUG_ERROR, "b6 ssid num not found\n");
--				break;
-+				goto err;
- 			}
- 			*pos2 = '\0';
- 			if (sscanf(pos1, "%d", &ssid_num) != 1) {
-@@ -443,6 +454,6 @@
- 			if (pos2 == NULL) {
- 				debug(DEBUG_ERROR, "b6 ssid length not found\n");
--				break;
-+				goto err;
- 			}
- 			*pos2 = '\0';
- 			if (sscanf(pos1, "%d", &ssid_len) != 1) {
-@@ -457,6 +468,6 @@
- 			if (pos2 == NULL) {
- 				debug(DEBUG_ERROR, "b6 ssid not found\n");
--				break;
-+				goto err;
- 			}
- 			*pos2 = '\0';
- 			if (sscanf(pos1, "%32s", ssid) != 1) {
-@@ -471,6 +482,6 @@
- 			if (pos2 == NULL) {
- 				debug(DEBUG_ERROR, "b6 vlan id not found\n");
--				break;
-+				goto err;
- 			}
- 			*pos2 = '\0';
- 			if (sscanf(pos1, "%d", &vlan_id) != 1) {
-@@ -489,6 +500,6 @@
- 			if (pos2 == NULL) {
- 				debug(DEBUG_ERROR, "b6 end line not found\n");
--				break;
-+				goto err;
- 			}
- 			pos2++;
- 			pos1 = pos2;
-@@ -506,6 +517,6 @@
- 			if (sscanf(pos1, "%d", &hidden_ssid) != 1) {
- 				debug(DEBUG_ERROR, "hidden ssid format error\n");
--				break;
-+				goto err;
- 			}
- 			pos2++;
- 			pos1 = pos2;
-@@ -526,6 +537,6 @@
+@@ -353,7 +363,7 @@
+ 				pos2 = strstr(pos1, "0x");
+ 				if (pos2 == NULL) {
+ 					debug(DEBUG_ERROR, "default vlan tlv len not found\n");
+-					break;
++					goto err;
+ 				}
+ 				pos2 += 2;
+ 				pos1 = pos2;
+@@ -366,7 +376,7 @@
+ 				pos2 = strstr(pos1, "0x");
+ 				if (pos2 == NULL) {
+ 					debug(DEBUG_ERROR, "default vlan not found\n");
+-					break;
++					goto err;
+ 				}
+ 				pos2 += 2;
+ 				pos1 = pos2;
+@@ -379,7 +389,7 @@
+ 				pos2 = strstr(pos1, "0x");
  				if (pos2 == NULL) {
  					debug(DEBUG_ERROR, "default pcp not found\n");
 -					break;
 +					goto err;
  				}
- 				*pos2 = '\0';
- 				if (sscanf(pos1, "%d", &pcp) != 1) {
-@@ -543,4 +554,4 @@
--				ctx->map_policy.setting.primary_vid = vid;
-+				pending_primary_vid = vid;
- 				/* pcp is 0-7 */
- 				if (pcp < 0 || pcp > 7) {
- 					debug(DEBUG_ERROR, "invalid pcp=%d\n", pcp);
-@@ -551,4 +562,4 @@
--				ctx->map_policy.setting.dft.PCP = pcp;
-+				pending_pcp = pcp;
+ 				pos2 += 2;
+ 				pos1 = pos2;
+@@ -400,7 +410,7 @@
+ 				pos2 = strstr(pos1, "0x");
+ 				if (pos2 == NULL) {
+ 					debug(DEBUG_ERROR, "traffic separation length not found\n");
+-					break;
++					goto err;
+ 				}
+ 				pos2 += 2;
+ 				pos1 = pos2;
+@@ -413,7 +423,7 @@
+ 				pos2 = strstr(pos1, "0x");
+ 				if (pos2 == NULL) {
+ 					debug(DEBUG_ERROR, "num of ssid not found\n");
+-					break;
++					goto err;
+ 				}
+ 				pos2 += 2;
+ 				pos1 = pos2;
+@@ -426,7 +436,7 @@
+ 				pos2 = strstr(pos1, "0x");
+ 				if (pos2 == NULL) {
+ 					debug(DEBUG_ERROR, "ssid len not found\n");
+-					break;
++					goto err;
+ 				}
+ 				pos2 += 2;
+ 				pos1 = pos2;
+@@ -439,7 +449,7 @@
+ 				pos2 = strchr(pos1, ' ');
+ 				if (pos2 == NULL) {
+ 					debug(DEBUG_ERROR, "ssid not found\n");
+-					break;
++					goto err;
+ 				}
+ 				pos2 ++;
+ 				pos1 = pos2;
+@@ -455,7 +465,7 @@
+ 				pos2 = strstr(pos1, "0x");
+ 				if (pos2 == NULL) {
+ 					debug(DEBUG_ERROR, "vlan not found\n");
+-					break;
++					goto err;
+ 				}
+ 				pos2 += 2;
+ 				pos1 = pos2;
+@@ -467,7 +477,7 @@
+ 				/* end of vlan */
+ 				pos2 = strchr(pos1, '\n');
+ 				if (!pos2)
+-					break;
++					goto err;
+ 				else
+ 					pos2 ++;
+ 				pos1 = pos2;
+@@ -486,7 +496,7 @@
+ 				pos1 = pos2;
+ 			} else {
+ 				debug(DEBUG_ERROR, "wrong format hidden ssid\n");
+-				break;
++				goto err;
  			}
--			ctx->map_policy.tpolicy.updated = 1;
-+			pending_tpolicy_updated = 1;
  		}
-@@ -607,10 +618,5 @@
- 		}
+ #ifdef MAP_R2
+@@ -517,14 +527,14 @@
+ 				pos2 = strstr(pos1, "pvid");
+ 				if (pos2 != NULL && (pos2 - pos1) < 10) {
+ 					debug(DEBUG_ERROR, "default vlan found\n");
+-					ctx->map_policy.setting.primary_vid = vid;
++					pending_primary_vid = vid;
+ 					pvid = vid;
+ 					pos1 = pos2;
+ 
+ 					pos2 = strstr(pos1, " ");
+ 					if (pos2 == NULL) {
+ 						debug(DEBUG_ERROR, "default pcp not found\n");
+-						break;
++						goto err;
+ 					}
+ 					pos2++;
+ 					pos1 = pos2;
+@@ -532,11 +542,11 @@
+ 						debug(DEBUG_ERROR, "[%d]sscanf fail!\n", __LINE__);
+ 						goto err;
+ 					}
+-					ctx->map_policy.setting.dft.PCP = pcp;
++					pending_pcp = pcp;
+ 					pos2++;
+ 					pos1 = pos2;
+ 
+-					ctx->map_policy.tpolicy.updated = 1;
++					pending_tpolicy_updated = 1;
+ 				} else {
+ 					debug(DEBUG_TRACE, "pvid not found or too far\n");
+ 				}
+@@ -592,11 +602,6 @@
+ 				fh_bss_unhidden |= bss_info[i].band_support;
  
  		i++;
 -		if (i >= max_bss_num) {
@@ -237,8 +262,10 @@
 -			break;
 -		}
  	}
+ 
  	*config_bss_num = i;
-@@ -630,6 +634,13 @@
+@@ -604,8 +609,15 @@
+ 	os_free(content);
  	if (fclose(f) < 0) {
  		debug(DEBUG_ERROR, "[%d]fclose fail!\n", __LINE__);
 +		os_memset(bss_info, 0, sizeof(*bss_info) * max_bss_num);
@@ -251,11 +278,14 @@
 +	ctx->map_policy.tpolicy.updated = pending_tpolicy_updated;
 +#endif
  
- 	if (!(fh_bss_unhidden & BAND_2G_CAP))
-@@ -647,4 +656,6 @@
+ 	if (!(fh_bss_unhidden & BAND_2G_CAP)) {
+ 		debug(DEBUG_OFF, "2G bss is hidden or empty! wps may fail!\n");
+@@ -628,6 +640,8 @@
+ #endif
+ 	return 0;
  err:
 +	os_memset(bss_info, 0, sizeof(*bss_info) * max_bss_num);
 +	*config_bss_num = 0;
  	os_free(content);
- 	fclose(f);
- 	return -1;
+ 	if (fclose(f) < 0)
+ 		debug(DEBUG_ERROR, "[%d]fclose fail!\n", __LINE__);
