@@ -36,50 +36,18 @@ list_access = parser.find("dev_list = &wapp->dev_list")
 require(null_guard >= 0 and list_access > null_guard,
         "WAPP pointer must be validated before dereferencing its device list")
 
-auth_init = parser.find("os_memset(&auth, 0, sizeof(auth));")
-first_key = parser.find('"_1905netAccessKey"')
-require(auth_init >= 0 and first_key > auth_init,
-        "DPP authentication state must be zero-initialized before allocating credential buffers")
-connector_alloc = parser.find("auth.connector = os_zalloc(")
-connector_guard = parser.find("if (!auth.connector)", connector_alloc)
-require(connector_alloc >= 0 and connector_guard > connector_alloc,
-        "DPP connector allocation must be checked before use")
-
-
-def check_hex_key(begin_marker, end_marker, field_name):
-    begin = parser.find(begin_marker)
-    require(begin >= 0, f"{field_name}: source parameter lookup is missing")
-    end = parser.find(end_marker, begin) if end_marker else parser.find(
-        "cred = wapp_dpp_save_dpp_cred", begin)
-    require(end > begin, f"{field_name}: key parser block boundary is missing")
-    block = parser[begin:end]
-    for token in (
-        "get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0",
-        "size_t hex_len = os_strlen(value)",
-        "(hex_len & 1)",
-        "hex_len / 2 > sizeof(buf_temp)",
-        "key_len = hex_len / 2",
-        "hexstr2bin(value, buf_temp, key_len) < 0",
-        f"auth.{field_name} = wpabuf_alloc(key_len)",
-        f"NdisCopyMemory(auth.{field_name}->buf, buf_temp, key_len)",
-        f"auth.{field_name}->used = key_len",
-    ):
-        require(token in block, f"{field_name}: missing checked conversion invariant: {token}")
-    alloc = block.find(f"auth.{field_name} = wpabuf_alloc(key_len)")
-    guard = block.find(f"if (!auth.{field_name})", alloc)
-    copy = block.find(f"NdisCopyMemory(auth.{field_name}->buf, buf_temp, key_len)", guard)
-    require(alloc >= 0 and guard > alloc and copy > guard,
-            f"{field_name}: wpabuf allocation must be checked before copying key bytes")
-    zero = block.find("NdisZeroMemory(value")
-    used = block.find(f"auth.{field_name}->used = key_len")
-    require(zero < 0 or zero > used,
-            f"{field_name}: source hex string is cleared before the key copy is complete")
-    buf_zero = block.find("NdisZeroMemory(buf_temp")
-    require(buf_zero < 0 or buf_zero > used,
-            f"{field_name}: temporary decoded key buffer is cleared before the key copy is complete")
-
-check_hex_key('"_1905netAccessKey"', '"_1905cSignKey"', "net_access_key")
-check_hex_key('"_1905cSignKey"', None, "c_sign_key")
+# The main config loader must not rebuild a second, unused 1905 credential.
+# Authentication-owned Connector/C-Sign/NetAccessKey buffers are packed and sent
+# by the live wapp_dpp_process_config() path below, not by this config parser.
+for dead_token in (
+    "struct dpp_authentication auth;",
+    "os_memset(&auth, 0, sizeof(auth));",
+    '"_1905netAccessKey"',
+    '"_1905cSignKey"',
+    "wapp_dpp_save_dpp_cred(&auth)",
+):
+    require(dead_token not in parser,
+            f"main DPP config loader retains the removed key('"_1905cSignKey"', None, "c_sign_key")
 
 require("dpp_read_config_file_for_connection(wapp) < 0" in src["map"],
         "MAP event handler ignores DPP parser failure")
