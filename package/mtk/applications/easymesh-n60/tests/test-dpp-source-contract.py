@@ -19,6 +19,8 @@ paths = {
     "header": root / "wappd/dpp/dpp.h",
     "wdev": root / "wappd/common/wdev.c",
     "dpp_wdev": root / "wappd/dpp/dpp_wdev.c",
+    "dpp_reconfig": root / "wappd/dpp/dpp_reconfig.c",
+    "dpp_wired": root / "wappd/dpp/dpp_wired.c",
 }
 for name, path in paths.items():
     require(path.is_file(), f"required DPP source is missing: {path}")
@@ -354,5 +356,83 @@ require("forced_memzero(wapp->dpp_csign, wapp->dpp_csign_len);" in src["main"],
         "main DPP configuration replaces a retained C-sign key without clearing")
 require('wpa_hexdump(MSG_DEBUG, DPP_MAP_PREX "in process config cign key"' not in src["main"],
         "main DPP configuration still logs the C-sign key")
+
+
+# DPP 018: every DPP translation unit that emits binary diagnostics must redact payload bytes.
+for name in ("dpp", "dpp_reconfig", "dpp_wdev", "dpp_wired"):
+    source = src[name]
+    require("#define DPP_REDACT_DUMP(level, title)" in source,
+            f"{name}: DPP diagnostic redaction wrapper is missing")
+    for macro in (
+        "#define wpa_hexdump(level, title, buf, len) DPP_REDACT_DUMP(level, title)",
+        "#define wpa_hexdump_ascii(level, title, buf, len) DPP_REDACT_DUMP(level, title)",
+        "#define wpa_hexdump_buf(level, title, buf) DPP_REDACT_DUMP(level, title)",
+        "#define wpa_hexdump_key(level, title, buf, len) DPP_REDACT_DUMP(level, title)",
+        "#define wpa_hexdump_buf_key(level, title, buf) DPP_REDACT_DUMP(level, title)",
+    ):
+        require(macro in source, f"{name}: unsafe hexdump path is not redacted: {macro}")
+
+key_debug = extract_c_function(src["dpp"], "void dpp_debug_print_key(")
+require("dpp_debug_print_point(title, group, point)" in key_debug and
+        "EVP_PKEY_print_private" not in key_debug and
+        "i2d_ECPrivateKey" not in key_debug,
+        "DPP key diagnostics must expose public EC points only")
+
+for name, forbidden in (
+    ("dpp", (
+        'DPP_EVENT_CONNECTOR "After: %s"',
+        'DPP_EVENT_C_SIGN_KEY "%s"',
+        'DPP_EVENT_NET_ACCESS_KEY "%s"',
+        'DPP: dppCon: %s',
+        'DPP: Set configurator parameters: %s',
+    )),
+    ("dpp_reconfig", ('DPP: dppCon: %s', 'DPP: signedConnector: %s')),
+    ("dpp_wdev", (
+        'DPP_EVENT_CONNECTOR "%s"',
+        'DPP_EVENT_CONFOBJ_PASS "%s"',
+        'DPP_EVENT_CONFOBJ_PSK "%s"',
+        'DPP_EVENT_C_SIGN_KEY "%s"',
+        'DPP_EVENT_NET_ACCESS_KEY "%s"',
+        'DPP_EVENT_PP_KEY "%s"',
+    )),
+    ("map", ('DPP: configurationObject JSON', 'DPP: 2nd configurationObject JSON')),
+):
+    for marker in forbidden:
+        require(marker not in src[name],
+                f"{name}: credential-bearing text log remains: {marker}")
+
+for marker in ("_passphrase %s", "_PMK %s", "_PTK %s"):
+    require(marker not in src["wdev"],
+            f"DPP test helper still persists credential material: {marker}")
+
+# Config ownership cleanup must cover replacement and allocation-failure paths.
+cred_fn = extract_c_function(src["wdev"], "int wdev_set_dpp_cred(")
+for token in (
+    "forced_memzero(wdev->config->dpp_connector, os_strlen(wdev->config->dpp_connector) + 1)",
+    "forced_memzero(wdev->config->dpp_netaccesskey, wdev->config->dpp_netaccesskey_len)",
+    "forced_memzero(wdev->config->dpp_csign, wdev->config->dpp_csign_len)",
+    "forced_memzero(wdev->config->dpp_ppkey, wdev->config->dpp_ppkey_len)",
+    "forced_memzero(wdev->config->psk, sizeof(wdev->config->psk))",
+    "forced_memzero(wdev->config2->dpp_connector, os_strlen(wdev->config2->dpp_connector) + 1)",
+    "forced_memzero(wdev->config2->dpp_netaccesskey, wdev->config2->dpp_netaccesskey_len)",
+    "forced_memzero(wdev->config2->dpp_csign, wdev->config2->dpp_csign_len)",
+    "forced_memzero(wdev->config2->dpp_ppkey, wdev->config2->dpp_ppkey_len)",
+    "forced_memzero(wdev->config2->psk, sizeof(wdev->config2->psk))",
+    "forced_memzero(wdev_config->dpp_connector, os_strlen(wdev_config->dpp_connector) + 1)",
+    "forced_memzero(wdev_config->dpp_csign, wdev_config->dpp_csign_len)",
+    "forced_memzero(wdev_config->dpp_netaccesskey, wdev_config->dpp_netaccesskey_len)",
+    "forced_memzero(wdev_config->dpp_ppkey, wdev_config->dpp_ppkey_len)",
+    "forced_memzero(wdev_config->psk, sizeof(wdev_config->psk))",
+):
+    require(token in cred_fn, f"DPP config owner cleanup invariant missing: {token}")
+
+psk_clear = main.find("forced_memzero(wdev->config->psk, sizeof(wdev->config->psk));")
+psk_replace = main.find("os_memcpy(wdev->config, (char *)(&config[k])")
+require(psk_clear >= 0 and psk_replace > psk_clear,
+        "old per-interface PSK must be cleared before config replacement")
+require("int dpp_csign_updated = 0;" in main and
+        "dpp_csign_updated = 1;" in main and
+        "if (dpp_csign_updated && wapp->dpp_csign)" in main,
+        "global C-sign rollback must clear only a key installed by this transaction")
 
 print("PASS: DPP BSS/credential bounds/ownership/log redaction, main config guards, parser bounds, QR count 0..100 validation, QR load/save/reset/remove error paths, OpenSSL 3 accessor and secret redaction")
