@@ -442,7 +442,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  
  	dir = tuplehash->tuple.dir;
  	flow = container_of(tuplehash, struct flow_offload, tuplehash[dir]);
-@@ -393,6 +394,13 @@ static int nf_flow_offload_forward(struc
+@@ -393,6 +394,12 @@ static int nf_flow_offload_forward(struc
  	if (skb_try_make_writable(skb, thoff + ctx->hdrsize))
  		return -1;
  
@@ -463,7 +463,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  
  	dir = tuplehash->tuple.dir;
  	flow = container_of(tuplehash, struct flow_offload, tuplehash[dir]);
-@@ -672,6 +681,11 @@ static int nf_flow_offload_ipv6_forward(
+@@ -672,6 +681,12 @@ static int nf_flow_offload_ipv6_forward(
  	if (skb_try_make_writable(skb, thoff + ctx->hdrsize))
  		return -1;
  
