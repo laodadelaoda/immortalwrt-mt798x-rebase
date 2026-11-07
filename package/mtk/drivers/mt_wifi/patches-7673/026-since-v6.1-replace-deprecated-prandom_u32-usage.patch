@@ -1,6 +1,6 @@
 --- a/mt_wifi/embedded/common/rt_os_util.c
 +++ b/mt_wifi/embedded/common/rt_os_util.c
-@@ -12,5 +12,6 @@
+@@ -16,5 +16,6 @@
  #define RTMP_MODULE_OS_UTIL
  
 +#include <linux/random.h>

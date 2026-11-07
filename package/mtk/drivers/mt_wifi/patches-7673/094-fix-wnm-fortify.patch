@@ -1,7 +1,7 @@
 diff -ruN a/mt_wifi/embedded/ap/ap_cfg.c b/mt_wifi/embedded/ap/ap_cfg.c
 --- a/mt_wifi/embedded/ap/ap_cfg.c	2026-10-24 16:48:27.498912943 +0800
 +++ b/mt_wifi/embedded/ap/ap_cfg.c	2026-10-24 16:48:50.283331816 +0800
-@@ -26844,7 +26844,9 @@
+@@ -26900,7 +26900,9 @@
  	Len += 1;
  	Event->u.BTM_REQ_DATA.BTMReqLen = BTMReqLen;
  	Len += 2;

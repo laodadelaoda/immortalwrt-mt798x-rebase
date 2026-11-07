@@ -29,7 +29,7 @@
  	default:
 --- a/mt_wifi/embedded/sta/sta.c
 +++ b/mt_wifi/embedded/sta/sta.c
-@@ -580,8 +580,13 @@ INT sta_inf_open(struct wifi_dev *wdev)
+@@ -583,8 +583,13 @@ INT sta_inf_open(struct wifi_dev *wdev)
  		if (!pAd->CommonCfg.bcfg80211Disabled) {
  			AsicSetWdevIfAddr(pAd, wdev, OPMODE_STA);
  			if (wdev->if_dev) {

@@ -11,7 +11,7 @@
  	}
 --- a/mt_wifi/embedded/common/cmm_info.c
 +++ b/mt_wifi/embedded/common/cmm_info.c
-@@ -16479,7 +16479,7 @@ INT Set_TxBfProfileDataWrite(RTMP_ADAPTE
+@@ -16489,7 +16489,7 @@ INT Set_TxBfProfileDataWrite(RTMP_ADAPTE
  		strLen = strlen(value);
  
  		if (strLen & 1) {
@@ -20,7 +20,7 @@
  			strncat(value_T, value, strLen);
  			AtoH(value_T, (PCHAR)(&Input[i]), 2);
  			Input[i] = be2cpu16(Input[i]);
-@@ -16641,7 +16641,7 @@ between : */
+@@ -16651,7 +16651,7 @@ between : */
  		str_len = strlen(value);
  
  		if (str_len & 1) {
@@ -29,7 +29,7 @@
  			strncat(value_t, value, str_len);
  			AtoH(value_t, (PCHAR)(&input[i]), 2);
  			input[i] = be2cpu16(input[i]);
-@@ -16811,7 +16811,7 @@ INT Set_TxBfProfilePnWrite(RTMP_ADAPTER
+@@ -16821,7 +16821,7 @@ INT Set_TxBfProfilePnWrite(RTMP_ADAPTER
  		strLen = strlen(value);
  
  		if (strLen & 1) {

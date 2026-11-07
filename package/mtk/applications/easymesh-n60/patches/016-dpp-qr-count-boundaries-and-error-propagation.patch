@@ -477,7 +477,7 @@
  #ifdef OPENWRT_SUPPORT
 --- a/wappd/common/main.c
 +++ b/wappd/common/main.c
-@@ -1261,10 +1261,16 @@
+@@ -1234,10 +1234,16 @@
  	}
  #endif
  

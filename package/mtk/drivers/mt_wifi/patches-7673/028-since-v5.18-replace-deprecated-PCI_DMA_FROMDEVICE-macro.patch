@@ -20,7 +20,7 @@
  
 --- a/mt_wifi/os/linux/rt_rbus_pci_util.c
 +++ b/mt_wifi/os/linux/rt_rbus_pci_util.c
-@@ -159,7 +159,7 @@ PNDIS_PACKET RTMP_AllocateRxPacketBuffer
+@@ -160,7 +160,7 @@ PNDIS_PACKET RTMP_AllocateRxPacketBuffer
  	}
  
  	if (pkt) {
@@ -29,7 +29,7 @@
  		 if (dma_mapping_error(pdev, *pa)) {
  			MTWF_DBG(NULL, DBG_CAT_HIF, CATHIF_PCI, DBG_LVL_ERROR, "!!!!dma_mapping_error(pdev, *pa)!!!!\n");
  			switch (rx_ring->buf_type) {
-@@ -231,10 +231,10 @@ ra_dma_addr_t linux_pci_map_single(void
+@@ -232,10 +232,10 @@ ra_dma_addr_t linux_pci_map_single(void
  	struct device *pdev = (struct device *)pDev;
  
  	if (direction == RTMP_PCI_DMA_TODEVICE)
@@ -42,7 +42,7 @@
  
  	/*
  	 *	------ Porting Information ------
-@@ -264,10 +264,10 @@ void linux_pci_unmap_single(void *pDev,
+@@ -265,10 +265,10 @@ void linux_pci_unmap_single(void *pDev,
  	struct device *pdev = (struct device *)pDev;
  
  	if (direction == RTMP_PCI_DMA_TODEVICE)

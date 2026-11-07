@@ -1,6 +1,6 @@
 --- a/mt_wifi/embedded/common/wnm.c	2026-10-26 15:46:19.627130946 +0800
 +++ b/mt_wifi/embedded/common/wnm.c	2026-10-26 15:46:19.628418419 +0800
-@@ -166,7 +166,9 @@
+@@ -170,7 +170,9 @@
  	rsp_data->ifindex = RtmpOsGetNetIfIndex(net_dev);
  	memcpy(rsp_data->peer_mac_addr, peer_mac_addr, 6);
  	rsp_data->btm_rsp_len	= btm_rsp_len;
@@ -11,7 +11,7 @@
  
  	RtmpOSWrielessEventSend(net_dev, RT_WLAN_EVENT_CUSTOM,
  						OID_802_11_WNM_EVENT, NULL, (PUCHAR)buf, buflen);
-@@ -188,7 +190,9 @@
+@@ -192,7 +194,9 @@
  	rsp_data->ifindex = RtmpOsGetNetIfIndex(net_dev);
  	memcpy(rsp_data->peer_mac_addr, peer_mac_addr, 6);
  	rsp_data->btm_rsp_len	= btm_rsp_len;

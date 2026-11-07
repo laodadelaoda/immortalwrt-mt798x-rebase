@@ -1,6 +1,6 @@
 --- a/warp_main.c
 +++ b/warp_main.c
-@@ -1229,8 +1229,8 @@ warp_isr_handler(void *priv_data)
+@@ -1227,8 +1227,8 @@ warp_isr_handler(void *priv_data)
  		return;
  
  	wed = &warp->wed;
@@ -26,7 +26,7 @@
  		warp = (struct warp_entry *)wed->warp;
 --- a/warp_bm_v2.c
 +++ b/warp_bm_v2.c
-@@ -1161,9 +1161,9 @@ wed_rx_budget_ring_exit(
+@@ -1162,9 +1162,9 @@ wed_rx_budget_ring_exit(
  	u32 ring_len,
  	struct warp_dma_buf *desc)
  {

@@ -1,6 +1,6 @@
 --- a/mt_wifi/embedded/ap/ap_cfg.c
 +++ b/mt_wifi/embedded/ap/ap_cfg.c
-@@ -11650,7 +11650,7 @@ INT RTMPAPQueryInformation(
+@@ -11651,7 +11651,7 @@ INT RTMPAPQueryInformation(
  			Status = copy_to_user(wrq->u.data.pointer, &pAd->ApCfg.MBSSID[ifIndex].AccessControlList, sizeof(RT_802_11_ACL));
  
  		break;
@@ -9,7 +9,7 @@
  #ifdef CONFIG_DOT11V_WNM
  
  	case OID_802_11_WNM_IPV4_PROXY_ARP_LIST: {
-@@ -11688,19 +11688,37 @@ INT RTMPAPQueryInformation(
+@@ -11689,19 +11689,37 @@ INT RTMPAPQueryInformation(
  
  	case OID_802_11_SECURITY_TYPE: {
  		BSS_STRUCT *pMbss;
@@ -51,7 +51,7 @@
  		os_free_mem(pType);
  	}
  	break;
-@@ -11758,7 +11776,7 @@ INT RTMPAPQueryInformation(
+@@ -11759,7 +11777,7 @@ INT RTMPAPQueryInformation(
  	}
  	break;
  #endif /* CONFIG_HOTSPOT_R3 */

@@ -1,6 +1,6 @@
 --- a/mt_wifi/embedded/common/wnm.c	2026-10-26 20:55:50.363759891 +0800
 +++ b/mt_wifi/embedded/common/wnm.c	2026-10-26 20:55:50.386606641 +0800
-@@ -2495,7 +2495,9 @@
+@@ -2505,7 +2505,9 @@
  	Event->u.BTM_REQ_DATA.DialogToken = p_btm_req_data->dialog_token;
  	Event->u.BTM_REQ_DATA.BTMReqLen = p_btm_req_data->btm_req_len;
  
