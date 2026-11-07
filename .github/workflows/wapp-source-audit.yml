@@ -61,11 +61,26 @@ jobs:
           tar -xjf wappd-80ca5724.tar.bz2 -C source
           mkdir dpp-patch-root
           tar -xjf wappd-80ca5724.tar.bz2 -C dpp-patch-root
-          for name in 007-openssl3-use-native-evp-pkey-get0-ec-key.patch 008-dpp-parser-bounds-and-secret-redaction.patch 015-dpp-config-lookup-null-and-error-guard.patch 016-dpp-qr-count-boundaries-and-error-propagation.patch; do
+          LOCK_HELPER="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py"
+          TRANSFORM_HELPER="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/scripts/n60-vendor-source-transforms.py"
+          patch_names="$(python3 "$LOCK_HELPER" patch-order --repo "$GITHUB_WORKSPACE" --set easymesh --phase application)"
+          test -n "$patch_names" || { echo "DPP source capture has no locked application patch order" >&2; exit 1; }
+          for name in $patch_names; do
             patch_file="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/$name"
             patch --dry-run --batch --forward --fuzz=0 -p1 -d dpp-patch-root < "$patch_file"
             patch --batch --forward --fuzz=0 -p1 -d dpp-patch-root < "$patch_file"
           done
+          python3 "$TRANSFORM_HELPER" normalize "$RUNNER_TEMP/wapp-audit/dpp-patch-root"
+          post_names="$(python3 "$LOCK_HELPER" patch-order --repo "$GITHUB_WORKSPACE" --set easymesh --phase post_normalize)"
+          for name in $post_names; do
+            patch_root_suffix="$(python3 "$LOCK_HELPER" patch-root --repo "$GITHUB_WORKSPACE" --set easymesh --phase post_normalize --name "$name")"
+            patch_root="dpp-patch-root"
+            if [ -n "$patch_root_suffix" ]; then patch_root="$patch_root/$patch_root_suffix"; fi
+            patch_file="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/$name"
+            patch --dry-run --batch --forward --fuzz=0 -p1 -d "$patch_root" < "$patch_file"
+            patch --batch --forward --fuzz=0 -p1 -d "$patch_root" < "$patch_file"
+          done
+          python3 "$TRANSFORM_HELPER" finalize "$RUNNER_TEMP/wapp-audit/dpp-patch-root"
           python3 - <<'PY'
           import pathlib
           root = pathlib.Path("dpp-patch-root/wappd/dpp")
@@ -111,6 +126,7 @@ jobs:
             ${{ runner.temp }}/wapp-audit/dpp-patch-root/wappd/dpp/dpp.c
             ${{ runner.temp }}/wapp-audit/dpp-patch-root/wappd/dpp/dpp.h
             ${{ runner.temp }}/wapp-audit/dpp-patch-root/wappd/dpp/dpp_wdev.c
+            ${{ runner.temp }}/wapp-audit/dpp-patch-root/wappd/common/main.c
           if-no-files-found: error
           retention-days: 7
 
