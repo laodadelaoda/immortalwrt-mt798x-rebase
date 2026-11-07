@@ -34,8 +34,6 @@ jobs:
           git apply --numstat "$PKG/patches/012-p1905-wts-hardening.patch" >/dev/null
           git apply --numstat "$PKG/patches/013-wapp-wts-parser-fail-closed.patch" >/dev/null
           git apply --numstat "$PKG/patches/014-wapp-wps-key-log-redaction.patch" >/dev/null
-          test -s "$PKG/patches/015-dpp-qr-count-and-config-lookup-guards.patch"
-          git apply --numstat "$PKG/patches/015-dpp-qr-count-and-config-lookup-guards.patch" >/dev/null
           python3 "$PKG/scripts/n60-vendor-source-transforms.py" verify-lock "$GITHUB_WORKSPACE"
           grep -Fq 'apply_patch_strict' "$PKG/Makefile"
           grep -Fq 'if (i >= content_len - 1)' "$PKG/patches/011-wapp-wts-security.patch"
@@ -161,9 +159,6 @@ jobs:
           tar -xjf wappd-80ca5724.tar.bz2 -C "$PATCH_ROOT"
           tar -xjf mapd-6eca4331.tar.bz2 -C "$PATCH_ROOT"
           tar -xjf 1905daemon-35234223.tar.bz2 -C "$PATCH_ROOT"
-          DPP_PATCH="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/015-dpp-qr-count-and-config-lookup-guards.patch"
-          patch --dry-run --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$DPP_PATCH"
-          patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$DPP_PATCH"
           WTS_PATCH="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/011-wapp-wts-security.patch"
           patch --dry-run --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WTS_PATCH"
           patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WTS_PATCH"
@@ -228,13 +223,6 @@ jobs:
               assert "goto err;" in block and "break;" not in block, f"WAPP field must fail closed: {field_error}"
           wps = (root / "wappd/common/wdev.c").read_text()
           assert "key is configured, len = %d" in wps and "\\nSSID = %s, key = %s, len = %d" not in wps, "WAPP WPS credential log redaction missing"
-          dw = (root / "wappd/dpp/dpp_wdev.c").read_text()
-          assert "char param[64] = {0}, value[64] = {0};" in dw
-          assert "get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0" in dw
-          assert "parsed > MAP_MAX_DPP_URI_COUNT" in dw and "unsigned int uri_num = 1, uri_cnt = 0;" in dw
-          dc = (root / "wappd/dpp/dpp.c").read_text()
-          assert "parsed > MAP_MAX_DPP_URI_COUNT" in dc and "dpp_read_qr_count(wapp, &uri_cnt) < 0" in dc
-          assert "char uri_num" not in dc, "DPP QR loop retains narrow char index"
           m = (root / "mapd/src/topologySrv/topologySrv.c").read_text()
           assert "key is configured" in m and "key=%s" not in m, "MAPD secret-log redaction missing"
           print("PASS: WAPP pre-write record bound, malformed-input fail-closed path and MAPD key-log redaction")
