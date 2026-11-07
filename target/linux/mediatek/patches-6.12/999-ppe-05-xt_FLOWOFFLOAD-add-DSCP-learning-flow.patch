@@ -447,7 +447,6 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  		return -1;
  
 +	iph = (struct iphdr *)(skb_network_header(skb) + ctx->offset);
-+	ip6h = (struct ipv6hdr *)(skb_network_header(skb) + ctx->offset);
 +	net = nf_ct_net(flow->ct);
 +	if (net->ct.sysctl_qos &&
 +	    flow->tuplehash[dir].tuple.l4proto == IPPROTO_TCP)
@@ -468,6 +467,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	if (skb_try_make_writable(skb, thoff + ctx->hdrsize))
  		return -1;
  
++	ip6h = (struct ipv6hdr *)(skb_network_header(skb) + ctx->offset);
 +	net = nf_ct_net(flow->ct);
 +	if (net->ct.sysctl_qos &&
 +	    flow->tuplehash[dir].tuple.l4proto == IPPROTO_TCP)
