@@ -2,4 +2,4 @@ This file is an intentional trigger for the isolated N60 Pro fixed-vendor patch 
 
 The workflow calls vendor-source-patch-audit.yml only. It does not invoke Quick Prepare, Quick compilation, or Full firmware compilation.
 
-Audit trigger revision: 848b354b0193f36614689e4fd8a628d3adeb4e02
+Audit trigger revision: unified-manifest-fail-closed-b4cae5a37052d825e18cc3692bd2542fa1228470
