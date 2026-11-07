@@ -240,6 +240,7 @@ require("char *ifparam = NULL;" in qr_reset_fn and
 qr_remove_fn = extract_c_function(src["dpp"], "void  dpp_remove_uri_from_file(")
 require("if (!wapp || !wapp->map || !wapp->dpp || !uri_temp || !uri_temp[0])" in qr_remove_fn and
         "dpp_read_qr_count(wapp, &uri_cnt) < 0" in qr_remove_fn and
+        "os_strlen(uri_temp) >= 150" in qr_remove_fn and
         "unsigned int uri_cnt = 0, uri_num, found = 0;" in qr_remove_fn and
         "os_zalloc(sizeof(*uri_values) * uri_cnt)" in qr_remove_fn and
         "os_strcmp(uri_temp, uri_values[uri_num - 1]) == 0" in qr_remove_fn and
