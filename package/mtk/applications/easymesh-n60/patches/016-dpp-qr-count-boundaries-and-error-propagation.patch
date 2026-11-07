@@ -1,0 +1,477 @@
+--- a/wappd/dpp/dpp.c
++++ b/wappd/dpp/dpp.c
+@@ -10386,35 +10386,106 @@
+ }
+ 
+ #ifdef MAP_R3
+-int  dpp_reset_dpp_config_file(struct wifi_app *wapp)
++int dpp_read_qr_parameter(struct wifi_app *wapp, const char *param,
++			  char *value, size_t value_len)
+ {
++	if (!wapp || !wapp->map || !param || !value || !value_len)
++		return -1;
++	value[0] = '\0';
++#ifdef OPENWRT_SUPPORT
++	{
++		struct kvc_context *dat_ctx;
++		const char *stored;
++		size_t len;
++		int ret = -1;
+ 
+-   	char param[50]="0";
+-	char qr_param[20] = "0";
+-	char value[150] = "0";
+-	char param_str[15] = "agt_qr_code";
+-	char uri_num = 1;
+-	int uri_cnt = 0;
++		dat_ctx = dat_load(DPP_CFG_FILE);
++		if (!dat_ctx)
++			return -1;
++		stored = kvc_get(dat_ctx, param);
++		if (!stored) {
++			ret = 1;
++			goto out;
++		}
++		len = os_strlen(stored);
++		if (len >= value_len)
++			goto out;
++		os_memcpy(value, stored, len + 1);
++		ret = 0;
++out:
++		kvc_unload(dat_ctx);
++		return ret;
++	}
++#else
++	if (get_dpp_parameters(wapp->map, (char *)param, value, value_len) < 0)
++		return -1;
++	return 0;
++#endif
++}
++
++int dpp_read_qr_count(struct wifi_app *wapp, unsigned int *count)
++{
++	char value[16] = {0};
++	size_t len, i;
++	unsigned int parsed = 0;
++	int ret;
++
++	if (!count)
++		return -1;
++	*count = 0;
++	ret = dpp_read_qr_parameter(wapp, "qr_count", value, sizeof(value));
++	if (ret == 1)
++		return 0;
++	if (ret < 0)
++		return -1;
++	len = os_strlen(value);
++	if (!len || len > 3)
++		return -1;
++	for (i = 0; i < len; i++) {
++		unsigned int digit;
++
++		if (value[i] < '0' || value[i] > '9')
++			return -1;
++		digit = (unsigned int)(value[i] - '0');
++		parsed = parsed * 10 + digit;
++		if (parsed > MAP_MAX_DPP_URI_COUNT)
++			return -1;
++	}
++	*count = parsed;
++	return 0;
++}
++
++int  dpp_reset_dpp_config_file(struct wifi_app *wapp)
++{
++	char param[50] = "0";
++	char qr_param[20] = {0};
++	char value[150] = {0};
++	const char *param_str = "agt_qr_code";
++	unsigned int uri_num, uri_cnt = 0;
+ 	int res = 0;
+-	
++
+ 	char required_parameters[20][30]={"_akm","dpp_private_key","_1905valid","_1905connector",
+         "_1905netAccessKey","_1905cSignKey","_netKeyExpiry","_decryptThreshold","_ppkey","_bsscred",
+ 	"_bsscredlen","_bhcredlen","_fhcredlen","_valid","_ssid","_passPhrase","_connector",
+ 	"_netAccessKey","_cSignKey","qr_count"};
+ 
+-	get_dpp_parameters(wapp->map, "qr_count", value, sizeof(value));
+-	uri_cnt = atoi(value);
+-	if(uri_cnt != 0) {
+-		for(uri_num = 1; uri_num <= uri_cnt; uri_num++) {
+-			os_memset(qr_param, 0, 20);
+-			res = os_snprintf(qr_param, sizeof(qr_param), "%s_%u", param_str, uri_num);
+-			if (os_snprintf_error(sizeof(qr_param), res)) {
+-				DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"%s %d os_snprintf error\n", __func__, __LINE__);
+-				continue;
+-			}
++	if (!wapp || !wapp->map)
++		return -1;
++	if (dpp_read_qr_count(wapp, &uri_cnt) < 0) {
++		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"invalid qr_count; refusing partial DPP reset\n");
++		return -1;
++	}
++	for (uri_num = 1; uri_num <= uri_cnt; uri_num++) {
++		int read_ret;
+ 
+-			dpp_delete_parameter_from_file(wapp, (const char *)qr_param);
+-		}
++		res = os_snprintf(qr_param, sizeof(qr_param), "%s_%u", param_str, uri_num);
++		if (os_snprintf_error(sizeof(qr_param), res))
++			return -1;
++		read_ret = dpp_read_qr_parameter(wapp, qr_param, value, sizeof(value));
++		if (read_ret < 0)
++			return -1;
++		if (read_ret == 0 && dpp_delete_parameter_from_file(wapp, qr_param) < 0)
++			return -1;
+ 	}
+ 
+ 	for( int i=0;i<20;i++)
+@@ -10424,15 +10495,16 @@
+ 
+ #ifdef OPENWRT_SUPPORT
+ 		struct kvc_context *dat_ctx = NULL;
+-		char *ifparam;
++		char *ifparam = NULL;
+ 		int ret = 0;
+ 
+-		os_alloc_mem(NULL, (UCHAR**)&ifparam, os_strlen(param)+1);
+-		if(ifparam == NULL) {
++		os_alloc_mem(NULL, (UCHAR**)&ifparam, os_strlen(param) + 1);
++		if (!ifparam) {
+ 			DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"%s, mem alloc fail \n", __func__);
++			ret = -1;
+ 			goto out;
+ 		}
+-		NdisZeroMemory(ifparam, os_strlen(param));
++		NdisZeroMemory(ifparam, os_strlen(param) + 1);
+ 
+ 		strncat(ifparam, param,os_strlen(param));
+ 		dat_ctx = dat_load(DPP_CFG_FILE);
+@@ -10464,6 +10536,8 @@
+ 			    return -1;
+ #endif /* OPENWRT_SUPPORT */
+ 	}
++	if (wapp->dpp)
++		wapp->dpp->qr_code_num = 0;
+ 	return dpp_reset_mapd_user_config_file(wapp);
+ }
+ 
+@@ -10485,15 +10559,16 @@
+ 
+ #ifdef OPENWRT_SUPPORT
+ 		struct kvc_context *dat_ctx = NULL;
+-		char *ifparam;
++		char *ifparam = NULL;
+ 		int ret = 0;
+ 
+-		os_alloc_mem(NULL, (UCHAR **)&ifparam, os_strlen(param)+1);
+-		if (ifparam == NULL) {
++		os_alloc_mem(NULL, (UCHAR **)&ifparam, os_strlen(param) + 1);
++		if (!ifparam) {
+ 			DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"%s, mem alloc fail\n", __func__);
++			ret = -1;
+ 			goto out;
+ 		}
+-		NdisZeroMemory(ifparam, os_strlen(param));
++		NdisZeroMemory(ifparam, os_strlen(param) + 1);
+ 
+ 		strncat(ifparam, param, os_strlen(param));
+ 		dat_ctx = dat_load(MAPD_USER_CFG_FILE);
+@@ -10533,98 +10608,72 @@
+ #endif /*MAP R3 */
+ void  dpp_remove_uri_from_file(struct wifi_app *wapp, unsigned int id , const char *uri_temp)
+ {
+-    
+-    char qr_param[20] = "0";
+-	char value[150] = "0";
+-	char param_str[15] = "agt_qr_code";
+-	char uri_num = 1;
+-	int uri_cnt = 0, ret = 0;
+-
+-	char *strbuf = NULL;
+-   
+-	os_alloc_mem(NULL, (UCHAR**)&strbuf, 10);
+-	if (strbuf == NULL) {
+-		DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"Error: Memory allocation failed \n");
++#ifdef MAP_R3
++	char qr_param[20] = {0};
++	char count_buf[4] = {0};
++	char (*uri_values)[150] = NULL;
++	unsigned int uri_cnt = 0, uri_num, found = 0;
++	int ret;
++
++	(void)id;
++	if (!wapp || !wapp->map || !wapp->dpp || !uri_temp || !uri_temp[0])
++		return;
++	if (os_strlen(uri_temp) >= 150)
++		return;
++	if (dpp_read_qr_count(wapp, &uri_cnt) < 0) {
++		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"invalid qr_count; refusing URI removal\n");
+ 		return;
+ 	}
+-	
+-	NdisZeroMemory(strbuf, 10);
++	if (!uri_cnt)
++		return;
+ 
+-	get_dpp_parameters(wapp->map, "qr_count", value, sizeof(value));
+-	uri_cnt = atoi(value);
+-	
+-	int found =0;
+-	//If passed URI found , overwritng it with succesive URI 
+-	//Also updating the successive URIs in the same manner
+-	if(uri_cnt != 0) {
+-		for(uri_num = 1; uri_num <= uri_cnt; uri_num++)
+-			{
+-			  
+-			os_memset(qr_param, 0, 20);
+-			os_memset(value, 0, 150);
+-			ret = os_snprintf(qr_param, sizeof(qr_param), "%s_%u", param_str, uri_num);
+-			if (os_snprintf_error(sizeof(qr_param), ret))
+-				DBGPRINT(RT_DEBUG_TRACE, DPP_MAP_PREX"%s %d os_snprintf error1\n", __func__, __LINE__);
+-
+-			 get_dpp_parameters(wapp->map, qr_param, value, sizeof(value));
+-			
+-			 if(memcmp(uri_temp,value,strlen(value))==0)
+-			 	{
+-			 	  DBGPRINT(RT_DEBUG_TRACE, DPP_MAP_PREX"strings matched : going to update qr codes \n");
+-			 	found=1;
+-			for (uri_num = uri_num+1; uri_num <= uri_cnt; uri_num++) {
+-			os_memset(qr_param, 0, 20);
+-			os_memset(value, 0, 150);
+-			ret = os_snprintf(qr_param, sizeof(qr_param), "%s_%u", param_str, uri_num);
+-			if (os_snprintf_error(sizeof(qr_param), ret))
+-				DBGPRINT(RT_DEBUG_TRACE, DPP_MAP_PREX"%s %d os_snprintf error2\n", __func__, __LINE__);
+-
+-			get_dpp_parameters(wapp->map, qr_param, value, sizeof(value));
+-			if(!is_str_null(value))
+-			
+-			{
+-				os_memset(qr_param, 0, 20);
+-				ret = os_snprintf(qr_param, sizeof(qr_param), "%s_%u", param_str, (uri_num-1));
+-				if (os_snprintf_error(sizeof(qr_param), ret))
+-					DBGPRINT(RT_DEBUG_TRACE, DPP_MAP_PREX"%s %d os_snprintf error3\n", __func__, __LINE__);
+-
+-				dpp_save_config(wapp, (const char *)qr_param, (const char *)value, NULL);
+-				os_memset(value, 0, 150);
+-				get_dpp_parameters(wapp->map, qr_param, value, sizeof(value));
+-			}
+-			
+-		  	}
+-		 	}
+-			 if(found==1)
+-			 	break;
+-			
+-		}
+-		}
+-	 
+-     //updating/deleting last qr parameter 
+-     if(found ==1){
+-		os_memset(qr_param, 0, 20);
+-		ret = os_snprintf(qr_param, sizeof(qr_param), "%s_%u", param_str, uri_cnt);
++	uri_values = os_zalloc(sizeof(*uri_values) * uri_cnt);
++	if (!uri_values)
++		return;
++
++	/* Read and validate the complete bounded list before modifying the file. */
++	for (uri_num = 1; uri_num <= uri_cnt; uri_num++) {
++		ret = os_snprintf(qr_param, sizeof(qr_param), "agt_qr_code_%u", uri_num);
+ 		if (os_snprintf_error(sizeof(qr_param), ret))
+-			DBGPRINT(RT_DEBUG_TRACE, DPP_MAP_PREX"%s %d os_snprintf error4\n", __func__, __LINE__);
++			goto out;
++		ret = dpp_read_qr_parameter(wapp, qr_param, uri_values[uri_num - 1],
++					    sizeof(uri_values[uri_num - 1]));
++		if (ret < 0)
++			goto out;
++		if (!found && ret == 0 && uri_values[uri_num - 1][0] &&
++		    os_strcmp(uri_temp, uri_values[uri_num - 1]) == 0)
++			found = uri_num;
++	}
++	if (!found)
++		goto out;
+ 
+-		dpp_delete_parameter_from_file(wapp, (const char *)qr_param);
++	for (uri_num = found + 1; uri_num <= uri_cnt; uri_num++) {
++		ret = os_snprintf(qr_param, sizeof(qr_param), "agt_qr_code_%u", uri_num - 1);
++		if (os_snprintf_error(sizeof(qr_param), ret))
++			goto out;
++		if (dpp_save_config(wapp, qr_param, uri_values[uri_num - 1], NULL) < 0)
++			goto out;
++	}
+ 
+-         //updating the QR count
+-		 wapp->dpp->qr_code_num--;
+-		ret = os_snprintf(strbuf, 10, "%u", wapp->dpp->qr_code_num);
+-		if (os_snprintf_error(10, ret))
+-			DBGPRINT(RT_DEBUG_TRACE, DPP_MAP_PREX"%s %d os_snprintf error5\n", __func__, __LINE__);
+-
+-		dpp_save_config(wapp, "qr_count", strbuf, NULL);
+-		NdisZeroMemory(strbuf, 10);
+-
+-		
+-      	}
+-	    if (strbuf)
+-		   os_free_mem(NULL, strbuf);
+-		
+-		return;
++	ret = os_snprintf(qr_param, sizeof(qr_param), "agt_qr_code_%u", uri_cnt);
++	if (os_snprintf_error(sizeof(qr_param), ret))
++		goto out;
++	if (dpp_delete_parameter_from_file(wapp, qr_param) < 0)
++		goto out;
++	ret = os_snprintf(count_buf, sizeof(count_buf), "%u", uri_cnt - 1);
++	if (os_snprintf_error(sizeof(count_buf), ret))
++		goto out;
++	if (dpp_save_config(wapp, "qr_count", count_buf, NULL) < 0)
++		goto out;
++	wapp->dpp->qr_code_num = (u8)(uri_cnt - 1);
++out:
++	os_free(uri_values);
++#else
++	(void)wapp;
++	(void)id;
++	(void)uri_temp;
++#endif /* MAP_R3 */
+ }
+ 
+ 
+--- a/wappd/dpp/dpp.h
++++ b/wappd/dpp/dpp.h
+@@ -908,6 +908,9 @@
+ #endif
+ 
+ #ifdef MAP_R3
++int dpp_read_qr_parameter(struct wifi_app *wapp, const char *param,
++			  char *value, size_t value_len);
++int dpp_read_qr_count(struct wifi_app *wapp, unsigned int *count);
+ int  dpp_reset_dpp_config_file(struct wifi_app *wapp);
+ int  dpp_reset_mapd_user_config_file(struct wifi_app *wapp);
+ #endif 
+--- a/wappd/dpp/dpp_wdev.c
++++ b/wappd/dpp/dpp_wdev.c
+@@ -545,34 +545,36 @@
+ 
+ void wapp_dpp_get_uri_frm_file(struct wifi_app *wapp)
+ {
+-	char qr_param[20] = "0";
+-	char value[150] = "0";
+-	char param_str[15] = "agt_qr_code";
+-	char uri_num = 1;
+-	int uri_cnt = 0;
++	char qr_param[20] = {0};
++	char value[150] = {0};
++	unsigned int uri_num, uri_cnt = 0;
+ 	int ret;
+ 
+-	/* Get QR code save conunt for */
+-	get_dpp_parameters(wapp->map, "qr_count", value, sizeof(value));
+-	uri_cnt = atoi(value);
+-	if(uri_cnt != 0) {
+-		/* Resetting the flag so the same QR code is not saved */
++	if (!wapp || !wapp->map || !wapp->dpp)
++		return;
++	if (dpp_read_qr_count(wapp, &uri_cnt) < 0) {
++		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"invalid qr_count; refusing URI load\n");
+ 		wapp->dpp->qr_cmd = 0;
+-		for(uri_num = 1; uri_num <= uri_cnt; uri_num++) {
+-			os_memset(qr_param, 0, 20);
+-			os_memset(value, 0, 150);
+-			ret = os_snprintf(qr_param, sizeof(qr_param), "%s_%u", param_str, uri_num);
+-			if (os_snprintf_error(sizeof(qr_param), ret)) {
+-				DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"%s %d os_snprintf error\n", __func__, __LINE__);
+-				continue;
+-			}
++		return;
++	}
++	if (!uri_cnt)
++		return;
+ 
+-			get_dpp_parameters(wapp->map, qr_param, value, sizeof(value));
+-			if(!is_str_null(value))
+-				wapp_dpp_qr_code(wapp, (const char *)value);
++	/* Keep the command disabled unless every configured entry is readable. */
++	wapp->dpp->qr_cmd = 0;
++	for (uri_num = 1; uri_num <= uri_cnt; uri_num++) {
++		ret = os_snprintf(qr_param, sizeof(qr_param), "agt_qr_code_%u", uri_num);
++		if (os_snprintf_error(sizeof(qr_param), ret))
++			return;
++		ret = dpp_read_qr_parameter(wapp, qr_param, value, sizeof(value));
++		if (ret < 0) {
++			DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"failed to read QR entry %u\n", uri_num);
++			return;
+ 		}
+-		wapp->dpp->qr_cmd = 1;
++		if (ret == 0 && !is_str_null(value))
++			wapp_dpp_qr_code(wapp, (const char *)value);
+ 	}
++	wapp->dpp->qr_cmd = 1;
+ }
+ 
+ int wapp_dpp_set_onboarding_type(struct wifi_app *wapp, u8 flag)
+@@ -7127,40 +7129,37 @@
+ 
+ void dpp_save_dpp_uri_to_file(struct wifi_app *wapp, char *uri_str)
+ {
+-	char param_str[15] = "agt_qr_code";
+-	char qr_param[20] = "";
+-	char *strbuf = NULL;
++	char qr_param[20] = {0};
++	char count_buf[4] = {0};
++	unsigned int current_count = 0, next_count;
+ 	int ret;
+ 
+-	os_alloc_mem(NULL, (UCHAR**)&strbuf, 10);
+-	if (strbuf == NULL) {
+-		DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"Error: QR code could not save to file\n");
++	if (!wapp || !wapp->map || !wapp->dpp || !uri_str || !uri_str[0])
++		return;
++	if (os_strlen(uri_str) >= 150) {
++		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"QR URI exceeds configuration buffer\n");
+ 		return;
+ 	}
+-	NdisZeroMemory(strbuf, 10);
+-
+-	NdisZeroMemory(qr_param, 20);
+-
+-	if(wapp->dpp->qr_code_num >= MAP_MAX_DPP_URI_COUNT){
+-		DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"QR code count reached max in file,reset count\n");
+-		wapp->dpp->qr_code_num = 0;
++	if (dpp_read_qr_count(wapp, &current_count) < 0) {
++		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"invalid qr_count; refusing URI save\n");
++		return;
+ 	}
+-	wapp->dpp->qr_code_num++;
+-	ret = os_snprintf(qr_param, sizeof(qr_param), "%s_%u", param_str, wapp->dpp->qr_code_num);
++	next_count = current_count >= MAP_MAX_DPP_URI_COUNT ? 1 : current_count + 1;
++	ret = os_snprintf(qr_param, sizeof(qr_param), "agt_qr_code_%u", next_count);
+ 	if (os_snprintf_error(sizeof(qr_param), ret))
+-		DBGPRINT(RT_DEBUG_ERROR, "%s %d snprintf error\n", __func__, __LINE__);
+-	dpp_save_config(wapp, (const char *)qr_param, (const char *)uri_str, NULL);
+-
+-	ret = snprintf(strbuf, 10, "%u", wapp->dpp->qr_code_num);
+-	if (os_snprintf_error(10, ret))
+-		DBGPRINT(RT_DEBUG_ERROR, "%s %d snprintf error\n", __func__, __LINE__);
+-	dpp_save_config(wapp, "qr_count", strbuf, NULL);
+-	NdisZeroMemory(strbuf, 10);
+-
+-	if (strbuf)
+-		os_free_mem(NULL, strbuf);
+-
+-	return;
++		return;
++	ret = os_snprintf(count_buf, sizeof(count_buf), "%u", next_count);
++	if (os_snprintf_error(sizeof(count_buf), ret))
++		return;
++	if (dpp_save_config(wapp, qr_param, uri_str, NULL) < 0) {
++		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"failed to save QR entry %u\n", next_count);
++		return;
++	}
++	if (dpp_save_config(wapp, "qr_count", count_buf, NULL) < 0) {
++		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"failed to update QR count\n");
++		return;
++	}
++	wapp->dpp->qr_code_num = (u8)next_count;
+ }
+ #endif
+ #ifdef OPENWRT_SUPPORT
