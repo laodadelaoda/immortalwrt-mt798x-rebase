@@ -5,11 +5,10 @@
 +	u16 is_1905_conn = 0, is_normal = 0;
 @@ -807 +806,0 @@
 -	dev_list = &wapp->dev_list;
-@@ -843,2 +843,5 @@
- 		return WAPP_INVALID_ARG;
- 	}
+@@ -846,1 +846,4 @@
 +#ifdef MAP_R3
 +	dev_list = &wapp->dev_list;
 +#endif
+ 	os_memset(config, 0, 3 * sizeof(struct dpp_config));
 @@ -996 +997,0 @@
 -		cred_len = sizeof(*cred) + cred->payload_len;
