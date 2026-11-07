@@ -108,19 +108,21 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_debugfs.c
 @@ -207,6 +207,8 @@ mtk_ppe_internal_debugfs_read_qos
  	else if (eth->qos_toggle == 2)
- 		seq_puts(m, "Per-port-per-queue mode is enabled!\\n");
+ 		seq_puts(m, "Per-port-per-queue mode is enabled!\n");
 +	else if (eth->qos_toggle == 3)
-+		seq_puts(m, "Adaptive Per-port-per-queue mode is enabled!\\n");
++		seq_puts(m, "Adaptive Per-port-per-queue mode is enabled!\n");
  
  	return 0;
  }
-@@ -239,6 +241,7 @@ mtk_ppe_internal_debugfs_write_qos
+@@ -239,7 +239,8 @@ mtk_ppe_internal_debugfs_write_qos
  	case '3':
  		eth->qos_toggle = 3;
 +		eth->qdma_shaper.threshold = 6000;
  		break;
+ 	}
  
- 	return len;
+-	return count;
++	return count;
  }
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
