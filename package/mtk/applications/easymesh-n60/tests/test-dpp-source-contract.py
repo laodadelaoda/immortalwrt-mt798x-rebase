@@ -105,9 +105,9 @@ require("EVP_PKEY_get0_EC_KEY(csign)" in src["dpp"],
 dpp_source_files = list((root / "wappd/dpp").rglob("*.c")) + list((root / "wappd/dpp").rglob("*.h"))
 for source_path in dpp_source_files:
     source_text = source_path.read_text(encoding="utf-8")
-    require(re.search(r"\\b(?:pkey|key)->pkey\\.", source_text) is None,
+    require(re.search(r"\b(?:pkey|key)->pkey\.", source_text) is None,
             f"OpenSSL opaque EVP_PKEY field access remains in {source_path}")
-    require(re.search(r"\\bEVP_PKEY_get0_EC_KEY\\s*\\([^;]*\\)\\s*\\{", source_text, re.S) is None,
+    require(re.search(r"\bEVP_PKEY_get0_EC_KEY\s*\([^;]*\)\s*\{", source_text, re.S) is None,
             f"vendor EVP_PKEY_get0_EC_KEY implementation shadows OpenSSL 3 in {source_path}")
 
 require('DPP_MAP_PREX"dpp_private_key=%s' not in src["dpp"],
