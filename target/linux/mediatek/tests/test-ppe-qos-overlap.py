@@ -48,7 +48,7 @@ require("nf_ct_protonum(ct) == IPPROTO_TCP" in dscp_init and
         "DSCP tuple initialization must require a bidirectional TCP learning threshold.")
 
 # skb_try_make_writable() can replace skb storage; refresh the network-header pointer afterwards.
-ipv4 = flow_ip.split("static int nf_flow_offload_forward", 1)[1].split("unsigned int", 1)[0]
+ipv4 = flow_ip.split("static int nf_flow_offload_forward", 1)[1].split("static int nf_flow_offload_ipv6_forward", 1)[0]
 ipv6 = flow_ip.split("static int nf_flow_offload_ipv6_forward", 1)[1].split("static struct flow_offload_tuple_rhash", 1)[0]
 require(re.search(r"skb_try_make_writable[\s\S]*?iph = \(struct iphdr \*\)\(skb_network_header\(skb\) \+ ctx->offset\);[\s\S]*?if \(net->ct.sysctl_qos &&\s*flow->tuplehash\[dir\]\.tuple\.l4proto == IPPROTO_TCP\)\s*ipv4_change_dsfield\(iph", ipv4),
         "IPv4 DS-field rewrite must refresh the offset header pointer and apply only to TCP after skb_try_make_writable().")
