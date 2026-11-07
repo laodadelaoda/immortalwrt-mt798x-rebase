@@ -131,6 +131,11 @@ Signed-off-by: Rex Lu <rex.lu@mediatek.com>
  #ifdef CONFIG_NET_MEDIATEK_SOC_WED
 --- a/include/linux/netdevice.h
 +++ b/include/linux/netdevice.h
-@@ -873,1 +873,2 @@
+@@ -879,6 +879,7 @@
+ 			u16 wcid;
+ 			u8 bss;
  			u8 amsdu;
 +			u8 tid;
+ 		} mtk_wdma;
+ 		struct {
+ 			u8 h_source[ETH_ALEN];
