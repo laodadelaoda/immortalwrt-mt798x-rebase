@@ -81,19 +81,10 @@ jobs:
             cat > "$patch_input"
           fi
 
+          # PPE stage identification is based on the resulting source tree,
+          # not patch command-line spelling or mail-header text. OpenWrt may
+          # invoke patch with stdin, -i, or normalized input.
           stage=""
-          patch_identity="${patch_file##*/}"
-          # OpenWrt may pass a complete patch file with -i, or stream a
-          # normalized diff on stdin after stripping the mail header. Identify
-          # PPE stages by both the stable filename and unique patch payload
-          # markers; do not depend on the optional Subject: mail header.
-          if [[ "$patch_identity" == "999-ppe-04-mtk_ppe-change-to-internal-QoS-mode.patch" ]] ||
-             grep -Fq "qos_toggle" "$patch_input"; then
-            stage="after-04"
-          elif [[ "$patch_identity" == "999-ppe-05-xt_FLOWOFFLOAD-add-DSCP-learning-flow.patch" ]] ||
-               grep -Fq "nf_conntrack_qos" "$patch_input"; then
-            stage="after-05"
-          fi
 
           snapshot_sources() {
             local name="$1"
@@ -133,7 +124,20 @@ jobs:
             echo "Captured PPE source snapshot: $name"
           }
 
-          if [[ "$stage" == "after-05" ]]; then
+          ppe_offload="$targetdir/drivers/net/ethernet/mediatek/mtk_ppe_offload.c"
+          ppe_core="$targetdir/drivers/net/ethernet/mediatek/mtk_ppe.c"
+          ppe_eth_header="$targetdir/drivers/net/ethernet/mediatek/mtk_eth_soc.h"
+          after04_snapshot="$GITHUB_WORKSPACE/kernel-patch-audit/ppe-reconstruction/after-04/drivers/net/ethernet/mediatek/mtk_ppe_offload.c"
+          before05_snapshot="$GITHUB_WORKSPACE/kernel-patch-audit/ppe-reconstruction/before-05/drivers/net/ethernet/mediatek/mtk_ppe_offload.c"
+          after05_snapshot="$GITHUB_WORKSPACE/kernel-patch-audit/ppe-reconstruction/after-05/drivers/net/ethernet/mediatek/mtk_ppe_offload.c"
+
+          # The first patch invocation after PPE-04 is the pre-05 boundary.
+          # Capture it before applying that next patch, while the QoS mode
+          # change is present and the DSCP setter has not yet appeared.
+          if [[ -s "$after04_snapshot" && ! -s "$before05_snapshot" ]] &&
+             [[ -s "$ppe_eth_header" ]] && grep -Fq 'qos_toggle' "$ppe_eth_header" &&
+             [[ -s "$ppe_offload" ]] && ! grep -Fq 'mtk_foe_entry_set_dscp' "$ppe_offload"; then
+            stage="before-05"
             snapshot_sources "before-05"
           fi
 
@@ -194,7 +198,22 @@ jobs:
           fi
 
           if (( netdevice_patch )); then snapshot_netdevice "post" "$patch_name"; fi
-          if [[ -n "$stage" ]]; then snapshot_sources "$stage"; fi
+
+          # Capture the exact post-application source states at the PPE-04
+          # and PPE-05 boundaries. These signatures are introduced by the
+          # respective patches and remain independent of patch(1) arguments.
+          if [[ ! -s "$after04_snapshot" ]] &&
+             [[ -s "$ppe_eth_header" ]] && grep -Fq 'qos_toggle' "$ppe_eth_header" &&
+             [[ -s "$ppe_offload" ]] && grep -Fq 'mtk_flow_set_output_device' "$ppe_offload"; then
+            stage="after-04"
+            snapshot_sources "after-04"
+          fi
+          if [[ ! -s "$after05_snapshot" ]] &&
+             [[ -s "$ppe_core" ]] && grep -Fq 'mtk_foe_entry_set_dscp' "$ppe_core" &&
+             [[ -s "$ppe_offload" ]] && grep -Fq 'mtk_foe_entry_set_dscp' "$ppe_offload"; then
+            stage="after-05"
+            snapshot_sources "after-05"
+          fi
           PATCH_WRAPPER_EOF
           chmod +x "$PATCH_WRAPPER"
           PATCH_BIN="$RUNNER_TEMP/n60-patch-bin"
