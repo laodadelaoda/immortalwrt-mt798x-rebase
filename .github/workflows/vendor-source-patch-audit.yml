@@ -105,6 +105,12 @@ jobs:
             mapfile -t locked_names < <(python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py patch-order --repo "$GITHUB_WORKSPACE" --set "$set_id" --phase "$phase")
             for name in "${locked_names[@]}"; do
               test -s "$patch_dir/$name" || { fail "missing/empty locked patch: $patch_dir/$name"; continue; }
+              if [ "$set_id" = "easymesh" ] && [ "$name" = "017-dpp-credential-bounds-zeroization-and-log-redaction.patch" ]; then
+                mkdir -p "$OUT/pre017"
+                cp "$patch_root/wappd/common/main.c" "$OUT/pre017/main.c"
+                cp "$patch_root/wappd/dpp/dpp_wdev.c" "$OUT/pre017/dpp_wdev.c"
+                sha256sum "$OUT/pre017/main.c" "$OUT/pre017/dpp_wdev.c" > "$OUT/pre017/SHA256SUMS"
+              fi
               apply_one "$patch_dir/$name" "$patch_root"
             done
           }
@@ -330,6 +336,15 @@ jobs:
           path: PATCH-APPLICATION-REPORT.txt
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Upload actual pre-017 source from full audit patch stage
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: dpp-pre017-full-audit-source
+          path: ${{ runner.temp }}/n60-vendor-patch-audit/report/pre017/
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Upload unified patch inventory, dependency CSVs and SHA256 credentials
         if: always()
