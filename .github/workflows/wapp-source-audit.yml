@@ -30,8 +30,10 @@ jobs:
           test -s "$PKG/patches/011-wapp-wts-security.patch"
           test -s "$PKG/patches/012-p1905-wts-hardening.patch"
           test -s "$PKG/patches/013-wapp-wts-parser-fail-closed.patch"
+          test -s "$PKG/patches/014-wapp-wps-key-log-redaction.patch"
           git apply --numstat "$PKG/patches/012-p1905-wts-hardening.patch" >/dev/null
           git apply --numstat "$PKG/patches/013-wapp-wts-parser-fail-closed.patch" >/dev/null
+          git apply --numstat "$PKG/patches/014-wapp-wps-key-log-redaction.patch" >/dev/null
           python3 "$PKG/scripts/n60-vendor-source-transforms.py" verify-lock "$GITHUB_WORKSPACE"
           grep -Fq 'apply_patch_strict' "$PKG/Makefile"
           grep -Fq 'if (i >= content_len - 1)' "$PKG/patches/011-wapp-wts-security.patch"
@@ -171,6 +173,9 @@ jobs:
           WAPP_PATCH="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/013-wapp-wts-parser-fail-closed.patch"
           patch --dry-run --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WAPP_PATCH"
           patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WAPP_PATCH"
+          WPS_PATCH="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/014-wapp-wps-key-log-redaction.patch"
+          patch --dry-run --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WPS_PATCH"
+          patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WPS_PATCH"
           python3 - "$PATCH_ROOT" <<'PY'
           import pathlib, re, sys
           root = pathlib.Path(sys.argv[1])
@@ -216,6 +221,8 @@ jobs:
               block_end = loop.find("}", pos)
               block = loop[pos:block_end + 1] if pos >= 0 and block_end >= 0 else ""
               assert "goto err;" in block and "break;" not in block, f"WAPP field must fail closed: {field_error}"
+          wps = (root / "wappd/common/wdev.c").read_text()
+          assert "key is configured, len = %d" in wps and "event_data->wps_conf_info.Key," not in wps, "WAPP WPS credential log redaction missing"
           m = (root / "mapd/src/topologySrv/topologySrv.c").read_text()
           assert "key is configured" in m and "key=%s" not in m, "MAPD secret-log redaction missing"
           print("PASS: WAPP pre-write record bound, malformed-input fail-closed path and MAPD key-log redaction")
