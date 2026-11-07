@@ -57,17 +57,29 @@ jobs:
           set -u
           patch_input="$(mktemp)"
           trap 'rm -f "$patch_input"' EXIT
-          cat > "$patch_input"
 
           targetdir="."
+          patch_file=""
           args=("$@")
           for ((i = 0; i < ${#args[@]}; i++)); do
-            if [[ "${args[$i]}" == "-d" ]] && (( i + 1 < ${#args[@]} )); then
-              targetdir="${args[$((i + 1))]}"
-              break
-            fi
+            case "${args[$i]}" in
+              -d|--directory)
+                if (( i + 1 < ${#args[@]} )); then targetdir="${args[$((i + 1))]}"; fi
+                ;;
+              -i|--input)
+                if (( i + 1 < ${#args[@]} )); then patch_file="${args[$((i + 1))]}"; fi
+                ;;
+              -i?*)
+                patch_file="${args[$i]#-i}"
+                ;;
+            esac
           done
           targetdir="$(cd "$targetdir" && pwd)"
+          if [[ -n "$patch_file" && -f "$patch_file" ]]; then
+            cp -f "$patch_file" "$patch_input"
+          else
+            cat > "$patch_input"
+          fi
 
           stage=""
           if grep -Fq "Subject: [PATCH] net: ethernet: mtk_ppe: change to internal QoS mode" "$patch_input"; then
@@ -76,17 +88,9 @@ jobs:
             stage="after-05"
           fi
 
-          if /usr/bin/patch "$@" < "$patch_input"; then
-            rc=0
-          else
-            rc=$?
-          fi
-          if (( rc != 0 )); then
-            exit "$rc"
-          fi
-
-          if [[ -n "$stage" ]]; then
-            out="$GITHUB_WORKSPACE/kernel-patch-audit/ppe-reconstruction/$stage"
+          snapshot_sources() {
+            local name="$1"
+            local out="$GITHUB_WORKSPACE/kernel-patch-audit/ppe-reconstruction/$name"
             mkdir -p "$out"
             for rel in \
               drivers/net/ethernet/mediatek/mtk_ppe_offload.c \
@@ -94,26 +98,51 @@ jobs:
               drivers/net/ethernet/mediatek/mtk_ppe.c \
               drivers/net/ethernet/mediatek/mtk_ppe.h \
               drivers/net/ethernet/mediatek/mtk_eth_soc.h \
-              drivers/net/ethernet/mediatek/mtk_wed.h \
+              include/net/flow_offload.h \
+              include/net/netfilter/nf_conntrack_extend.h \
               include/net/netfilter/nf_conntrack_qos.h \
               include/net/netfilter/nf_flow_table.h \
               include/net/netns/conntrack.h \
-              net/netfilter/xt_FLOWOFFLOAD.c \
+              net/netfilter/nf_conntrack_core.c \
+              net/netfilter/nf_conntrack_extend.c \
+              net/netfilter/nf_conntrack_netlink.c \
+              net/netfilter/nf_conntrack_standalone.c \
+              net/netfilter/nf_flow_table_core.c \
               net/netfilter/nf_flow_table_ip.c \
               net/netfilter/nf_flow_table_offload.c \
-              net/netfilter/nf_conntrack_core.c; do
+              net/netfilter/xt_FLOWOFFLOAD.c; do
               if [[ -s "$targetdir/$rel" ]]; then
                 mkdir -p "$out/$(dirname "$rel")"
                 cp -f "$targetdir/$rel" "$out/$rel"
+                [[ ! -s "$targetdir/$rel.rej" ]] || cp -f "$targetdir/$rel.rej" "$out/$rel.rej"
+                [[ ! -s "$targetdir/$rel.orig" ]] || cp -f "$targetdir/$rel.orig" "$out/$rel.orig"
               fi
             done
             cp -f "$GITHUB_WORKSPACE/target/linux/mediatek/patches-6.12/999-ppe-04-mtk_ppe-change-to-internal-QoS-mode.patch" "$out/"
-            if [[ "$stage" == "after-05" ]]; then
+            if [[ "$stage" == "after-05" || "$name" == "before-05" || "$name" == "failed-05-partial" ]]; then
               cp -f "$GITHUB_WORKSPACE/target/linux/mediatek/patches-6.12/999-ppe-05-xt_FLOWOFFLOAD-add-DSCP-learning-flow.patch" "$out/"
             fi
             (cd "$out" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
-            echo "Captured real PPE source snapshot: $stage"
+            echo "Captured PPE source snapshot: $name"
+          }
+
+          if [[ "$stage" == "after-05" ]]; then
+            snapshot_sources "before-05"
           fi
+
+          if [[ -n "$patch_file" && -f "$patch_file" ]]; then
+            /usr/bin/patch "${args[@]}"
+            rc=$?
+          else
+            /usr/bin/patch "${args[@]}" < "$patch_input"
+            rc=$?
+          fi
+          if (( rc != 0 )); then
+            if [[ "$stage" == "after-05" ]]; then snapshot_sources "failed-05-partial"; fi
+            exit "$rc"
+          fi
+
+          if [[ -n "$stage" ]]; then snapshot_sources "$stage"; fi
           PATCH_WRAPPER_EOF
           chmod +x "$PATCH_WRAPPER"
           PATCH_BIN="$RUNNER_TEMP/n60-patch-bin"
