@@ -67,6 +67,8 @@ require("case '3':" in debugfs and "qos_toggle = 3" in debugfs,
         "adaptive PPPQ mode 3 must be selectable through qos_toggle.")
 require("qos_toggle == 3" in offload,
         "adaptive PPPQ mode 3 consumer is missing.")
+require("idev && mtk_is_xlat464_enabled()" in offload,
+        "464XLAT name lookup must not dereference a missing ingress device.")
 
 # #20 must release the software hash even when hardware state was already cleared.
 clear = ppe_c.split("__mtk_foe_entry_clear", 1)[1].split("static int __mtk_foe_entry_idle_time", 1)[0]
@@ -87,5 +89,13 @@ require(re.search(r"struct mtk_ppe \*ppe = eth->ppe\[i\];[\s\S]{0,120}if\s*\(!pp
 lookup = offload.split("mtk_find_tuple_in_ppe", 1)[1]
 require(re.search(r"ppe = eth->ppe\[i\];[\s\S]{0,100}if\s*\(!ppe\)\s*continue;", lookup),
         "464XLAT PPE lookup must skip absent PPE instances.")
+require("DSA_TAG_PROTO_MXL862_8021Q" in offload and "mtk_foe_entry_set_dsa(eth, foe, dsa_proto, dsa_port)" in offload,
+        "MXL862 DSA protocol must be preserved into the PPE DSA entry.")
+require("FLOW_ACTION_NPU_ENCAP" in offload and "xfrm_state_lookup_byaddr" in offload and "xfrm_state_put(xs)" in offload,
+        "NPU/XFRM flow actions must resolve and release the xfrm_state reference.")
+require("mtk_flow_is_dev_3addr_sta" in offload and "NL80211_IFTYPE_STATION" in offload and "ether_addr_copy(data.eth.h_source, odev->dev_addr)" in offload,
+        "3-address station egress must use the egress device source MAC.")
+require("ndo_fill_forward_path" in offload and "info.tid = dscp" in offload and "FIELD_PREP(MTK_FOE_WINFO_AMSDU_TID, tid)" in read("drivers/net/ethernet/mediatek/mtk_ppe.c"),
+        "WED WMM TID must flow through the netdevice path and PPE WDMA entry.")
 
 print("PASS: PPE/QoS overlap contracts (#04/#05/#11/#20/#28/#32/#33/#35/#39/#42/#45/WED-07).")

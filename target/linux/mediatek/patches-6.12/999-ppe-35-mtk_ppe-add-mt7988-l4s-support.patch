@@ -87,7 +87,7 @@ Subject: [PATCH] net: ethernet: mtk_ppe: add mt7988 l4s support
 +	struct mtk_mac *target_mac;
 +	u32 gdm_config, val;
 +	char buf[8];
-+	int len = count;
++	size_t len = count;
 +	int i, ppe_num;
 +
 +	if (!len || len > sizeof(buf))

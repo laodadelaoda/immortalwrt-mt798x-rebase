@@ -419,7 +419,7 @@ Subject: [PATCH] net: ethernet: mtk_ppe: add 464xlat clat support
 +	line[length] = '\0';
 +
 +	ret = sscanf(line, "%1d %45s", &enable, addr);
-+	if (ret < 1 || (enable != 0 && enable != 1))
++	if (ret < 1 || (enable != 0 && enable != 1) || (!enable && ret != 1))
 +		return -EINVAL;
 +
 +	if (enable) {
@@ -736,7 +736,7 @@ Subject: [PATCH] net: ethernet: mtk_ppe: add 464xlat clat support
  		}
  	}
  
-+	if (mtk_is_xlat464_enabled() && !strncmp(idev->name, "464-", 4)) {
++	if (idev && mtk_is_xlat464_enabled() && !strncmp(idev->name, "464-", 4)) {
 +		/* IPv4 packets arriving from a 464xlat device are 6-to-4 (XLAT64),
 +		 * IPv6 packets arriving from a 464xlat device are 4-to-6 (XLAT46).
 +		 */
