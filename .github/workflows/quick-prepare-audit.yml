@@ -116,7 +116,12 @@ jobs:
           fi
           PATCH_WRAPPER_EOF
           chmod +x "$PATCH_WRAPPER"
-          export PATCH="$PATCH_WRAPPER"
+          PATCH_BIN="$RUNNER_TEMP/n60-patch-bin"
+          mkdir -p "$PATCH_BIN"
+          ln -sf "$PATCH_WRAPPER" "$PATCH_BIN/patch"
+          export PATH="$PATCH_BIN:$PATH"
+          echo "PATCH wrapper: $(command -v patch)"
+          echo "Patch wrapper is injected through PATH so scripts invoking literal patch are also captured."
           if ! make target/linux/prepare V=s 2>&1 | tee "$KERNEL_PATCH_LOG"; then
             echo "::error::Linux 6.12 source preparation or complete kernel patch application failed."
             tail -n 250 "$KERNEL_PATCH_LOG"
