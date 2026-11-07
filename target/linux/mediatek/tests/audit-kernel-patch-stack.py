@@ -424,6 +424,7 @@ def write_inventory(inv, out):
     (out / "patch-inventory.json").write_text(json.dumps(inv, indent=2) + "\n")
     repository_manifest = {
         "schema_version": 1,
+        "scope": "N60 Pro active Linux 6.12.112 kernel patch stack plus fixed vendor source patch sets declared in package/mtk/vendor-sources.lock.json; unrelated OpenWrt package and target patch stacks are excluded",
         "repository_head_sha": head(out.parent if out.name == "kernel-patch-audit" else out),
         "kernel": {
             "version": inv["kernel_version"], "archive_sha256": inv["kernel_archive_sha256"],
@@ -455,7 +456,10 @@ def write_inventory(inv, out):
         with (out / filename).open("w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=fields); w.writeheader(); w.writerows(rows)
     (out / "README.md").write_text(
-        "# Linux 6.12.112 patch-stack inventory\n\n"
+        "# N60 Pro unified patch-stack inventory\n\n"
+        "Scope: active Linux 6.12.112 kernel patch directories and fixed vendor package patch sets declared by the vendor Lock; unrelated OpenWrt patch stacks are excluded.\n\n"
+        "- Unified manifest: repository-patch-manifest.json\n"
+        "- Cross-directory reports: cross-directory-dependencies.csv and vendor-cross-directory-dependencies.csv\n"
         f"- Ordered Linux kernel patches: {inv['patch_count']} ({inv['patch_hunk_count']} hunks)\n"
         f"- Fixed vendor package patches: {inv['vendor']['patch_count']} ({inv['vendor']['patch_hunk_count']} hunks)\n"
         f"- Unified repository patch inputs: {inv['repository_patch_count']} ({inv['repository_patch_hunk_count']} hunks)\n"

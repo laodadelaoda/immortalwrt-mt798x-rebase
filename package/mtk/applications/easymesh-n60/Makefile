@@ -64,7 +64,7 @@ define Build/Prepare
 		patch_root_suffix="$$$$(python3 ./scripts/n60-vendor-lock.py patch-root --repo "$(TOPDIR)" --set easymesh --phase post_normalize --name "$$$$patch_name")"; \
 		patch_root="$(PKG_BUILD_DIR)"; \
 		if [ -n "$$$$patch_root_suffix" ]; then patch_root="$$$$patch_root/$$$$patch_root_suffix"; fi; \
-		printf "LOCK POST-NORMALIZE ROOT: %s -> %s\\n" "$$$$patch_name" "$$$$patch_root"; \
+		printf "LOCK POST-NORMALIZE ROOT: %s -> %s\n" "$$$$patch_name" "$$$$patch_root"; \
 		apply_patch_strict "./patches/$$$$patch_name" "$$$$patch_root"; \
 	done; \
 	python3 ./scripts/n60-vendor-source-transforms.py finalize "$(PKG_BUILD_DIR)"; \
