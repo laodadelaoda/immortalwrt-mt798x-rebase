@@ -32,7 +32,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  drivers/net/ethernet/mediatek/mtk_ppe.h       |  3 ++
  .../net/ethernet/mediatek/mtk_ppe_debugfs.c   | 52 +++++++++++++++++++
  drivers/net/ethernet/mediatek/mtk_ppe_regs.h  |  1 +
- 5 files changed, 76 insertions(+)
+ 5 files changed, 82 insertions(+)
 
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.h
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.h
@@ -100,7 +100,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  enum {
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_debugfs.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_debugfs.c
-@@ -197,6 +197,56 @@ int mtk_ppe_debugfs_init(struct mtk_ppe
+@@ -197,6 +197,62 @@ int mtk_ppe_debugfs_init(struct mtk_ppe
  }
  
  static int
