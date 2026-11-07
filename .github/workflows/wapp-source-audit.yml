@@ -36,6 +36,8 @@ jobs:
           git apply --numstat "$PKG/patches/014-wapp-wps-key-log-redaction.patch" >/dev/null
           test -s "$PKG/patches/015-dpp-config-lookup-null-and-error-guard.patch"
           git apply --numstat "$PKG/patches/015-dpp-config-lookup-null-and-error-guard.patch" >/dev/null
+          test -s "$PKG/patches/016-dpp-qr-count-boundaries-and-error-propagation.patch"
+          git apply --numstat "$PKG/patches/016-dpp-qr-count-boundaries-and-error-propagation.patch" >/dev/null
           python3 "$PKG/scripts/n60-vendor-source-transforms.py" verify-lock "$GITHUB_WORKSPACE"
           grep -Fq 'apply_patch_strict' "$PKG/Makefile"
           grep -Fq 'if (i >= content_len - 1)' "$PKG/patches/011-wapp-wts-security.patch"
@@ -59,7 +61,7 @@ jobs:
           tar -xjf wappd-80ca5724.tar.bz2 -C source
           mkdir dpp-patch-root
           tar -xjf wappd-80ca5724.tar.bz2 -C dpp-patch-root
-          for name in 007-openssl3-use-native-evp-pkey-get0-ec-key.patch 008-dpp-parser-bounds-and-secret-redaction.patch 015-dpp-config-lookup-null-and-error-guard.patch; do
+          for name in 007-openssl3-use-native-evp-pkey-get0-ec-key.patch 008-dpp-parser-bounds-and-secret-redaction.patch 015-dpp-config-lookup-null-and-error-guard.patch 016-dpp-qr-count-boundaries-and-error-propagation.patch; do
             patch_file="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/$name"
             patch --dry-run --batch --forward --fuzz=0 -p1 -d dpp-patch-root < "$patch_file"
             patch --batch --forward --fuzz=0 -p1 -d dpp-patch-root < "$patch_file"
