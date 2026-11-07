@@ -94,10 +94,20 @@ def targets(text):
     return sorted(x for x in out if x and x != "/dev/null")
 
 def hunk_metadata_errors(text):
-    """Strictly validate unified-diff hunk headers and declared body line counts."""
+    """Validate hunk counts, allowing trailing blank separators used by legacy patch files."""
     lines = text.splitlines()
     errors = []
     index = 0
+
+    def is_file_boundary(position):
+        line = lines[position]
+        if (line.startswith("diff ") or line.startswith("Index: ") or
+            line.startswith("@@") or line == "--"):
+            return True
+        if line.startswith("--- ") and position + 1 < len(lines):
+            return lines[position + 1].startswith("+++ ")
+        return False
+
     while index < len(lines):
         header = lines[index]
         if not header.startswith("@@"):
@@ -117,60 +127,48 @@ def hunk_metadata_errors(text):
 
         declared_old = int(match.group(2) or 1)
         declared_new = int(match.group(4) or 1)
-        actual_old = actual_new = 0
-        index += 1
-        while index < len(lines):
-            body = lines[index]
-            # Hunk boundaries and file metadata are valid only after the
-            # declared old/new line counts have been fully consumed.
-            complete = actual_old == declared_old and actual_new == declared_new
-            if complete:
-                if body.startswith("\\"):
-                    index += 1
-                    continue
-                if (body.startswith("@@") or body.startswith("diff --git ") or
-                    body.startswith("Index: ") or body.startswith("--- ") or
-                    body.startswith("+++ ") or body == "-- " or
-                    body.startswith(("new file mode ", "deleted file mode ",
-                                     "similarity index ", "rename from ",
-                                     "rename to ", "old mode ", "new mode ",
-                                     "GIT binary patch", "Binary files "))):
-                    break
-                errors.append({
-                    "line": index + 1, "header": header,
-                    "error": "extra content after declared hunk line counts",
-                    "content": body[:120],
-                })
-                index += 1
-                continue
+        body_lines = []
+        cursor = index + 1
+        while cursor < len(lines) and not is_file_boundary(cursor):
+            body_lines.append((cursor + 1, lines[cursor]))
+            cursor += 1
 
-            if body.startswith("diff --git ") or body.startswith("Index: ") or body.startswith("@@"):
-                break
+        actual_old = actual_new = 0
+        parsed = []
+        for line_number, body in body_lines:
             if body.startswith("\\"):
-                index += 1
-                continue
-            if body == "":
-                # Existing upstream patch files encode some blank context
-                # lines without the conventional leading space; GNU patch
-                # treats these as context, and their declared counts include them.
+                parsed.append((line_number, body, 0, 0))
+            elif body == "":
+                # Existing repository patches use bare empty lines as context.
+                parsed.append((line_number, body, 1, 1))
                 actual_old += 1
                 actual_new += 1
             elif body.startswith(" "):
+                parsed.append((line_number, body, 1, 1))
                 actual_old += 1
                 actual_new += 1
             elif body.startswith("-"):
+                parsed.append((line_number, body, 1, 0))
                 actual_old += 1
             elif body.startswith("+"):
+                parsed.append((line_number, body, 0, 1))
                 actual_new += 1
             else:
                 errors.append({
-                    "line": index + 1, "header": header,
+                    "line": line_number, "header": header,
                     "error": "invalid or unprefixed line inside unified-diff hunk",
                     "content": body[:120],
                 })
-                index += 1
-                break
-            index += 1
+
+        # Some legacy patch files leave bare blank separators after the final
+        # hunk line. Exclude only trailing empty lines, and only as needed to
+        # reconcile the declared old/new counts.
+        while parsed and parsed[-1][1] == "" and (
+            actual_old > declared_old or actual_new > declared_new
+        ):
+            _, _, old_delta, new_delta = parsed.pop()
+            actual_old -= old_delta
+            actual_new -= new_delta
 
         if (actual_old, actual_new) != (declared_old, declared_new):
             errors.append({
@@ -179,6 +177,7 @@ def hunk_metadata_errors(text):
                 "declared_new": declared_new, "actual_new": actual_new,
                 "error": "unified-diff hunk line-count mismatch",
             })
+        index = cursor
     return errors
 
 def vendor_inventory(repo):
