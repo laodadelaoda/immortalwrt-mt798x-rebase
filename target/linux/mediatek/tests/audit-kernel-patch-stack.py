@@ -559,7 +559,7 @@ def write_inventory(inv, out):
         ("file-overlap-dependencies.csv", inv["file_overlap_edges"], ["target_file","previous_patch","next_patch","previous_directory","next_directory","previous_order","next_order","dependency_basis"]),
         ("vendor-file-overlap-dependencies.csv", inv["vendor"]["file_overlap_edges"], ["source_id","target_file","previous_patch","next_patch","previous_patch_set","next_patch_set","previous_directory","next_directory","previous_order","next_order","previous_patch_set_order","next_patch_set_order","dependency_basis"]),
         ("cross-directory-dependencies.csv", inv["cross_directory_overlap_edges"], ["target_file","previous_patch","next_patch","previous_directory","next_directory","previous_order","next_order","dependency_basis"]),
-        ("vendor-cross-directory-dependencies.csv", inv["vendor"]["cross_directory_overlap_edges"], ["source_id","target_file","previous_patch","next_patch","previous_patch_set","next_patch_set","previous_directory","next_directory","previous_order","next_order","dependency_basis"]),
+        ("vendor-cross-directory-dependencies.csv", inv["vendor"]["cross_directory_overlap_edges"], ["source_id","target_file","previous_patch","next_patch","previous_patch_set","next_patch_set","previous_directory","next_directory","previous_order","next_order","previous_patch_set_order","next_patch_set_order","dependency_basis"]),
         ("overlay-inventory.csv", inv["overlays"], ["directory_order","directory","source_path","target_path","sha256","bytes"]),
         ("semantic-dependencies.csv", inv["semantic_dependencies"], ["prerequisite","consumer","reason","prerequisite_order","consumer_order","prerequisite_applied_before_consumer"]),
         ("patch-records.csv", [
