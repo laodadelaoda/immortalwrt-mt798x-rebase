@@ -99,7 +99,7 @@
  		wapp->dpp->qr_cmd = 1;
 --- a/wappd/dpp/dpp.c
 +++ b/wappd/dpp/dpp.c
-@@ -10378,6 +10378,29 @@
+@@ -10378,13 +10378,35 @@
  }
  
  #ifdef MAP_R3
@@ -129,7 +129,7 @@
  int  dpp_reset_dpp_config_file(struct wifi_app *wapp)
  {
  
-@@ -10385,6 +10408,5 @@
+ 	char param[50]="0";
  	char qr_param[20] = "0";
  	char value[150] = "0";
  	char param_str[15] = "agt_qr_code";
