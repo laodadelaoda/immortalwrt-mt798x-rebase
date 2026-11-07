@@ -44,7 +44,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	return 0;
 --- a/drivers/net/ethernet/mediatek/mtk_ppe.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe.c
-@@ -718,16 +718,29 @@ __mtk_foe_entry_clear(struct mtk_ppe *pp
+@@ -718,15 +718,29 @@ __mtk_foe_entry_clear(struct mtk_ppe *pp
  
  	if (entry->hash != 0xffff && set_state) {
  		struct mtk_foe_entry *hwe = mtk_foe_get_entry(ppe, entry->hash);
@@ -69,13 +69,12 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  		if (state == MTK_FOE_STATE_BIND)
  			mtk_ppe_cache_clear(ppe);
 +
-+		entry->hash = 0xffff;
  	}
--	entry->hash = 0xffff;
++	entry->hash = 0xffff;
  
  	if (entry->type != MTK_FLOW_TYPE_L2_SUBFLOW)
  		return;
-@@ -848,7 +861,8 @@ __mtk_foe_entry_commit(struct mtk_ppe *p
+@@ -848,7 +862,8 @@ __mtk_foe_entry_commit(struct mtk_ppe *p
  	struct mtk_eth *eth = ppe->eth;
  	u16 timestamp = mtk_eth_timestamp(eth);
  	struct mtk_foe_entry *hwe;
@@ -85,7 +84,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  
  	hwe = mtk_foe_get_entry(ppe, hash);
  
-@@ -865,6 +879,21 @@ __mtk_foe_entry_commit(struct mtk_ppe *p
+@@ -865,6 +880,21 @@ __mtk_foe_entry_commit(struct mtk_ppe *p
  					 timestamp);
  	}
  

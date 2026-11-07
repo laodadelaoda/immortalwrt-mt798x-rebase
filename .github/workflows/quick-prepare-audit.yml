@@ -76,6 +76,18 @@ jobs:
               echo "===== ACTUAL PATCHED SOURCE: mtk_pcie_msi_handler ($source) ====="
               grep -n -B 8 -A 45 "static void mtk_pcie_msi_handler" "$source" || true
             done
+            for source in $(find build_dir -type f -path "*/drivers/net/ethernet/mediatek/mtk_ppe_offload.c"); do
+              mkdir -p kernel-patch-audit/failure-source/ppe
+              cp -f "$source" kernel-patch-audit/failure-source/ppe/mtk_ppe_offload.c
+              if test -s "$source.rej"; then cp -f "$source.rej" kernel-patch-audit/failure-source/ppe/mtk_ppe_offload.c.rej; fi
+              cp -f target/linux/mediatek/patches-6.12/999-ppe-*.patch kernel-patch-audit/failure-source/ppe/
+              cp -f target/linux/mediatek/patches-6.12/999-wed-07-mtk-wed-add-hwpath-wmm-support.patch kernel-patch-audit/failure-source/ppe/
+              echo "===== ACTUAL PPE output-device function after failed patch application ($source) ====="
+              grep -n -B 30 -A 100 "mtk_flow_set_output_device" "$source" || true
+              echo "===== ACTUAL PPE conntrack QoS extension helper ====="
+              grep -n -B 12 -A 25 "nf_ct_qos_ext_add" build_dir/target-*/linux-*/linux-6.12.112/include/net/netfilter/nf_conntrack_qos.h 2>/dev/null || true
+              sha256sum kernel-patch-audit/failure-source/ppe/* || true
+            done
             for source in $(find build_dir -type f -path "*/include/linux/netdevice.h"); do
               echo "===== ACTUAL SOURCE: net_device_path_type ($source) ====="
               grep -n -B 5 -A 18 "enum net_device_path_type" "$source" || true
@@ -124,6 +136,14 @@ jobs:
           KERNEL_MAKEFILE="$(find build_dir -type f -path "*/linux-6.12.112/Makefile" -print -quit)"
           test -n "$KERNEL_MAKEFILE" || { echo "::error::Patched Linux 6.12.112 source tree is missing."; exit 1; }
           python3 target/linux/mediatek/tests/test-pcie-gen3-irq-lifecycle.py "$(dirname "$KERNEL_MAKEFILE")"
+
+      - name: Audit PPE overlapping QoS, DSCP and WDMA patch contracts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          KERNEL_MAKEFILE="$(find build_dir -type f -path "*/linux-6.12.112/Makefile" -print -quit)"
+          test -n "$KERNEL_MAKEFILE" || { echo "::error::Patched Linux 6.12.112 source tree is missing."; exit 1; }
+          python3 target/linux/mediatek/tests/test-ppe-qos-overlap.py "$(dirname "$KERNEL_MAKEFILE")"
 
       - name: Verify actual GNU Make package variables and fetch manual EasyMesh archives
         shell: bash

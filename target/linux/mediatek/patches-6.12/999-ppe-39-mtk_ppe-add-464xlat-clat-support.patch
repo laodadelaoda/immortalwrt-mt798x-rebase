@@ -419,7 +419,7 @@ Subject: [PATCH] net: ethernet: mtk_ppe: add 464xlat clat support
 +	line[length] = '\0';
 +
 +	ret = sscanf(line, "%1d %45s", &enable, addr);
-+	if (ret < 1)
++	if (ret < 1 || (enable != 0 && enable != 1))
 +		return -EINVAL;
 +
 +	if (enable) {
@@ -471,7 +471,7 @@ Subject: [PATCH] net: ethernet: mtk_ppe: add 464xlat clat support
 +	}
 +
 +	if (mtk_is_netsys_v2_or_greater(eth))
-+		debugfs_create_file("464xlat", S_IRUGO, root, eth,
++		debugfs_create_file("464xlat", S_IRUGO | S_IWUSR, root, eth,
 +				    &mtk_ppe_internal_debugfs_464xlat_fops);
 +
  	return 0;
@@ -600,7 +600,7 @@ Subject: [PATCH] net: ethernet: mtk_ppe: add 464xlat clat support
  
  	return 0;
  }
-@@ -399,6 +409,105 @@ mtk_flow_is_valid_idev(const struct mtk_
+@@ -399,6 +409,107 @@ mtk_flow_is_valid_idev(const struct mtk_
  	return false;
  }
  
@@ -663,6 +663,8 @@ Subject: [PATCH] net: ethernet: mtk_ppe: add 464xlat clat support
 +
 +	for (i = 0; i < eth->soc->ppe_num; i++) {
 +		ppe = eth->ppe[i];
++		if (!ppe)
++			continue;
 +
 +		for (j = 0; j < MTK_PPE_ENTRIES; j++) {
 +			hwe = mtk_foe_get_entry(ppe, j);
@@ -706,7 +708,7 @@ Subject: [PATCH] net: ethernet: mtk_ppe: add 464xlat clat support
  static int
  mtk_flow_offload_replace(struct mtk_eth *eth, struct flow_cls_offload *f,
  			 int ppe_index)
-@@ -407,13 +516,14 @@ mtk_flow_offload_replace(struct mtk_eth
+@@ -407,13 +518,14 @@ mtk_flow_offload_replace(struct mtk_eth
  	struct net_device *idev = NULL, *odev = NULL;
  	struct flow_action_entry *act;
  	struct mtk_flow_data data = {};
@@ -722,7 +724,7 @@ Subject: [PATCH] net: ethernet: mtk_ppe: add 464xlat clat support
  	int err = 0;
  	int i;
  
-@@ -470,6 +580,7 @@ mtk_flow_offload_replace(struct mtk_eth
+@@ -470,6 +582,7 @@ mtk_flow_offload_replace(struct mtk_eth
  
  		flow_rule_match_ip(rule, &match);
  		dscp = match.key->tos;
@@ -730,7 +732,7 @@ Subject: [PATCH] net: ethernet: mtk_ppe: add 464xlat clat support
  	}
  
  	switch (addr_type) {
-@@ -551,6 +662,16 @@ mtk_flow_offload_replace(struct mtk_eth
+@@ -551,6 +664,16 @@ mtk_flow_offload_replace(struct mtk_eth
  		}
  	}
  
@@ -747,7 +749,7 @@ Subject: [PATCH] net: ethernet: mtk_ppe: add 464xlat clat support
  	if (!is_valid_ether_addr(data.eth.h_source) ||
  	    !is_valid_ether_addr(data.eth.h_dest))
  		return -EINVAL;
-@@ -573,11 +694,37 @@ mtk_flow_offload_replace(struct mtk_eth
+@@ -573,11 +696,37 @@ mtk_flow_offload_replace(struct mtk_eth
  		return -EOPNOTSUPP;
  	}
  
@@ -785,7 +787,7 @@ Subject: [PATCH] net: ethernet: mtk_ppe: add 464xlat clat support
  		data.v4.src_addr = addrs.key->src;
  		data.v4.dst_addr = addrs.key->dst;
  
-@@ -589,6 +736,25 @@ mtk_flow_offload_replace(struct mtk_eth
+@@ -589,6 +738,25 @@ mtk_flow_offload_replace(struct mtk_eth
  
  		flow_rule_match_ipv6_addrs(rule, &addrs);
  

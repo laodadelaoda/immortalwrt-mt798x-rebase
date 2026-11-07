@@ -47,7 +47,7 @@ v1: Add xfrm hw offload
  int mtk_foe_entry_set_wdma(struct mtk_eth *eth, struct mtk_foe_entry *entry,
  			   int wdma_idx, int txq, int bss, int wcid,
  			   bool amsdu_en)
-@@ -932,6 +955,73 @@ void mtk_foe_entry_clear(struct mtk_ppe
+@@ -932,6 +955,76 @@ void mtk_foe_entry_clear(struct mtk_ppe
  	spin_unlock_bh(&ppe_lock);
  }
  
@@ -63,6 +63,9 @@ v1: Add xfrm hw offload
 +
 +	for (i = 0; i < ARRAY_SIZE(eth->ppe); i++) {
 +		struct mtk_ppe *ppe = eth->ppe[i];
++
++		if (!ppe)
++			continue;
 +
 +		for (j = 0; j < MTK_PPE_ENTRIES; j++) {
 +			struct mtk_foe_entry *entry = mtk_foe_get_entry(ppe, j);

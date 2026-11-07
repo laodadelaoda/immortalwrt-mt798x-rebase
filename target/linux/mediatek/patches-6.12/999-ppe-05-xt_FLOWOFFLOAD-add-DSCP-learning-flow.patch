@@ -82,13 +82,14 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  int mtk_foe_entry_set_pppoe(struct mtk_eth *eth, struct mtk_foe_entry *entry,
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
-@@ -193,7 +193,7 @@ static int
+@@ -193,8 +193,8 @@ static int
  mtk_flow_set_output_device(struct mtk_eth *eth, struct mtk_foe_entry *foe,
  			   struct net_device *idev, struct net_device *odev,
  			   struct flow_cls_offload *f, const u8 *dest_mac,
 -			   int *wed_index)
 +			   int *wed_index, int dscp)
  {
+ 	struct net_device *odev_conduit = odev;
  	struct mtk_wdma_info info = {};
  	struct nf_conn *ct = NULL;
 @@ -272,6 +272,7 @@ mtk_flow_set_output_device(struct mtk_et
@@ -132,7 +133,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  
 --- a/include/net/netfilter/nf_conntrack_extend.h
 +++ b/include/net/netfilter/nf_conntrack_extend.h
-@@ -13,6 +13,7 @@ enum nf_ct_ext_id {
+@@ -13,7 +13,8 @@ enum nf_ct_ext_id {
  #endif
  	NF_CT_EXT_SEQADJ,
  	NF_CT_EXT_ACCT,
@@ -142,7 +143,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  #endif
 --- /dev/null
 +++ b/include/net/netfilter/nf_conntrack_qos.h
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,66 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +/*
 + * Copyright (C) 2025 MediaTek Inc.
@@ -182,8 +183,10 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +		return NULL;
 +
 +	qos = nf_ct_ext_add(ct, NF_CT_EXT_QOS, gfp);
-+	if (!qos)
++	if (!qos) {
 +		pr_debug("failed to add qos extension area");
++		return NULL;
++	}
 +
 +	memset(qos, 0, sizeof(struct nf_conn_qos));
 +
@@ -300,7 +303,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  #include <net/netfilter/nf_conntrack_zones.h>
  #include <net/netfilter/nf_conntrack_timestamp.h>
  #include <net/netfilter/nf_conntrack_labels.h>
-@@ -2305,6 +2306,7 @@ ctnetlink_create_conntrack(struct net *n
+@@ -2305,7 +2306,8 @@ ctnetlink_create_conntrack(struct net *n
  		goto err2;
  
  	nf_ct_acct_ext_add(ct, GFP_ATOMIC);
@@ -439,10 +442,12 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  
  	dir = tuplehash->tuple.dir;
  	flow = container_of(tuplehash, struct flow_offload, tuplehash[dir]);
-@@ -393,6 +394,10 @@ static int nf_flow_offload_forward(struc
+@@ -393,6 +394,12 @@ static int nf_flow_offload_forward(struc
  	if (skb_try_make_writable(skb, thoff + ctx->hdrsize))
  		return -1;
  
++	iph = (struct iphdr *)(skb_network_header(skb) + ctx->offset);
++	ip6h = (struct ipv6hdr *)(skb_network_header(skb) + ctx->offset);
 +	net = nf_ct_net(flow->ct);
 +	if (net->ct.sysctl_qos)
 +		ipv4_change_dsfield(iph, 0u, flow->tuplehash[dir].tuple.tos);
@@ -450,7 +455,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	flow_offload_refresh(flow_table, flow, false);
  
  	nf_flow_encap_pop(skb, tuplehash);
-@@ -651,6 +656,7 @@ static int nf_flow_offload_ipv6_forward(
+@@ -651,6 +658,7 @@ static int nf_flow_offload_ipv6_forward(
  	struct flow_offload *flow;
  	unsigned int thoff, mtu;
  	struct ipv6hdr *ip6h;
@@ -458,7 +463,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  
  	dir = tuplehash->tuple.dir;
  	flow = container_of(tuplehash, struct flow_offload, tuplehash[dir]);
-@@ -672,6 +678,10 @@ static int nf_flow_offload_ipv6_forward(
+@@ -672,6 +680,10 @@ static int nf_flow_offload_ipv6_forward(
  	if (skb_try_make_writable(skb, thoff + ctx->hdrsize))
  		return -1;
  
@@ -536,12 +541,12 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  
  	if (xt_flowoffload_skip(skb, xt_family(par)))
  		return XT_CONTINUE;
-@@ -669,6 +688,28 @@ flowoffload_tg(struct sk_buff *skb, cons
+@@ -669,6 +688,29 @@ flowoffload_tg(struct sk_buff *skb, cons
  
  	dir = CTINFO2DIR(ctinfo);
  
 +	qos = nf_conn_qos_find(ct);
-+	if (qos) {
++	if (qos && nf_ct_protonum(ct) == IPPROTO_TCP) {
 +		struct net *net = nf_ct_net(ct);
 +
 +		switch (xt_family(par)) {
@@ -558,14 +563,15 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +		qos->tos[dir].value = tos;
 +		atomic64_add(1, &qos->tos[dir].counter);
 +
-+		if (atomic64_read(&qos->tos[dir].counter) < net->ct.sysctl_qos)
++		if (atomic64_read(&qos->tos[dir].counter) < net->ct.sysctl_qos ||
++		    atomic64_read(&qos->tos[!dir].counter) < net->ct.sysctl_qos)
 +			return XT_CONTINUE;
 +	}
 +
  	devs[dir] = xt_out(par);
  	devs[!dir] = xt_in(par);
  
-@@ -692,6 +733,8 @@ flowoffload_tg(struct sk_buff *skb, cons
+@@ -692,6 +734,8 @@ flowoffload_tg(struct sk_buff *skb, cons
  
  	flow_offload_route_init(flow, &route);
  
