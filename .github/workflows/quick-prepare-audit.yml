@@ -130,6 +130,32 @@ jobs:
             snapshot_sources "before-05"
           fi
 
+          # Capture the complete netdevice.h state immediately before and after
+          # every patch that touches it. This preserves the actual application chain,
+          # rather than relying on reconstructed context from a failed hunk.
+          snapshot_netdevice() {
+            local phase="$1"
+            local patch_name="$2"
+            local out="$GITHUB_WORKSPACE/kernel-patch-audit/netdevice-chain/$patch_name/$phase"
+            mkdir -p "$out"
+            test -s "$targetdir/include/linux/netdevice.h" || return 0
+            cp -f "$targetdir/include/linux/netdevice.h" "$out/netdevice.h"
+            if [[ -s "$targetdir/include/linux/netdevice.h.rej" ]]; then
+              cp -f "$targetdir/include/linux/netdevice.h.rej" "$out/netdevice.h.rej"
+            fi
+            cp -f "$patch_input" "$out/applied.patch"
+            (cd "$out" && sha256sum netdevice.h applied.patch *.rej 2>/dev/null > SHA256SUMS || sha256sum netdevice.h applied.patch > SHA256SUMS)
+            echo "NETDEVICE SNAPSHOT: $patch_name / $phase"
+            cat "$out/SHA256SUMS"
+          }
+
+          netdevice_patch=0
+          patch_name="$(basename "${patch_file:-stdin.patch}")"
+          if grep -Eq '^(\+\+\+|---) [ab/]?include/linux/netdevice\\.h([[:space:]]|$)' "$patch_input"; then
+            netdevice_patch=1
+            snapshot_netdevice "pre" "$patch_name"
+          fi
+
           # Enforce the acceptance contract at invocation time, not only by log inspection.
           strict_args=()
           drop_fuzz_value=0
@@ -154,10 +180,12 @@ jobs:
             rc=$?
           fi
           if (( rc != 0 )); then
+            if (( netdevice_patch )); then snapshot_netdevice "failed" "$patch_name"; fi
             if [[ "$stage" == "after-05" ]]; then snapshot_sources "failed-05-partial"; fi
             exit "$rc"
           fi
 
+          if (( netdevice_patch )); then snapshot_netdevice "post" "$patch_name"; fi
           if [[ -n "$stage" ]]; then snapshot_sources "$stage"; fi
           PATCH_WRAPPER_EOF
           chmod +x "$PATCH_WRAPPER"
