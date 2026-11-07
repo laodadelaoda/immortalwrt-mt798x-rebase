@@ -85,6 +85,11 @@ def targets(text):
             # Quilt-style patches use Index: and versioned ---/+++ headers.
             value = line[len("Index: "):].strip()
             value = re.sub(r"^linux-[^/]+/", "", value)
+            # OpenWrt generic backport patches may carry a quilt Index:
+            # path rooted at "kernel/", while their ---/+++ headers and the
+            # actual patch(1) invocation are rooted at the kernel source
+            # directory (e.g. kernel/arch/... vs arch/...).
+            value = re.sub(r"^kernel/", "", value)
             if value and value != "/dev/null": out.add(value)
         elif line.startswith(("--- ", "+++ ")):
             value = line[4:].split("\t", 1)[0].split(" ", 1)[0]
