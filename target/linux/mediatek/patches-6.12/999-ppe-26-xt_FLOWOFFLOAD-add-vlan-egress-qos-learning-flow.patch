@@ -76,11 +76,12 @@ when the below command is configured.
  	struct ethhdr *eth;
  	enum ip_conntrack_dir skb_dir;
  	unsigned char ha[ETH_ALEN];
-@@ -740,6 +752,7 @@ flowoffload_tg(struct sk_buff *skb, cons
+@@ -694,7 +706,8 @@ flowoffload_tg(struct sk_buff *skb, cons
  
  		qos->tos[dir].value = tos;
  		atomic64_add(1, &qos->tos[dir].counter);
 +		qos->priority[dir] = skb->priority;
  
- 		if (atomic64_read(&qos->tos[dir].counter) < net->ct.sysctl_qos)
+ 		if (atomic64_read(&qos->tos[dir].counter) < net->ct.sysctl_qos ||
+ 		    atomic64_read(&qos->tos[!dir].counter) < net->ct.sysctl_qos)
  			return XT_CONTINUE;
