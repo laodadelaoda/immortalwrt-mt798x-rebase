@@ -69,6 +69,11 @@ jobs:
           patch_names="$(python3 "$LOCK_HELPER" patch-order --repo "$GITHUB_WORKSPACE" --set easymesh --phase application)"
           test -n "$patch_names" || { echo "DPP source capture has no locked application patch order" >&2; exit 1; }
           for name in $patch_names; do
+            if [ "$name" = "017-dpp-credential-bounds-zeroization-and-log-redaction.patch" ]; then
+              mkdir -p pre017-snapshot/common pre017-snapshot/dpp
+              cp dpp-patch-root/wappd/common/main.c pre017-snapshot/common/main.c
+              cp dpp-patch-root/wappd/dpp/dpp_wdev.c pre017-snapshot/dpp/dpp_wdev.c
+            fi
             patch_file="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/$name"
             patch --dry-run --batch --forward --fuzz=0 -p1 -d dpp-patch-root < "$patch_file"
             patch --batch --forward --fuzz=0 -p1 -d dpp-patch-root < "$patch_file"
@@ -130,6 +135,8 @@ jobs:
             ${{ runner.temp }}/wapp-audit/dpp-patch-root/wappd/dpp/dpp.h
             ${{ runner.temp }}/wapp-audit/dpp-patch-root/wappd/dpp/dpp_wdev.c
             ${{ runner.temp }}/wapp-audit/dpp-patch-root/wappd/common/main.c
+            ${{ runner.temp }}/wapp-audit/pre017-snapshot/common/main.c
+            ${{ runner.temp }}/wapp-audit/pre017-snapshot/dpp/dpp_wdev.c
           if-no-files-found: error
           retention-days: 7
 
