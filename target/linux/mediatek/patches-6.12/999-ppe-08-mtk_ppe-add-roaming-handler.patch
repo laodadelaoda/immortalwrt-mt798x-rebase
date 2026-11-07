@@ -235,7 +235,7 @@ Link: https://github.com/cmonroe/target-mediatek/blob/smartrg-master/mediatek/pa
  out_bpf:
  	nf_flow_table_offload_exit();
  out_offload:
-@@ -730,6 +887,11 @@ out_offload:
+@@ -730,6 +895,11 @@ out_offload:
  
  static void __exit nf_flow_table_module_exit(void)
  {
