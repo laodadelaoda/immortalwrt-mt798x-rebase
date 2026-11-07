@@ -175,6 +175,7 @@
         "010-dpp-wdev-config-allocation-rollback.patch",
         "011-wapp-wts-security.patch",
         "014-wapp-wps-key-log-redaction.patch",
+        "015-dpp-qr-count-and-config-lookup-guards.patch",
         "012-p1905-wts-hardening.patch",
         "013-wapp-wts-parser-fail-closed.patch",
         "003-wapp-gcc14-copy-semantics.patch",
