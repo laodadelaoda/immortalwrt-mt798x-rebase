@@ -261,4 +261,20 @@ require("if (!wapp || !wapp->map || !wapp->dpp || !uri_str || !uri_str[0])" in q
         "wapp->dpp->qr_code_num = (u8)next_count;" in qr_save_fn,
         "DPP QR save path lacks input/count bounds or checked persistence")
 
-print("PASS: DPP parser bounds, QR count 0..100 validation, QR load/save/reset/remove error paths, OpenSSL 3 accessor and secret redaction")
+
+main_dpp_fn = extract_c_function(src["main"], "int dpp_read_config_file_for_connection(")
+null_guard_return = main_dpp_fn.find("return WAPP_INVALID_ARG;")
+null_guard_close = main_dpp_fn.find("}", null_guard_return)
+dev_list_init = main_dpp_fn.find("dev_list = &wapp->dev_list;")
+dev_list_use = main_dpp_fn.find("dl_list_for_each_safe(wdev, wdev_temp, dev_list")
+require(null_guard_return >= 0 and null_guard_close > null_guard_return and
+        dev_list_init > null_guard_close and dev_list_use > dev_list_init,
+        "MAP R3 dev_list is not initialized after the wapp NULL guard")
+require("u16 cred_len = 0;" not in main_dpp_fn,
+        "DPP unused cred_len declaration remains in live MAP_R3_RECONFIG code")
+require('wapp->dpp->qr_code_num = atoi(value)' not in main_dpp_fn and
+        "dpp_read_qr_count(wapp, &qr_count) < 0" in main_dpp_fn and
+        "wapp->dpp->qr_code_num = (u8)qr_count;" in main_dpp_fn,
+        "main DPP config loader bypasses the bounded QR count parser")
+
+print("PASS: DPP main config guards, parser bounds, QR count 0..100 validation, QR load/save/reset/remove error paths, OpenSSL 3 accessor and secret redaction")
