@@ -37,19 +37,23 @@ add = qos_h.split("nf_ct_qos_ext_add", 1)[1].split("#else", 1)[0]
 require(re.search(r"if\s*\(!qos\)\s*\{[\s\S]*?return NULL;[\s\S]*?\}\s*memset\(qos", add),
         "nf_ct_qos_ext_add() must return on allocation failure before memset.")
 
-# DSCP learning is a bidirectional TCP threshold, not a one-direction counter.
+# DSCP learning is a bidirectional TCP threshold, and only learned TCP DSCP is applied.
 require("nf_ct_protonum(ct) == IPPROTO_TCP" in xt,
         "DSCP learning must be limited to TCP flows.")
 require(re.search(r"qos->tos\[dir\]\.counter[\s\S]{0,220}qos->tos\[!dir\]\.counter", xt),
         "both conntrack directions must reach the configured DSCP-learning threshold.")
+dscp_init = xt.split("xt_flowoffload_dscp_init", 1)[1].split("static unsigned int", 1)[0]
+require("nf_ct_protonum(ct) == IPPROTO_TCP" in dscp_init and
+        "qos->tos[!dir].counter" in dscp_init,
+        "DSCP tuple initialization must require a bidirectional TCP learning threshold.")
 
 # skb_try_make_writable() can replace skb storage; refresh the network-header pointer afterwards.
 ipv4 = flow_ip.split("static int nf_flow_offload_forward", 1)[1].split("unsigned int", 1)[0]
 ipv6 = flow_ip.split("static int nf_flow_offload_ipv6_forward", 1)[1].split("static struct flow_offload_tuple_rhash", 1)[0]
-require(re.search(r"skb_try_make_writable[\s\S]*?iph = \(struct iphdr \*\)\(skb_network_header\(skb\) \+ ctx->offset\);[\s\S]*?ipv4_change_dsfield\(iph", ipv4),
-        "IPv4 DS-field rewrite must refresh the offset header pointer after skb_try_make_writable().")
-require(re.search(r"skb_try_make_writable[\s\S]*?ip6h = \(struct ipv6hdr \*\)\(skb_network_header\(skb\) \+ ctx->offset\);[\s\S]*?ipv6_change_dsfield\(ip6h", ipv6),
-        "IPv6 DS-field rewrite must refresh the offset header pointer after skb_try_make_writable().")
+require(re.search(r"skb_try_make_writable[\s\S]*?iph = \(struct iphdr \*\)\(skb_network_header\(skb\) \+ ctx->offset\);[\s\S]*?if \(net->ct.sysctl_qos &&\s*flow->tuplehash\[dir\]\.tuple\.l4proto == IPPROTO_TCP\)\s*ipv4_change_dsfield\(iph", ipv4),
+        "IPv4 DS-field rewrite must refresh the offset header pointer and apply only to TCP after skb_try_make_writable().")
+require(re.search(r"skb_try_make_writable[\s\S]*?ip6h = \(struct ipv6hdr \*\)\(skb_network_header\(skb\) \+ ctx->offset\);[\s\S]*?if \(net->ct.sysctl_qos &&\s*flow->tuplehash\[dir\]\.tuple\.l4proto == IPPROTO_TCP\)\s*ipv6_change_dsfield\(ip6h", ipv6),
+        "IPv6 DS-field rewrite must refresh the offset header pointer and apply only to TCP after skb_try_make_writable().")
 
 # These debugfs controls have write callbacks; their modes must permit writes.
 for name in ("qos_toggle", "l4s_toggle", "464xlat"):
