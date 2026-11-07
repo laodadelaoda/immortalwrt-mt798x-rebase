@@ -556,7 +556,7 @@ def write_inventory(inv, out):
     }
     (out / "repository-patch-manifest.json").write_text(json.dumps(repository_manifest, indent=2) + "\n")
     for filename, rows, fields in [
-        ("file-overlap-dependencies.csv", inv["file_overlap_edges"], ["target_file","previous_patch","next_patch","previous_order","next_order"]),
+        ("file-overlap-dependencies.csv", inv["file_overlap_edges"], ["target_file","previous_patch","next_patch","previous_directory","next_directory","previous_order","next_order","dependency_basis"]),
         ("vendor-file-overlap-dependencies.csv", inv["vendor"]["file_overlap_edges"], ["source_id","target_file","previous_patch","next_patch","previous_patch_set","next_patch_set","previous_directory","next_directory","previous_order","next_order","previous_patch_set_order","next_patch_set_order","dependency_basis"]),
         ("cross-directory-dependencies.csv", inv["cross_directory_overlap_edges"], ["target_file","previous_patch","next_patch","previous_directory","next_directory","previous_order","next_order","dependency_basis"]),
         ("vendor-cross-directory-dependencies.csv", inv["vendor"]["cross_directory_overlap_edges"], ["source_id","target_file","previous_patch","next_patch","previous_patch_set","next_patch_set","previous_directory","next_directory","previous_order","next_order","dependency_basis"]),
