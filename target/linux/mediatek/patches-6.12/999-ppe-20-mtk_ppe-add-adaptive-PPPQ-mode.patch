@@ -23,11 +23,11 @@ do not exceed the QDMA bandwidth.
 
 Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 ---
- drivers/net/ethernet/mediatek/mtk_eth_soc.h   |  5 +++
- drivers/net/ethernet/mediatek/mtk_ppe.c       | 26 +++++++++++++--
+ drivers/net/ethernet/mediatek/mtk_eth_soc.h   |  3 +++
+ drivers/net/ethernet/mediatek/mtk_ppe.c       | 30 +++++++++++++++++++++++++++++-
  drivers/net/ethernet/mediatek/mtk_ppe.h       |  1 +
  .../net/ethernet/mediatek/mtk_ppe_debugfs.c   |  3 ++
- .../net/ethernet/mediatek/mtk_ppe_offload.c   |  2 +-
+ .../net/ethernet/mediatek/mtk_ppe_offload.c   |  3 ++-
  5 files changed, 38 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.h
