@@ -4,13 +4,13 @@
 
 The N60 Pro vendor source set is pinned by package/mtk/vendor-sources.lock.json. The lock binds archive names and SHA256 values, package ownership, extraction roots, patch directories, patch order, and audit-only source sets.
 
-The locked inventory contains 11 source archives and 89 ordered vendor patches across seven patch sets. n60-vendor-source-transforms.py is the single shared source-normalization/transform entry used by both native package Build/Prepare and the audit path; Quick and Full must consume the same lock and attestation.
+The locked inventory contains 11 source archives and 90 ordered vendor patches across seven patch sets. n60-vendor-source-transforms.py is the single shared source-normalization/transform entry used by both native package Build/Prepare and the audit path; Quick and Full must consume the same lock and attestation.
 
 ## Source ownership
 
 | Source set | Owning package / Makefile | Patch set | Scope |
 |---|---|---:|---|
-| WAPP, MAPD, 1905daemon, libmapd | package/mtk/applications/easymesh-n60/Makefile | 11 | Built EasyMesh components |
+| WAPP, MAPD, 1905daemon, libmapd | package/mtk/applications/easymesh-n60/Makefile | 12 | Built EasyMesh components |
 | datconf | package/mtk/applications/datconf/Makefile | 1 | Separate package; patches stay with datconf |
 | mt_wifi | package/mtk/drivers/mt_wifi/Makefile | 44 | Vendor Wi-Fi driver |
 | conninfra | package/mtk/drivers/conninfra/Makefile | 17 | Connectivity infrastructure driver |
@@ -37,8 +37,9 @@ The shared transform script includes both source/build portability adjustments (
 
 - Keep the vendor WTS template, field order, and vendor parser/read path.
 - Do not add a WTS generator or a replacement parser.
-- WTS security changes remain ordinary .patch files, including patches/011-wapp-wts-security.patch.
+- WTS security changes remain ordinary .patch files, including patches/011-wapp-wts-security.patch and patches/012-p1905-wts-hardening.patch.
 - Bound both input bytes and parsed record count before any indexed BSS write; fail closed and clear partially populated output on malformed input.
+- The P1905 parser rejects excess rows and malformed mandatory fields, and stages MAP-R2 policy changes until parsing and file close succeed.
 - Redact PSK/private-key material from logs.
 - Obtain AL MAC and BSS MAC dynamically from the live interface/driver; do not hardcode device MAC addresses.
 - N60 must not enable CONFIG_MTK_6G_SUPPORT, CONFIG_MTK_MAP_R2_6E_SUPPORT, or CONFIG_MTK_MAP_R3_6E_SUPPORT; WTS/radio configuration remains 2.4/5 GHz only.

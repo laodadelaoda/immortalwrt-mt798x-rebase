@@ -148,6 +148,36 @@ def require_wts_record_limit(source, marker, label):
 
 require_wts_record_limit(wts_wapp, "content_len = WTS_FILE_READ_LINE * max_bss_num;", "WAPP")
 require_wts_record_limit(wts_p1905, "content_len = 100 * max_bss_num;", "P1905")
+
+p1905_func = wts_p1905.find("int _1905_read_set_config(")
+require(p1905_func >= 0, "P1905 WTS parser function is missing")
+p1905_body = wts_p1905[p1905_func:]
+p1905_err = p1905_body.find("\nerr:")
+require(p1905_err >= 0, "P1905 WTS parser error label is missing")
+p1905_error_body = p1905_body[p1905_err:]
+require("os_memset(bss_info, 0, sizeof(*bss_info) * max_bss_num);" in p1905_error_body and
+        "*config_bss_num = 0;" in p1905_error_body,
+        "P1905 malformed input must clear partial BSS output and reset the returned count")
+require("pending_primary_vid = vid;" in p1905_body and
+        "pending_pcp = pcp;" in p1905_body and
+        "pending_tpolicy_updated = 1;" in p1905_body and
+        "ctx->map_policy.setting.primary_vid = pending_primary_vid;" in p1905_body and
+        "ctx->map_policy.setting.dft.PCP = pending_pcp;" in p1905_body and
+        "ctx->map_policy.tpolicy.updated = pending_tpolicy_updated;" in p1905_body,
+        "P1905 MAP-R2 state must be staged and committed only after successful parsing")
+fclose_pos = p1905_body.find("if (fclose(f) < 0)")
+commit_pos = p1905_body.find("ctx->map_policy.setting.primary_vid = pending_primary_vid;")
+require(fclose_pos >= 0 and commit_pos > fclose_pos,
+        "P1905 MAP-R2 state must not be committed before the input file closes successfully")
+for field_error in ("index not found", "mac not found", "opclass not found", "ssid not found",
+                    "authmode not found", "encrytype not found", "key not found", "resv1 not found",
+                    "end line not found"):
+    pos = p1905_body.find(field_error)
+    block_end = p1905_body.find("}", pos)
+    field_block = p1905_body[pos:block_end + 1] if pos >= 0 and block_end >= 0 else ""
+    require("goto err;" in field_block and "break;" not in field_block,
+            f"P1905 malformed mandatory field must fail closed: {field_error}")
+print("PASS: P1905 WTS malformed-field rollback and MAP-R2 state transaction.")
 print("PASS: WAPP and P1905 WTS record counts are bounded before indexed BSS writes.")
 
 require('goto err;' in wts_wapp and '*config_bss_num = 0;' in wts_wapp,

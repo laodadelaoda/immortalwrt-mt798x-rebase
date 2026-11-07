@@ -156,6 +156,9 @@ jobs:
           WTS_PATCH="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/011-wapp-wts-security.patch"
           patch --dry-run --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WTS_PATCH"
           patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WTS_PATCH"
+          P1905_PATCH="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/012-p1905-wts-hardening.patch"
+          patch --dry-run --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$P1905_PATCH"
+          patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$P1905_PATCH"
           echo "PASS: complete WTS patch applied to pinned WAPP, MAPD and P1905 archives with zero fuzz."
 
       - name: Upload verified source archive and audit inventory
