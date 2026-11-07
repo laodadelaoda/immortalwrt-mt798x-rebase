@@ -448,6 +448,16 @@ success_return = config_loader.find("return WAPP_SUCCESS;")
 temp_connector_clear = config_loader.find("forced_memzero(config[k].dpp_connector")
 require(temp_connector_clear >= 0 and success_return > temp_connector_clear,
         "temporary Connector must be cleared and freed before successful config return")
+for token in (
+    "os_free(config[k].dpp_connector)",
+    "os_free(config[k].dpp_csign)",
+    "os_free(config[k].dpp_netaccesskey)",
+    "os_free(config[k].dpp_ppkey)",
+    "os_free(config[k].ssid)",
+):
+    require(token in config_loader,
+            f"successful DPP config load must release temporary owner: {token}")
+
 
 
 print("PASS: DPP BSS/credential bounds/ownership/log redaction, main config guards, parser bounds, QR count 0..100 validation, QR load/save/reset/remove error paths, OpenSSL 3 accessor and secret redaction")
