@@ -68,7 +68,7 @@ jobs:
               if grep -Eiq 'Hunk #[0-9]+ succeeded at .*\(offset [+-]?[1-9][0-9]* lines?\)' "$dry_log"; then
                 grep -Ei 'Hunk #[0-9]+ succeeded at .*\(offset [+-]?[1-9][0-9]* lines?\)' "$dry_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
                 fail "non-zero line offset detected in dry-run: $patch_file"
-                return 1
+                echo "DIAGNOSTIC CONTINUE: applying this zero-fuzz patch to discover downstream context offsets." | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
               fi
             else
               cat "$dry_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
@@ -90,7 +90,7 @@ jobs:
               if grep -Eiq 'Hunk #[0-9]+ succeeded at .*\(offset [+-]?[1-9][0-9]* lines?\)' "$apply_log"; then
                 grep -Ei 'Hunk #[0-9]+ succeeded at .*\(offset [+-]?[1-9][0-9]* lines?\)' "$apply_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
                 fail "non-zero line offset detected during actual apply: $patch_file"
-                return 1
+                echo "DIAGNOSTIC CONTINUE: patch applied with offset; later dependent patches will still be checked." | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
               fi
             else
               cat "$apply_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
