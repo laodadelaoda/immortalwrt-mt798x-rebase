@@ -202,8 +202,24 @@ jobs:
           {
             echo "Repository revision: $(git rev-parse HEAD)"
             echo "WAPP archive SHA256: $(python3 -c 'import json; from pathlib import Path; d=json.loads(Path("package/mtk/vendor-sources.lock.json").read_text()); print(next(x["sha256"] for x in d["sources"] if x["id"]=="wappd"))')"
-            echo "DPP patch: package/mtk/applications/easymesh-n60/patches/017-dpp-credential-bounds-zeroization-and-log-redaction.patch"
-            sha256sum "$OUT/dpp-audit/pristine/common/main.c" "$OUT/dpp-audit/pristine/dpp/dpp_wdev.c" "$OUT/dpp-audit/patched/common/main.c" "$OUT/dpp-audit/patched/dpp/dpp_wdev.c"
+            echo "DPP patch series: 017-dpp-credential-bounds-zeroization-and-log-redaction.patch -> 018-dpp-security-logging-and-credential-lifecycle.patch"
+            sha256sum \
+              package/mtk/applications/easymesh-n60/patches/017-dpp-credential-bounds-zeroization-and-log-redaction.patch \
+              package/mtk/applications/easymesh-n60/patches/018-dpp-security-logging-and-credential-lifecycle.patch \
+              "$OUT/dpp-audit/pristine/common/main.c" \
+              "$OUT/dpp-audit/pristine/common/wdev.c" \
+              "$OUT/dpp-audit/pristine/dpp/dpp.c" \
+              "$OUT/dpp-audit/pristine/dpp/dpp_reconfig.c" \
+              "$OUT/dpp-audit/pristine/dpp/dpp_wdev.c" \
+              "$OUT/dpp-audit/pristine/dpp/dpp_wired.c" \
+              "$OUT/dpp-audit/pristine/map/map_1905.c" \
+              "$OUT/dpp-audit/patched/common/main.c" \
+              "$OUT/dpp-audit/patched/common/wdev.c" \
+              "$OUT/dpp-audit/patched/dpp/dpp.c" \
+              "$OUT/dpp-audit/patched/dpp/dpp_reconfig.c" \
+              "$OUT/dpp-audit/patched/dpp/dpp_wdev.c" \
+              "$OUT/dpp-audit/patched/dpp/dpp_wired.c" \
+              "$OUT/dpp-audit/patched/map/map_1905.c"
           } > "$OUT/dpp-audit/SOURCE-MANIFEST.txt"
 
           # Git's unified-diff parser must also accept every active patch.
