@@ -66,7 +66,7 @@ jobs:
                 mkdir -p "$ctx_tmp/before/$(dirname "$rel")"
                 cp -p "$patch_root/$rel" "$ctx_tmp/before/$rel"
               fi
-            done < <(sed -n 's/^+++ b\///p' "$patch_file" | sort -u)
+            done < <(sed -n 's/^+++ b\/\([^[:space:]]*\).*/\1/p' "$patch_file" | sort -u)
             echo "===== PATCH $patch_file | expected_hunks=$expected_hunks =====" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
             if [ "$expected_hunks" -le 0 ]; then
               fail "patch has no unified-diff hunks: $patch_file"
@@ -127,7 +127,7 @@ jobs:
                   mkdir -p "$ctx_out/after/$(dirname "$rel")"
                   cp -p "$patch_root/$rel" "$ctx_out/after/$rel"
                 fi
-              done < <(sed -n 's/^+++ b\///p' "$patch_file" | sort -u)
+              done < <(sed -n 's/^+++ b\/\([^[:space:]]*\).*/\1/p' "$patch_file" | sort -u)
               cp "$patch_file" "$ctx_out/"
               cp "$dry_log" "$ctx_out/dry-run.log"
               cp "$apply_log" "$ctx_out/actual-apply.log"
