@@ -149,7 +149,13 @@ def hunk_metadata_errors(text):
             if body.startswith("\\"):
                 index += 1
                 continue
-            if body.startswith(" "):
+            if body == "":
+                # Existing upstream patch files encode some blank context
+                # lines without the conventional leading space; GNU patch
+                # treats these as context, and their declared counts include them.
+                actual_old += 1
+                actual_new += 1
+            elif body.startswith(" "):
                 actual_old += 1
                 actual_new += 1
             elif body.startswith("-"):
