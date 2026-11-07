@@ -146,7 +146,7 @@ require(re.search(r"} else {\n[ \t]+goto error;", parser) is not None,
 
 
 conf_start = src["dpp_wdev"].find("int wapp_dpp_get_conf_frm_file(")
-conf_end = src["dpp_wdev"].find("\\nvoid wapp_dpp_get_uri_frm_file", conf_start)
+conf_end = src["dpp_wdev"].find("\nvoid wapp_dpp_get_uri_frm_file", conf_start)
 require(conf_start >= 0 and conf_end > conf_start,
         "DPP config-file accessor function boundary is missing")
 conf_fn = src["dpp_wdev"][conf_start:conf_end]
