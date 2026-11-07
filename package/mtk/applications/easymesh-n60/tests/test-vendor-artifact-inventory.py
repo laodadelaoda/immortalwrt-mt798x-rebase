@@ -189,6 +189,7 @@ generated_inventory = {
     "wappd": {
         "wapp_ap.conf",
         "common/main.c.orig",
+        "common/wdev.c.orig",
         "map/map_1905.c.orig",
     },
 }
