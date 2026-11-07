@@ -115,6 +115,16 @@ jobs:
             mapfile -t locked_names < <(python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py patch-order --repo "$GITHUB_WORKSPACE" --set "$set_id" --phase "$phase")
             for name in "${locked_names[@]}"; do
               test -s "$patch_dir/$name" || { fail "missing/empty locked patch: $patch_dir/$name"; continue; }
+              if [ "$set_id" = "easymesh" ] && [ "$name" = "009-dpp-null-guard-and-unused-cred-length.patch" ]; then
+                mkdir -p "$OUT/failed-context/009"
+                cp "$patch_root/wappd/common/main.c" "$OUT/failed-context/009/main.c.before-009"
+                cp "$patch_dir/002-dpp-parser-safety.patch" "$OUT/failed-context/009/"
+                cp "$patch_dir/007-openssl3-use-native-evp-pkey-get0-ec-key.patch" "$OUT/failed-context/009/"
+                cp "$patch_dir/008-dpp-parser-bounds-and-secret-redaction.patch" "$OUT/failed-context/009/"
+                cp "$patch_dir/009-dpp-null-guard-and-unused-cred-length.patch" "$OUT/failed-context/009/"
+                nl -ba "$patch_root/wappd/common/main.c" > "$OUT/failed-context/009/main.c.before-009.numbered"
+                sha256sum "$OUT/failed-context/009/"* > "$OUT/failed-context/009/SHA256SUMS"
+              fi
               if [ "$set_id" = "easymesh" ] && [ "$name" = "017-dpp-credential-bounds-zeroization-and-log-redaction.patch" ]; then
                 mkdir -p "$OUT/pre017"
                 cp "$patch_root/wappd/common/main.c" "$OUT/pre017/main.c"
@@ -372,6 +382,15 @@ jobs:
         with:
           name: n60-fixed-vendor-patch-audit
           path: PATCH-APPLICATION-REPORT.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload exact source context before DPP patch 009
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-dpp-009-failure-context
+          path: ${{ runner.temp }}/n60-vendor-patch-audit/report/failed-context/009/
           if-no-files-found: warn
           retention-days: 14
 

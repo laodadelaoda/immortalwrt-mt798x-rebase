@@ -1,5 +1,2 @@
-This file is an intentional trigger for the isolated N60 Pro fixed-vendor patch audit.
-
-The workflow calls vendor-source-patch-audit.yml only. It does not invoke Quick Prepare, Quick compilation, or Full firmware compilation.
-
-Audit trigger revision: strict-zero-offset-regex-correction-20261108
+This file triggers only the fixed-vendor source patch audit. It does not authorize Quick or Full compilation.
+Revision: capture-exact-post-008-context-for-009-rebase-20261108
