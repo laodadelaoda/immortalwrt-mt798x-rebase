@@ -87,6 +87,44 @@ def targets(text):
                 out.add(re.sub(r"^linux-[^/]+(?:\.orig)?/", "", value))
     return sorted(x for x in out if x and x != "/dev/null")
 
+def hunk_metadata_errors(text):
+    """Validate declared unified-diff old/new line counts before patching."""
+    lines = text.splitlines()
+    errors = []
+    for index, header in enumerate(lines):
+        if not header.startswith("@@"):
+            continue
+        match = re.match(r"^@@ -(\\d+)(?:,(\\d+))? \\+(\\d+)(?:,(\\d+))? @@", header)
+        if not match:
+            errors.append({"line": index + 1, "header": header, "error": "malformed unified-diff hunk header"})
+            continue
+        declared_old = int(match.group(2) or 1)
+        declared_new = int(match.group(4) or 1)
+        actual_old = actual_new = 0
+        for body in lines[index + 1:]:
+            if body.startswith("@@") or body.startswith("diff --git ") or body.startswith("Index: ") or body.startswith(("--- a/", "--- /dev/null")):
+                break
+            if body.startswith(" "):
+                actual_old += 1
+                actual_new += 1
+            elif body.startswith("-"):
+                actual_old += 1
+            elif body.startswith("+"):
+                actual_new += 1
+            elif body.startswith("\\\\"):
+                continue
+            else:
+                errors.append({"line": index + 1, "header": header, "error": "invalid line inside unified-diff hunk", "content": body[:120]})
+                break
+        if (actual_old, actual_new) != (declared_old, declared_new):
+            errors.append({
+                "line": index + 1, "header": header,
+                "declared_old": declared_old, "actual_old": actual_old,
+                "declared_new": declared_new, "actual_new": actual_new,
+                "error": "unified-diff hunk line-count mismatch",
+            })
+    return errors
+
 def inventory(repo):
     patches = []
     for di, rel in enumerate(PATCH_DIRS, 1):
@@ -99,7 +137,7 @@ def inventory(repo):
                 "order": len(patches) + 1, "directory_order": di, "directory": rel,
                 "name": p.name, "path": p.relative_to(repo).as_posix(),
                 "sha256": digest(raw), "bytes": len(raw),
-                "hunks": len(re.findall(r"^@@", txt, re.M)), "target_files": targets(txt),
+                "hunks": len(re.findall(r"^@@", txt, re.M)), "hunk_metadata_errors": hunk_metadata_errors(txt), "target_files": targets(txt),
                 "line_endings": "mixed" if b"\r\n" in raw and re.search(rb"(?<!\r)\n", raw) else ("crlf" if b"\r\n" in raw else "lf"),
             })
     overlays = []
@@ -153,7 +191,11 @@ def inventory(repo):
     }
 
 def validate_inventory(inv):
-    """Fail closed when curated semantic prerequisites are absent or out of order."""
+    """Fail closed on malformed hunk counts and missing/out-of-order prerequisites."""
+    malformed = [(p["path"], e) for p in inv["patches"] for e in p.get("hunk_metadata_errors", [])]
+    if malformed:
+        details = "; ".join(f"{path}: line {err['line']}: {err['error']} ({err.get('header', '')})" for path, err in malformed[:20])
+        raise RuntimeError("Unified-diff hunk metadata validation failed: " + details)
     missing = inv.get("missing_semantic_dependencies", [])
     violations = inv.get("semantic_dependency_order_violations", [])
     if missing:
@@ -316,7 +358,7 @@ def main():
     out = a.output_dir if a.output_dir.is_absolute() else repo / a.output_dir
     try:
         if a.command == "inventory":
-            inv = inventory(repo); write_inventory(inv,out)
+            inv = inventory(repo); validate_inventory(inv); write_inventory(inv,out)
             print(f"PASS: inventoried {inv['patch_count']} ordered patches and {inv['overlay_file_count']} overlays; input manifest {inv['input_manifest_sha256']}")
         elif a.command == "attest":
             if not all((a.kernel_src,a.patch_log,a.kernel_archive,a.run_id,a.run_attempt)): raise RuntimeError("attest requires kernel source, patch log, archive, run id and attempt")
