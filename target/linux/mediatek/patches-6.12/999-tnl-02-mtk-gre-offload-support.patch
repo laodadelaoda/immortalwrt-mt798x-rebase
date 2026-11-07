@@ -33,8 +33,8 @@
  static const struct net_device_ops ipgre_netdev_ops = {
  	.ndo_init		= ipgre_tunnel_init,
  	.ndo_uninit		= ip_tunnel_uninit,
-@@ -1264,6 +1283,9 @@ static const struct net_device_ops gre_t
- 	.ndo_get_stats64	= ip_tunnel_get_stats64,
+@@ -1333,6 +1352,9 @@ static const struct net_device_ops gre_tap_netdev_ops
+ 	.ndo_get_stats64	= dev_get_tstats64,
  	.ndo_get_iflink		= ip_tunnel_get_iflink,
  	.ndo_fill_metadata_dst	= gre_fill_metadata_dst,
 +#if IS_ENABLED(CONFIG_NF_FLOW_TABLE)
