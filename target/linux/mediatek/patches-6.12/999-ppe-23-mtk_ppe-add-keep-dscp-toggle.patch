@@ -129,10 +129,16 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +	struct seq_file *m = file->private_data;
 +	struct mtk_eth *eth = m->private;
 +	char buf[8];
-+	int len = count;
++	size_t len = count;
 +
-+	if ((len > 8) || copy_from_user(buf, buffer, len))
++	if (!len || len > sizeof(buf))
++		return -EINVAL;
++	if (copy_from_user(buf, buffer, len))
 +		return -EFAULT;
++	if (buf[len - 1] == '\n')
++		len--;
++	if (len != 1 || (buf[0] != '0' && buf[0] != '1'))
++		return -EINVAL;
 +
 +	if (buf[0] == '0') {
 +		pr_info("Keep DSCP mode is going to be disabled !\n");
@@ -142,7 +148,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +		eth->dscp_toggle = 1;
 +	}
 +
-+	return len;
++	return count;
 +}
 +
 +static const struct file_operations mtk_ppe_internal_debugfs_dscp_fops = {
@@ -161,9 +167,9 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  			    &mtk_ppe_internal_debugfs_foe_all_fops);
  	debugfs_create_file("bind", S_IRUGO, root, eth,
  			    &mtk_ppe_internal_debugfs_foe_bind_fops);
-+	debugfs_create_file("dscp_toggle", S_IRUGO, root, eth,
++	debugfs_create_file("dscp_toggle", S_IRUGO | S_IWUSR, root, eth,
 +			    &mtk_ppe_internal_debugfs_dscp_fops);
- 	debugfs_create_file("qos_toggle", S_IRUGO, root, eth,
+ 	debugfs_create_file("qos_toggle", S_IRUGO | S_IWUSR, root, eth,
  			    &mtk_ppe_internal_debugfs_qos_fops);
  
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_regs.h
