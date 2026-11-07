@@ -346,4 +346,31 @@ require("forced_memzero(value, sizeof(value));" in main_dpp_fn and
 require("forced_memzero(wdev->config->psk, sizeof(wdev->config->psk));" in main_dpp_fn,
         "DPP per-interface rollback leaves a copied PSK in memory")
 
-print("PASS: DPP credential bounds/ownership/log redaction, main config guards, parser bounds, QR count 0..100 validation, QR load/save/reset/remove error paths, OpenSSL 3 accessor and secret redaction")
+
+bss_fn = extract_c_function(src["dpp_wdev"], "void wapp_snd_bss_conn_1905(")
+for token in ("size_t group_id_len, msg1_len, msg2_len, payload_len;",
+              "if (!wapp || !auth)", "if (!msg1 || !msg2)",
+              "msg1_len > 0xffffU - msg2_len",
+              "payload_len > 0xffffU - sizeof(*bss_cred)",
+              "bss_cred->bh_connect_len = (unsigned short)msg1_len",
+              "bss_cred->fh_connect_len = (unsigned short)msg2_len",
+              "forced_memzero(bss_cred, cred_len)",
+              "wpabuf_clear_free(msg1)", "wpabuf_clear_free(msg2)"):
+    require(token in bss_fn, f"BSS connector packer lacks bound or cleanup invariant: {token}")
+require("cred_buffer" not in bss_fn and "hex_dump_dbg" not in bss_fn and
+        "wpa_hexdump" not in bss_fn,
+        "BSS connector path retains temporary copy or raw credential logging")
+bss_wipe = bss_fn.find("forced_memzero(bss_cred, cred_len);")
+bss_free = bss_fn.find("os_free(bss_cred);", bss_wipe)
+require(bss_wipe >= 0 and bss_free > bss_wipe,
+        "BSS connector payload is freed without clearing")
+clear_fn = extract_c_function(src["dpp_wdev"], "static void wapp_dpp_clear_cred(")
+require("if (!auth)" in clear_fn and "forced_memzero(auth->ssid, SSID_MAX_LEN)" in clear_fn and
+        "forced_memzero(auth->passphrase, 64)" in clear_fn,
+        "DPP authentication SSID/passphrase cleanup is not NULL-safe and non-optimizable")
+require("forced_memzero(wapp->dpp_csign, wapp->dpp_csign_len);" in src["main"],
+        "main DPP configuration replaces a retained C-sign key without clearing")
+require('wpa_hexdump(MSG_DEBUG, DPP_MAP_PREX "in process config cign key"' not in src["main"],
+        "main DPP configuration still logs the C-sign key")
+
+print("PASS: DPP BSS/credential bounds/ownership/log redaction, main config guards, parser bounds, QR count 0..100 validation, QR load/save/reset/remove error paths, OpenSSL 3 accessor and secret redaction")
