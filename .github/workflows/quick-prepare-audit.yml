@@ -51,7 +51,72 @@ jobs:
           KERNEL_PATCH_LOG="$RUNNER_TEMP/n60-linux-6.12-patch-prepare.log"
           echo "===== OpenWrt Kernel/Prepare: pristine source plus generic and MediaTek patch stacks ====="
           python3 target/linux/mediatek/tests/audit-kernel-patch-stack.py inventory --repo "$GITHUB_WORKSPACE" --output-dir "$GITHUB_WORKSPACE/kernel-patch-audit"
-          export PATCH="patch --fuzz=0"
+          PATCH_WRAPPER="$RUNNER_TEMP/n60-patch-snapshot-wrapper"
+          cat > "$PATCH_WRAPPER" <<'PATCH_WRAPPER_EOF'
+          #!/usr/bin/env bash
+          set -u
+          patch_input="$(mktemp)"
+          trap 'rm -f "$patch_input"' EXIT
+          cat > "$patch_input"
+
+          targetdir="."
+          args=("$@")
+          for ((i = 0; i < ${#args[@]}; i++)); do
+            if [[ "${args[$i]}" == "-d" ]] && (( i + 1 < ${#args[@]} )); then
+              targetdir="${args[$((i + 1))]}"
+              break
+            fi
+          done
+          targetdir="$(cd "$targetdir" && pwd)"
+
+          stage=""
+          if grep -Fq "Subject: [PATCH] net: ethernet: mtk_ppe: change to internal QoS mode" "$patch_input"; then
+            stage="after-04"
+          elif grep -Fq "Subject: [PATCH] netfilter: add DSCP learning flow to xt_FLOWOFFLOAD" "$patch_input"; then
+            stage="after-05"
+          fi
+
+          if /usr/bin/patch "$@" < "$patch_input"; then
+            rc=0
+          else
+            rc=$?
+          fi
+          if (( rc != 0 )); then
+            exit "$rc"
+          fi
+
+          if [[ -n "$stage" ]]; then
+            out="$GITHUB_WORKSPACE/kernel-patch-audit/ppe-reconstruction/$stage"
+            mkdir -p "$out"
+            for rel in \
+              drivers/net/ethernet/mediatek/mtk_ppe_offload.c \
+              drivers/net/ethernet/mediatek/mtk_ppe_debugfs.c \
+              drivers/net/ethernet/mediatek/mtk_ppe.c \
+              drivers/net/ethernet/mediatek/mtk_ppe.h \
+              drivers/net/ethernet/mediatek/mtk_eth_soc.h \
+              drivers/net/ethernet/mediatek/mtk_wed.h \
+              include/net/netfilter/nf_conntrack_qos.h \
+              include/net/netfilter/nf_flow_table.h \
+              include/net/netns/conntrack.h \
+              net/netfilter/xt_FLOWOFFLOAD.c \
+              net/netfilter/nf_flow_table_ip.c \
+              net/netfilter/nf_flow_table_offload.c \
+              net/netfilter/nf_conntrack_core.c; do
+              if [[ -s "$targetdir/$rel" ]]; then
+                mkdir -p "$out/$(dirname "$rel")"
+                cp -f "$targetdir/$rel" "$out/$rel"
+              fi
+            done
+            cp -f "$GITHUB_WORKSPACE/target/linux/mediatek/patches-6.12/999-ppe-04-mtk_ppe-change-to-internal-QoS-mode.patch" "$out/"
+            if [[ "$stage" == "after-05" ]]; then
+              cp -f "$GITHUB_WORKSPACE/target/linux/mediatek/patches-6.12/999-ppe-05-xt_FLOWOFFLOAD-add-DSCP-learning-flow.patch" "$out/"
+            fi
+            (cd "$out" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+            echo "Captured real PPE source snapshot: $stage"
+          fi
+          PATCH_WRAPPER_EOF
+          chmod +x "$PATCH_WRAPPER"
+          export PATCH="$PATCH_WRAPPER"
           if ! make target/linux/prepare V=s 2>&1 | tee "$KERNEL_PATCH_LOG"; then
             echo "::error::Linux 6.12 source preparation or complete kernel patch application failed."
             tail -n 250 "$KERNEL_PATCH_LOG"
@@ -112,6 +177,12 @@ jobs:
           grep -q "^PATCHLEVEL = 12$" "$KERNEL_MAKEFILE"
           grep -q "^SUBLEVEL = 112$" "$KERNEL_MAKEFILE"
           KERNEL_SRC="$(dirname "$KERNEL_MAKEFILE")"
+          for stage in after-04 after-05; do
+            snapshot="$GITHUB_WORKSPACE/kernel-patch-audit/ppe-reconstruction/$stage/drivers/net/ethernet/mediatek/mtk_ppe_offload.c"
+            test -s "$snapshot" || { echo "::error::Missing real PPE source snapshot: $stage"; exit 1; }
+            echo "===== PPE reconstructed source $stage ====="
+            sha256sum "$snapshot"
+          done
           KERNEL_ARCHIVE="$GITHUB_WORKSPACE/dl/linux-6.12.112.tar.xz"
           test -s "$KERNEL_ARCHIVE" || { echo "::error::Pinned Linux 6.12.112 source archive is missing."; exit 1; }
           python3 target/linux/mediatek/tests/audit-kernel-patch-stack.py attest \
