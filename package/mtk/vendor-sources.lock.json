@@ -173,7 +173,8 @@
       "post_normalize_root_suffixes": {
         "006-p1905-libbridge-tool-propagation.patch": "",
         "001-dsa-use-linux-mii-ioctl.patch": "1905daemon"
-      }
+      },
+      "application_stage_order": 1
     },
     {
       "id": "auxiliary",
@@ -182,7 +183,8 @@
         "001-bndstrg-gcc14-werror-and-init.patch",
         "002-fwdd-gcc14-bounded-ifname-copy.patch"
       ],
-      "scope": "bndstrg_plus and fwdd auxiliary patch series"
+      "scope": "bndstrg_plus and fwdd auxiliary patch series",
+      "application_stage_order": 7
     },
     {
       "id": "datconf",
@@ -190,7 +192,8 @@
       "application_order": [
         "002-update-cmake-minimum-required.patch"
       ],
-      "scope": "datconf package patch series"
+      "scope": "datconf package patch series",
+      "application_stage_order": 5
     },
     {
       "id": "mtwifi-7673",
@@ -241,7 +244,8 @@
         "095-fix-wnm-fortify-rsp.patch",
         "096-wnm-fix-send-btm-req-fortify.patch"
       ],
-      "scope": "MT Wi-Fi 7.6.7.3 patch series"
+      "scope": "MT Wi-Fi 7.6.7.3 patch series",
+      "application_stage_order": 2
     },
     {
       "id": "conninfra",
@@ -265,7 +269,8 @@
         "101-unwind-partial-core-thread-initialization.patch",
         "102-propagate-register-access-errors.patch"
       ],
-      "scope": "Conninfra patch series; empty 096-A-probe placeholder is separately classified"
+      "scope": "Conninfra patch series; empty 096-A-probe placeholder is separately classified",
+      "application_stage_order": 3
     },
     {
       "id": "warp",
@@ -284,7 +289,8 @@
         "099-2-fix-incompatible-format-warning.patch",
         "099-3-fix-unused-variable-warning.patch"
       ],
-      "scope": "WARP patch series"
+      "scope": "WARP patch series",
+      "application_stage_order": 4
     },
     {
       "id": "mapfilter",
@@ -293,7 +299,8 @@
         "001-remove-cb-mutex.patch",
         "002-sockptr-t-setsockopt.patch"
       ],
-      "scope": "MAPFILTER patch series"
+      "scope": "MAPFILTER patch series",
+      "application_stage_order": 6
     }
   ]
 }
