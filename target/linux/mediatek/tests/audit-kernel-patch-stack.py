@@ -102,7 +102,7 @@ def hunk_metadata_errors(text):
     def is_file_boundary(position):
         line = lines[position]
         if (line.startswith("diff ") or line.startswith("Index: ") or
-            line.startswith("@@") or line.startswith("-- ")):
+            line.startswith("@@") or line == "--" or line.startswith("-- ")):
             return True
         if line.startswith("--- ") and position + 1 < len(lines):
             return lines[position + 1].startswith("+++ ")
