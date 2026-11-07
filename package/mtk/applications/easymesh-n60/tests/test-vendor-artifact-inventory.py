@@ -182,16 +182,11 @@ archive_inventory = {
     "1905daemon": "1905daemon-35234223.tar.bz2",
     "libmapd": "libmapd-0132d199.tar.bz2",
 }
-# Build/Prepare intentionally creates wapp_ap.conf; GNU patch retains two
-# exact pre-patch snapshots as .orig files. These are generated artifacts,
-# not vendor archive members.
+# Build/Prepare intentionally creates wapp_ap.conf. Strict patch application
+# does not request --backup, so .orig files are not expected in the prepared
+# tree; exact pre/post source snapshots are retained by the audit workflow.
 generated_inventory = {
-    "wappd": {
-        "wapp_ap.conf",
-        "common/main.c.orig",
-        "common/wdev.c.orig",
-        "map/map_1905.c.orig",
-    },
+    "wappd": {"wapp_ap.conf"},
 }
 for root_name, archive_name in archive_inventory.items():
     root = build / root_name
