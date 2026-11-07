@@ -324,7 +324,9 @@ def vendor_inventory(repo):
                             "archive_sha256": s["sha256"],
                             "source_scope": s.get("source_scope"),
                             "package_makefile": s["package_makefile"],
-                            "source_directory": s.get("expected_build_dir"),
+                            "source_directory": s.get("expected_build_dir") or
+                                               ("audit-only/" + str(s.get("extract_to") or "")).rstrip("/"),
+                            "expected_build_directory": s.get("expected_build_dir"),
                             "extract_to": s.get("extract_to"),
                             "archive_root": s.get("extract_root"),
                         }
@@ -336,6 +338,7 @@ def vendor_inventory(repo):
                 patches.append(item)
         patch_sets.append({
             "id": set_id, "directory": directory, "order": set_order,
+            "application_stage_order": set_order,
             "package_makefile": owners[0],
             "source_ids": [s["id"] for s in set_sources],
             "application_order": patch_set.get("application_order", []),
@@ -541,11 +544,24 @@ def write_inventory(inv, out):
     (out / "repository-patch-manifest.json").write_text(json.dumps(repository_manifest, indent=2) + "\n")
     for filename, rows, fields in [
         ("file-overlap-dependencies.csv", inv["file_overlap_edges"], ["target_file","previous_patch","next_patch","previous_order","next_order"]),
-        ("vendor-file-overlap-dependencies.csv", inv["vendor"]["file_overlap_edges"], ["source_id","target_file","previous_patch","next_patch","previous_patch_set","next_patch_set","previous_directory","next_directory","previous_order","next_order","dependency_basis"]),
+        ("vendor-file-overlap-dependencies.csv", inv["vendor"]["file_overlap_edges"], ["source_id","target_file","previous_patch","next_patch","previous_patch_set","next_patch_set","previous_directory","next_directory","previous_order","next_order","previous_patch_set_order","next_patch_set_order","dependency_basis"]),
         ("cross-directory-dependencies.csv", inv["cross_directory_overlap_edges"], ["target_file","previous_patch","next_patch","previous_directory","next_directory","previous_order","next_order","dependency_basis"]),
         ("vendor-cross-directory-dependencies.csv", inv["vendor"]["cross_directory_overlap_edges"], ["source_id","target_file","previous_patch","next_patch","previous_patch_set","next_patch_set","previous_directory","next_directory","previous_order","next_order","dependency_basis"]),
         ("overlay-inventory.csv", inv["overlays"], ["directory_order","directory","source_path","target_path","sha256","bytes"]),
         ("semantic-dependencies.csv", inv["semantic_dependencies"], ["prerequisite","consumer","reason","prerequisite_order","consumer_order","prerequisite_applied_before_consumer"]),
+        ("patch-records.csv", [
+            {
+                "scope": p["scope"], "application_sequence_domain": p["application_sequence_domain"],
+                "application_sequence": p.get("application_sequence", p.get("order")),
+                "application_stage": p.get("application_stage", p.get("directory")),
+                "patch_set_id": p.get("patch_set_id", ""),
+                "path": p["path"], "sha256": p["sha256"], "hunks": p["hunks"],
+                "package_makefile": p.get("package_makefile", ""),
+                "patch_directory": p.get("patch_directory", p.get("directory", "")),
+                "target_files": ";".join(p["target_files"]),
+            }
+            for p in unified_patch_records
+        ], ["scope","application_sequence_domain","application_sequence","application_stage","patch_set_id","path","sha256","hunks","package_makefile","patch_directory","target_files"]),
     ]:
         with (out / filename).open("w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=fields); w.writeheader(); w.writerows(rows)
@@ -566,8 +582,18 @@ def write_inventory(inv, out):
         f"- Patch manifest SHA256: {inv['patch_manifest_sha256']}\n"
         f"- Overlay manifest SHA256: {inv['overlay_manifest_sha256']}\n"
         f"- Combined input manifest SHA256: {inv['input_manifest_sha256']}\n\n"
-        "Application order:\n" + "\n".join(f"{i}. {d}" for i,d in enumerate(PATCH_DIRS,1)) +
-        "\n\nThe attestation is generated only after the actual OpenWrt target/linux/prepare succeeds with zero fuzz and no reject/original files.\n"
+        "Kernel application order:\\n" + "\\n".join(f"{i}. {d}" for i,d in enumerate(PATCH_DIRS,1)) +
+        "\\n\\nVendor application order:\\n" + "\\n".join(
+            f"{p['application_stage_order']}. {p['id']} ({p['directory']})"
+            for p in inv["vendor"]["patch_sets"]
+        ) +
+        "\\n\\nThe attestation is generated only after the actual OpenWrt target/linux/prepare succeeds with zero fuzz and no reject/original files.\\n"
+    )
+    checksum_files = sorted(
+        p for p in out.iterdir() if p.is_file() and p.name != "SHA256SUMS"
+    )
+    (out / "SHA256SUMS").write_text(
+        "".join(f"{digest(p.read_bytes())}  {p.name}\\n" for p in checksum_files)
     )
 
 def validate_patch_application_log(inv, log, repo):
