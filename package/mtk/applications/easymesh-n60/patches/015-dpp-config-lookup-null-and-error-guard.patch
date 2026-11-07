@@ -1,0 +1,33 @@
+--- a/wappd/dpp/dpp_wdev.c
++++ b/wappd/dpp/dpp_wdev.c
+@@ -524,20 +524,23 @@
+ 
+ int wapp_dpp_get_conf_frm_file(struct wifi_app *wapp, const char *str)
+ {
+-	int ret = 0;
+-	char param[64], value[64];
++	int ret;
++	char param[64] = {0}, value[64] = {0};
++
++	if (!wapp || !wapp->map || !str)
++		return 0;
+ 	ret = os_snprintf(param, sizeof(param), "_%s", str);
+-	if (os_snprintf_error(sizeof(param), ret))
++	if (os_snprintf_error(sizeof(param), ret)) {
+ 		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"%s %d os_snprintf error\n", __func__, __LINE__);
+-
+-	ret = 0;
+-	get_dpp_parameters(wapp->map, param, value, sizeof(value));
+-	if(os_strcmp(value,"1") == 0) {
++		return 0;
++	}
++	if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
++		return 0;
++	if (os_strcmp(value, "1") == 0) {
+ 		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"found config %s\n", str);
+ 		return 1;
+ 	}
+-
+-	return ret;
++	return 0;
+ }
