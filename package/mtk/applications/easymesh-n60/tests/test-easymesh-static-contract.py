@@ -195,6 +195,9 @@ for source, label in ((wts_wapp, "WAPP WTS"), (wts_wapp_map, "WAPP MAP"),
 require("key is configured" in wts_wapp and "key is configured" in wts_p1905 and
         "key is configured" in wts_p1905_map and "key is configured" in wts_mapd,
         "Wi-Fi secret-redaction markers are incomplete")
+require('key = %s' not in wts_wdev,
+        "WAPP WPS configuration handler still logs the plaintext credential")
+
 print("PASS: vendor WTS readers retain the original field flow; bounded reads/tokens, fail-closed errors and WAPP/P1905/MAPD secret redaction are enforced.")
 
 # Startup contract: init starts WAPP, then P1905; MAPD's own source performs
