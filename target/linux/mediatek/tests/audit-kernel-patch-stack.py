@@ -104,7 +104,12 @@ def hunk_metadata_errors(text):
         for body in lines[index + 1:]:
             if body == "-- " or body.startswith("@@") or body.startswith("diff --git ") or body.startswith("Index: ") or body.startswith(("--- a/", "--- /dev/null")):
                 break
-            if body.startswith(" "):
+            if actual_old == declared_old and actual_new == declared_new:
+                break
+            if body == "":
+                actual_old += 1
+                actual_new += 1
+            elif body.startswith(" "):
                 actual_old += 1
                 actual_new += 1
             elif body.startswith("-"):
