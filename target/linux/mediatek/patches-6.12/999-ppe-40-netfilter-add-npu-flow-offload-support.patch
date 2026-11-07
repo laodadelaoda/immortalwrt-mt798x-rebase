@@ -94,7 +94,7 @@ v2: Add tunnel over IPSec hardware offload
  
  	return 0;
  }
-@@ -203,6 +206,12 @@ static void flow_offload_route_release(s
+@@ -203,5 +206,11 @@ static void flow_offload_route_release(s
  {
  	nft_flow_dst_release(flow, FLOW_OFFLOAD_DIR_ORIGINAL);
  	nft_flow_dst_release(flow, FLOW_OFFLOAD_DIR_REPLY);
@@ -105,5 +105,3 @@ v2: Add tunnel over IPSec hardware offload
 +	flow->tuplehash[FLOW_OFFLOAD_DIR_ORIGINAL].tuple.npu.dst = NULL;
 +	flow->tuplehash[FLOW_OFFLOAD_DIR_REPLY].tuple.npu.dst = NULL;
  }
- 
- void flow_offload_free(struct flow_offload *flow)
