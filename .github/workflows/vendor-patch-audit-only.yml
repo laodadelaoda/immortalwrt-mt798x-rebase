@@ -1,0 +1,16 @@
+name: N60 Pro vendor patch audit only
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["n60pro-mtk-closed-driver"]
+    paths:
+      - "docs/vendor-patch-audit-trigger.txt"
+
+permissions:
+  contents: read
+
+jobs:
+  vendor-source-patch-audit:
+    name: Full fixed-vendor patch audit (no compilation)
+    uses: ./.github/workflows/vendor-source-patch-audit.yml

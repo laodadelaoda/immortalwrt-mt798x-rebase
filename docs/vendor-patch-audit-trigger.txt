@@ -1,0 +1,3 @@
+This file is an intentional trigger for the isolated N60 Pro fixed-vendor patch audit.
+
+The workflow calls vendor-source-patch-audit.yml only. It does not invoke Quick Prepare, Quick compilation, or Full firmware compilation.
