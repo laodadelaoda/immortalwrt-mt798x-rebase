@@ -97,5 +97,8 @@ require("mtk_flow_is_dev_3addr_sta" in offload and "NL80211_IFTYPE_STATION" in o
         "3-address station egress must use the egress device source MAC.")
 require("ndo_fill_forward_path" in offload and "info.tid = dscp" in offload and "FIELD_PREP(MTK_FOE_WINFO_AMSDU_TID, tid)" in read("drivers/net/ethernet/mediatek/mtk_ppe.c"),
         "WED WMM TID must flow through the netdevice path and PPE WDMA entry.")
+wdma = offload.split("mtk_flow_get_wdma_info", 1)[1].split("static int", 1)[0]
+require(re.search(r"rcu_read_lock\(\);[\s\S]*ndo_fill_forward_path\(&ctx, &path\);[\s\S]*rcu_read_unlock\(\);", wdma),
+        "WED forward-path callback must run under RCU read-side protection.")
 
 print("PASS: PPE/QoS overlap contracts (#04/#05/#11/#20/#28/#32/#33/#35/#39/#42/#45/WED-07).")
