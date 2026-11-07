@@ -75,7 +75,6 @@ jobs:
               cp dpp-patch-root/wappd/dpp/dpp_wdev.c pre017-snapshot/dpp/dpp_wdev.c
               cp dpp-patch-root/wappd/dpp/dpp.c pre017-snapshot/dpp/dpp.c
               cp dpp-patch-root/wappd/dpp/dpp.h pre017-snapshot/dpp/dpp.h
-              continue
             fi
             patch_file="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/$name"
             patch --dry-run --batch --forward --fuzz=0 -p1 -d dpp-patch-root < "$patch_file"
