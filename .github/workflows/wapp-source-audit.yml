@@ -188,12 +188,14 @@ jobs:
           PY
           echo "PASS: complete WTS patch applied to pinned WAPP, MAPD and P1905 archives with zero fuzz."
 
-      - name: Upload exact P1905 post-011 parser source for patch rebasing
+      - name: Upload exact P1905 and WAPP post-011 parser sources for patch rebasing
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: p1905-post-011-parser-source
-          path: ${{ runner.temp }}/p1905-post-011/file_io.c
+          path: |
+            ${{ runner.temp }}/p1905-post-011/file_io.c
+            ${{ runner.temp }}/wapp-post-011/main.c
           if-no-files-found: error
           retention-days: 3
 
