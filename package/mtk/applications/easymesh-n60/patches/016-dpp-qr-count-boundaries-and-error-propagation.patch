@@ -475,3 +475,26 @@
  }
  #endif
  #ifdef OPENWRT_SUPPORT
+--- a/wappd/common/main.c
++++ b/wappd/common/main.c
+@@ -1261,10 +1261,16 @@
+ 	}
+ #endif
+ 
+-	/* Get QR code save conunt for */
+-	get_dpp_parameters(wapp->map, "qr_count", value, sizeof(value));
+-	if (wapp->dpp)
+-		wapp->dpp->qr_code_num = atoi(value);
++	if (wapp->dpp) {
++		unsigned int qr_count = 0;
++
++		if (dpp_read_qr_count(wapp, &qr_count) < 0) {
++			DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"invalid qr_count while loading DPP config\n");
++			wapp->dpp->qr_code_num = 0;
++			goto error;
++		}
++		wapp->dpp->qr_code_num = (u8)qr_count;
++	}
+ 
+ //fail:
+ 	if (cred)
