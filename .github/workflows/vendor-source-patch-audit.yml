@@ -27,6 +27,10 @@ jobs:
           make defconfig
           python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-source-transforms.py verify-lock "$GITHUB_WORKSPACE"
           python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py verify-packages --repo "$GITHUB_WORKSPACE"
+          echo "===== Generate unified Linux kernel + fixed-vendor patch manifest ====="
+          python3 target/linux/mediatek/tests/audit-kernel-patch-stack.py inventory \
+            --repo "$GITHUB_WORKSPACE" \
+            --output-dir "$GITHUB_WORKSPACE/kernel-patch-audit"
           ROOT="$RUNNER_TEMP/n60-vendor-patch-audit"
           INPUT="$ROOT/input"
           SRC="$ROOT/source"
@@ -326,3 +330,12 @@ jobs:
           path: PATCH-APPLICATION-REPORT.txt
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Upload unified patch inventory, dependency CSVs and SHA256 credentials
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-unified-patch-inventory
+          path: kernel-patch-audit/
+          if-no-files-found: warn
+          retention-days: 30
