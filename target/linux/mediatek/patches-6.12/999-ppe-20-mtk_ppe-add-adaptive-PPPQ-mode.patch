@@ -62,7 +62,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +		}
  
  		hwe->ib1 &= ~MTK_FOE_IB1_STATE;
-@@ -848,7 +862,8 @@ __mtk_foe_entry_commit(struct mtk_ppe *p
+@@ -848,7 +860,8 @@ __mtk_foe_entry_commit(struct mtk_ppe *p
  	struct mtk_eth *eth = ppe->eth;
  	u16 timestamp = mtk_eth_timestamp(eth);
  	struct mtk_foe_entry *hwe;
@@ -72,7 +72,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  
  	hwe = mtk_foe_get_entry(ppe, hash);
  
-@@ -865,6 +880,21 @@ __mtk_foe_entry_commit(struct mtk_ppe *p
+@@ -865,6 +878,21 @@ __mtk_foe_entry_commit(struct mtk_ppe *p
  					 timestamp);
  	}
  
