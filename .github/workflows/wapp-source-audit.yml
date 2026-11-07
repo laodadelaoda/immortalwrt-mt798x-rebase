@@ -28,6 +28,8 @@ jobs:
           python3 -m py_compile "$PKG/tests/test-easymesh-static-contract.py" "$PKG/tests/test-dpp-source-contract.py" "$PKG/tests/test-vendor-artifact-inventory.py"
           bash -n "$PKG/scripts/n60-auxiliary-source-audit.sh"
           test -s "$PKG/patches/011-wapp-wts-security.patch"
+          test -s "$PKG/patches/012-p1905-wts-hardening.patch"
+          git apply --numstat "$PKG/patches/012-p1905-wts-hardening.patch" >/dev/null
           python3 "$PKG/scripts/n60-vendor-source-transforms.py" verify-lock "$GITHUB_WORKSPACE"
           grep -Fq 'apply_patch_strict' "$PKG/Makefile"
           grep -Fq 'if (i >= content_len - 1)' "$PKG/patches/011-wapp-wts-security.patch"
@@ -158,11 +160,32 @@ jobs:
           patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WTS_PATCH"
           # Preserve the exact P1905 parser state after patch 011. Patch 012
           # must be rebased against this state because both patches touch file_io.c.
-          mkdir -p "$RUNNER_TEMP/p1905-post-011"
+          mkdir -p "$RUNNER_TEMP/p1905-post-011" "$RUNNER_TEMP/wapp-post-011"
           cp "$PATCH_ROOT/1905daemon/src/file_io.c" "$RUNNER_TEMP/p1905-post-011/file_io.c"
+          cp "$PATCH_ROOT/wappd/common/main.c" "$RUNNER_TEMP/wapp-post-011/main.c"
           P1905_PATCH="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/012-p1905-wts-hardening.patch"
           patch --dry-run --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$P1905_PATCH"
           patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$P1905_PATCH"
+          python3 - "$PATCH_ROOT" <<'PY'
+          import pathlib, sys
+          root = pathlib.Path(sys.argv[1])
+          p = (root / "1905daemon/src/file_io.c").read_text()
+          start = p.index("int _1905_read_set_config(")
+          end = p.index("\nchar* get_raw_data_end", start)
+          fn = p[start:end]
+          assert "if (*pos1 == '\\0')\n\t\t\tbreak;" in fn, "P1905 clean end-of-input guard missing"
+          assert fn.index("if (i >= max_bss_num)") < fn.index("bss_info[i].authmode"), "P1905 record limit is not checked before array writes"
+          assert "i--;" not in fn, "P1905 legacy post-write count rollback remains"
+          assert fn.count("break;") == 1, "P1905 parser has a non-EOF break that can return partial success"
+          assert "os_memset(bss_info, 0, sizeof(*bss_info) * max_bss_num);" in fn[fn.index("err:"):]
+          assert "*config_bss_num = 0;" in fn[fn.index("err:"):]
+          close = fn.index("if (fclose(f) < 0)")
+          assert fn.index("ctx->map_policy.setting.primary_vid = pending_primary_vid;") > close
+          assert "ctx->map_policy.setting.primary_vid = vid;" not in fn
+          assert "ctx->map_policy.setting.dft.PCP = pcp;" not in fn
+          assert "ctx->map_policy.tpolicy.updated = 1;" not in fn
+          print("PASS: P1905 pre-write record bound, fail-closed parser, output rollback and deferred MAP R2 state")
+          PY
           echo "PASS: complete WTS patch applied to pinned WAPP, MAPD and P1905 archives with zero fuzz."
 
       - name: Upload exact P1905 post-011 parser source for patch rebasing
