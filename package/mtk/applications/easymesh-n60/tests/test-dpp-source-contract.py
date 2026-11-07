@@ -324,7 +324,7 @@ for idx, process_fn in enumerate((process_one, process_two), 1):
     require("hex_dump_dbg" not in process_fn and "wpa_hexdump" not in process_fn,
             f"DPP credential sender {idx} logs credential material")
 for idx, process_fn in enumerate((process_one, process_two), 1):
-    require(re.search(r"\\bu16\\s+cred_len(?:\\s*=\\s*0)?\\s*;", process_fn) is not None,
+    require(re.search(r"\bu16\s+cred_len(?:\s*=\s*0)?\s*;", process_fn) is not None,
             f"DPP 1905 credential sender {idx} length is not explicitly declared or initialized")
 
 for secret_dump in (
