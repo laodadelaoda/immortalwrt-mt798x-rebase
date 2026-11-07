@@ -197,22 +197,20 @@ def vendor_inventory(repo):
                 target_records = []
                 target_owners = []
                 for target in target_files:
-                    matched = None
                     if root_suffix:
-                        matched = next((s for s in set_sources if s.get("extract_root") == root_suffix), None)
+                        matches = [s for s in set_sources if s.get("extract_root") == root_suffix]
                     else:
-                        matched = next((s for s in set_sources
-                                        if target == s.get("extract_root")
-                                        or target.startswith(str(s.get("extract_root", "")) + "/")), None)
-                    if matched is None and len(set_sources) == 1:
-                        matched = set_sources[0]
-                    if matched is None and audit_only:
-                        matched = next((s for s in set_sources
-                                        if s["id"].split("_")[0] in name.lower()), None)
-                    if matched is None:
+                        matches = [s for s in set_sources
+                                   if s.get("extract_root") and
+                                   (target == s["extract_root"] or target.startswith(s["extract_root"] + "/"))]
+                    if len(matches) != 1:
+                        reason = "unmapped" if not matches else "ambiguous: " + ", ".join(s["id"] for s in matches)
                         raise RuntimeError(
-                            f"Cannot resolve vendor patch target ownership: {patch_path.relative_to(repo)} -> {target}"
+                            f"Cannot resolve vendor patch target ownership ({reason}); "
+                            f"explicit archive-root mapping is required: "
+                            f"{patch_path.relative_to(repo)} -> {target}"
                         )
+                    matched = matches[0]
                     normalized = (root_suffix + "/" + target) if root_suffix else target
                     target_records.append(normalized)
                     target_owners.append({"target_file": normalized, "source_id": matched["id"]})
@@ -228,6 +226,10 @@ def vendor_inventory(repo):
                     "patch_set_order": set_order,
                     "sequence": sequence,
                     "phase": phase,
+                    "application_stage": phase,
+                    "application_sequence_domain": "vendor:" + set_id,
+                    "application_sequence": sequence,
+                    "patch_directory": directory,
                     "path": patch_path.relative_to(repo).as_posix(),
                     "name": name,
                     "sha256": digest(raw),
@@ -239,10 +241,16 @@ def vendor_inventory(repo):
                     "source_ids": source_ids,
                     "package_makefile": owners[0],
                     "source_archives": [
-                        {"id": s["id"], "archive": s["archive"], "sha256": s["sha256"],
-                         "source_scope": s.get("source_scope"),
-                         "build_dir": s.get("expected_build_dir"),
-                         "extract_root": s.get("extract_root")}
+                        {
+                            "id": s["id"],
+                            "archive": s["archive"],
+                            "archive_sha256": s["sha256"],
+                            "source_scope": s.get("source_scope"),
+                            "package_makefile": s["package_makefile"],
+                            "source_directory": s.get("expected_build_dir"),
+                            "extract_to": s.get("extract_to"),
+                            "archive_root": s.get("extract_root"),
+                        }
                         for s in set_sources if s["id"] in source_ids
                     ],
                     "application_root": application_root,
@@ -311,7 +319,9 @@ def inventory(repo):
             raw = p.read_bytes()
             txt = raw.decode("utf-8", errors="replace")
             patches.append({
-                "order": len(patches) + 1, "directory_order": di, "directory": rel,
+                "order": len(patches) + 1, "application_sequence": len(patches) + 1,
+                "application_sequence_domain": "linux-kernel",
+                "application_stage": rel, "directory_order": di, "directory": rel,
                 "name": p.name, "path": p.relative_to(repo).as_posix(),
                 "sha256": digest(raw), "bytes": len(raw),
                 "hunks": len(re.findall(r"^@@", txt, re.M)), "hunk_metadata_errors": hunk_metadata_errors(txt), "target_files": targets(txt),
@@ -422,10 +432,15 @@ def _groups(keys, values):
 def write_inventory(inv, out):
     out.mkdir(parents=True, exist_ok=True)
     (out / "patch-inventory.json").write_text(json.dumps(inv, indent=2) + "\n")
+    unified_patch_records = (
+        [{"scope": "linux-kernel", **p} for p in inv["patches"]] +
+        [{"scope": "fixed-vendor-package", **p} for p in inv["vendor"]["patches"]]
+    )
     repository_manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "scope": "N60 Pro active Linux 6.12.112 kernel patch stack plus fixed vendor source patch sets declared in package/mtk/vendor-sources.lock.json; unrelated OpenWrt package and target patch stacks are excluded",
         "repository_head_sha": head(out.parent if out.name == "kernel-patch-audit" else out),
+        "patch_records": unified_patch_records,
         "kernel": {
             "version": inv["kernel_version"], "archive_sha256": inv["kernel_archive_sha256"],
             "patch_directories_in_application_order": inv["patch_directories_in_application_order"],
