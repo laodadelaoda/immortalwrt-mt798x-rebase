@@ -435,4 +435,19 @@ require("int dpp_csign_updated = 0;" in main and
         "if (dpp_csign_updated && wapp->dpp_csign)" in main,
         "global C-sign rollback must clear only a key installed by this transaction")
 
+config_loader = extract_c_function(main, "int dpp_read_config_file_for_connection(")
+for token in (
+    "forced_memzero(config[k].dpp_connector, os_strlen(config[k].dpp_connector) + 1)",
+    "forced_memzero(config[k].dpp_csign, config[k].dpp_csign_len)",
+    "forced_memzero(config[k].dpp_netaccesskey, config[k].dpp_netaccesskey_len)",
+    "forced_memzero(config[k].dpp_ppkey, config[k].dpp_ppkey_len)",
+):
+    require(token in config_loader,
+            f"successful DPP config load must clear temporary credential ownership: {token}")
+success_return = config_loader.find("return WAPP_SUCCESS;")
+temp_connector_clear = config_loader.find("forced_memzero(config[k].dpp_connector")
+require(temp_connector_clear >= 0 and success_return > temp_connector_clear,
+        "temporary Connector must be cleared and freed before successful config return")
+
+
 print("PASS: DPP BSS/credential bounds/ownership/log redaction, main config guards, parser bounds, QR count 0..100 validation, QR load/save/reset/remove error paths, OpenSSL 3 accessor and secret redaction")
