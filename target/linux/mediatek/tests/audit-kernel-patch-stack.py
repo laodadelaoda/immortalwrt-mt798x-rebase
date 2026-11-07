@@ -582,18 +582,18 @@ def write_inventory(inv, out):
         f"- Patch manifest SHA256: {inv['patch_manifest_sha256']}\n"
         f"- Overlay manifest SHA256: {inv['overlay_manifest_sha256']}\n"
         f"- Combined input manifest SHA256: {inv['input_manifest_sha256']}\n\n"
-        "Kernel application order:\\n" + "\\n".join(f"{i}. {d}" for i,d in enumerate(PATCH_DIRS,1)) +
-        "\\n\\nVendor application order:\\n" + "\\n".join(
+        "Kernel application order:\n" + "\n".join(f"{i}. {d}" for i,d in enumerate(PATCH_DIRS,1)) +
+        "\n\nVendor application order:\n" + "\n".join(
             f"{p['application_stage_order']}. {p['id']} ({p['directory']})"
             for p in inv["vendor"]["patch_sets"]
         ) +
-        "\\n\\nThe attestation is generated only after the actual OpenWrt target/linux/prepare succeeds with zero fuzz and no reject/original files.\\n"
+        "\n\nThe attestation is generated only after the actual OpenWrt target/linux/prepare succeeds with zero fuzz and no reject/original files.\n"
     )
     checksum_files = sorted(
         p for p in out.iterdir() if p.is_file() and p.name != "SHA256SUMS"
     )
     (out / "SHA256SUMS").write_text(
-        "".join(f"{digest(p.read_bytes())}  {p.name}\\n" for p in checksum_files)
+        "".join(f"{digest(p.read_bytes())}  {p.name}\n" for p in checksum_files)
     )
 
 def validate_patch_application_log(inv, log, repo):
