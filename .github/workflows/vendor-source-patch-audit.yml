@@ -65,8 +65,8 @@ jobs:
 
             if patch --verbose --dry-run --batch --forward --fuzz=0 -p1 -d "$patch_root" < "$patch_file" > "$dry_log" 2>&1; then
               cat "$dry_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
-              if grep -Eiq 'Hunk #[0-9]+ succeeded at .*\\(offset [+-]?[1-9][0-9]* lines?\\)' "$dry_log"; then
-                grep -Ei 'Hunk #[0-9]+ succeeded at .*\\(offset [+-]?[1-9][0-9]* lines?\\)' "$dry_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+              if grep -Eiq 'Hunk #[0-9]+ succeeded at .*\(offset [+-]?[1-9][0-9]* lines?\)' "$dry_log"; then
+                grep -Ei 'Hunk #[0-9]+ succeeded at .*\(offset [+-]?[1-9][0-9]* lines?\)' "$dry_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
                 fail "non-zero line offset detected in dry-run: $patch_file"
                 return 1
               fi
@@ -87,8 +87,8 @@ jobs:
 
             if patch --verbose --batch --forward --fuzz=0 -p1 -d "$patch_root" < "$patch_file" > "$apply_log" 2>&1; then
               cat "$apply_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
-              if grep -Eiq 'Hunk #[0-9]+ succeeded at .*\\(offset [+-]?[1-9][0-9]* lines?\\)' "$apply_log"; then
-                grep -Ei 'Hunk #[0-9]+ succeeded at .*\\(offset [+-]?[1-9][0-9]* lines?\\)' "$apply_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+              if grep -Eiq 'Hunk #[0-9]+ succeeded at .*\(offset [+-]?[1-9][0-9]* lines?\)' "$apply_log"; then
+                grep -Ei 'Hunk #[0-9]+ succeeded at .*\(offset [+-]?[1-9][0-9]* lines?\)' "$apply_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
                 fail "non-zero line offset detected during actual apply: $patch_file"
                 return 1
               fi
