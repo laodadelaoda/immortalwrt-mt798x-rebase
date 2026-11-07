@@ -130,11 +130,27 @@ jobs:
             snapshot_sources "before-05"
           fi
 
+          # Enforce the acceptance contract at invocation time, not only by log inspection.
+          strict_args=()
+          drop_fuzz_value=0
+          for arg in "${args[@]}"; do
+            if (( drop_fuzz_value )); then
+              drop_fuzz_value=0
+              continue
+            fi
+            case "$arg" in
+              --fuzz|-F) drop_fuzz_value=1 ;;
+              --fuzz=*|-F[0-9]*) ;;
+              *) strict_args+=("$arg") ;;
+            esac
+          done
+          strict_args+=(--verbose --fuzz=0 --batch --forward)
+
           if [[ -n "$patch_file" && -f "$patch_file" ]]; then
-            /usr/bin/patch "${args[@]}"
+            /usr/bin/patch "${strict_args[@]}"
             rc=$?
           else
-            /usr/bin/patch "${args[@]}" < "$patch_input"
+            /usr/bin/patch "${strict_args[@]}" < "$patch_input"
             rc=$?
           fi
           if (( rc != 0 )); then
@@ -187,6 +203,14 @@ jobs:
               echo "===== ACTUAL PPE conntrack QoS extension helper ====="
               grep -n -B 12 -A 25 "nf_ct_qos_ext_add" build_dir/target-*/linux-*/linux-6.12.112/include/net/netfilter/nf_conntrack_qos.h 2>/dev/null || true
               sha256sum kernel-patch-audit/failure-source/ppe/* || true
+            done
+            for source in $(find build_dir -type f -path "*/net/netfilter/nf_flow_table_core.c"); do
+              mkdir -p kernel-patch-audit/failure-source/ppe
+              cp -f "$source" kernel-patch-audit/failure-source/ppe/nf_flow_table_core.c
+              if test -s "$source.rej"; then cp -f "$source.rej" kernel-patch-audit/failure-source/ppe/nf_flow_table_core.c.rej; fi
+              echo "===== ACTUAL nf_flow_table_module_exit after failed PPE patch ($source) ====="
+              grep -n -B 25 -A 45 "static void __exit nf_flow_table_module_exit" "$source" || true
+              sha256sum kernel-patch-audit/failure-source/ppe/nf_flow_table_core.c*
             done
             for source in $(find build_dir -type f -path "*/include/linux/netdevice.h"); do
               echo "===== ACTUAL SOURCE: net_device_path_type ($source) ====="

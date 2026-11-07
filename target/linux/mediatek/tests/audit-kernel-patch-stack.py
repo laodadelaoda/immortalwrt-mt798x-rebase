@@ -196,16 +196,76 @@ def write_inventory(inv, out):
         "\n\nThe attestation is generated only after the actual OpenWrt target/linux/prepare succeeds with zero fuzz and no reject/original files.\n"
     )
 
+def validate_patch_application_log(inv, log, repo):
+    """Verify every locked patch was applied forward, without fuzz or skipped hunks."""
+    matches = list(re.finditer(r"^Applying (.+?) using [^:]+:[ \t]*$", log, re.M))
+    expected = [p["path"] for p in inv["patches"]]
+    if len(matches) != len(expected):
+        raise RuntimeError(
+            f"Applied patch invocation count mismatch: expected {len(expected)}, observed {len(matches)}"
+        )
+
+    observed = []
+    blocks = []
+    for i, match in enumerate(matches):
+        raw_path = match.group(1).strip()
+        path = Path(raw_path)
+        if not path.is_absolute():
+            path = repo / path
+        try:
+            relative = path.resolve().relative_to(repo.resolve()).as_posix()
+        except ValueError:
+            raise RuntimeError("Patch invocation escapes repository: " + raw_path)
+        observed.append(relative)
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(log)
+        blocks.append(log[match.end():end])
+
+    if observed != expected:
+        for i, (got, want) in enumerate(zip(observed, expected), 1):
+            if got != want:
+                raise RuntimeError(
+                    f"Applied patch path/order mismatch at {i}: observed {got}, expected {want}"
+                )
+        raise RuntimeError(
+            f"Applied patch path/order mismatch: expected {len(expected)}, observed {len(observed)}"
+        )
+
+    total = 0
+    for patch, block in zip(inv["patches"], blocks):
+        name = patch["path"]
+        if re.search(
+            r"Skipping patch|Reversed \(or previously applied\)|Ignoring previously applied",
+            block, re.I
+        ):
+            raise RuntimeError("Patch was skipped or treated as already applied: " + name)
+        if re.search(r"Hunk #\d+ FAILED|malformed patch|can't find file to patch", block, re.I):
+            raise RuntimeError("Patch contains a failed/malformed hunk: " + name)
+        if re.search(r"with fuzz [1-9]|fuzz [1-9]", block, re.I):
+            raise RuntimeError("Patch used non-zero fuzz: " + name)
+        succeeded = re.findall(
+            r"^Hunk #\d+ succeeded at \d+(?: .*)?\.?$",
+            block, re.M
+        )
+        expected_hunks = patch["hunks"]
+        if len(succeeded) != expected_hunks:
+            raise RuntimeError(
+                f"Patch hunk application count mismatch for {name}: "
+                f"expected {expected_hunks}, observed {len(succeeded)}"
+            )
+        total += len(succeeded)
+    return total
+
+
 def attest(repo, out, kernel_src, log_path, archive, run_id, attempt):
     inv = json.loads((out / "patch-inventory.json").read_text())
     validate_inventory(inv)
     archive_sha = digest(archive.read_bytes())
     if archive_sha != inv["kernel_archive_sha256"]: raise RuntimeError("Downloaded kernel archive SHA256 differs from the repository pin")
     raw = log_path.read_bytes(); log = raw.decode("utf-8", errors="replace")
-    applied = [Path(x).name for x in re.findall(r"^Applying (.+?) using [^:]+:", log, re.M)]
-    expected = [p["name"] for p in inv["patches"]]
-    if applied != expected: raise RuntimeError(f"Applied patch sequence mismatch: expected {len(expected)}, observed {len(applied)}")
-    if re.search(r"Patch failed!|FAILED at|with fuzz [1-9]|fuzz [1-9]", log, re.I): raise RuntimeError("Patch log contains failure or non-zero fuzz")
+    applied_hunks = validate_patch_application_log(inv, log, repo)
+    expected_hunks = sum(p["hunks"] for p in inv["patches"])
+    if applied_hunks != expected_hunks:
+        raise RuntimeError(f"Applied hunk total mismatch: expected {expected_hunks}, observed {applied_hunks}")
     mk = (kernel_src / "Makefile").read_text(errors="replace")
     for key, val in (("VERSION","6"),("PATCHLEVEL","12"),("SUBLEVEL","112")):
         if not re.search(rf"^{key}\s*=\s*{val}\s*$", mk, re.M): raise RuntimeError("Prepared kernel source is not Linux 6.12.112")
@@ -220,11 +280,11 @@ def attest(repo, out, kernel_src, log_path, archive, run_id, attempt):
         "schema_version":1,"repository_head_sha":head(repo),"github_run_id":str(run_id),"github_run_attempt":str(attempt),
         "kernel_version":inv["kernel_version"],"kernel_archive_sha256":archive_sha,
         "patch_directories_in_application_order":PATCH_DIRS,"overlay_directories_in_application_order":OVERLAY_DIRS,
-        "patch_count":inv["patch_count"],"patch_manifest_sha256":inv["patch_manifest_sha256"],
+        "patch_count":inv["patch_count"],"patch_hunk_count":expected_hunks,"applied_hunk_count":applied_hunks,"patch_manifest_sha256":inv["patch_manifest_sha256"],
         "overlay_manifest_sha256":inv["overlay_manifest_sha256"],"input_manifest_sha256":inv["input_manifest_sha256"],
         "patch_log_sha256":digest(raw),"patched_paths_count":len(state),
         "patched_paths_state_sha256":digest(json.dumps(state,sort_keys=True,separators=(",",":")).encode()),
-        "application_result":"PASS_ZERO_FUZZ_NO_REJECTS"
+        "application_result":"PASS_ZERO_FUZZ_NO_SKIP_ALL_HUNKS_NO_REJECTS"
     }
     att["attestation_sha256"] = digest(json.dumps(att,sort_keys=True,separators=(",",":")).encode())
     (out / "kernel-patch-attestation.json").write_text(json.dumps(att,indent=2)+"\n")
@@ -235,11 +295,11 @@ def verify(repo, att_path, run_id, attempt):
     if att.get("github_run_id") != str(run_id) or att.get("github_run_attempt") != str(attempt): raise RuntimeError("Attestation belongs to another workflow run/attempt")
     inv = inventory(repo)
     validate_inventory(inv)
-    for key in ("kernel_version","kernel_archive_sha256","patch_manifest_sha256","overlay_manifest_sha256","input_manifest_sha256","patch_count"):
+    for key in ("kernel_version","kernel_archive_sha256","patch_manifest_sha256","overlay_manifest_sha256","input_manifest_sha256","patch_count","patch_hunk_count","applied_hunk_count"):
         if att.get(key) != inv.get(key): raise RuntimeError("Attested source input changed: " + key)
     unsigned = dict(att); signature = unsigned.pop("attestation_sha256", None)
     if signature != digest(json.dumps(unsigned,sort_keys=True,separators=(",",":")).encode()): raise RuntimeError("Attestation digest is invalid")
-    if att.get("application_result") != "PASS_ZERO_FUZZ_NO_REJECTS": raise RuntimeError("Kernel patch application was not attested as passing")
+    if att.get("application_result") != "PASS_ZERO_FUZZ_NO_SKIP_ALL_HUNKS_NO_REJECTS": raise RuntimeError("Kernel patch application was not attested as passing")
     print(f"PASS: Linux {att['kernel_version']}; {att['patch_count']} ordered patches; attestation {signature}")
 
 def main():
