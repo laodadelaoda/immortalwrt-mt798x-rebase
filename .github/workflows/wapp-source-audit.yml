@@ -230,7 +230,7 @@ jobs:
           assert "key is configured, len = %d" in wps and "\\nSSID = %s, key = %s, len = %d" not in wps, "WAPP WPS credential log redaction missing"
           dw = (root / "wappd/dpp/dpp_wdev.c").read_text()
           conf_start = dw.index("int wapp_dpp_get_conf_frm_file(")
-          conf_end = dw.index("\\nvoid wapp_dpp_get_uri_frm_file", conf_start)
+          conf_end = dw.index("\nvoid wapp_dpp_get_uri_frm_file", conf_start)
           conf_fn = dw[conf_start:conf_end]
           assert "char param[64] = {0}, value[64] = {0};" in conf_fn
           assert "if (!wapp || !wapp->map || !str)" in conf_fn
