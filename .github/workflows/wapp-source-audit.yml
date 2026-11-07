@@ -57,6 +57,35 @@ jobs:
           tar -tjf wappd-80ca5724.tar.bz2 | tee archive-files.txt
           mkdir source
           tar -xjf wappd-80ca5724.tar.bz2 -C source
+          mkdir dpp-patch-root
+          tar -xjf wappd-80ca5724.tar.bz2 -C dpp-patch-root
+          for name in 007-openssl3-use-native-evp-pkey-get0-ec-key.patch 008-dpp-parser-bounds-and-secret-redaction.patch 015-dpp-config-lookup-null-and-error-guard.patch; do
+            patch_file="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/$name"
+            patch --dry-run --batch --forward --fuzz=0 -p1 -d dpp-patch-root < "$patch_file"
+            patch --batch --forward --fuzz=0 -p1 -d dpp-patch-root < "$patch_file"
+          done
+          python3 - <<'PY'
+          import pathlib
+          root = pathlib.Path("dpp-patch-root/wappd/dpp")
+          targets = {
+              "dpp_wdev.c": ["void wapp_dpp_get_uri_frm_file(", "void dpp_save_dpp_uri_to_file("],
+              "dpp.c": ["int  dpp_reset_dpp_config_file(", "void  dpp_remove_uri_from_file("],
+          }
+          for filename, signatures in targets.items():
+              source = (root / filename).read_text()
+              for signature in signatures:
+                  start = source.index(signature)
+                  brace = source.index("{", start)
+                  depth = 0
+                  for end in range(brace, len(source)):
+                      if source[end] == "{": depth += 1
+                      elif source[end] == "}":
+                          depth -= 1
+                          if depth == 0: break
+                  else: raise SystemExit(f"unterminated {signature}")
+                  print(f"\\n===== POST-LOCK {filename}: {signature} =====")
+                  print(source[start:end + 1])
+          PY
           echo "===== EXTRACTED FILE COUNT ====="
           find source -type f | wc -l
           echo "===== EXACT DPP QR COUNT SOURCE CONTEXT (PINNED WAPP ARCHIVE) ====="
