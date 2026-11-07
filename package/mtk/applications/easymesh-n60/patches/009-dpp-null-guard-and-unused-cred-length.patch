@@ -11,5 +11,3 @@
 +#endif
 @@ -996 +997,0 @@
 -		cred_len = sizeof(*cred) + cred->payload_len;
-@@ -1120,0 +1122 @@
-+	u16 cred_len = 0;
