@@ -224,16 +224,40 @@ jobs:
               echo "===== ALL pending_work scheduling sites ($source) ====="
               grep -n -B 5 -A 5 "schedule_work(&eth->pending_work)" "$source" || true
             done
-            for source in $(find build_dir -type f -path "*/drivers/net/phy/air_en8811h.c"); do
-              mkdir -p kernel-patch-audit/failure-source/phy
-              cp -f "$source" kernel-patch-audit/failure-source/phy/air_en8811h.c
-              if test -s "$source.rej"; then cp -f "$source.rej" kernel-patch-audit/failure-source/phy/air_en8811h.c.rej; fi
-              cp -f target/linux/generic/backport-6.12/720-09-v6.14-net-phy-Constify-struct-mdio_device_id.patch kernel-patch-audit/failure-source/phy/
-              cp -f target/linux/generic/backport-6.12/788-v7.3-net-phy-air_en8811h-move-LED-GPIO-configuration-to-config_init.patch kernel-patch-audit/failure-source/phy/
-              echo "===== ACTUAL PHY SOURCE AROUND en8811h_config_init ($source) ====="
-              sed -n '820,930p' "$source"
-              sha256sum kernel-patch-audit/failure-source/phy/*
-            done
+            KERNEL_MAKEFILE_DIAG="$(find build_dir -path "*/linux-6.12.112/Makefile" -print -quit)"
+            if test -n "$KERNEL_MAKEFILE_DIAG"; then
+              KERNEL_SRC_DIAG="$(dirname "$KERNEL_MAKEFILE_DIAG")"
+              source="$KERNEL_SRC_DIAG/drivers/net/phy/air_en8811h.c"
+              if test -e "$source"; then
+                mkdir -p kernel-patch-audit/failure-source/phy
+                cp -Lf "$source" kernel-patch-audit/failure-source/phy/air_en8811h.c
+                if test -s "$source.rej"; then cp -f "$source.rej" kernel-patch-audit/failure-source/phy/air_en8811h.c.rej; fi
+                cp -f target/linux/generic/backport-6.12/720-09-v6.14-net-phy-Constify-struct-mdio_device_id.patch kernel-patch-audit/failure-source/phy/
+                cp -f target/linux/generic/backport-6.12/788-v7.3-net-phy-air_en8811h-move-LED-GPIO-configuration-to-config_init.patch kernel-patch-audit/failure-source/phy/
+                echo "===== ACTUAL PHY SOURCE AROUND en8811h_config_init ($source) ====="
+                sed -n '820,930p' "$source"
+                sha256sum kernel-patch-audit/failure-source/phy/*
+              else
+                echo "::warning::PHY source snapshot not found at $source"
+              fi
+              source="$KERNEL_SRC_DIAG/drivers/net/ethernet/mediatek/mtk_ppe.c"
+              if test -e "$source"; then
+                mkdir -p kernel-patch-audit/failure-source/ppe
+                cp -Lf "$source" kernel-patch-audit/failure-source/ppe/mtk_ppe.c
+                if test -s "$source.rej"; then cp -f "$source.rej" kernel-patch-audit/failure-source/ppe/mtk_ppe.c.rej; fi
+                cp -f target/linux/mediatek/patches-6.12/999-ppe-14-mtk_ppe-add-PPE-cache-preserved-line-lock.patch kernel-patch-audit/failure-source/ppe/
+                cp -f target/linux/mediatek/patches-6.12/999-ppe-20-mtk_ppe-add-adaptive-PPPQ-mode.patch kernel-patch-audit/failure-source/ppe/
+                echo "===== ACTUAL PPE source around __mtk_foe_entry_clear ($source) ====="
+                grep -n -B 12 -A 55 "__mtk_foe_entry_clear" "$source" || true
+                echo "===== ACTUAL PPE source around __mtk_foe_entry_commit ($source) ====="
+                grep -n -B 12 -A 55 "__mtk_foe_entry_commit" "$source" || true
+                sha256sum kernel-patch-audit/failure-source/ppe/mtk_ppe.c*
+              else
+                echo "::warning::PPE source snapshot not found at $source"
+              fi
+            else
+              echo "::warning::Linux 6.12.112 source root not found for failure snapshots"
+            fi
             exit 1
           fi
           if grep -Eiq "with fuzz [1-9]|fuzz [1-9]" "$KERNEL_PATCH_LOG"; then
