@@ -1,6 +1,6 @@
 --- a/wappd/dpp/dpp_wdev.c
 +++ b/wappd/dpp/dpp_wdev.c
-@@ -524,18 +524,21 @@
+@@ -524,20 +524,23 @@
  
  int wapp_dpp_get_conf_frm_file(struct wifi_app *wapp, const char *str)
  {
@@ -31,3 +31,5 @@
 -	return ret;
 +	return 0;
  }
+ 
+ void wapp_dpp_get_uri_frm_file(struct wifi_app *wapp)
