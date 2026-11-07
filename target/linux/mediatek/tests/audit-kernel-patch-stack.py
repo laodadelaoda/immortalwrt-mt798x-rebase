@@ -662,12 +662,19 @@ def validate_patch_application_log(inv, log, repo):
         # status; OpenWrt prepare succeeding therefore proves all hunks in
         # this invocation were accepted. Verify the complete target-file set
         # here, and reject failed/skipped/fuzzy applications above.
+        # A unified patch may contain multiple file sections for the same
+        # path. GNU patch can therefore print "patching file <path>" more
+        # than once for one logical target. Compare unique path sets while
+        # retaining strict detection of missing or unexpected targets.
         patched_files = re.findall(r"^patching file (.+?)\s*$", block, re.M)
-        expected_files = patch["target_files"]
-        if sorted(patched_files) != sorted(expected_files):
+        observed_files = sorted(set(patched_files))
+        expected_files = sorted(set(patch["target_files"]))
+        if observed_files != expected_files:
             raise RuntimeError(
                 f"Patch target-file application mismatch for {name}: "
-                f"expected {expected_files}, observed {patched_files}"
+                f"expected unique targets {expected_files}, "
+                f"observed unique targets {observed_files} "
+                f"(raw patching-file records: {len(patched_files)})"
             )
         total += patch["hunks"]
     return total
