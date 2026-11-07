@@ -165,11 +165,27 @@ require("char param[64] = {0}, value[64] = {0};" in conf_fn and
         "DPP config-file accessor lacks initialized output, NULL guard or error handling")
 
 
-def extract_c_function(source, signature):
-    start = source.find(signature)
-    require(start >= 0, f"missing C function: {signature}")
+def extract_c_function(source, signature, occurrence=0):
+    # Skip forward declarations: the first opening brace after a prototype may
+    # belong to an unrelated function. Select only signatures whose next
+    # declaration terminator is an opening brace, not a semicolon.
+    starts = []
+    cursor = 0
+    while True:
+        start = source.find(signature, cursor)
+        if start < 0:
+            break
+        brace = source.find("{", start)
+        semicolon = source.find(";", start)
+        if brace >= 0 and (semicolon < 0 or brace < semicolon):
+            starts.append(start)
+            cursor = brace + 1
+        else:
+            cursor = start + len(signature)
+    require(occurrence < len(starts),
+            f"missing C function definition #{occurrence + 1}: {signature}")
+    start = starts[occurrence]
     brace = source.find("{", start)
-    require(brace > start, f"missing function body: {signature}")
     depth = 0
     for pos in range(brace, len(source)):
         if source[pos] == "{":
@@ -295,12 +311,8 @@ require("cred_buffer" not in cred_fn and "unsigned short cred_len" not in cred_f
         "DPP packed credential builder retains the temporary copy or narrow accumulator")
 
 process_sig = "static int wapp_dpp_process_config("
-first_pos = src["dpp_wdev"].find(process_sig)
-second_pos = src["dpp_wdev"].find(process_sig, first_pos + len(process_sig))
-require(first_pos >= 0 and second_pos > first_pos,
-        "both DPP 1905 credential send paths are not present")
-process_one = extract_c_function(src["dpp_wdev"][first_pos:], process_sig)
-process_two = extract_c_function(src["dpp_wdev"][second_pos:], process_sig)
+process_one = extract_c_function(src["dpp_wdev"], process_sig, occurrence=0)
+process_two = extract_c_function(src["dpp_wdev"], process_sig, occurrence=1)
 for idx, process_fn in enumerate((process_one, process_two), 1):
     require("wapp_dpp_save_dpp_cred(auth)" in process_fn and
             "wapp_send_1905_msg(wapp, WAPP_SEND_1905_CONNECTOR" in process_fn,
