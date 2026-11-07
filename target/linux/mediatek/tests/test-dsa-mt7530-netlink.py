@@ -70,15 +70,17 @@ unregister_pos = exit_fn.find("genl_unregister_family")
 clear_pos = exit_fn.find("sw_priv = NULL")
 check(unregister_pos >= 0 and clear_pos > unregister_pos,
       "sw_priv is cleared before the Generic Netlink family is unregistered")
-check("mutex_lock" in exit_fn and "mutex_unlock" in exit_fn,
-      "Netlink teardown is not synchronized against in-flight handlers")
+check("mt7530_lock()" in exit_fn and "mt7530_put()" in exit_fn,
+      "Netlink teardown does not serialize state transitions with request handlers")
 check("if (!sw_priv)" in response or "if (!READ_ONCE(sw_priv))" in response,
       "Netlink request handler has no null-device guard")
 
 # Both probe paths must initialize the same interface; teardown must precede
 # release of the hardware/private state.
 check("mt7530_nl_init(priv)" in mdio, "MDIO probe does not initialize MT7530 Netlink")
-check("mt7530_nl_init(priv)" in mmio, "MMIO probe does not initialize MT7530 Netlink")
+mmio_probe = function(mmio, "mt7988_probe")
+check("mt7530_nl_init(priv)" in mmio_probe,
+      "MMIO probe does not initialize MT7530 Netlink with the current pointer API")
 mdio_remove = function(mdio, "mt7530_remove")
 mmio_remove = function(mmio, "mt7988_remove")
 check(mdio_remove.find("mt7530_nl_exit") >= 0 and
@@ -160,8 +162,9 @@ check("an8855_read(struct an8855_priv *priv, u32 reg, u32 *val)" in an8855_h,
       "AN8855 register-read declaration does not expose an error return/out value")
 check("int an8855_write(struct an8855_priv *priv" in an8855_h,
       "AN8855 register-write declaration does not expose an error return")
-check(bool(re.search(r"phy\s*<\s*-1\s*\|\|\s*phy\s*>=", an_validate)),
-      "AN8855 Netlink PHY index lacks bounds validation")
+check(bool(re.search(r"phy\s*<\s*-1\b", an_validate)) and
+      bool(re.search(r"phy\s*>=\s*priv->ds->num_ports", an_validate)),
+      "AN8855 Netlink PHY index lacks lower/upper bounds validation")
 check(bool(re.search(r"devad\s*<\s*-1\s*\|\|\s*devad\s*>", an_validate)),
       "AN8855 Netlink DEVAD lacks bounds validation")
 check(bool(re.search(r"reg\s*>", an_validate)),
