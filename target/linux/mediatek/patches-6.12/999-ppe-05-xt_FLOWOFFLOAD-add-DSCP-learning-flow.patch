@@ -133,7 +133,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  
 --- a/include/net/netfilter/nf_conntrack_extend.h
 +++ b/include/net/netfilter/nf_conntrack_extend.h
-@@ -13,7 +13,8 @@ enum nf_ct_ext_id {
+@@ -13,6 +13,7 @@ enum nf_ct_ext_id {
  #endif
  	NF_CT_EXT_SEQADJ,
  	NF_CT_EXT_ACCT,
@@ -303,7 +303,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  #include <net/netfilter/nf_conntrack_zones.h>
  #include <net/netfilter/nf_conntrack_timestamp.h>
  #include <net/netfilter/nf_conntrack_labels.h>
-@@ -2305,7 +2306,8 @@ ctnetlink_create_conntrack(struct net *n
+@@ -2305,6 +2306,7 @@ ctnetlink_create_conntrack(struct net *n
  		goto err2;
  
  	nf_ct_acct_ext_add(ct, GFP_ATOMIC);
