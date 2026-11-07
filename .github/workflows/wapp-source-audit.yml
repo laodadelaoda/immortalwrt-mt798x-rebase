@@ -101,6 +101,17 @@ jobs:
             strings -a "binaries/$name" | grep -iE "WAPP_USER_GET_WTS_CONFIG|WAPP_WTS_CONFIG|wts_bss_info_config|wapp_read_wts_map_config|EVENT_REGISTER|/tmp/wapp_server|map_handler" | head -100 || true
           done
 
+      - name: Upload exact post-Lock DPP source for patch generation
+        uses: actions/upload-artifact@v4
+        with:
+          name: dpp-post-lock-source
+          path: |
+            ${{ runner.temp }}/wapp-audit/dpp-patch-root/wappd/dpp/dpp.c
+            ${{ runner.temp }}/wapp-audit/dpp-patch-root/wappd/dpp/dpp.h
+            ${{ runner.temp }}/wapp-audit/dpp-patch-root/wappd/dpp/dpp_wdev.c
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Audit WTS parser, events, interface registration and WTS writers
         shell: bash
         run: |
