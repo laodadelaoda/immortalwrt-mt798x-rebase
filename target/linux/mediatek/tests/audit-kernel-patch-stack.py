@@ -698,8 +698,28 @@ def attest(repo, out, kernel_src, log_path, archive, run_id, attempt):
     mk = (kernel_src / "Makefile").read_text(errors="replace")
     for key, val in (("VERSION","6"),("PATCHLEVEL","12"),("SUBLEVEL","112")):
         if not re.search(rf"^{key}\s*=\s*{val}\s*$", mk, re.M): raise RuntimeError("Prepared kernel source is not Linux 6.12.112")
-    rejects = list(kernel_src.rglob("*.rej")) + list(kernel_src.rglob("*.orig"))
-    if rejects: raise RuntimeError("Reject/original files remain after patching: " + ", ".join(str(x) for x in rejects[:10]))
+    # A .rej file is evidence of a rejected hunk and is always fatal.
+    # GNU patch may retain a .orig backup for successfully modified files;
+    # that backup is not a reject and must be audited separately, not treated
+    # as a failed application merely because of its suffix.
+    rejects = sorted(kernel_src.rglob("*.rej"))
+    if rejects:
+        raise RuntimeError("Rejected patch files remain after patching: " + ", ".join(str(x) for x in rejects[:20]))
+    target_paths = {kernel_src / x for p in inv["patches"] for x in p["target_files"]}
+    backups = sorted(kernel_src.rglob("*.orig"))
+    backup_records = []
+    for backup in backups:
+        original = backup.with_suffix("")
+        if original not in target_paths:
+            raise RuntimeError("Unexpected .orig backup outside the locked patch target set: " + str(backup))
+        if not original.is_file():
+            raise RuntimeError("Orphaned .orig backup has no corresponding patched source file: " + str(backup))
+        backup_records.append({
+            "path": backup.relative_to(kernel_src).as_posix(),
+            "sha256": digest(backup.read_bytes()),
+            "patched_path": original.relative_to(kernel_src).as_posix(),
+            "patched_sha256": digest(original.read_bytes()),
+        })
     paths = sorted({x for p in inv["patches"] for x in p["target_files"]} | {x["target_path"] for x in inv["overlays"]})
     state = []
     for rel in paths:
@@ -716,6 +736,7 @@ def attest(repo, out, kernel_src, log_path, archive, run_id, attempt):
         "repository_patch_manifest_sha256":inv["repository_patch_manifest_sha256"],
         "overlay_manifest_sha256":inv["overlay_manifest_sha256"],"input_manifest_sha256":inv["input_manifest_sha256"],
         "patch_log_sha256":digest(raw),"patched_paths_count":len(state),
+        "patch_backup_files":backup_records,"patch_backup_file_count":len(backup_records),
         "patched_paths_state_sha256":digest(json.dumps(state,sort_keys=True,separators=(",",":")).encode()),
         "application_result":"PASS_ZERO_FUZZ_NO_SKIP_ALL_HUNKS_NO_REJECTS"
     }
