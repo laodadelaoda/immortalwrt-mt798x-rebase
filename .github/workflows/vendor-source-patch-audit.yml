@@ -57,6 +57,16 @@ jobs:
             dry_log="$ROOT/$patch_name.dry-run.log"
             apply_log="$ROOT/$patch_name.apply.log"
             expected_hunks="$(grep -c '^@@ ' "$patch_file" || true)"
+            ctx_tmp="$ROOT/offset-context-$CHECKED"
+            rm -rf "$ctx_tmp"
+            mkdir -p "$ctx_tmp/before"
+            while IFS= read -r rel; do
+              [ -n "$rel" ] || continue
+              if [ -f "$patch_root/$rel" ]; then
+                mkdir -p "$ctx_tmp/before/$(dirname "$rel")"
+                cp -p "$patch_root/$rel" "$ctx_tmp/before/$rel"
+              fi
+            done < <(sed -n 's/^+++ b\///p' "$patch_file" | sort -u)
             echo "===== PATCH $patch_file | expected_hunks=$expected_hunks =====" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
             if [ "$expected_hunks" -le 0 ]; then
               fail "patch has no unified-diff hunks: $patch_file"
@@ -105,6 +115,28 @@ jobs:
             if [ "$applied_hunks" -ne "$expected_hunks" ]; then
               fail "actual application applied $applied_hunks/$expected_hunks hunks: $patch_file"
               return 1
+            fi
+            if grep -Eiq 'Hunk #[0-9]+ succeeded at .*\\(offset [+-]?[1-9][0-9]* lines?\\)' "$dry_log" "$apply_log"; then
+              ctx_out="$OUT/offset-context/$patch_name"
+              mkdir -p "$ctx_out"
+              cp -a "$ctx_tmp/before" "$ctx_out/"
+              mkdir -p "$ctx_out/after"
+              while IFS= read -r rel; do
+                [ -n "$rel" ] || continue
+                if [ -f "$patch_root/$rel" ]; then
+                  mkdir -p "$ctx_out/after/$(dirname "$rel")"
+                  cp -p "$patch_root/$rel" "$ctx_out/after/$rel"
+                fi
+              done < <(sed -n 's/^+++ b\\///p' "$patch_file" | sort -u)
+              cp "$patch_file" "$ctx_out/"
+              cp "$dry_log" "$ctx_out/dry-run.log"
+              cp "$apply_log" "$ctx_out/actual-apply.log"
+              {
+                echo "patch=$patch_file"
+                echo "patch_sha256=$(sha256sum "$patch_file" | awk '{print $1}')"
+                echo "patch_root=$patch_root"
+                find "$ctx_out/before" "$ctx_out/after" -type f -print0 | sort -z | xargs -0 sha256sum
+              } > "$ctx_out/CONTEXT-MANIFEST.txt"
             fi
             echo "PASS: all $applied_hunks/$expected_hunks hunks dry-run and applied with zero fuzz: $patch_file" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
           }
@@ -394,6 +426,15 @@ jobs:
           path: PATCH-APPLICATION-REPORT.txt
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Upload exact pre/post source contexts for offset patches
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-offset-patch-contexts
+          path: ${{ runner.temp }}/n60-vendor-patch-audit/report/offset-context/
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Upload exact source context before DPP patch 009
         if: always()
