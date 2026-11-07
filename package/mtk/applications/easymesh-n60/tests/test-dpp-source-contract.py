@@ -361,14 +361,15 @@ require('wpa_hexdump(MSG_DEBUG, DPP_MAP_PREX "in process config cign key"' not i
 # DPP 018: every DPP translation unit that emits binary diagnostics must redact payload bytes.
 for name in ("dpp", "dpp_reconfig", "dpp_wdev", "dpp_wired"):
     source = src[name]
-    require("#define DPP_REDACT_DUMP(level, title)" in source,
+    require("#define DPP_REDACT_DUMP(level, title, data, data_len) do {" in source and
+            "wpa_printf((level), \"%s: [REDACTED]\", (title));" in source,
             f"{name}: DPP diagnostic redaction wrapper is missing")
     for macro in (
-        "#define wpa_hexdump(level, title, buf, len) DPP_REDACT_DUMP(level, title)",
-        "#define wpa_hexdump_ascii(level, title, buf, len) DPP_REDACT_DUMP(level, title)",
-        "#define wpa_hexdump_buf(level, title, buf) DPP_REDACT_DUMP(level, title)",
-        "#define wpa_hexdump_key(level, title, buf, len) DPP_REDACT_DUMP(level, title)",
-        "#define wpa_hexdump_buf_key(level, title, buf) DPP_REDACT_DUMP(level, title)",
+        "#define wpa_hexdump(level, title, buf, len) DPP_REDACT_DUMP(level, title, buf, len)",
+        "#define wpa_hexdump_ascii(level, title, buf, len) DPP_REDACT_DUMP(level, title, buf, len)",
+        "#define wpa_hexdump_buf(level, title, buf) DPP_REDACT_DUMP(level, title, buf, 0)",
+        "#define wpa_hexdump_key(level, title, buf, len) DPP_REDACT_DUMP(level, title, buf, len)",
+        "#define wpa_hexdump_buf_key(level, title, buf) DPP_REDACT_DUMP(level, title, buf, 0)",
     ):
         require(macro in source, f"{name}: unsafe hexdump path is not redacted: {macro}")
 
