@@ -5,7 +5,9 @@
 +	u16 is_1905_conn = 0, is_normal = 0;
 @@ -807 +806,0 @@
 -	dev_list = &wapp->dev_list;
-@@ -816,0 +816,3 @@
+@@ -843,2 +843,5 @@
+ 		return WAPP_INVALID_ARG;
+ 	}
 +#ifdef MAP_R3
 +	dev_list = &wapp->dev_list;
 +#endif
