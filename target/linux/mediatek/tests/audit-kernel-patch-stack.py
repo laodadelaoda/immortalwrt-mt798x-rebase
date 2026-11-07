@@ -143,7 +143,7 @@ def inventory(repo):
     return {
         "schema_version": 1, "kernel_version": kernel, "kernel_archive_sha256": hm.group(2),
         "patch_directories_in_application_order": PATCH_DIRS, "overlay_directories_in_application_order": OVERLAY_DIRS,
-        "patch_count": len(patches), "overlay_file_count": len(overlays), "patch_manifest_sha256": patch_sha,
+        "patch_count": len(patches), "patch_hunk_count": sum(p["hunks"] for p in patches), "overlay_file_count": len(overlays), "patch_manifest_sha256": patch_sha,
         "overlay_manifest_sha256": overlay_sha, "input_manifest_sha256": digest(json.dumps(core, sort_keys=True, separators=(",", ":")).encode()),
         "patches": patches, "overlays": overlays, "file_overlap_matrix": overlap, "file_overlap_edges": edges,
         "overlay_collision_matrix": {k:v for k,v in sorted(overlay_targets.items()) if len(v)>1},
@@ -186,7 +186,7 @@ def write_inventory(inv, out):
             w = csv.DictWriter(f, fieldnames=fields); w.writeheader(); w.writerows(rows)
     (out / "README.md").write_text(
         "# Linux 6.12.112 patch-stack inventory\n\n"
-        f"- Ordered patch inputs: {inv['patch_count']}\n- Pre-patch overlay files: {inv['overlay_file_count']}\n"
+        f"- Ordered patch inputs: {inv['patch_count']}\n- Unified-diff hunks: {inv['patch_hunk_count']}\n- Pre-patch overlay files: {inv['overlay_file_count']}\n"
         f"- Same-file dependency edges: {len(inv['file_overlap_edges'])}\n"
         f"- Curated semantic dependency edges: {len(inv['semantic_dependencies'])}\n"
         f"- Patch manifest SHA256: {inv['patch_manifest_sha256']}\n"
@@ -295,12 +295,14 @@ def verify(repo, att_path, run_id, attempt):
     if att.get("github_run_id") != str(run_id) or att.get("github_run_attempt") != str(attempt): raise RuntimeError("Attestation belongs to another workflow run/attempt")
     inv = inventory(repo)
     validate_inventory(inv)
-    for key in ("kernel_version","kernel_archive_sha256","patch_manifest_sha256","overlay_manifest_sha256","input_manifest_sha256","patch_count","patch_hunk_count","applied_hunk_count"):
+    for key in ("kernel_version","kernel_archive_sha256","patch_manifest_sha256","overlay_manifest_sha256","input_manifest_sha256","patch_count","patch_hunk_count"):
         if att.get(key) != inv.get(key): raise RuntimeError("Attested source input changed: " + key)
+    if att.get("applied_hunk_count") != inv["patch_hunk_count"]:
+        raise RuntimeError("Attested applied hunk count differs from the locked patch inventory")
     unsigned = dict(att); signature = unsigned.pop("attestation_sha256", None)
     if signature != digest(json.dumps(unsigned,sort_keys=True,separators=(",",":")).encode()): raise RuntimeError("Attestation digest is invalid")
     if att.get("application_result") != "PASS_ZERO_FUZZ_NO_SKIP_ALL_HUNKS_NO_REJECTS": raise RuntimeError("Kernel patch application was not attested as passing")
-    print(f"PASS: Linux {att['kernel_version']}; {att['patch_count']} ordered patches; attestation {signature}")
+    print(f"PASS: Linux {att['kernel_version']}; {att['patch_count']} ordered patches / {att['applied_hunk_count']} hunks; attestation {signature}")
 
 def main():
     ap = argparse.ArgumentParser()

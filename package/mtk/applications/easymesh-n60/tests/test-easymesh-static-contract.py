@@ -126,6 +126,30 @@ require('os_strlen(pos1) >= sizeof(op_class)' in wts_wapp and
         "WAPP WTS token length guards are incomplete")
 require('if (ret != 6)' in wts_wapp and wts_wapp.count('if (ret != 1)') >= 6,
         "WAPP WTS scanf conversion results are not checked exactly")
+
+def require_wts_record_limit(source, marker, label):
+    start = source.find(marker)
+    require(start >= 0, f"{label}: WTS parser capacity declaration is missing")
+    terminator = source.find("content[i] = '\\0';", start)
+    require(terminator > start, f"{label}: WTS input is not NUL-terminated before parsing")
+    loop_match = re.search(r"\b(?:while|for)\s*\(", source[terminator:])
+    require(loop_match is not None, f"{label}: WTS record parser loop is missing")
+    loop = terminator + loop_match.start()
+    first_access = source.find("bss_info[i]", loop)
+    require(first_access > loop, f"{label}: indexed BSS record write is missing")
+    guard = source.find("if (i >= max_bss_num)", loop, first_access)
+    bounded_loop = re.search(
+        r"\b(?:while|for)\s*\([^)]*\bi\s*<\s*max_bss_num",
+        source[loop:first_access]
+    ) is not None
+    excerpt = source[loop:first_access + 120]
+    require(guard >= 0 or bounded_loop,
+            f"{label}: record count is not bounded before bss_info[i] access; excerpt={excerpt!r}")
+
+require_wts_record_limit(wts_wapp, "content_len = WTS_FILE_READ_LINE * max_bss_num;", "WAPP")
+require_wts_record_limit(wts_p1905, "content_len = 100 * max_bss_num;", "P1905")
+print("PASS: WAPP and P1905 WTS record counts are bounded before indexed BSS writes.")
+
 require('goto err;' in wts_wapp and '*config_bss_num = 0;' in wts_wapp,
         "WAPP WTS malformed-input path does not fail closed/reset outputs")
 require('while ((ch = fgetc(f)) != EOF)' in wts_p1905 and

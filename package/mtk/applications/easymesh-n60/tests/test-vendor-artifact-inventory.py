@@ -430,6 +430,9 @@ need('CONFIG_first_card_name="MT7981"' not in fragment,
 config_path=repo/".config"
 need(config_path.is_file(),"resolved .config missing; make defconfig must run before Build/Prepare")
 config=config_path.read_text(encoding="utf-8",errors="replace")
+for symbol in ("CONFIG_MTK_6G_SUPPORT", "CONFIG_MTK_MAP_R2_6E_SUPPORT", "CONFIG_MTK_MAP_R3_6E_SUPPORT"):
+    need(not re.search(rf"(?m)^{symbol}=(?:y|m)$",config),
+         f"N60 must not enable 6 GHz/6E option {symbol}")
 need('CONFIG_first_card_name="MT7986"' in config,'wifi-dats must resolve CONFIG_first_card_name="MT7986"')
 need("CONFIG_MTK_FIRST_IF_MT7986=y" in config,"N60 first MTK Wi-Fi interface is not MT7986")
 need("CONFIG_MTK_WIFI_FW_BIN_LOAD=y" in config,"MTK Wi-Fi firmware loading is not enabled")

@@ -36,6 +36,11 @@ list_access = parser.find("dev_list = &wapp->dev_list")
 require(null_guard >= 0 and list_access > null_guard,
         "WAPP pointer must be validated before dereferencing its device list")
 
+auth_init = parser.find("os_memset(&auth, '\\0', sizeof(struct dpp_authentication));")
+first_key = parser.find('"_1905netAccessKey"')
+require(auth_init >= 0 and first_key > auth_init,
+        "DPP authentication state must be zero-initialized before allocating credential buffers")
+
 def check_hex_key(begin_marker, end_marker, field_name):
     begin = parser.find(begin_marker)
     require(begin >= 0, f"{field_name}: source parameter lookup is missing")
@@ -55,6 +60,11 @@ def check_hex_key(begin_marker, end_marker, field_name):
         f"auth.{field_name}->used = key_len",
     ):
         require(token in block, f"{field_name}: missing checked conversion invariant: {token}")
+    alloc = block.find(f"auth.{field_name} = wpabuf_alloc(key_len)")
+    guard = block.find(f"if (!auth.{field_name})", alloc)
+    copy = block.find(f"NdisCopyMemory(auth.{field_name}->buf, buf_temp, key_len)", guard)
+    require(alloc >= 0 and guard > alloc and copy > guard,
+            f"{field_name}: wpabuf allocation must be checked before copying key bytes")
     zero = block.find("NdisZeroMemory(value")
     used = block.find(f"auth.{field_name}->used = key_len")
     require(zero < 0 or zero > used,

@@ -28,7 +28,7 @@
  
  	f = fopen(name, "r");
  	if (f == NULL) {
-@@ -308,55 +316,56 @@
+@@ -308,55 +316,58 @@
  	}
  
  	i = 0;
@@ -91,6 +91,8 @@
  	while (1) {
 +		if (*pos1 == '\0')
 +			break;
++		if (i >= max_bss_num)
++			goto err;
 +		memset(mac_int, 0, sizeof(mac_int));
 +		memset(mac, 0, sizeof(mac));
 +		memset(op_class, 0, sizeof(op_class));
