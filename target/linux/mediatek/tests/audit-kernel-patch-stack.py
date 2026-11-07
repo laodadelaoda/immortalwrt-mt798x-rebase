@@ -188,7 +188,30 @@ def vendor_inventory(repo):
     patches = []
     patch_sets = []
     overlaps = defaultdict(list)
-    for set_order, patch_set in enumerate(lock.get("patch_sets", []), 1):
+    raw_patch_sets = lock.get("patch_sets", [])
+    stage_orders = [p.get("application_stage_order") for p in raw_patch_sets]
+    if (any(not isinstance(x, int) or x < 1 for x in stage_orders) or
+        len(stage_orders) != len(set(stage_orders)) or
+        sorted(stage_orders) != list(range(1, len(raw_patch_sets) + 1))):
+        raise RuntimeError("Vendor Lock application_stage_order must be unique, contiguous, and match the real package patch execution sequence")
+    source_ids_in_lock = [s.get("id") for s in lock.get("sources", [])]
+    if (not all(source_ids_in_lock) or len(source_ids_in_lock) != len(set(source_ids_in_lock))):
+        raise RuntimeError("Vendor Lock source IDs are missing or duplicated")
+    patch_set_ids = [p.get("id") for p in raw_patch_sets]
+    if (not all(patch_set_ids) or len(patch_set_ids) != len(set(patch_set_ids))):
+        raise RuntimeError("Vendor Lock patch-set IDs are missing or duplicated")
+    unknown_sets = sorted({s.get("patch_set") for s in lock.get("sources", []) if s.get("patch_set")} - set(patch_set_ids))
+    if unknown_sets:
+        raise RuntimeError("Vendor sources reference unknown patch sets: " + ", ".join(unknown_sets))
+    for source in lock.get("sources", []):
+        if not (repo / source.get("package_makefile", "")).is_file():
+            raise RuntimeError("Vendor source references missing package Makefile: " + str(source.get("package_makefile")))
+        if not re.fullmatch(r"[0-9a-f]{64}", str(source.get("sha256", ""))):
+            raise RuntimeError("Vendor source has invalid archive SHA256: " + str(source.get("id")))
+        if not source.get("archive"):
+            raise RuntimeError("Vendor source archive name is missing: " + str(source.get("id")))
+    vendor_application_sequence = 0
+    for set_order, patch_set in enumerate(sorted(raw_patch_sets, key=lambda p: p["application_stage_order"]), 1):
         set_id = patch_set["id"]
         directory = patch_set["directory"]
         directory_path = repo / directory
@@ -219,6 +242,7 @@ def vendor_inventory(repo):
         for phase, names in phases:
             for name in names:
                 sequence += 1
+                vendor_application_sequence += 1
                 patch_path = directory_path / name
                 raw = patch_path.read_bytes()
                 txt = raw.decode("utf-8", errors="replace")
@@ -261,7 +285,8 @@ def vendor_inventory(repo):
                     overlaps[(matched["id"], normalized)].append({
                         "path": patch_path.relative_to(repo).as_posix(),
                         "patch_set_id": set_id, "directory": directory,
-                        "patch_set_order": set_order, "sequence": sequence, "phase": phase,
+                        "patch_set_order": set_order, "sequence": sequence,
+                        "application_sequence": vendor_application_sequence, "phase": phase,
                     })
                 source_ids = sorted({x["source_id"] for x in target_owners})
                 if not source_ids or len(target_owners) != len(target_files):
@@ -274,10 +299,12 @@ def vendor_inventory(repo):
                     "patch_set_id": set_id,
                     "patch_set_order": set_order,
                     "sequence": sequence,
+                    "patch_set_sequence": sequence,
                     "phase": phase,
                     "application_stage": phase,
-                    "application_sequence_domain": "vendor:" + set_id,
-                    "application_sequence": sequence,
+                    "application_stage_order": set_order,
+                    "application_sequence_domain": "fixed-vendor-lock",
+                    "application_sequence": vendor_application_sequence,
                     "patch_directory": directory,
                     "path": patch_path.relative_to(repo).as_posix(),
                     "name": name,
@@ -293,6 +320,7 @@ def vendor_inventory(repo):
                         {
                             "id": s["id"],
                             "archive": s["archive"],
+                            "source_archive_path": s["archive"],
                             "archive_sha256": s["sha256"],
                             "source_scope": s.get("source_scope"),
                             "package_makefile": s["package_makefile"],
@@ -324,7 +352,7 @@ def vendor_inventory(repo):
     cross_directory_edges = []
     cross_directory_matrix = {}
     for (source_id, target), items in sorted(overlaps.items()):
-        ordered = sorted(items, key=lambda x: (x["patch_set_order"], x["sequence"]))
+        ordered = sorted(items, key=lambda x: x["application_sequence"])
         if len({x["directory"] for x in ordered}) > 1:
             cross_directory_matrix[f"{source_id}:{target}"] = [x["path"] for x in ordered]
         for previous, following in zip(ordered, ordered[1:]):
@@ -333,8 +361,10 @@ def vendor_inventory(repo):
                 "previous_patch": previous["path"], "next_patch": following["path"],
                 "previous_patch_set": previous["patch_set_id"], "next_patch_set": following["patch_set_id"],
                 "previous_directory": previous["directory"], "next_directory": following["directory"],
-                "previous_order": previous["sequence"], "next_order": following["sequence"],
-                "dependency_basis": "same-source-same-file-application-order",
+                "previous_order": previous["application_sequence"], "next_order": following["application_sequence"],
+                "previous_patch_set_order": previous["patch_set_order"],
+                "next_patch_set_order": following["patch_set_order"],
+                "dependency_basis": "same-source-same-file-real-vendor-application-order",
             }
             overlap_edges.append(edge)
             if previous["directory"] != following["directory"]:
