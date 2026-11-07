@@ -94,7 +94,7 @@ def hunk_metadata_errors(text):
     for index, header in enumerate(lines):
         if not header.startswith("@@"):
             continue
-        match = re.match(r"^@@ -(\\d+)(?:,(\\d+))? \\+(\\d+)(?:,(\\d+))? @@", header)
+        match = re.match(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", header)
         if not match:
             errors.append({"line": index + 1, "header": header, "error": "malformed unified-diff hunk header"})
             continue
@@ -111,7 +111,7 @@ def hunk_metadata_errors(text):
                 actual_old += 1
             elif body.startswith("+"):
                 actual_new += 1
-            elif body.startswith("\\\\"):
+            elif body.startswith("\\"):
                 continue
             else:
                 errors.append({"line": index + 1, "header": header, "error": "invalid line inside unified-diff hunk", "content": body[:120]})
