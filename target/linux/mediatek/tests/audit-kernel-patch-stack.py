@@ -104,7 +104,7 @@ def hunk_metadata_errors(text):
             index += 1
             continue
         match = re.fullmatch(
-            r"@@ -(\\d+)(?:,(\\d+))? \\+(\\d+)(?:,(\\d+))? @@(?:.*)",
+            r"@@ -(\d+)(?:,(\d+))? \\+(\d+)(?:,(\d+))? @@(?:.*)",
             header,
         )
         if not match:
@@ -125,7 +125,7 @@ def hunk_metadata_errors(text):
             # declared old/new line counts have been fully consumed.
             complete = actual_old == declared_old and actual_new == declared_new
             if complete:
-                if body.startswith("\\\\"):
+                if body.startswith("\\"):
                     index += 1
                     continue
                 if (body.startswith("@@") or body.startswith("diff --git ") or
@@ -146,7 +146,7 @@ def hunk_metadata_errors(text):
 
             if body.startswith("diff --git ") or body.startswith("Index: ") or body.startswith("@@"):
                 break
-            if body.startswith("\\\\"):
+            if body.startswith("\\"):
                 index += 1
                 continue
             if body.startswith(" "):
