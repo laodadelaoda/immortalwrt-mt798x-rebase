@@ -164,4 +164,100 @@ require("char param[64] = {0}, value[64] = {0};" in conf_fn and
         "get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0" in conf_fn,
         "DPP config-file accessor lacks initialized output, NULL guard or error handling")
 
-print("PASS: DPP parser bounds, hex decoding lengths, error propagation, OpenSSL 3 accessor and secret redaction")
+
+def extract_c_function(source, signature):
+    start = source.find(signature)
+    require(start >= 0, f"missing C function: {signature}")
+    brace = source.find("{", start)
+    require(brace > start, f"missing function body: {signature}")
+    depth = 0
+    for pos in range(brace, len(source)):
+        if source[pos] == "{":
+            depth += 1
+        elif source[pos] == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start:pos + 1]
+    require(False, f"unterminated C function: {signature}")
+
+
+require("#define MAP_MAX_DPP_URI_COUNT 100" in src["header"],
+        "DPP QR source limit changed unexpectedly")
+qr_param_fn = extract_c_function(src["dpp"], "int dpp_read_qr_parameter(")
+for token in ("dat_load(DPP_CFG_FILE)", "if (!dat_ctx)", "kvc_get(dat_ctx, param)",
+              "if (!stored)", "ret = 1", "if (len >= value_len)",
+              "os_memcpy(value, stored, len + 1)", "kvc_unload(dat_ctx)"):
+    require(token in qr_param_fn, f"DPP QR parameter reader lacks invariant: {token}")
+
+qr_count_fn = extract_c_function(src["dpp"], "int dpp_read_qr_count(")
+for token in ('"qr_count"', "ret == 1", "ret < 0", "len > 3",
+              "value[i] < '0'", "value[i] > '9'",
+              "parsed > MAP_MAX_DPP_URI_COUNT", "*count = parsed"):
+    require(token in qr_count_fn, f"DPP QR count parser lacks invariant: {token}")
+
+def qr_count_reference(value):
+    if value is None:
+        return 0
+    if not value or len(value) > 3:
+        return None
+    parsed = 0
+    for char in value:
+        if char < "0" or char > "9":
+            return None
+        parsed = parsed * 10 + ord(char) - ord("0")
+        if parsed > 100:
+            return None
+    return parsed
+
+for raw, expected in ((None, 0), ("0", 0), ("1", 1), ("100", 100), ("000", 0)):
+    require(qr_count_reference(raw) == expected,
+            f"DPP QR count reference parser rejected valid boundary {raw!r}")
+for raw in ("", "101", "1000", "-1", "+1", " 1", "1x"):
+    require(qr_count_reference(raw) is None,
+            f"DPP QR count reference parser accepted invalid value {raw!r}")
+
+qr_load_fn = extract_c_function(src["dpp_wdev"], "void wapp_dpp_get_uri_frm_file(")
+require("if (!wapp || !wapp->map || !wapp->dpp)" in qr_load_fn and
+        "dpp_read_qr_count(wapp, &uri_cnt) < 0" in qr_load_fn and
+        "unsigned int uri_num, uri_cnt = 0;" in qr_load_fn and
+        "dpp_read_qr_parameter(wapp, qr_param, value, sizeof(value))" in qr_load_fn and
+        "if (ret < 0)" in qr_load_fn and "atoi(value)" not in qr_load_fn and
+        "char uri_num" not in qr_load_fn,
+        "DPP QR load path lacks bounded count, NULL checks or read-error handling")
+
+qr_reset_fn = extract_c_function(src["dpp"], "int  dpp_reset_dpp_config_file(")
+require("if (!wapp || !wapp->map)" in qr_reset_fn and
+        "dpp_read_qr_count(wapp, &uri_cnt) < 0" in qr_reset_fn and
+        "unsigned int uri_num, uri_cnt = 0;" in qr_reset_fn and
+        "dpp_delete_parameter_from_file(wapp, qr_param) < 0" in qr_reset_fn and
+        "atoi(value)" not in qr_reset_fn and "char uri_num" not in qr_reset_fn,
+        "DPP QR reset path lacks bounded count or checked deletion")
+require("char *ifparam = NULL;" in qr_reset_fn and
+        "ret = -1;" in qr_reset_fn and
+        "NdisZeroMemory(ifparam, os_strlen(param) + 1);" in qr_reset_fn,
+        "DPP config reset allocation failure or NUL termination is unsafe")
+
+qr_remove_fn = extract_c_function(src["dpp"], "void  dpp_remove_uri_from_file(")
+require("if (!wapp || !wapp->map || !wapp->dpp || !uri_temp || !uri_temp[0])" in qr_remove_fn and
+        "dpp_read_qr_count(wapp, &uri_cnt) < 0" in qr_remove_fn and
+        "unsigned int uri_cnt = 0, uri_num, found = 0;" in qr_remove_fn and
+        "os_zalloc(sizeof(*uri_values) * uri_cnt)" in qr_remove_fn and
+        "os_strcmp(uri_temp, uri_values[uri_num - 1]) == 0" in qr_remove_fn and
+        "memcmp(uri_temp" not in qr_remove_fn and "atoi(value)" not in qr_remove_fn and
+        "char uri_num" not in qr_remove_fn and "dpp_save_config(wapp, qr_param, uri_values[uri_num - 1], NULL) < 0" in qr_remove_fn and
+        "dpp_delete_parameter_from_file(wapp, qr_param) < 0" in qr_remove_fn and
+        "wapp->dpp->qr_code_num = (u8)(uri_cnt - 1);" in qr_remove_fn and
+        "os_free(uri_values);" in qr_remove_fn,
+        "DPP QR remove path lacks bounded full-list read, exact comparison or checked updates")
+
+qr_save_fn = extract_c_function(src["dpp_wdev"], "void dpp_save_dpp_uri_to_file(")
+require("if (!wapp || !wapp->map || !wapp->dpp || !uri_str || !uri_str[0])" in qr_save_fn and
+        "os_strlen(uri_str) >= 150" in qr_save_fn and
+        "dpp_read_qr_count(wapp, &current_count) < 0" in qr_save_fn and
+        "current_count >= MAP_MAX_DPP_URI_COUNT ? 1 : current_count + 1" in qr_save_fn and
+        "dpp_save_config(wapp, qr_param, uri_str, NULL) < 0" in qr_save_fn and
+        'dpp_save_config(wapp, "qr_count", count_buf, NULL) < 0' in qr_save_fn and
+        "wapp->dpp->qr_code_num = (u8)next_count;" in qr_save_fn,
+        "DPP QR save path lacks input/count bounds or checked persistence")
+
+print("PASS: DPP parser bounds, QR count 0..100 validation, QR load/save/reset/remove error paths, OpenSSL 3 accessor and secret redaction")
