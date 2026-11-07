@@ -156,10 +156,22 @@ jobs:
           WTS_PATCH="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/011-wapp-wts-security.patch"
           patch --dry-run --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WTS_PATCH"
           patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WTS_PATCH"
+          # Preserve the exact P1905 parser state after patch 011. Patch 012
+          # must be rebased against this state because both patches touch file_io.c.
+          mkdir -p "$RUNNER_TEMP/p1905-post-011"
+          cp "$PATCH_ROOT/1905daemon/src/file_io.c" "$RUNNER_TEMP/p1905-post-011/file_io.c"
           P1905_PATCH="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/012-p1905-wts-hardening.patch"
           patch --dry-run --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$P1905_PATCH"
           patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$P1905_PATCH"
           echo "PASS: complete WTS patch applied to pinned WAPP, MAPD and P1905 archives with zero fuzz."
+
+      - name: Upload exact P1905 post-011 parser source for patch rebasing
+        uses: actions/upload-artifact@v6
+        with:
+          name: p1905-post-011-parser-source
+          path: ${{ runner.temp }}/p1905-post-011/file_io.c
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Upload verified source archive and audit inventory
         uses: actions/upload-artifact@v6
