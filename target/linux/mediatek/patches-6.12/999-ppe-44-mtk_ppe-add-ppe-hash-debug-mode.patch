@@ -233,7 +233,7 @@ Usage:
 +				    &mtk_ppe_internal_debugfs_hash_fops);
  	/* only mt7988 can support l4s through tops */
  	if (eth->soc->caps == MT7988_CAPS)
- 		debugfs_create_file("l4s_toggle", S_IRUGO, root, eth,
+ 		debugfs_create_file("l4s_toggle", S_IRUGO | S_IWUSR, root, eth,
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_regs.h
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_regs.h
 @@ -66,6 +66,7 @@
