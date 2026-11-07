@@ -226,7 +226,7 @@ Usage:
  {
 @@ -559,6 +641,9 @@ int mtk_ppe_internal_debugfs_init(struct
  			    &mtk_ppe_internal_debugfs_dscp_fops);
- 	debugfs_create_file("qos_toggle", S_IRUGO, root, eth,
+ 	debugfs_create_file("qos_toggle", S_IRUGO | S_IWUSR, root, eth,
  			    &mtk_ppe_internal_debugfs_qos_fops);
 +	if (mtk_is_netsys_v2_or_greater(eth))
 +		debugfs_create_file("hash_mode", S_IRUGO, root, eth,
