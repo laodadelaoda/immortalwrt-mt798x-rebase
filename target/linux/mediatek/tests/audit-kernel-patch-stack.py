@@ -102,7 +102,7 @@ def hunk_metadata_errors(text):
         declared_new = int(match.group(4) or 1)
         actual_old = actual_new = 0
         for body in lines[index + 1:]:
-            if body.startswith("@@") or body.startswith("diff --git ") or body.startswith("Index: ") or body.startswith(("--- a/", "--- /dev/null")):
+            if body == "-- " or body.startswith("@@") or body.startswith("diff --git ") or body.startswith("Index: ") or body.startswith(("--- a/", "--- /dev/null")):
                 break
             if body.startswith(" "):
                 actual_old += 1
@@ -125,6 +125,156 @@ def hunk_metadata_errors(text):
             })
     return errors
 
+def vendor_inventory(repo):
+    """Inventory every active fixed-vendor patch from the canonical source Lock."""
+    lock_path = repo / "package/mtk/vendor-sources.lock.json"
+    lock_raw = lock_path.read_bytes()
+    lock = json.loads(lock_raw)
+    sources_by_set = defaultdict(list)
+    for source in lock.get("sources", []):
+        if source.get("patch_set"):
+            sources_by_set[source["patch_set"]].append(source)
+
+    patches = []
+    patch_sets = []
+    overlaps = defaultdict(list)
+    for set_order, patch_set in enumerate(lock.get("patch_sets", []), 1):
+        set_id = patch_set["id"]
+        directory = patch_set["directory"]
+        directory_path = repo / directory
+        if not directory_path.is_dir():
+            raise RuntimeError("Missing vendor patch directory: " + directory)
+        phases = [
+            ("application", patch_set.get("application_order", [])),
+            ("post_normalize", patch_set.get("post_normalize_order", [])),
+        ]
+        ordered_names = [name for _, names in phases for name in names]
+        actual_names = sorted(p.name for p in directory_path.iterdir()
+                              if p.is_file() and p.suffix.lower() in (".patch", ".diff"))
+        if sorted(ordered_names) != actual_names:
+            raise RuntimeError(
+                f"Vendor patch inventory differs from Lock for {set_id}: "
+                f"unlisted={sorted(set(actual_names)-set(ordered_names))}; "
+                f"missing={sorted(set(ordered_names)-set(actual_names))}"
+            )
+
+        set_sources = sources_by_set.get(set_id, [])
+        if not set_sources:
+            raise RuntimeError("Vendor patch set has no owning source declaration: " + set_id)
+        owners = sorted({s["package_makefile"] for s in set_sources})
+        if len(owners) != 1:
+            raise RuntimeError("Vendor patch set maps to multiple package owners: " + set_id)
+
+        sequence = 0
+        for phase, names in phases:
+            for name in names:
+                sequence += 1
+                patch_path = directory_path / name
+                raw = patch_path.read_bytes()
+                txt = raw.decode("utf-8", errors="replace")
+                audit_only = all(s.get("source_scope") == "auxiliary-audit-only" for s in set_sources)
+                root_suffix = "1905daemon" if (
+                    set_id == "easymesh" and phase == "post_normalize"
+                    and name == "001-dsa-use-linux-mii-ioctl.patch"
+                ) else ""
+                application_root = "audit-only" if audit_only else (
+                    "PKG_BUILD_DIR" + ("/" + root_suffix if root_suffix else "")
+                )
+                target_files = targets(txt)
+                source_ids = []
+                for target in target_files:
+                    matched = None
+                    if root_suffix:
+                        matched = next((s for s in set_sources if s.get("extract_root") == root_suffix), None)
+                    else:
+                        matched = next((s for s in set_sources
+                                        if target == s.get("extract_root")
+                                        or target.startswith(str(s.get("extract_root", "")) + "/")), None)
+                    if matched is None and len(set_sources) == 1:
+                        matched = set_sources[0]
+                    if matched is None and audit_only:
+                        matched = next((s for s in set_sources
+                                        if s["id"].split("_")[0] in name.lower()), None)
+                    if matched is not None:
+                        source_ids.append(matched["id"])
+                source_ids = sorted(set(source_ids))
+                if not source_ids:
+                    source_ids = [s["id"] for s in set_sources]
+                target_records = []
+                for target in target_files:
+                    normalized = (root_suffix + "/" + target) if root_suffix else target
+                    target_records.append(normalized)
+                    for source_id in source_ids:
+                        overlaps[(set_id, source_id, normalized)].append({
+                            "path": patch_path.relative_to(repo).as_posix(),
+                            "sequence": sequence, "phase": phase,
+                        })
+                item = {
+                    "scope": "fixed-vendor-package",
+                    "patch_set_id": set_id,
+                    "patch_set_order": set_order,
+                    "sequence": sequence,
+                    "phase": phase,
+                    "path": patch_path.relative_to(repo).as_posix(),
+                    "name": name,
+                    "sha256": digest(raw),
+                    "bytes": len(raw),
+                    "hunks": len(re.findall(r"^@@", txt, re.M)),
+                    "hunk_metadata_errors": hunk_metadata_errors(txt),
+                    "target_files": target_records,
+                    "source_ids": source_ids,
+                    "package_makefile": owners[0],
+                    "source_archives": [
+                        {"id": s["id"], "archive": s["archive"], "sha256": s["sha256"],
+                         "source_scope": s.get("source_scope"),
+                         "build_dir": s.get("expected_build_dir"),
+                         "extract_root": s.get("extract_root")}
+                        for s in set_sources if s["id"] in source_ids
+                    ],
+                    "application_root": application_root,
+                    "application_mode": "audit-only" if audit_only else "native-Build-Prepare",
+                }
+                patches.append(item)
+        patch_sets.append({
+            "id": set_id, "directory": directory, "order": set_order,
+            "package_makefile": owners[0],
+            "source_ids": [s["id"] for s in set_sources],
+            "application_order": patch_set.get("application_order", []),
+            "post_normalize_order": patch_set.get("post_normalize_order", []),
+            "scope": patch_set.get("scope", ""),
+        })
+
+    overlap_matrix = {
+        f"{set_id}:{source_id}:{target}": [x["path"] for x in sorted(items, key=lambda x: x["sequence"])]
+        for (set_id, source_id, target), items in sorted(overlaps.items()) if len(items) > 1
+    }
+    overlap_edges = []
+    for (set_id, source_id, target), items in sorted(overlaps.items()):
+        ordered = sorted(items, key=lambda x: x["sequence"])
+        for previous, following in zip(ordered, ordered[1:]):
+            overlap_edges.append({
+                "patch_set_id": set_id, "source_id": source_id, "target_file": target,
+                "previous_patch": previous["path"], "next_patch": following["path"],
+                "previous_order": previous["sequence"], "next_order": following["sequence"],
+            })
+    return {
+        "release": lock.get("release"),
+        "lock_path": lock_path.relative_to(repo).as_posix(),
+        "lock_sha256": digest(lock_raw),
+        "sources": lock.get("sources", []),
+        "patch_sets": patch_sets,
+        "patches": patches,
+        "patch_count": len(patches),
+        "patch_hunk_count": sum(p["hunks"] for p in patches),
+        "patch_manifest_sha256": digest(json.dumps(patches, sort_keys=True, separators=(",", ":")).encode()),
+        "file_overlap_matrix": overlap_matrix,
+        "file_overlap_edges": overlap_edges,
+        "duplicate_patch_content": [
+            paths for paths in _groups([p["sha256"] for p in patches], [p["path"] for p in patches]).values()
+            if len(paths) > 1
+        ],
+    }
+
 def inventory(repo):
     patches = []
     for di, rel in enumerate(PATCH_DIRS, 1):
@@ -140,6 +290,7 @@ def inventory(repo):
                 "hunks": len(re.findall(r"^@@", txt, re.M)), "hunk_metadata_errors": hunk_metadata_errors(txt), "target_files": targets(txt),
                 "line_endings": "mixed" if b"\r\n" in raw and re.search(rb"(?<!\r)\n", raw) else ("crlf" if b"\r\n" in raw else "lf"),
             })
+    vendor = vendor_inventory(repo)
     overlays = []
     overlay_targets = defaultdict(list)
     for di, rel in enumerate(OVERLAY_DIRS, 1):
@@ -177,13 +328,17 @@ def inventory(repo):
     overlay_sha = digest(json.dumps(overlays, sort_keys=True, separators=(",", ":")).encode())
     core = {"kernel_version": kernel, "kernel_archive_sha256": hm.group(2),
             "patch_directories_in_application_order": PATCH_DIRS, "overlay_directories_in_application_order": OVERLAY_DIRS,
-            "patches": patches, "overlays": overlays, "file_overlap_matrix": overlap, "semantic_dependencies": semantic}
+            "patches": patches, "vendor": vendor, "overlays": overlays,
+            "file_overlap_matrix": overlap, "semantic_dependencies": semantic}
     return {
         "schema_version": 1, "kernel_version": kernel, "kernel_archive_sha256": hm.group(2),
         "patch_directories_in_application_order": PATCH_DIRS, "overlay_directories_in_application_order": OVERLAY_DIRS,
         "patch_count": len(patches), "patch_hunk_count": sum(p["hunks"] for p in patches), "overlay_file_count": len(overlays), "patch_manifest_sha256": patch_sha,
         "overlay_manifest_sha256": overlay_sha, "input_manifest_sha256": digest(json.dumps(core, sort_keys=True, separators=(",", ":")).encode()),
-        "patches": patches, "overlays": overlays, "file_overlap_matrix": overlap, "file_overlap_edges": edges,
+        "patches": patches, "vendor": vendor, "repository_patch_count": len(patches) + vendor["patch_count"],
+        "repository_patch_hunk_count": sum(p["hunks"] for p in patches) + vendor["patch_hunk_count"],
+        "repository_patch_manifest_sha256": digest(json.dumps({"kernel": patches, "vendor": vendor["patches"], "vendor_lock_sha256": vendor["lock_sha256"]}, sort_keys=True, separators=(",", ":")).encode()),
+        "overlays": overlays, "file_overlap_matrix": overlap, "file_overlap_edges": edges,
         "overlay_collision_matrix": {k:v for k,v in sorted(overlay_targets.items()) if len(v)>1},
         "semantic_dependencies": semantic, "missing_semantic_dependencies": missing,
         "semantic_dependency_order_violations": [x for x in semantic if not x["prerequisite_applied_before_consumer"]],
@@ -192,7 +347,7 @@ def inventory(repo):
 
 def validate_inventory(inv):
     """Fail closed on malformed hunk counts and missing/out-of-order prerequisites."""
-    malformed = [(p["path"], e) for p in inv["patches"] for e in p.get("hunk_metadata_errors", [])]
+    malformed = [(p["path"], e) for p in (inv["patches"] + inv.get("vendor", {}).get("patches", [])) for e in p.get("hunk_metadata_errors", [])]
     if malformed:
         details = "; ".join(f"{path}: line {err['line']}: {err['error']} ({err.get('header', '')})" for path, err in malformed[:20])
         raise RuntimeError("Unified-diff hunk metadata validation failed: " + details)
@@ -219,8 +374,27 @@ def _groups(keys, values):
 def write_inventory(inv, out):
     out.mkdir(parents=True, exist_ok=True)
     (out / "patch-inventory.json").write_text(json.dumps(inv, indent=2) + "\n")
+    repository_manifest = {
+        "schema_version": 1,
+        "repository_head_sha": head(out.parent if out.name == "kernel-patch-audit" else out),
+        "kernel": {
+            "version": inv["kernel_version"], "archive_sha256": inv["kernel_archive_sha256"],
+            "patch_directories_in_application_order": inv["patch_directories_in_application_order"],
+            "patches": inv["patches"], "file_overlap_matrix": inv["file_overlap_matrix"],
+            "same_file_dependency_edges": inv["file_overlap_edges"],
+            "semantic_dependencies": inv["semantic_dependencies"],
+        },
+        "fixed_vendor": inv["vendor"],
+        "overlays": inv["overlays"],
+        "repository_patch_count": inv["repository_patch_count"],
+        "repository_patch_hunk_count": inv["repository_patch_hunk_count"],
+        "repository_patch_manifest_sha256": inv["repository_patch_manifest_sha256"],
+        "input_manifest_sha256": inv["input_manifest_sha256"],
+    }
+    (out / "repository-patch-manifest.json").write_text(json.dumps(repository_manifest, indent=2) + "\n")
     for filename, rows, fields in [
         ("file-overlap-dependencies.csv", inv["file_overlap_edges"], ["target_file","previous_patch","next_patch","previous_order","next_order"]),
+        ("vendor-file-overlap-dependencies.csv", inv["vendor"]["file_overlap_edges"], ["patch_set_id","source_id","target_file","previous_patch","next_patch","previous_order","next_order"]),
         ("overlay-inventory.csv", inv["overlays"], ["directory_order","directory","source_path","target_path","sha256","bytes"]),
         ("semantic-dependencies.csv", inv["semantic_dependencies"], ["prerequisite","consumer","reason","prerequisite_order","consumer_order","prerequisite_applied_before_consumer"]),
     ]:
@@ -228,8 +402,12 @@ def write_inventory(inv, out):
             w = csv.DictWriter(f, fieldnames=fields); w.writeheader(); w.writerows(rows)
     (out / "README.md").write_text(
         "# Linux 6.12.112 patch-stack inventory\n\n"
-        f"- Ordered patch inputs: {inv['patch_count']}\n- Unified-diff hunks: {inv['patch_hunk_count']}\n- Pre-patch overlay files: {inv['overlay_file_count']}\n"
-        f"- Same-file dependency edges: {len(inv['file_overlap_edges'])}\n"
+        f"- Ordered Linux kernel patches: {inv['patch_count']} ({inv['patch_hunk_count']} hunks)\n"
+        f"- Fixed vendor package patches: {inv['vendor']['patch_count']} ({inv['vendor']['patch_hunk_count']} hunks)\n"
+        f"- Unified repository patch inputs: {inv['repository_patch_count']} ({inv['repository_patch_hunk_count']} hunks)\n"
+        f"- Pre-patch overlay files: {inv['overlay_file_count']}\n"
+        f"- Kernel same-file dependency edges: {len(inv['file_overlap_edges'])}\n"
+        f"- Vendor same-file dependency edges: {len(inv['vendor']['file_overlap_edges'])}\n"
         f"- Curated semantic dependency edges: {len(inv['semantic_dependencies'])}\n"
         f"- Patch manifest SHA256: {inv['patch_manifest_sha256']}\n"
         f"- Overlay manifest SHA256: {inv['overlay_manifest_sha256']}\n"
@@ -323,6 +501,10 @@ def attest(repo, out, kernel_src, log_path, archive, run_id, attempt):
         "kernel_version":inv["kernel_version"],"kernel_archive_sha256":archive_sha,
         "patch_directories_in_application_order":PATCH_DIRS,"overlay_directories_in_application_order":OVERLAY_DIRS,
         "patch_count":inv["patch_count"],"patch_hunk_count":expected_hunks,"applied_hunk_count":applied_hunks,"patch_manifest_sha256":inv["patch_manifest_sha256"],
+        "vendor_lock_sha256":inv["vendor"]["lock_sha256"],"vendor_patch_count":inv["vendor"]["patch_count"],
+        "vendor_patch_manifest_sha256":inv["vendor"]["patch_manifest_sha256"],
+        "repository_patch_count":inv["repository_patch_count"],
+        "repository_patch_manifest_sha256":inv["repository_patch_manifest_sha256"],
         "overlay_manifest_sha256":inv["overlay_manifest_sha256"],"input_manifest_sha256":inv["input_manifest_sha256"],
         "patch_log_sha256":digest(raw),"patched_paths_count":len(state),
         "patched_paths_state_sha256":digest(json.dumps(state,sort_keys=True,separators=(",",":")).encode()),
@@ -337,7 +519,7 @@ def verify(repo, att_path, run_id, attempt):
     if att.get("github_run_id") != str(run_id) or att.get("github_run_attempt") != str(attempt): raise RuntimeError("Attestation belongs to another workflow run/attempt")
     inv = inventory(repo)
     validate_inventory(inv)
-    for key in ("kernel_version","kernel_archive_sha256","patch_manifest_sha256","overlay_manifest_sha256","input_manifest_sha256","patch_count","patch_hunk_count"):
+    for key in ("kernel_version","kernel_archive_sha256","patch_manifest_sha256","overlay_manifest_sha256","input_manifest_sha256","patch_count","patch_hunk_count","vendor_lock_sha256","vendor_patch_count","vendor_patch_manifest_sha256","repository_patch_count","repository_patch_manifest_sha256"):
         if att.get(key) != inv.get(key): raise RuntimeError("Attested source input changed: " + key)
     if att.get("applied_hunk_count") != inv["patch_hunk_count"]:
         raise RuntimeError("Attested applied hunk count differs from the locked patch inventory")
