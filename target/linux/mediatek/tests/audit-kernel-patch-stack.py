@@ -181,7 +181,8 @@ def vendor_inventory(repo):
                     "PKG_BUILD_DIR" + ("/" + root_suffix if root_suffix else "")
                 )
                 target_files = targets(txt)
-                source_ids = []
+                target_records = []
+                target_owners = []
                 for target in target_files:
                     matched = None
                     if root_suffix:
@@ -195,20 +196,18 @@ def vendor_inventory(repo):
                     if matched is None and audit_only:
                         matched = next((s for s in set_sources
                                         if s["id"].split("_")[0] in name.lower()), None)
-                    if matched is not None:
-                        source_ids.append(matched["id"])
-                source_ids = sorted(set(source_ids))
-                if not source_ids:
-                    source_ids = [s["id"] for s in set_sources]
-                target_records = []
-                for target in target_files:
+                    if matched is None:
+                        raise RuntimeError(
+                            f"Cannot resolve vendor patch target ownership: {patch_path.relative_to(repo)} -> {target}"
+                        )
                     normalized = (root_suffix + "/" + target) if root_suffix else target
                     target_records.append(normalized)
-                    for source_id in source_ids:
-                        overlaps[(set_id, source_id, normalized)].append({
-                            "path": patch_path.relative_to(repo).as_posix(),
-                            "sequence": sequence, "phase": phase,
-                        })
+                    target_owners.append({"target_file": normalized, "source_id": matched["id"]})
+                    overlaps[(set_id, matched["id"], normalized)].append({
+                        "path": patch_path.relative_to(repo).as_posix(),
+                        "sequence": sequence, "phase": phase,
+                    })
+                source_ids = sorted({x["source_id"] for x in target_owners})
                 item = {
                     "scope": "fixed-vendor-package",
                     "patch_set_id": set_id,
@@ -222,6 +221,7 @@ def vendor_inventory(repo):
                     "hunks": len(re.findall(r"^@@", txt, re.M)),
                     "hunk_metadata_errors": hunk_metadata_errors(txt),
                     "target_files": target_records,
+                    "target_owners": target_owners,
                     "source_ids": source_ids,
                     "package_makefile": owners[0],
                     "source_archives": [
