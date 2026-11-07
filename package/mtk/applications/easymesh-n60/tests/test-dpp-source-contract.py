@@ -36,10 +36,15 @@ list_access = parser.find("dev_list = &wapp->dev_list")
 require(null_guard >= 0 and list_access > null_guard,
         "WAPP pointer must be validated before dereferencing its device list")
 
-auth_init = parser.find("os_memset(&auth, '\\0', sizeof(struct dpp_authentication));")
+auth_init = parser.find("os_memset(&auth, 0, sizeof(auth));")
 first_key = parser.find('"_1905netAccessKey"')
 require(auth_init >= 0 and first_key > auth_init,
         "DPP authentication state must be zero-initialized before allocating credential buffers")
+connector_alloc = parser.find("auth.connector = os_zalloc(")
+connector_guard = parser.find("if (!auth.connector)", connector_alloc)
+require(connector_alloc >= 0 and connector_guard > connector_alloc,
+        "DPP connector allocation must be checked before use")
+
 
 def check_hex_key(begin_marker, end_marker, field_name):
     begin = parser.find(begin_marker)
@@ -69,6 +74,9 @@ def check_hex_key(begin_marker, end_marker, field_name):
     used = block.find(f"auth.{field_name}->used = key_len")
     require(zero < 0 or zero > used,
             f"{field_name}: source hex string is cleared before the key copy is complete")
+    buf_zero = block.find("NdisZeroMemory(buf_temp")
+    require(buf_zero < 0 or buf_zero > used,
+            f"{field_name}: temporary decoded key buffer is cleared before the key copy is complete")
 
 check_hex_key('"_1905netAccessKey"', '"_1905cSignKey"', "net_access_key")
 check_hex_key('"_1905cSignKey"', None, "c_sign_key")
