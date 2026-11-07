@@ -94,39 +94,78 @@ def targets(text):
     return sorted(x for x in out if x and x != "/dev/null")
 
 def hunk_metadata_errors(text):
-    """Validate declared unified-diff old/new line counts before patching."""
+    """Strictly validate unified-diff hunk headers and declared body line counts."""
     lines = text.splitlines()
     errors = []
-    for index, header in enumerate(lines):
+    index = 0
+    while index < len(lines):
+        header = lines[index]
         if not header.startswith("@@"):
+            index += 1
             continue
-        match = re.match(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", header)
+        match = re.fullmatch(
+            r"@@ -(\\d+)(?:,(\\d+))? \\+(\\d+)(?:,(\\d+))? @@(?:.*)",
+            header,
+        )
         if not match:
-            errors.append({"line": index + 1, "header": header, "error": "malformed unified-diff hunk header"})
+            errors.append({
+                "line": index + 1, "header": header,
+                "error": "malformed unified-diff hunk header",
+            })
+            index += 1
             continue
+
         declared_old = int(match.group(2) or 1)
         declared_new = int(match.group(4) or 1)
         actual_old = actual_new = 0
-        for body in lines[index + 1:]:
-            if body == "-- " or body.startswith("@@") or body.startswith("diff --git ") or body.startswith("Index: ") or body.startswith(("--- a/", "--- /dev/null")):
+        index += 1
+        while index < len(lines):
+            body = lines[index]
+            # Hunk boundaries and file metadata are valid only after the
+            # declared old/new line counts have been fully consumed.
+            complete = actual_old == declared_old and actual_new == declared_new
+            if complete:
+                if body.startswith("\\\\"):
+                    index += 1
+                    continue
+                if (body.startswith("@@") or body.startswith("diff --git ") or
+                    body.startswith("Index: ") or body.startswith("--- ") or
+                    body.startswith("+++ ") or body == "-- " or
+                    body.startswith(("new file mode ", "deleted file mode ",
+                                     "similarity index ", "rename from ",
+                                     "rename to ", "old mode ", "new mode ",
+                                     "GIT binary patch", "Binary files "))):
+                    break
+                errors.append({
+                    "line": index + 1, "header": header,
+                    "error": "extra content after declared hunk line counts",
+                    "content": body[:120],
+                })
+                index += 1
+                continue
+
+            if body.startswith("diff --git ") or body.startswith("Index: ") or body.startswith("@@"):
                 break
-            if actual_old == declared_old and actual_new == declared_new:
-                break
-            if body == "":
-                actual_old += 1
-                actual_new += 1
-            elif body.startswith(" "):
+            if body.startswith("\\\\"):
+                index += 1
+                continue
+            if body.startswith(" "):
                 actual_old += 1
                 actual_new += 1
             elif body.startswith("-"):
                 actual_old += 1
             elif body.startswith("+"):
                 actual_new += 1
-            elif body.startswith("\\"):
-                continue
             else:
-                errors.append({"line": index + 1, "header": header, "error": "invalid line inside unified-diff hunk", "content": body[:120]})
+                errors.append({
+                    "line": index + 1, "header": header,
+                    "error": "invalid or unprefixed line inside unified-diff hunk",
+                    "content": body[:120],
+                })
+                index += 1
                 break
+            index += 1
+
         if (actual_old, actual_new) != (declared_old, declared_new):
             errors.append({
                 "line": index + 1, "header": header,
