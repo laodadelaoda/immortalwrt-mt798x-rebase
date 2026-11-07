@@ -45,8 +45,6 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 --- a/drivers/net/ethernet/mediatek/mtk_ppe.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe.c
 @@ -720,1 +720,13 @@ __mtk_foe_entry_clear
- 		struct mtk_foe_entry *hwe = mtk_foe_get_entry(ppe, entry->hash);
- 
  		state = FIELD_GET(MTK_FOE_IB1_STATE, hwe->ib1);
 +
 +		if (mtk_is_netsys_v3_or_greater(ppe->eth) && ppe->eth->qos_toggle == 3) {
@@ -60,8 +58,6 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +				spin_unlock(&ppe->eth->qdma_shaper.lock);
 +			}
 +		}
- 
- 		hwe->ib1 &= ~MTK_FOE_IB1_STATE;
 @@ -848,7 +860,8 @@ __mtk_foe_entry_commit(struct mtk_ppe *p
  	struct mtk_eth *eth = ppe->eth;
  	u16 timestamp = mtk_eth_timestamp(eth);
