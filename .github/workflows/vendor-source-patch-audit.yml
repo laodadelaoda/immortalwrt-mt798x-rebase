@@ -194,6 +194,18 @@ jobs:
           # This prevents the audit's transformation logic drifting from the real build.
           python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-source-transforms.py finalize "$SRC/easymesh"
 
+          # Preserve an independently reviewable DPP source pair: pristine vendor
+          # WAPP and the exact fully patched/normalized WAPP tree used by Prepare.
+          mkdir -p "$OUT/dpp-audit/pristine" "$OUT/dpp-audit/patched"
+          cp -a "$SRC/pristine/wappd/." "$OUT/dpp-audit/pristine/"
+          cp -a "$SRC/easymesh/wappd/." "$OUT/dpp-audit/patched/"
+          {
+            echo "Repository revision: $(git rev-parse HEAD)"
+            echo "WAPP archive SHA256: $(python3 -c 'import json; from pathlib import Path; d=json.loads(Path("package/mtk/vendor-sources.lock.json").read_text()); print(next(x["sha256"] for x in d["sources"] if x["id"]=="wappd"))')"
+            echo "DPP patch: package/mtk/applications/easymesh-n60/patches/017-dpp-credential-bounds-zeroization-and-log-redaction.patch"
+            sha256sum "$OUT/dpp-audit/pristine/common/main.c" "$OUT/dpp-audit/pristine/dpp/dpp_wdev.c" "$OUT/dpp-audit/patched/common/main.c" "$OUT/dpp-audit/patched/dpp/dpp_wdev.c"
+          } > "$OUT/dpp-audit/SOURCE-MANIFEST.txt"
+
           # Git's unified-diff parser must also accept every active patch.
           while IFS= read -r patch_file; do
             if git apply --numstat "$patch_file" >/dev/null 2>"$RUNNER_TEMP/git-apply-parse.err"; then
@@ -345,6 +357,15 @@ jobs:
           path: ${{ runner.temp }}/n60-vendor-patch-audit/report/pre017/
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Upload pristine and fully patched WAPP source for DPP security review
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: dpp-security-audit-source
+          path: ${{ runner.temp }}/n60-vendor-patch-audit/report/dpp-audit/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload unified patch inventory, dependency CSVs and SHA256 credentials
         if: always()
