@@ -3,9 +3,11 @@
 from pathlib import Path
 import sys
 
+
 def fail(message):
     print(f"FAIL: {message}", file=sys.stderr)
     raise SystemExit(1)
+
 
 def body(source, signature):
     start = source.rfind(signature)
@@ -24,9 +26,11 @@ def body(source, signature):
                 return source[brace + 1:i]
     fail(f"unterminated function: {signature}")
 
+
 def require(condition, message):
     if not condition:
         fail(message)
+
 
 if len(sys.argv) != 2:
     fail("usage: test-pcie-gen3-irq-lifecycle.py <kernel-source>")
@@ -45,6 +49,8 @@ require("count % 2" in parse and "count / 2 != pcie->num_irqs" in parse,
         "msi-map must contain exactly two cells per platform IRQ")
 require("!msimap[i * 2 + 1]" in parse and "PCIE_MSI_GROUP_NUM" in parse,
         "msi-map group and mask values must be range/bounds checked")
+require("(msimap[i * 2 + 1] & mask_check)" in parse,
+        "overlapping msi-map masks must be rejected")
 require("else\n\t\t\treturn -EINVAL;" in parse,
         "unknown msi_type values must be rejected")
 
@@ -61,13 +67,27 @@ require("pcie->intx_domain = NULL" in teardown and "pcie->msi_domain = NULL" in 
         and "pcie->msi_bottom_domain = NULL" in teardown,
         "teardown must clear removed IRQ-domain pointers")
 
-affinity = body(src, "static int mtk_pcie_intx_set_affinity(")
-require("if (!port_data)" in affinity and "if (ret >= 0)" in affinity,
-        "INTx affinity callback must validate parent IRQ data and propagate failure")
+for signature in ("static int mtk_pcie_intx_set_affinity(",
+                  "static int mtk_pcie_msi_set_affinity("):
+    affinity = body(src, signature)
+    require("port_data = irq_get_irq_data(" in affinity,
+            f"{signature} must retrieve parent IRQ data")
+    lookup = affinity.index("port_data = irq_get_irq_data(")
+    guard = affinity.find("if (!port_data)", lookup)
+    dereference = affinity.find("irq_data_get_irq_chip(port_data)", lookup)
+    require(guard >= 0 and dereference >= 0 and guard < dereference,
+            f"{signature} must guard NULL irq_data before dereference")
+    require("if (ret >= 0)" in affinity,
+            f"{signature} must update effective affinity only on success")
 
-msi_affinity = body(src, "static int mtk_pcie_msi_set_affinity(")
-require("if (IS_ERR_OR_NULL(irqs))" in msi_affinity and "if (ret >= 0)" in msi_affinity,
-        "MSI affinity callback must validate its parent IRQ mapping and update effective affinity only on success")
+handler = body(src, "static void mtk_pcie_msi_handler(")
+lookup = handler.find("irqs = mtk_msi_irq_get_irqs(pcie, irq_desc_get_irq(desc));")
+guard = handler.find("if (IS_ERR_OR_NULL(irqs))", lookup)
+read_enable = handler.find("msi_enable = readl_relaxed", lookup)
+require(lookup >= 0 and guard > lookup and read_enable > guard,
+        "MSI handler must resolve and validate the parent IRQ before register access")
+require("msi_enable &= irqs->mapped_table;" in handler,
+        "MSI handler must restrict enabled bits to the current parent IRQ mapping")
 
 read = body(src, "static int mtk_pcie_config_read(")
 write = body(src, "static int mtk_pcie_config_write(")
@@ -90,4 +110,4 @@ require(soft_on.count("pci_dev_put(dev)") >= 2 and "mtk_pcie_power_down(pcie);" 
 require("struct mutex power_lock;" in src and "mutex_init(&pcie->power_lock);" in body(src, "static int mtk_pcie_setup("),
         "power mutex must be declared and initialized before the exported API is used")
 
-print("PASS: PCIe Gen3 MSI bounds, IRQ rollback, affinity and soft-power lifecycle contracts")
+print("PASS: PCIe Gen3 MSI bounds, parent-IRQ mapping, NULL-safe affinity, rollback and soft-power lifecycle")

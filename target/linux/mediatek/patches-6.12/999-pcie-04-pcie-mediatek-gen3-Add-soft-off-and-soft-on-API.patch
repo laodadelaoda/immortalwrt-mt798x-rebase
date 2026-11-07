@@ -1,46 +1,31 @@
----
-[v2] pcie: mediatek-gen3: Add soft off and soft on API
-
-Add soft off and soft on API for MediaTek Gen3 PCIe controller. These APIs
-provide software-controlled PCIe link management, allowing graceful shutdown
-and restart of PCIe devices without full hardware reset, useful for power
-management and device recovery scenarios.
----
-v2: Update quilt refresh to re-sync the patch and ensure it applies cleanly
-    with the latest source code.
-v1: Move openwrt-master files to openwrt-25.12 branch after OpenWrt official
-    25.12 branch release.
----
-
-From 6ca5849bee7d577fc97e08d7f575b588c4157630 Mon Sep 17 00:00:00 2001
-From: Jianguo Zhang <jianguo.zhang@mediatek.com>
-Date: Tue, 14 Oct 2025 16:48:46 +0800
-Subject: [PATCH] pcie: mediatek-gen3: Add soft off and soft on API
-
-[Description]
-Add soft off and soft on API
-
-[Release-log]
-NA
-
-Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
----
- drivers/pci/controller/pcie-mediatek-gen3.c | 103 ++++++++++++++++++++
- 1 file changed, 103 insertions(+)
-
 --- a/drivers/pci/controller/pcie-mediatek-gen3.c
 +++ b/drivers/pci/controller/pcie-mediatek-gen3.c
-@@ -135,6 +135,9 @@
+@@ -129,16 +129,19 @@
+ #define PCIE_ATR_TLP_TYPE(type)		(((type) << 16) & GENMASK(18, 16))
+ #define PCIE_ATR_TLP_TYPE_MEM		PCIE_ATR_TLP_TYPE(0)
+ #define PCIE_ATR_TLP_TYPE_IO		PCIE_ATR_TLP_TYPE(2)
+ 
+ #define MAX_NUM_PHY_RESETS		3
+ 
  /* Time in ms needed to complete PCIe reset on EN7581 SoC */
  #define PCIE_EN7581_RESET_TIME_MS	100
- 
++
 +int mtk_pcie_soft_off(struct pci_bus *bus);
 +int mtk_pcie_soft_on(struct pci_bus *bus);
-+
+ 
  struct mtk_gen3_pcie;
  
  /**
-@@ -213,6 +216,7 @@ struct mtk_pcie_irq {
+  * struct mtk_gen3_pcie_pdata - differentiate between host generations
+  * @power_up: pcie power_up callback
+  * @phy_resets: phy reset lines SoC data.
+  */
+@@ -208,16 +211,17 @@
+  * @saved_irq_state: IRQ enable state saved at suspend time
+  * @irq_lock: lock protecting IRQ register access
+  * @intx_domain: legacy INTx IRQ domain
+  * @msi_domain: MSI IRQ domain
+  * @msi_bottom_domain: MSI IRQ bottom domain
   * @msi_sets: MSI sets information
   * @msi_group_type: PCIe controller MSI group type
   * @lock: lock protecting IRQ bit map
@@ -48,7 +33,17 @@ Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
   * @msi_irq_in_use: bit map for assigned MSI IRQ
   * @soc: pointer to SoC-dependent operations
   */
-@@ -242,6 +246,8 @@ struct mtk_gen3_pcie {
+ struct mtk_gen3_pcie {
+ 	struct device *dev;
+ 	void __iomem *base;
+ 	phys_addr_t reg_base;
+ 	struct reset_control *mac_reset;
+@@ -237,16 +241,18 @@
+ 	u32 saved_irq_state;
+ 	raw_spinlock_t irq_lock;
+ 	struct irq_domain *intx_domain;
+ 	struct irq_domain *msi_domain;
+ 	struct irq_domain *msi_bottom_domain;
  	struct mtk_msi_set msi_sets[PCIE_MSI_SET_NUM];
  	enum mtk_msi_group_type msi_group_type;
  	struct mutex lock;
@@ -57,7 +52,17 @@ Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
  	DECLARE_BITMAP(msi_irq_in_use, PCIE_MSI_IRQS_NUM);
  
  	const struct mtk_gen3_pcie_pdata *soc;
-@@ -313,6 +319,13 @@ static void __iomem *mtk_pcie_map_bus(st
+ };
+ 
+ /* LTSSM state in PCIE_LTSSM_STATUS_REG bit[28:24] */
+ static const char *const ltssm_str[] = {
+ 	"detect.quiet",			/* 0x00 */
+@@ -308,24 +314,36 @@
+ 	struct mtk_gen3_pcie *pcie = bus->sysdata;
+ 
+ 	return pcie->base + PCIE_CFG_OFFSET_ADDR + where;
+ }
+ 
  static int mtk_pcie_config_read(struct pci_bus *bus, unsigned int devfn,
  				int where, int size, u32 *val)
  {
@@ -71,7 +76,8 @@ Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
  	mtk_pcie_config_tlp_header(bus, devfn, where, size);
  
  	return pci_generic_config_read32(bus, devfn, where, size, val);
-@@ -321,6 +334,11 @@ static int mtk_pcie_config_read(struct p
+ }
+ 
  static int mtk_pcie_config_write(struct pci_bus *bus, unsigned int devfn,
  				 int where, int size, u32 val)
  {
@@ -83,12 +89,35 @@ Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
  	mtk_pcie_config_tlp_header(bus, devfn, where, size);
  
  	if (size <= 2)
-@@ -1361,3 +1379,4 @@ static int mtk_pcie_setup(struct mtk_gen3_pcie *pcie)
+ 		val <<= (where & 0x3) * 8;
+ 
+ 	return pci_generic_config_write32(bus, devfn, where, 4, val);
+ }
+ 
+@@ -1361,16 +1379,17 @@
+ 	phy_power_off(pcie->phy);
+ 	phy_exit(pcie->phy);
+ 	reset_control_bulk_assert(pcie->soc->phy_resets.num_resets, pcie->phy_resets);
+ }
+ 
+ static int mtk_pcie_setup(struct mtk_gen3_pcie *pcie)
  {
  	int err;
 +	mutex_init(&pcie->power_lock);
  
-@@ -1506,6 +1525,126 @@ static int mtk_pcie_turn_off_link(struct
+ 	err = mtk_pcie_parse_port(pcie);
+ 	if (err)
+ 		return err;
+ 
+ 	/*
+ 	 * Deassert the line in order to avoid unbalance in deassert_count
+ 	 * counter since the bulk is shared.
+@@ -1503,16 +1522,136 @@
+ 
+ 	/* Check the link is L2 */
+ 	return readl_poll_timeout(pcie->base + PCIE_LTSSM_STATUS_REG, val,
+ 				  (PCIE_LTSSM_STATE(val) ==
+ 				   PCIE_LTSSM_STATE_L2_IDLE), 20,
  				   50 * USEC_PER_MSEC);
  }
  
@@ -215,3 +244,8 @@ Signed-off-by: Jianguo Zhang <jianguo.zhang@mediatek.com>
  static int mtk_pcie_suspend_noirq(struct device *dev)
  {
  	struct mtk_gen3_pcie *pcie = dev_get_drvdata(dev);
+ 	int err;
+ 	u32 val;
+ 
+ 	/* Trigger link to L2 state */
+ 	err = mtk_pcie_turn_off_link(pcie);
