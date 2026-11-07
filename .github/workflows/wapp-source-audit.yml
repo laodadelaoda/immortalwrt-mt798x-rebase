@@ -189,6 +189,13 @@ jobs:
           assert "ctx->map_policy.setting.primary_vid = vid;" not in fn
           assert "ctx->map_policy.setting.dft.PCP = pcp;" not in fn
           assert "ctx->map_policy.tpolicy.updated = 1;" not in fn
+          for field_error in ("index not found", "mac not found", "opclass not found", "ssid not found",
+                              "authmode not found", "encrytype not found", "key not found",
+                              "resv1 not found", "end line not found"):
+              pos = fn.find(field_error)
+              block_end = fn.find("}", pos)
+              block = fn[pos:block_end + 1] if pos >= 0 and block_end >= 0 else ""
+              assert "goto err;" in block and "break;" not in block, f"P1905 field must fail closed: {field_error}"
           w = (root / "wappd/common/main.c").read_text()
           ws = w.index("int wapp_read_wts_map_config(")
           we = w.index("\n#ifdef DPP_SUPPORT", ws)
@@ -201,6 +208,14 @@ jobs:
           err = wfn[wfn.index("err:"):]
           assert "*config_bss_num = 0;" in err and "memset(bss_info, 0, sizeof(*bss_info) * max_bss_num);" in err
           assert "if (ferror(f))\n\t\tgoto err;" in wfn
+          assert "continue;" not in loop, "WAPP malformed sscanf input can continue with partial parser state"
+          for field_error in ("index not found", "mac not found", "opclass not found", "ssid not found",
+                              "authmode not found", "encrytype not found", "key not found",
+                              "resv1 not found", "resv2 not found"):
+              pos = loop.find(field_error)
+              block_end = loop.find("}", pos)
+              block = loop[pos:block_end + 1] if pos >= 0 and block_end >= 0 else ""
+              assert "goto err;" in block and "break;" not in block, f"WAPP field must fail closed: {field_error}"
           m = (root / "mapd/src/topologySrv/topologySrv.c").read_text()
           assert "key is configured" in m and "key=%s" not in m, "MAPD secret-log redaction missing"
           print("PASS: WAPP pre-write record bound, malformed-input fail-closed path and MAPD key-log redaction")
