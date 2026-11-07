@@ -93,7 +93,10 @@
       "patch_set": "mtwifi-7673",
       "expected_patch_dir": "package/mtk/drivers/mt_wifi/patches-7673",
       "source_scope": "openwrt-package",
-      "expected_build_dir": "build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/mt_wifi"
+      "expected_build_dir": "build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/mt_wifi",
+      "patch_target_prefixes": [
+        ""
+      ]
     },
     {
       "id": "conninfra",
@@ -106,7 +109,10 @@
       "patch_set": "conninfra",
       "expected_patch_dir": "package/mtk/drivers/conninfra/patches",
       "source_scope": "openwrt-package",
-      "expected_build_dir": "build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/conninfra"
+      "expected_build_dir": "build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/conninfra",
+      "patch_target_prefixes": [
+        ""
+      ]
     },
     {
       "id": "warp",
@@ -119,7 +125,10 @@
       "patch_set": "warp",
       "expected_patch_dir": "package/mtk/drivers/warp/patches",
       "source_scope": "openwrt-package",
-      "expected_build_dir": "build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/warp"
+      "expected_build_dir": "build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/warp",
+      "patch_target_prefixes": [
+        ""
+      ]
     },
     {
       "id": "datconf",
@@ -132,7 +141,10 @@
       "patch_set": "datconf",
       "expected_patch_dir": "package/mtk/applications/datconf/patches",
       "source_scope": "openwrt-package",
-      "expected_build_dir": "build_dir/target-aarch64_cortex-a53_musl/datconf"
+      "expected_build_dir": "build_dir/target-aarch64_cortex-a53_musl/datconf",
+      "patch_target_prefixes": [
+        ""
+      ]
     },
     {
       "id": "mapfilter",
@@ -145,7 +157,10 @@
       "patch_set": "mapfilter",
       "expected_patch_dir": "package/kernel/mapfilter/patches",
       "source_scope": "openwrt-package",
-      "expected_build_dir": "build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/mapfilter"
+      "expected_build_dir": "build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/mapfilter",
+      "patch_target_prefixes": [
+        ""
+      ]
     }
   ],
   "patch_sets": [
