@@ -277,4 +277,73 @@ require('wapp->dpp->qr_code_num = atoi(value)' not in main_dpp_fn and
         "wapp->dpp->qr_code_num = (u8)qr_count;" in main_dpp_fn,
         "main DPP config loader bypasses the bounded QR count parser")
 
-print("PASS: DPP main config guards, parser bounds, QR count 0..100 validation, QR load/save/reset/remove error paths, OpenSSL 3 accessor and secret redaction")
+
+cred_fn = extract_c_function(src["dpp_wdev"], "struct dpp_sec_cred * wapp_dpp_save_dpp_cred(")
+for token in ("if (!auth || !auth->connector || !auth->connector[0] ||",
+              "!auth->c_sign_key || !auth->net_access_key)",
+              "size_t connector_len, csign_len, net_access_key_len, payload_len;",
+              "wpabuf_len(auth->c_sign_key)", "wpabuf_len(auth->net_access_key)",
+              "!csign_key || !net_access_key", "connector_len > 0xffffU",
+              "payload_len > 0xffffU - sizeof(*sec_cred)",
+              "os_zalloc(sizeof(*sec_cred) + payload_len)",
+              "sec_cred->payload_len = (unsigned short)payload_len",
+              "os_memcpy(pos, auth->connector, connector_len)",
+              "os_memcpy(pos, csign_key, csign_len)",
+              "os_memcpy(pos, net_access_key, net_access_key_len)"):
+    require(token in cred_fn, f"DPP packed credential builder lacks invariant: {token}")
+require("cred_buffer" not in cred_fn and "unsigned short cred_len" not in cred_fn,
+        "DPP packed credential builder retains the temporary copy or narrow accumulator")
+
+process_sig = "static int wapp_dpp_process_config("
+first_pos = src["dpp_wdev"].find(process_sig)
+second_pos = src["dpp_wdev"].find(process_sig, first_pos + len(process_sig))
+require(first_pos >= 0 and second_pos > first_pos,
+        "both DPP 1905 credential send paths are not present")
+process_one = extract_c_function(src["dpp_wdev"][first_pos:], process_sig)
+process_two = extract_c_function(src["dpp_wdev"][second_pos:], process_sig)
+for idx, process_fn in enumerate((process_one, process_two), 1):
+    require("wapp_dpp_save_dpp_cred(auth)" in process_fn and
+            "wapp_send_1905_msg(wapp, WAPP_SEND_1905_CONNECTOR" in process_fn,
+            f"DPP credential sender {idx} no longer uses the packed credential contract")
+    wipe = process_fn.find("forced_memzero(cred, cred_len);")
+    free = process_fn.find("os_free(cred);", wipe)
+    require(wipe >= 0 and free > wipe,
+            f"DPP credential sender {idx} frees credential material without clearing it")
+    require("hex_dump_dbg" not in process_fn and "wpa_hexdump" not in process_fn,
+            f"DPP credential sender {idx} logs credential material")
+require("u16 cred_len;" in process_one and "u16 cred_len;" in process_two,
+        "DPP 1905 credential sender length is not explicitly declared")
+
+for secret_dump in (
+    'wpa_hexdump_ascii(MSG_DEBUG, DPP_MAP_PREX "DPP: first connector"',
+    'wpa_hexdump_ascii(MSG_DEBUG, DPP_MAP_PREX "DPP: second connector"',
+    'wpa_hexdump(MSG_DEBUG, DPP_MAP_PREX "in process config cign key"',
+    'wpa_hexdump_ascii(MSG_DEBUG, DPP_MAP_PREX "in process config connector"',
+    'hex_dump_dbg("save 1905 connector"',
+    'hex_dump_dbg(DPP_MAP_PREX"dpp frame ',
+    'wpa_hexdump(MSG_MSGDUMP, DPP_MAP_PREX "DPP: Received message attributes"',
+    'wpa_hexdump_buf(MSG_DEBUG, "DPP: Configuration Response adv_proto"'):
+    require(secret_dump not in src["dpp_wdev"],
+            f"DPP credential or protocol payload dump remains: {secret_dump}")
+require('hex_dump(DPP_MAP_PREX"Reboot BSS_connectors=' not in src["main"],
+        "disabled BSS credential payload dump remains in main source")
+require("wpabuf_clear_free(wapp->dpp_ctrlconnector);" in src["dpp_wdev"] and
+        "wpabuf_free(wapp->dpp_ctrlconnector);" not in src["dpp_wdev"],
+        "retained DPP connector is not cleared on replacement")
+require("forced_memzero(wapp->dpp_csign, wapp->dpp_csign_len);" in src["dpp_wdev"],
+        "retained DPP C-sign key is freed without clearing")
+
+require("wapp_dpp_save_dpp_cred(" not in main_dpp_fn and
+        "struct dpp_authentication auth;" not in main_dpp_fn and
+        "struct dpp_sec_cred *cred" not in main_dpp_fn,
+        "main DPP config loader retains a dead credential pack-and-free path")
+for field in ("dpp_connector", "dpp_csign", "dpp_netaccesskey", "dpp_ppkey"):
+    require(f"forced_memzero(config[k].{field}" in main_dpp_fn,
+            f"temporary DPP {field} is not cleared before free")
+require("forced_memzero(value, sizeof(value));" in main_dpp_fn and
+        "forced_memzero(buf_temp, sizeof(buf_temp));" in main_dpp_fn,
+        "DPP config parser leaves temporary key material on the stack")
+require("forced_memzero(wdev->config->psk, sizeof(wdev->config->psk));" in main_dpp_fn,
+        "DPP per-interface rollback leaves a copied PSK in memory")
+
+print("PASS: DPP credential bounds/ownership/log redaction, main config guards, parser bounds, QR count 0..100 validation, QR load/save/reset/remove error paths, OpenSSL 3 accessor and secret redaction")
