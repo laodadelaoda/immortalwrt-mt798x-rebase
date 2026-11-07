@@ -175,6 +175,7 @@
         "010-dpp-wdev-config-allocation-rollback.patch",
         "015-dpp-config-lookup-null-and-error-guard.patch",
         "016-dpp-qr-count-boundaries-and-error-propagation.patch",
+        "017-dpp-credential-bounds-zeroization-and-log-redaction.patch",
         "011-wapp-wts-security.patch",
         "014-wapp-wps-key-log-redaction.patch",
         "012-p1905-wts-hardening.patch",
