@@ -42,7 +42,7 @@ Signed-off-by: Paolo Abeni <pabeni@redhat.com>
  	return 0;
  }
 
-@@ -908,6 +901,16 @@
+@@ -908,5 +901,15 @@
  		return ret;
  	}
 

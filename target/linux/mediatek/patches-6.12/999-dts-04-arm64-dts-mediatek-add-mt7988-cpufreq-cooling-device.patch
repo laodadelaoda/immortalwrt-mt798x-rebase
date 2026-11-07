@@ -30,8 +30,8 @@ index 62f99e3..a0aad82 100644
  
  / {
 @@ -57,6 +58,7 @@ cpu0: cpu@0 {
-			nvmem-cells = <&cpufreq_calibration>;
-			nvmem-cell-names = "calibration-data";
+ 			nvmem-cells = <&cpufreq_calibration>;
+ 			nvmem-cell-names = "calibration-data";
  			mediatek,cci = <&cci>;
 +			#cooling-cells = <2>;
  		};
