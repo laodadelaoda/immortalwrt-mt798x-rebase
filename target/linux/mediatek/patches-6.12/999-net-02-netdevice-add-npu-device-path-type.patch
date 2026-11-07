@@ -60,7 +60,7 @@ v1: Add L2TP flow offload support for NPU
  
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
-@@ -167,1 +167,4 @@
+@@ -167,2 +167,5 @@
 +int (*mtk_flow_tnl_offloadable)(const struct net_device_path *path);
 +EXPORT_SYMBOL(mtk_flow_tnl_offloadable);
 +
