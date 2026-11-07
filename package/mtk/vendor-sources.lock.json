@@ -160,6 +160,7 @@
         "010-dpp-wdev-config-allocation-rollback.patch",
         "011-wapp-wts-security.patch",
         "012-p1905-wts-hardening.patch",
+        "013-wapp-wts-parser-fail-closed.patch",
         "003-wapp-gcc14-copy-semantics.patch",
         "004-libmapd-target-flags.patch",
         "005-wapp-hotspot-realloc-pointer-arithmetic.patch"
