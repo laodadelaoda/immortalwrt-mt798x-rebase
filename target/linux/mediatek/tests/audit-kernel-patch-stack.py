@@ -104,7 +104,7 @@ def hunk_metadata_errors(text):
             index += 1
             continue
         match = re.fullmatch(
-            r"@@ -(\d+)(?:,(\d+))? \\+(\d+)(?:,(\d+))? @@(?:.*)",
+            r"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?:.*)",
             header,
         )
         if not match:
