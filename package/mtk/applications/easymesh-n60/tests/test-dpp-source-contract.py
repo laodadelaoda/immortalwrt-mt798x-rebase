@@ -143,4 +143,63 @@ for field in ("ssid_len", "dpp_csign_len", "dpp_netaccesskey_len", "dpp_ppkey_le
 require(re.search(r"} else {\n[ \t]+goto error;", parser) is not None,
         "failure to allocate the per-interface dpp_config object is silently ignored")
 
+
+# Audit every DPP configuration-file/QR path that is active in MAP R3.
+dpp_wdev = src["dpp_wdev"]
+conf_start = dpp_wdev.find("int wapp_dpp_get_conf_frm_file(")
+conf_end = dpp_wdev.find("\\nstatic int wapp_dpp_read_qr_count", conf_start)
+require(conf_start >= 0 and conf_end > conf_start,
+        "DPP config-file accessor function boundary is missing")
+conf_fn = dpp_wdev[conf_start:conf_end]
+require("char param[64] = {0}, value[64] = {0};" in conf_fn,
+        "DPP config-file accessor reads an uninitialized value buffer")
+require("if (!wapp || !wapp->map || !str)" in conf_fn and
+        "get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0" in conf_fn,
+        "DPP config-file accessor lacks NULL and parameter-read failure guards")
+
+qr_helper_start = dpp_wdev.find("static int wapp_dpp_read_qr_count(")
+qr_helper_end = dpp_wdev.find("\\nvoid wapp_dpp_get_uri_frm_file", qr_helper_start)
+require(qr_helper_start >= 0 and qr_helper_end > qr_helper_start,
+        "WAPP QR count helper is missing")
+qr_helper = dpp_wdev[qr_helper_start:qr_helper_end]
+for token in ("len > 3", "value[i] < '0'", "value[i] > '9'",
+              "parsed > MAP_MAX_DPP_URI_COUNT", "*count = parsed"):
+    require(token in qr_helper, "WAPP QR count validation is incomplete: " + token)
+qr_start = dpp_wdev.find("void wapp_dpp_get_uri_frm_file(")
+qr_end = dpp_wdev.find("\\n#endif /* MAP_R3 */", qr_start)
+require(qr_start >= 0 and qr_end > qr_start, "WAPP QR restore function boundary is missing")
+qr_fn = dpp_wdev[qr_start:qr_end]
+require("unsigned int uri_num = 1, uri_cnt = 0;" in qr_fn and
+        "wapp_dpp_read_qr_count(wapp, &uri_cnt) < 0" in qr_fn,
+        "WAPP QR restore loop lacks bounded unsigned count handling")
+require("get_dpp_parameters(wapp->map, qr_param, value, sizeof(value)) < 0" in qr_fn,
+        "WAPP QR restore ignores a failed parameter read")
+
+dpp_source = src["dpp"]
+count_helper_start = dpp_source.find("static int dpp_read_qr_count(")
+count_helper_end = dpp_source.find("\\nint  dpp_reset_dpp_config_file", count_helper_start)
+require(count_helper_start >= 0 and count_helper_end > count_helper_start,
+        "DPP QR count helper is missing")
+count_helper = dpp_source[count_helper_start:count_helper_end]
+for token in ("len > 3", "value[i] < '0'", "value[i] > '9'",
+              "parsed > MAP_MAX_DPP_URI_COUNT", "*count = parsed"):
+    require(token in count_helper, "DPP QR count validation is incomplete: " + token)
+reset_start = dpp_source.find("int  dpp_reset_dpp_config_file(")
+reset_end = dpp_source.find("\\nint  dpp_reset_mapd_user_config_file", reset_start)
+require(reset_start >= 0 and reset_end > reset_start, "DPP reset function boundary is missing")
+reset_fn = dpp_source[reset_start:reset_end]
+require("dpp_read_qr_count(wapp, &uri_cnt) < 0" in reset_fn and
+        "uri_cnt = 0;" in reset_fn and "char uri_num" not in reset_fn,
+        "DPP reset does not safely bound QR cleanup iteration")
+remove_start = dpp_source.find("void  dpp_remove_uri_from_file(")
+remove_end = dpp_source.find("\\nstatic int dpp_bootstrap_del", remove_start)
+require(remove_start >= 0 and remove_end > remove_start, "DPP URI removal function boundary is missing")
+remove_fn = dpp_source[remove_start:remove_end]
+require("!wapp || !wapp->map || !wapp->dpp || !uri_temp" in remove_fn and
+        "dpp_read_qr_count(wapp, &uri_cnt) < 0" in remove_fn and
+        "unsigned int uri_num = 1, uri_cnt = 0;" in remove_fn,
+        "DPP URI removal lacks NULL guards and bounded unsigned QR iteration")
+require(remove_fn.count("get_dpp_parameters(wapp->map, qr_param, value, sizeof(value)) < 0") >= 3,
+        "DPP URI removal ignores a QR entry read failure")
+
 print("PASS: DPP parser bounds, hex decoding lengths, error propagation, OpenSSL 3 accessor and secret redaction")
