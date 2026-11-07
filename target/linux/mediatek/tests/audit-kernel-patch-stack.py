@@ -655,17 +655,21 @@ def validate_patch_application_log(inv, log, repo):
             raise RuntimeError("Patch contains a failed/malformed hunk: " + name)
         if re.search(r"with fuzz [1-9]|fuzz [1-9]", block, re.I):
             raise RuntimeError("Patch used non-zero fuzz: " + name)
-        succeeded = re.findall(
-            r"^Hunk #\d+ succeeded at \d+(?: .*)?\.?$",
-            block, re.M
-        )
-        expected_hunks = patch["hunks"]
-        if len(succeeded) != expected_hunks:
+        # GNU patch emits "Hunk #N succeeded" only when a hunk needed
+        # an offset diagnostic. Exact-position successful hunks are silent,
+        # so counting those messages falsely reports valid patches as missing
+        # hunks. The wrapper enforces --fuzz=0 and propagates patch(1)'s exit
+        # status; OpenWrt prepare succeeding therefore proves all hunks in
+        # this invocation were accepted. Verify the complete target-file set
+        # here, and reject failed/skipped/fuzzy applications above.
+        patched_files = re.findall(r"^patching file (.+?)\\s*$", block, re.M)
+        expected_files = patch["target_files"]
+        if sorted(patched_files) != sorted(expected_files):
             raise RuntimeError(
-                f"Patch hunk application count mismatch for {name}: "
-                f"expected {expected_hunks}, observed {len(succeeded)}"
+                f"Patch target-file application mismatch for {name}: "
+                f"expected {expected_files}, observed {patched_files}"
             )
-        total += len(succeeded)
+        total += patch["hunks"]
     return total
 
 
