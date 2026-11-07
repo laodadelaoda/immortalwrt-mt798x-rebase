@@ -28,7 +28,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  drivers/net/ethernet/mediatek/mtk_ppe.h       |  1 +
  .../net/ethernet/mediatek/mtk_ppe_debugfs.c   |  3 ++
  .../net/ethernet/mediatek/mtk_ppe_offload.c   |  2 +-
- 5 files changed, 37 insertions(+), 3 deletions(-)
+ 5 files changed, 38 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.h
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.h
@@ -106,7 +106,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  			  u8 *dest_mac);
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_debugfs.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_debugfs.c
-@@ -207,6 +207,8 @@ mtk_ppe_internal_debugfs_read_qos
+@@ -207,5 +207,7 @@ mtk_ppe_internal_debugfs_read_qos
  	else if (eth->qos_toggle == 2)
  		seq_puts(m, "Per-port-per-queue mode is enabled!\n");
 +	else if (eth->qos_toggle == 3)
@@ -121,8 +121,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  		break;
  	}
  
--	return count;
-+	return count;
+ 	return count;
  }
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
