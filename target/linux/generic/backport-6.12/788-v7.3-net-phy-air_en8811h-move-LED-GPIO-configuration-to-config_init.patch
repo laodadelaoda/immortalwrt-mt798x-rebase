@@ -42,14 +42,7 @@ Signed-off-by: Paolo Abeni <pabeni@redhat.com>
  	return 0;
  }
 
-@@ -904,9 +897,19 @@
- 	ret = air_leds_init(phydev, EN8811H_LED_COUNT, AIR_PHY_LED_DUR,
- 			    AIR_LED_MODE_USER_DEFINE);
- 	if (ret < 0) {
- 		phydev_err(phydev, "Failed to initialize leds: %d\n", ret);
- 		return ret;
- 	}
-
+@@ -911,2 +904,12 @@
 +	/* Configure led gpio pins as output. en8811h_restart_mcu() above
 +	 * resets buckpbus-mapped MCU state including this register, so it
 +	 * must be reapplied on every .config_init() call.
