@@ -67,7 +67,7 @@ index 8c2c342..3026ea4 100644
 -	phylink_dbg(pl, "optical SFP: interfaces=[mac=%*pbl, sfp=%*pbl]\n",
 +	phylink_info(pl, "optical SFP: interfaces=[mac=%*pbl, sfp=%*pbl]\n",
  		    (int)PHY_INTERFACE_MODE_MAX,
- 		    pl->config->supported_interfaces,
+ 		    pl->supported_interfaces,
  		    (int)PHY_INTERFACE_MODE_MAX,
 diff --git a/drivers/net/phy/sfp-bus.c b/drivers/net/phy/sfp-bus.c
 index b771904..b7ceaa7 100644
