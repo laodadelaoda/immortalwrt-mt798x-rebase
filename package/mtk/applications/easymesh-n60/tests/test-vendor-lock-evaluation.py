@@ -2,10 +2,13 @@
 """Regression tests for Vendor Lock -> actual GNU Make variable mapping."""
 from __future__ import annotations
 import importlib.util
+import sys
 from pathlib import Path
 import unittest
 
-sys.dont_write_bytecode = True\n\nSCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "n60-vendor-lock.py"
+sys.dont_write_bytecode = True
+
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "n60-vendor-lock.py"
 SPEC = importlib.util.spec_from_file_location("n60_vendor_lock", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader
