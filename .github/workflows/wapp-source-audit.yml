@@ -238,26 +238,39 @@ jobs:
           tar -xjf wappd-80ca5724.tar.bz2 -C "$PATCH_ROOT"
           tar -xjf mapd-6eca4331.tar.bz2 -C "$PATCH_ROOT"
           tar -xjf 1905daemon-35234223.tar.bz2 -C "$PATCH_ROOT"
-          DPP_CONFIG_PATCH="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/015-dpp-config-lookup-null-and-error-guard.patch"
-          patch --dry-run --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$DPP_CONFIG_PATCH"
-          patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$DPP_CONFIG_PATCH"
-          WTS_PATCH="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/011-wapp-wts-security.patch"
-          patch --dry-run --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WTS_PATCH"
-          patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WTS_PATCH"
-          # Preserve the exact P1905 parser state after patch 011. Patch 012
-          # must be rebased against this state because both patches touch file_io.c.
-          mkdir -p "$RUNNER_TEMP/p1905-post-011" "$RUNNER_TEMP/wapp-post-011"
-          cp "$PATCH_ROOT/1905daemon/src/file_io.c" "$RUNNER_TEMP/p1905-post-011/file_io.c"
-          cp "$PATCH_ROOT/wappd/common/main.c" "$RUNNER_TEMP/wapp-post-011/main.c"
-          P1905_PATCH="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/012-p1905-wts-hardening.patch"
-          patch --dry-run --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$P1905_PATCH"
-          patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$P1905_PATCH"
-          WAPP_PATCH="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/013-wapp-wts-parser-fail-closed.patch"
-          patch --dry-run --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WAPP_PATCH"
-          patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WAPP_PATCH"
-          WPS_PATCH="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/014-wapp-wps-key-log-redaction.patch"
-          patch --dry-run --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WPS_PATCH"
-          patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$WPS_PATCH"
+          tar -xjf libmapd-0132d199.tar.bz2 -C "$PATCH_ROOT"
+          LOCK_HELPER="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py"
+          TRANSFORM_HELPER="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/scripts/n60-vendor-source-transforms.py"
+          patch_names="$(python3 "$LOCK_HELPER" patch-order --repo "$GITHUB_WORKSPACE" --set easymesh --phase application)"
+          test -n "$patch_names" || { echo "::error::Locked EasyMesh application patch order is empty."; exit 1; }
+          wts_captured=0
+          for name in $patch_names; do
+            patch_file="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/$name"
+            test -s "$patch_file" || { echo "::error::Missing Lock-listed EasyMesh patch: $patch_file"; exit 1; }
+            patch --dry-run --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$patch_file"
+            patch --batch --forward --fuzz=0 -p1 -d "$PATCH_ROOT" < "$patch_file"
+            if [ "$name" = "011-wapp-wts-security.patch" ]; then
+              # Capture the real Lock-ordered state immediately after 011.
+              mkdir -p "$RUNNER_TEMP/p1905-post-011" "$RUNNER_TEMP/wapp-post-011"
+              cp "$PATCH_ROOT/1905daemon/src/file_io.c" "$RUNNER_TEMP/p1905-post-011/file_io.c"
+              cp "$PATCH_ROOT/wappd/common/main.c" "$RUNNER_TEMP/wapp-post-011/main.c"
+              wts_captured=1
+            fi
+          done
+          test "$wts_captured" -eq 1 || { echo "::error::Patch 011 was not present in the locked application series."; exit 1; }
+          # Match Build/Prepare exactly: all application patches first, then normalize,
+          # post-normalize patches in Lock order, and finally source transforms.
+          python3 "$TRANSFORM_HELPER" normalize "$PATCH_ROOT"
+          post_names="$(python3 "$LOCK_HELPER" patch-order --repo "$GITHUB_WORKSPACE" --set easymesh --phase post_normalize)"
+          for name in $post_names; do
+            patch_root_suffix="$(python3 "$LOCK_HELPER" patch-root --repo "$GITHUB_WORKSPACE" --set easymesh --phase post_normalize --name "$name")"
+            patch_root="$PATCH_ROOT"
+            if [ -n "$patch_root_suffix" ]; then patch_root="$patch_root/$patch_root_suffix"; fi
+            patch_file="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/$name"
+            patch --dry-run --batch --forward --fuzz=0 -p1 -d "$patch_root" < "$patch_file"
+            patch --batch --forward --fuzz=0 -p1 -d "$patch_root" < "$patch_file"
+          done
+          python3 "$TRANSFORM_HELPER" finalize "$PATCH_ROOT"
           python3 - "$PATCH_ROOT" <<'PY'
           import pathlib, re, sys
           root = pathlib.Path(sys.argv[1])

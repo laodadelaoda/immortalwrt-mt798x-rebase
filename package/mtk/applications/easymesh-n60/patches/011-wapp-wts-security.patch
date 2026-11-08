@@ -354,7 +354,7 @@
  	dl_list_init(&wapp->map_devices);
 --- a/wappd/common/wdev.c
 +++ b/wappd/common/wdev.c
-@@ -4275,8 +4275,8 @@
+@@ -4276,8 +4276,8 @@
  	DBGPRINT_RAW(RT_DEBUG_OFF,
  		"set psk:\n"
  		"\t ifname = %s\n"
@@ -379,7 +379,7 @@
  			psetting->map_vendor_extension & BIT_BH_BSS ? "1" : "0",
  			psetting->map_vendor_extension & BIT_FH_BSS ? "1" : "0",
  			psetting->hidden_ssid);
-@@ -9700,2 +9700,7 @@
+@@ -9701,2 +9701,7 @@
 -	wapp_read_wts_map_config(wapp, MAPD_WTS_FILE,
 -		bss_config, MAX_SET_BSS_INFO_NUM, &bss_config_num);
 +	os_memset(bss_config, 0, sizeof(bss_config));

@@ -1,6 +1,6 @@
 --- a/wappd/common/wdev.c
 +++ b/wappd/common/wdev.c
-@@ -1608,2 +1608,2 @@
+@@ -1609,2 +1609,2 @@
 -	DBGPRINT(RT_DEBUG_ERROR, "\nSSID = %s, key = %s, len = %d", event_data->wps_conf_info.SSID,
 -					event_data->wps_conf_info.Key, event_data->wps_conf_info.KeyLength);
 +	DBGPRINT(RT_DEBUG_ERROR, "\nSSID = %s, key is configured, len = %d", event_data->wps_conf_info.SSID,
