@@ -138,6 +138,21 @@ need("&completion_report->cac_completion_status[0].identifier" not in src,
 need("&cac_status->cac_ongoing_channel[i].remain_interval" not in src,
      "address of packed CAC interval is still taken")
 
+# The first real AArch64 compile must catch pointer-member typos and every
+# address-taking operation on packed CAC timestamps / traffic-separation VIDs.
+need("cac_status.ongoing_cac_channel_num" not in cac,
+     "CAC flexible-tail index still uses pointer as a struct object")
+need("&wapp->map->cac_list.last_cac_time[" not in src,
+     "address of packed CAC timestamp member is still taken")
+need("offsetof(struct cac_run_list, last_cac_time)" in src,
+     "CAC timestamp accesses are not staged through byte offsets")
+need("setting->policy_vids" not in src,
+     "packed traffic-separation VLAN array is still passed by address")
+need("offsetof(struct ts_common_setting, policy_vids)" in src,
+     "packed VLAN entries are not copied through byte offsets")
+need("setting->policy_vid_num > MAX_VLAN_NUM" in src,
+     "traffic-separation VLAN count is not bounded before copying")
+
 # Deterministic protocol-size checks for the current vendor ABI.
 base_cac_status = 3 + 68 * 4 + 52 * 4
 need(base_cac_status == 483, "unexpected CAC status fixed-prefix size")

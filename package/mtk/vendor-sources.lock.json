@@ -184,7 +184,8 @@
         "003-wapp-gcc14-copy-semantics.patch",
         "004-libmapd-target-flags.patch",
         "005-wapp-hotspot-realloc-pointer-arithmetic.patch",
-        "019-wapp-map-buffer-safety.patch"
+        "019-wapp-map-buffer-safety.patch",
+        "020-wapp-map-packed-member-gcc14.patch"
       ],
       "scope": "EasyMesh Build/Prepare ordered vendor patch series",
       "post_normalize_order": [
