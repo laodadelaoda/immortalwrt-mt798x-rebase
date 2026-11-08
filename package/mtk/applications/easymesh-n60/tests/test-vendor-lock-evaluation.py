@@ -32,7 +32,7 @@ class InventoryRuntimeArtifactTests(unittest.TestCase):
                 self.assertTrue(ATTESTATION_MODULE.is_transient_python_artifact(Path(name)))
 
     def test_python_source_remains_in_audit_inventory(self):
-        self.assertFalse(MODULE.is_transient_python_artifact(Path("scripts/module.py")))
+        self.assertFalse(ATTESTATION_MODULE.is_transient_python_artifact(Path("scripts/module.py")))
 
 
 class SourceVariableMappingTests(unittest.TestCase):
