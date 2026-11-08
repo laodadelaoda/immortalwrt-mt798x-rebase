@@ -26,6 +26,7 @@ if set(v)!={"workflow_dispatch","push"} or v["push"].get("paths")!=["docs/vendor
 for n in ("wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-template-audit.yml"):
  t=tr(n)
  if set(t)!={"push","workflow_dispatch"} or not t["push"].get("branches") or not t["push"].get("paths"): bad(n+" must remain path-filtered")
+ if "package/mtk/vendor-sources.lock.json" not in t["push"]["paths"]: bad(n+" must trigger when canonical vendor Lock changes")
 if set(tr("copilot-ai-audit.yml"))!={"workflow_dispatch"}: bad("Copilot audit must remain manual-only")
 if set(tr("workflow-governance-audit.yml"))!={"push"} or not tr("workflow-governance-audit.yml")["push"].get("paths"): bad("governance trigger mismatch")
 for n in ("main.yml","build-package.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml"):

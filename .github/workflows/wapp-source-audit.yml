@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/wapp-source-audit.yml"
       - "package/mtk/applications/easymesh-n60/**"
+      - "package/mtk/vendor-sources.lock.json"
   workflow_dispatch:
 
 permissions:

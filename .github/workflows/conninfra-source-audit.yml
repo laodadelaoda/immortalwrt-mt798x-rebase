@@ -11,6 +11,7 @@ on:
       - "package/mtk/drivers/warp/patches/**"
       - "config/n60pro-1001.config"
       - "package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py"
+      - "package/mtk/vendor-sources.lock.json"
   workflow_dispatch:
 
 permissions:
