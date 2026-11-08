@@ -59,6 +59,7 @@ _Static_assert(sizeof(struct assoc_status) == 7, "assoc status ABI");
 _Static_assert(sizeof(struct assoc_notification_tlv) == 1, "assoc TLV prefix ABI");
 _Static_assert(sizeof(struct cac_completion_report_opcap) == 2, "CAC opcap ABI");
 _Static_assert(sizeof(struct cac_completion_status_lib) == 10, "CAC completion prefix ABI");
+_Static_assert(offsetof(struct cac_completion_status_lib, opcap) == sizeof(struct cac_completion_status_lib), "CAC opcap tail offset");
 _Static_assert(sizeof(struct cac_completion_report_lib) == 1, "CAC completion report prefix ABI");
 _Static_assert(sizeof(struct cac_ongoing_channel) == 6, "CAC ongoing in-memory ABI");
 _Static_assert(sizeof(struct cac_status_report_lib) == 483, "CAC status fixed prefix ABI");
@@ -121,13 +122,23 @@ need("*len_buf = cac_completion ? (int)(status_len - sizeof(struct evt)) : statu
 need("cac_status.cac_ongoing_channel" not in cac,
      "CAC flexible-array record is still accessed through a fixed-size stack object")
 
-# Completion report: zero op-class count must not be followed by opcap[0] writes.
-for marker in ("completion_report->cac_completion_status[0].op_class_num = 0;",):
-    need(marker in src, "zero-opclass CAC completion branch missing")
-for match in re.finditer(r"completion_report->cac_completion_status\[0\]\.op_class_num\s*=\s*0;", src):
-    following = src[match.end():src.find("\n\t\t}", match.end()) if "\n\t\t}" in src[match.end():] else len(src)]
-    need("opcap[0]" not in following,
-         "CAC completion writes opcap[0] when op_class_num is zero")
+# CAC completion: opcap is a wire tail after every radio status record.
+# Address it from the report allocation, not through the zero-length member.
+cac_stop_start = src.find("void wdev_handle_cac_stop(")
+cac_stop_end = src.find("\n#ifdef V10_DFS_SUPPORT", cac_stop_start)
+need(cac_stop_start >= 0 and cac_stop_end > cac_stop_start,
+     "CAC completion handler missing")
+cac_stop = src[cac_stop_start:cac_stop_end]
+need(cac_stop.count("opcap = (struct cac_completion_report_opcap *)") == 2,
+     "both CAC completion paths must calculate the opcap tail from the full radio-status prefix")
+need("completion_report->cac_completion_status[0].opcap[0]" not in cac_stop,
+     "CAC completion still indexes a zero-length opcap member")
+need("opcap->ch_num" in cac_stop and "opcap->op_class" in cac_stop,
+     "CAC completion does not populate the tail record through its bounded pointer")
+need(cac_stop.count("op_class_num*sizeof(struct cac_completion_report_opcap)") == 2,
+     "both CAC completion allocations must include the advertised opcap count")
+need(cac_stop.count("if (radar_status == FALSE)\n\t\t\top_class_num = 0;") == 2,
+     "both CAC completion paths must derive allocation size from radar status before allocation")
 
 # Packed-member alignment: macro output is built in an aligned local object;
 # packed interval bytes are copied by byte offset, never by taking a member address.
