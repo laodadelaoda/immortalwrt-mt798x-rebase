@@ -1,0 +1,15 @@
+{
+  "run_id": "42436263338",
+  "run_commit": "d4ec522b3336a0604ba46dcd2dfab255d109abb3",
+  "kernel_version": "6.12.112",
+  "patch_invocations": 1139,
+  "affected_patch_count": 219,
+  "offset_hunks": 743,
+  "max_abs_offset": 413,
+  "offset_hunks_by_scope": [
+    [
+      "patches-6.12",
+      743
+    ]
+  ]
+}
