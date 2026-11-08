@@ -2,14 +2,10 @@
   "run_id": "42436263338",
   "run_commit": "d4ec522b3336a0604ba46dcd2dfab255d109abb3",
   "kernel_version": "6.12.112",
-  "patch_invocations": 1139,
-  "affected_patch_count": 219,
+  "kernel_archive_sha256": "164dc9d1f6c93c61a15e1f071c48379b467f2b17c469cce7223471968208ed03",
+  "patch_manifest_sha256": "c7f9d0efa01412f18e2d4d21626f10d8fa81d068886b63ef17f61eab25a7d776",
+  "unique_patches_with_offsets": 219,
   "offset_hunks": 743,
   "max_abs_offset": 413,
-  "offset_hunks_by_scope": [
-    [
-      "patches-6.12",
-      743
-    ]
-  ]
+  "source_file_missing": 0
 }
