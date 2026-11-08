@@ -123,3 +123,28 @@ This follow-up was a patch-to-patch static hunk comparison. The locked WAPP vend
 The Lock digest did not change, but two patch inputs did. Any prior audit credential bound to the old patch blobs/commit is stale for this tree. The next fixed-vendor audit must hash the new patch blobs and bind a fresh credential to the resulting commit/run/attempt. Preserve the eight original design artifacts and all existing credentials as historical evidence; do not overwrite or reuse them as a pass for this revision.
 
 No EasyMesh Quick or Full compile/link was started. The complete fixed-vendor audit, exact locked-source patch replay, Quick Prepare, and MT Wi-Fi 026 path/application/function assertions remain mandatory gates.
+
+## Correction: conclusions verified against failed Action source evidence (2026-11-09)
+
+The exact logs and uploaded source artifacts from runs `42532859637` and `42532859725` falsified two statements in the preceding static review. This section supersedes those two statements.
+
+1. **Patch 019 CAC pointer indexing was not fully converted.**
+   - The fixed-vendor audit completed the archive/patch stage and reached the real native EasyMesh `prepare` target, where `test-wapp-map-buffer-contract.py` failed with `CAC flexible-tail index still uses pointer as a struct object`.
+   - The uploaded fully patched WAPP source showed three expressions of the form `cac_status->cac_ongoing_channel[cac_status.ongoing_cac_channel_num]`. The pointer base used `->`, but the flexible-tail index still used `.`. The regression assertion was correct; this was a real patch defect, not a false positive.
+   - Corrected all three index expressions in `019-wapp-map-buffer-safety.patch`.
+   - Correction commit: `a83eeb27320b47bc03e4374281f0df2bce6cef65`.
+   - New Git blob: `af8eaf3679b6039182143f10825d9f48112c5b1a`.
+
+2. **Patch 011 did not remove the WAPP post-write truncation guard.**
+   - WAPP source audit run `42532859725` failed at the assertion `WAPP legacy post-write truncation remains`. Its uploaded `wapp-post-011/main.c` was captured immediately after patch 011 and showed the post-write block still present: increment `i`, test `i >= max_bss_num`, decrement `i`, and `break`.
+   - The prior claim that patch 011 had already removed this block was incorrect. The source-audit assertion is valid for the complete patch stack: patch 013 must remove the residual block after patch 011.
+   - Restored the narrowly scoped deletion hunk to `013-wapp-wts-parser-fail-closed.patch`, retaining its unique malformed hidden-SSID `goto err` correction.
+   - Correction commit: `6bd84694917b7fa06a610540842cab8316a021d4`.
+   - New Git blob: `7089ea82e3d0d2ca3092c3f806824452c196d8a8`.
+   - Local replay against the exact post-011 WAPP source artifact passed `patch --dry-run --batch --forward --fuzz=0`; after application, the pre-write BSS bound remained before indexed writes, the post-write decrement/truncation block was absent, and the hidden-SSID malformed path remained fail-closed.
+
+3. **Action and credential disposition.**
+   - Run `42532859637` failed at native EasyMesh Prepare, after the fixed-vendor patch series had been applied. Its uploaded patch report and DPP/source artifacts remain preserved.
+   - Run `42532859725` failed at the WAPP parser source assertion, not at source download. Its post-011 WAPP and P1905 source artifacts remain preserved.
+   - The new patch inputs require fresh Lock/patch/input hashes and a new commit/run/attempt-bound audit credential. Existing eight design artifacts and prior SHA256 credentials remain historical evidence and must not be overwritten or reused as a pass.
+   - Do not start Quick or Full compile/link until the new complete fixed-vendor audit, WAPP source audit, native Quick Prepare, and MT Wi-Fi 026 path/application/function assertions all pass on the same applicable revision/evidence chain.
