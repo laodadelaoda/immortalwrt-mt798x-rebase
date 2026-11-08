@@ -18,7 +18,7 @@
  		return;
  
 +	if (wapp->map->cac_list.ch_num > MAX_DFS_CH) {
-+		DBGPRINT(RT_DEBUG_ERROR, "%s invalid CAC list count %u\\n",
++		DBGPRINT(RT_DEBUG_ERROR, "%s invalid CAC list count %u\n",
 +			__func__, wapp->map->cac_list.ch_num);
 +		return;
 +	}
