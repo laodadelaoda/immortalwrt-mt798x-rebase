@@ -42,7 +42,29 @@ elif (set(quick_triggers)=={"workflow_dispatch","push"} and
  pass
 else:
  bad("Quick must be manual-only except for the exact one-shot source-build trigger")
-if set(tr("vendor-source-patch-audit.yml"))!={"workflow_call","workflow_dispatch"}: bad("vendor audit trigger mismatch")
+vendor=tr("vendor-source-patch-audit.yml")
+vendor_paths=[
+ ".github/workflows/vendor-source-patch-audit.yml",
+ ".github/workflows/quick-prepare-audit.yml",
+ ".github/scripts/**",
+ "config/n60pro-1001.config",
+ "feeds.conf.default",
+ "include/**",
+ "Makefile",
+ "package/kernel/mapfilter/**",
+ "package/libs/libnl-tiny/**",
+ "package/libs/openssl/**",
+ "package/mtk/**",
+ "package/vendor/**",
+ "scripts/**",
+ "target/linux/generic/patches-6.12/**",
+ "target/linux/mediatek/patches-6.12/**",
+ "target/linux/mediatek/tests/**",
+]
+if (set(vendor)!={"push","workflow_call","workflow_dispatch"} or
+    vendor["push"].get("branches")!=["n60pro-mtk-closed-driver"] or
+    vendor["push"].get("paths")!=vendor_paths):
+ bad("vendor audit trigger mismatch")
 if set(tr("quick-prepare-audit.yml"))!={"workflow_call"}: bad("Prepare must be reusable-only")
 v=tr("vendor-patch-audit-only.yml")
 if set(v)!={"workflow_dispatch","push"} or v["push"].get("paths")!=["docs/vendor-patch-audit-trigger.txt"]: bad("standalone patch audit trigger mismatch")
