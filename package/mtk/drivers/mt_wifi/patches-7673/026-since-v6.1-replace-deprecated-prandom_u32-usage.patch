@@ -7,7 +7,7 @@
  #include "rt_config.h"
  #include "rtmp_comm.h"
  #include "rt_os_util.h"
-@@ -260,7 +260,9 @@ INT32  RtPrivIoctlSetVal(VOID)
+@@ -260,7 +261,9 @@ INT32  RtPrivIoctlSetVal(VOID)
  
  UINT32 MtRandom32(VOID)
  {
