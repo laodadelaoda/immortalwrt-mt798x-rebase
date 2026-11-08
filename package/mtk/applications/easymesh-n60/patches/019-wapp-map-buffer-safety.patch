@@ -344,7 +344,7 @@
 +				opcap->op_class = completion_report->cac_completion_status[0].op_class;
 +			}
 
-@@ -8205,8 +8262,6 @@
+@@ -8205,8 +8266,6 @@
  			else
  				completion_report->cac_completion_status[0].cac_status = CAC_FAILURE;
  			completion_report->cac_completion_status[0].op_class_num = 0;
@@ -353,7 +353,7 @@
  		}
  
  
-@@ -8337,7 +8392,13 @@
+@@ -8337,7 +8396,13 @@
  			return;
  		completion_report = (struct cac_completion_report_lib *)map_event->buffer;
  		completion_report->radio_num = radio_num;
