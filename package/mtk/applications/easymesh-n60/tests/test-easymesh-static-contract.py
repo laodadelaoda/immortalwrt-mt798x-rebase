@@ -15,6 +15,28 @@ if len(sys.argv) != 3:
 build = Path(sys.argv[1])
 repo = Path(sys.argv[2])
 
+# The archive extraction in native Package Prepare creates these three
+# source roots directly beneath PKG_BUILD_DIR. Resolve them once here so
+# every static contract reads the exact prepared source tree.
+wapp = build / "wappd"
+p1905 = build / "1905daemon"
+mapd = build / "mapd"
+for label, source_root in (("WAPP", wapp), ("P1905", p1905), ("MAPD", mapd)):
+    require(source_root.is_dir(), f"{label} source root is missing from prepared build tree: {source_root}")
+
+# Keep the OpenSSL inventory informational and derived from the real source
+# files. Deprecated API compatibility remains a compiler-diagnostic gate;
+# this script must not refer to undeclared inventory variables.
+openssl_files = []
+for source_root in (wapp, p1905, mapd):
+    for source_file in source_root.rglob("*"):
+        if source_file.is_file() and source_file.suffix in {".c", ".h"}:
+            source_text = source_file.read_text(encoding="utf-8", errors="replace")
+            if re.search(r"(?m)^\\s*#\\s*include\\s*[<\\\"]openssl/", source_text) or re.search(
+                r"\\b(?:EVP_|EC_KEY|OPENSSL_|OSSL_)", source_text
+            ):
+                openssl_files.append(source_file)
+
 # Regression: GNU Make consumes dollar references inside recipes. The
 # OpenSSL-major ERE must preserve its end-of-line anchor through nested Make
 # expansion, otherwise grep receives an unmatched opening parenthesis.
@@ -77,8 +99,7 @@ require((p1905 / "src/crypto_openssl.c").is_file(),
 require((p1905 / "src/dpp.c").is_file(),
         "P1905 DPP/OpenSSL source is missing")
 print(f"PASS: OpenSSL 3 opaque-object audit; {len(openssl_files)} source/header files contain OpenSSL API references.")
-print("OpenSSL legacy/deprecated API inventory (reviewed at compile time with visible diagnostics): " +
-      ", ".join(f"{name}={count}" for name, count in sorted(deprecated_counts.items())))
+print("OpenSSL deprecated-API compatibility remains gated by target compiler diagnostics.")
 
 # Runtime MAC contract: AL MAC comes from the selected live interface;
 # WAPP obtains BSSID from the driver's BSS-info response. FF:FF... in WTS
