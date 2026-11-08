@@ -64,6 +64,32 @@ jobs:
             echo "FAIL: $*" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
             FAILURES=$((FAILURES + 1))
           }
+          capture_failed_context() {
+            local patch_file="$1" patch_root="$2" ctx_tmp="$3" log_file="$4" phase="$5"
+            local patch_name ctx_out rel
+            patch_name="$(basename "$patch_file")"
+            ctx_out="$OUT/failed-context/patches/$patch_name/$phase"
+            mkdir -p "$ctx_out"
+            cp -a "$ctx_tmp/before" "$ctx_out/"
+            cp "$patch_file" "$ctx_out/"
+            cp "$log_file" "$ctx_out/$phase.log"
+            while IFS= read -r rel; do
+              [ -n "$rel" ] || continue
+              if [ -f "$patch_root/$rel" ]; then
+                mkdir -p "$ctx_out/before-numbered/$(dirname "$rel")"
+                nl -ba "$patch_root/$rel" > "$ctx_out/before-numbered/$rel.numbered"
+              fi
+            done < <(sed -n 's/^+++ b\/\([^[:space:]]*\).*/\1/p' "$patch_file" | sort -u)
+            {
+              echo "phase=$phase"
+              echo "patch=$patch_file"
+              echo "patch_sha256=$(sha256sum "$patch_file" | awk '{print $1}')"
+              echo "patch_root=$patch_root"
+              echo "log=$log_file"
+              find "$ctx_out" -type f ! -name CONTEXT-MANIFEST.txt -print0 | sort -z | xargs -0 sha256sum
+            } > "$ctx_out/CONTEXT-MANIFEST.txt"
+            echo "FAILURE CONTEXT SAVED: $patch_name phase=$phase" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+          }
           fetch_archive() {
             name="$1"; url="$2"; sha="$3"
             curl --fail --location --retry 3 --retry-delay 2 "$url" -o "$INPUT/$name"
@@ -101,6 +127,7 @@ jobs:
               fi
             else
               cat "$dry_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+              capture_failed_context "$patch_file" "$patch_root" "$ctx_tmp" "$dry_log" "dry-run"
               fail "zero-fuzz dry-run failed: $patch_file"
               return 1
             fi
@@ -123,6 +150,7 @@ jobs:
               fi
             else
               cat "$apply_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+              capture_failed_context "$patch_file" "$patch_root" "$ctx_tmp" "$apply_log" "actual-apply"
               fail "actual application failed after successful dry-run: $patch_file"
               return 1
             fi
@@ -452,6 +480,15 @@ jobs:
         with:
           name: n60-offset-patch-contexts
           path: ${{ runner.temp }}/n60-vendor-patch-audit/report/offset-context/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload exact source context for every failed patch application
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-failed-patch-source-context
+          path: ${{ runner.temp }}/n60-vendor-patch-audit/report/failed-context/patches/
           if-no-files-found: warn
           retention-days: 30
 
