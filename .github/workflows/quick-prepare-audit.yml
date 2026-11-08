@@ -440,6 +440,24 @@ jobs:
           done
           echo "PASS: all fixed vendor Package Build/Prepare targets completed; no compile target was invoked."
 
+      - name: Assert MT Wi-Fi 026 after Quick Prepare
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 package/mtk/drivers/mt_wifi/tests/test-026-prandom-u32-prepare.py \
+            --repo "$GITHUB_WORKSPACE" \
+            --evidence-dir "$RUNNER_TEMP/mtwifi-026-quick-prepare"
+
+      - name: Upload MT Wi-Fi 026 Quick Prepare evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-mtwifi-026-quick-prepare-evidence
+          path: ${{ runner.temp }}/mtwifi-026-quick-prepare/
+          if-no-files-found: warn
+          retention-days: 14
+
+
       - name: Upload Linux kernel patch inventory and attestation
         if: always()
         uses: actions/upload-artifact@v6
