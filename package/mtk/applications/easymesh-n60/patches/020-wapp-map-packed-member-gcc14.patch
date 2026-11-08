@@ -7,7 +7,7 @@
 +				cac_status->cac_ongoing_channel[cac_status->ongoing_cac_channel_num].ch_num = driver_cap->ch_num;
 +				cac_status->cac_ongoing_channel[cac_status->ongoing_cac_channel_num].op_class = ap->ch_info.op_class;
 +				cac_status->cac_ongoing_channel[cac_status->ongoing_cac_channel_num].remain_interval = driver_cap->cac_remain_time;
-@@ -8178,4 +8178,6 @@
+@@ -8178,4 +8178,7 @@
  	if (wdev->radio == NULL)
  		return;
  
@@ -15,7 +15,7 @@
 +		return;
 +
  	if(ret == TRUE) {
-@@ -8193,1 +8195,8 @@
+@@ -8193,1 +8196,8 @@
 -			os_get_time(&wapp->map->cac_list.last_cac_time[i]);
 +			{
 +				struct os_time now;
@@ -25,7 +25,7 @@
 +					offsetof(struct cac_run_list, last_cac_time) +
 +					(size_t)i * sizeof(now), &now, sizeof(now));
 +			}
-@@ -8200,1 +8209,8 @@
+@@ -8200,1 +8210,8 @@
 -			os_get_time(&wapp->map->cac_list.last_cac_time[i]);
 +			{
 +				struct os_time now;
@@ -35,7 +35,7 @@
 +					offsetof(struct cac_run_list, last_cac_time) +
 +					(size_t)i * sizeof(now), &now, sizeof(now));
 +			}
-@@ -9538,1 +9554,10 @@
+@@ -9538,1 +9555,10 @@
  {
 +	unsigned short policy_vids[MAX_VLAN_NUM];
 +	unsigned char policy_vid_num;
@@ -46,10 +46,10 @@
 +	os_memcpy(policy_vids, (const u8 *)setting +
 +		offsetof(struct ts_common_setting, policy_vids),
 +		(size_t)policy_vid_num * sizeof(policy_vids[0]));
-@@ -9542,2 +9567,1 @@
+@@ -9542,2 +9568,1 @@
 -	ts_bh_set_all_vid(wapp, wdev, setting->policy_vid_num,
 -						setting->policy_vids);
 +	ts_bh_set_all_vid(wapp, wdev, policy_vid_num, policy_vids);
-@@ -9547,1 +9571,1 @@
+@@ -9547,1 +9572,1 @@
 -	ts_bh_set_all_vid(wdev, setting->policy_vid_num, setting->policy_vids);
 +	ts_bh_set_all_vid(wdev, policy_vid_num, policy_vids);
