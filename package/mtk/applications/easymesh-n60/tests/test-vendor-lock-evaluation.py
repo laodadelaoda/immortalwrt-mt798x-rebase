@@ -14,6 +14,12 @@ MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader
 SPEC.loader.exec_module(MODULE)
 
+ATTESTATION_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "verify-vendor-audit-attestation.py"
+ATTESTATION_SPEC = importlib.util.spec_from_file_location("verify_vendor_audit_attestation", ATTESTATION_SCRIPT)
+ATTESTATION_MODULE = importlib.util.module_from_spec(ATTESTATION_SPEC)
+assert ATTESTATION_SPEC and ATTESTATION_SPEC.loader
+ATTESTATION_SPEC.loader.exec_module(ATTESTATION_MODULE)
+
 
 class InventoryRuntimeArtifactTests(unittest.TestCase):
     def test_python_bytecode_is_excluded_from_audit_inventory(self):
@@ -23,7 +29,7 @@ class InventoryRuntimeArtifactTests(unittest.TestCase):
             "scripts/module.pyo",
         ):
             with self.subTest(name=name):
-                self.assertTrue(MODULE.is_transient_python_artifact(Path(name)))
+                self.assertTrue(ATTESTATION_MODULE.is_transient_python_artifact(Path(name)))
 
     def test_python_source_remains_in_audit_inventory(self):
         self.assertFalse(MODULE.is_transient_python_artifact(Path("scripts/module.py")))
