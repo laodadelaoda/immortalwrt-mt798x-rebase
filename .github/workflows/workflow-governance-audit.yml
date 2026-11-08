@@ -7,6 +7,7 @@ on:
       - ".github/workflows/**"
       - ".github/actions/**"
       - ".github/scripts/audit-workflow-governance.py"
+      - ".github/scripts/check-package-dependency-closure.py"
 
 permissions:
   contents: read
@@ -18,7 +19,7 @@ concurrency:
 jobs:
   audit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - name: Checkout workflow revision
         uses: actions/checkout@v5
@@ -30,8 +31,17 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-yaml
+      - name: Resolve live feed metadata and verify allowlisted dependency closures
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          python3 .github/scripts/check-package-dependency-closure.py kmod-fs-ksmbd
       - name: Validate workflow governance matrix
         shell: bash
         run: |
           set -Eeuo pipefail
+          python3 -m py_compile .github/scripts/audit-workflow-governance.py .github/scripts/check-package-dependency-closure.py
+          python3 .github/scripts/check-package-dependency-closure.py --self-test
           python3 .github/scripts/audit-workflow-governance.py

@@ -46,15 +46,27 @@ qc=[s for s in act.get("runs",{}).get("steps",[]) if s.get("uses","").startswith
 if not qc: bad("Quick cache missing")
 qw=qc[0].get("with",{})
 if "n60pro-quick-openwrt-" not in qw.get("key","") or ".github/actions/easymesh-quick/action.yml" not in qw.get("key","") or qw.get("restore-keys"): bad("Quick cache isolation/hash mismatch")
-bi=tr("build-package.yml")["workflow_dispatch"]["inputs"]; safe={"luci-app-ttyd","kmod-fs-ksmbd"}
+bi=tr("build-package.yml")["workflow_dispatch"]["inputs"]; safe={"kmod-fs-ksmbd"}
 if bi["package_name"].get("type")!="choice" or set(bi["package_name"].get("options",[]))!=safe: bad("package input allowlist mismatch")
 if bi["device"].get("type")!="choice" or bi["device"].get("options")!=["netcore_n60-pro"]: bad("device choice mismatch")
 for s in steps(D["build-package.yml"]):
- if "\${{ github.event.inputs." in s.get("run","") or "\${{ inputs." in s.get("run",""): bad("untrusted input interpolated into shell")
+ if "${{ github.event.inputs." in s.get("run","") or "${{ inputs." in s.get("run",""): bad("untrusted input interpolated into shell")
 pc=[s for s in steps(D["build-package.yml"]) if s.get("uses","").startswith("actions/cache@")]
 if not pc or not any("-n60pro-package-" in s.get("with",{}).get("key","") and "hashFiles(" in s.get("with",{}).get("key","") for s in pc): bad("package cache missing isolation/hash")
 if any(s.get("with",{}).get("restore-keys") for s in pc): bad("package cache broad restore key present")
+helper=R/".github/scripts/check-package-dependency-closure.py"
+if not helper.is_file(): bad("transitive dependency closure checker missing")
+if "resolve_closure" not in helper.read_text(encoding="utf-8"): bad("recursive dependency closure implementation missing")
+if not any("check-package-dependency-closure.py" in s.get("run","") for s in steps(D["build-package.yml"])):
+ bad("build-package must execute recursive dependency closure check before compile")
+if not any("--self-test" in s.get("run","") for s in steps(D["workflow-governance-audit.yml"])):
+ bad("workflow governance must execute dependency-closure self-tests")
 ver=(R/"package/mtk/applications/easymesh-n60/scripts/verify-vendor-audit-attestation.py").read_text()
+for path in (".github/workflows/workflow-governance-audit.yml",
+             ".github/scripts/audit-workflow-governance.py",
+             ".github/scripts/check-package-dependency-closure.py",
+             "package/mtk/applications/easymesh-n60/scripts/verify-vendor-audit-attestation.py"):
+ if '"'+path+'"' not in ver: bad("vendor attestation does not bind "+path)
 for fld in ('"commit_sha"','"lock_sha256"','"files"','"run_id"','"run_attempt"'):
  if fld not in ver: bad("attestation verifier missing "+fld)
 for n in ("main.yml","easymesh-quick.yml"):
