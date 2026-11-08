@@ -649,73 +649,34 @@ runs:
             assert b.count(normalized) == 1, "expected exactly one normalized in-memory list structure: " + normalized.decode()
         print("PASS: both in-memory list structures are already normalized in the audited source snapshot.")
         PY
-        python3 - "$WAPP_SRC" <<'PY'
-        import pathlib, re, sys
-        root = pathlib.Path(sys.argv[1])
-        main = (root / "common/main.c").read_text(encoding="utf-8")
-        caller = (root / "map/map_1905.c").read_text(encoding="utf-8")
-        header = (root / "dpp/dpp_wdev.h").read_text(encoding="utf-8")
-        getter = main[main.index("int get_dpp_parameters"):main.index("int dpp_read_config_file_for_connection")]
-        symbol = "dpp_read_config_file_for_connection"
-        assert len(re.findall(r"\b" + symbol + r"\s*\(", main)) == 1, "WAPP DPP implementation count changed"
-        assert len(re.findall(r"\b" + symbol + r"\s*\(", caller)) == 2, "Expected one active and one commented legacy caller"
-        assert re.search(r"int\s+" + symbol + r"\s*\(struct wifi_app \*wapp\)\s*\{", main)
-        assert re.search(r"int\s+" + symbol + r"\s*\(struct wifi_app \*wapp\)\s*;", header)
-        active = caller[caller.index("case WAPP_USER_GET_BH_WIRELESS_SETTING:"):caller.index("case WAPP_USER_SET_ETH_BH_DOWN:")]
-        assert "#ifdef MAP_R3" in active and "map_version == DEV_TYPE_R3" in active and "TurnKeyEnable == 1" in active
-        assert re.search(r"dpp_read_config_file_for_connection\(wapp\)\s*<\s*0", active), "DPP caller ignores parser failure"
-        assert "ret = MAP_ERROR;" in active, "DPP parser failure is not propagated to WAPP event result"
-        cfg = (root / "wappd_config").read_text(encoding="utf-8")
-        assert "ifeq ($(CONFIG_MAP_R3_SUPPORT), y)" in cfg and "CONFIG_DPP_SUPPORT=y" in cfg
-        mk = (root / "Makefile").read_text(encoding="utf-8")
-        assert "ifeq ($(CONFIG_DPP_SUPPORT),y)" in mk and "dpp/dpp_wired.o" in mk
-        assert "-lssl -lcrypto" in mk and "common/main.o" in mk
-        assert "dat_load(file)" in getter and "kvc_get(dat_ctx" in getter and "kvc_unload(dat_ctx)" in getter
-        assert "ret = -1;" in getter
-        # Check the patched parser, not merely the symbol name.
-        body = main[main.index("int " + symbol):main.index("\n}", main.index("int " + symbol)) + 2]
-        assert "os_memset(&auth, 0, sizeof(auth));" in body, "auth cleanup state is not initialized before early exits"
-        assert body.count("get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0") >= 10, "DPP config read failures are not propagated"
-        assert body.count("wpabuf_alloc(key_len)") == 2, "1905 DPP keys are not allocated using decoded byte lengths"
-        assert body.count("hexstr2bin(value, buf_temp, key_len)") == 2, "1905 DPP hex decode lengths are not byte-based"
-        assert "config[k].dpp_csign_len = os_strlen(value) / 2;" in body
-        assert "config[k].dpp_netaccesskey_len = os_strlen(value) / 2;" in body
-        helper = main[main.index("int get_dpp_parameters"):main.index("int dpp_read_config_file_for_connection")]
-        assert "if (len >= val_len)" in helper, "DPP parser still silently truncates oversized values"
-        assert "os_memcpy(value, tmp_value, len + 1)" in helper, "DPP parser does not copy the full NUL-terminated value"
-        assert "os_min(os_strlen(tmp_value)" not in helper, "DPP parser retains silent truncation"
-        assert "value(%s)" not in helper, "DPP parser still logs secret configuration values"
-        dpp_source = (root / "dpp/dpp.c").read_text(encoding="utf-8")
-        netcopy_start = dpp_source.index("static int dpp_map_copy_netaccess_frm_cfg")
-        netcopy_end = dpp_source.index("static void dpp_copy_ppkey", netcopy_start)
-        netcopy = dpp_source[netcopy_start:netcopy_end]
-        assert netcopy.count("get_dpp_parameters(wapp->map,") >= 2 and netcopy.count(" < 0") >= 2, "DPP 1905 config reads do not propagate parser errors"
-        assert "hex_len / 2" in netcopy and "hexstr2bin(value, buf_temp, key_len)" in netcopy, "DPP netAccessKey hex length is not byte-based"
-        secret_log = [line for line in dpp_source.splitlines() if ("dpp_private_key=%s" in line or "pass :%s" in line) and re.search(r"\b(DBGPRINT|printf|wpa_printf)\s*\(", line)]
-        assert not secret_log, "DPP source still logs private keys or passphrases"
-        dpp_wdev = (root / "dpp/dpp_wdev.c").read_text(encoding="utf-8")
-        assert "passphrase(%d, len:%ld): %s" not in dpp_wdev, "DPP WAPP parser still logs passphrases"
-        common_wdev = (root / "common/wdev.c").read_text(encoding="utf-8")
-        assert "passphrases = %s" not in common_wdev, "WAPP security log still prints passphrases"
-        cmm = (root / "common/wapp_cmm.c").read_text(encoding="utf-8")
-        defs = (root / "include/map_1905.h").read_text(encoding="utf-8")
-        for old in ("os_strncpy(vname_duple->language", "os_strncpy(friendly_name->language",
-                    "os_strncpy(plan_tuple_data->language", "os_strncpy(plan_tuple_data->currency_code",
-                    "os_strncpy(service_desc->language", "os_strncpy(op_name_duple->language"):
-            assert old not in cmm, "GCC 14 fixed-width string copy remains: " + old
-        assert "os_memcpy(vname_duple->language, token, 3)" in cmm
-        assert "os_memcpy(op_name_duple->operator_name, token, os_strlen(token))" in cmm
-        assert "struct GNU_PACKED air_monitor_query_rsp" not in defs
-        assert "struct GNU_PACKED bh_assoc_ctrl" not in defs
-        assert not re.search(r"(?m)^\s*(?:wpa_)?printf\s*\([^;]*dpp_ppkey", body), "DPP private key material must not be printed"
-        csign = body.index("hexstr2bin(value, buf_temp, key_len)", body.index("_1905cSignKey"))
-        csign_clear = body.index("NdisZeroMemory(value", csign)
-        assert csign < csign_clear, "_1905cSignKey is cleared before conversion"
-        assert "#ifdef MAP_R3_RECONFIG\n\tif (config[k].dpp_ppkey)" in body, "DPP ppkey error cleanup is missing"
-        util = (root / "common/util.c").read_text(encoding="utf-8")
-        hexfn = util[util.index("int hexstr2bin"):util.index("\n}", util.index("int hexstr2bin"))]
-        assert "hex will be double" in util and "for (i = 0; i < len; i++)" in hexfn
-        print("PASS: DPP implementation/declaration/call guard, MAP R3 compile gates, datconf API, key byte lengths, error propagation and cleanup verified.")
+        # The canonical test-dpp-source-contract.py above owns the DPP
+        # semantic contract. Avoid duplicating stale checks here: the parser's
+        # credential pack/send path was deliberately removed from main.c;
+        # credential ownership belongs to wapp_dpp_process_config().
+        python3 - "$WAPP_SRC/common/main.c" <<'PY'
+        import pathlib, sys
+        source = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+        symbol = "int dpp_read_config_file_for_connection("
+        start = source.find(symbol)
+        if start < 0:
+            raise SystemExit("ERROR: DPP connection-config parser is missing.")
+        end = source.find("\\n}", start)
+        if end < 0:
+            raise SystemExit("ERROR: DPP connection-config parser has no closing brace.")
+        body = source[start:end + 2]
+        for dead in (
+            "struct dpp_authentication auth;",
+            '"_1905netAccessKey"',
+            '"_1905cSignKey"',
+            "wapp_dpp_save_dpp_cred(&auth)",
+        ):
+            if dead in body:
+                raise SystemExit("ERROR: removed duplicate DPP credential path reappeared: " + dead)
+        if "if (!wapp)" not in body or "dev_list = &wapp->dev_list" not in body:
+            raise SystemExit("ERROR: DPP parser no longer validates WAPP before accessing its device list.")
+        if "wdev_config_error:" not in body or "goto wdev_config_error;" not in body:
+            raise SystemExit("ERROR: DPP per-interface allocation rollback path is missing.")
+        print("PASS: DPP parser follows the single credential-ownership path; NULL guard and allocation rollback remain.")
         PY
     - name: Verify WAPP GCC 14 and P1905 archive-tool fixes
       shell: bash
