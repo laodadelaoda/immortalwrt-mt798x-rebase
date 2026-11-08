@@ -148,3 +148,17 @@ The exact logs and uploaded source artifacts from runs `42532859637` and `425328
    - Run `42532859725` failed at the WAPP parser source assertion, not at source download. Its post-011 WAPP and P1905 source artifacts remain preserved.
    - The new patch inputs require fresh Lock/patch/input hashes and a new commit/run/attempt-bound audit credential. Existing eight design artifacts and prior SHA256 credentials remain historical evidence and must not be overwritten or reused as a pass.
    - Do not start Quick or Full compile/link until the new complete fixed-vendor audit, WAPP source audit, native Quick Prepare, and MT Wi-Fi 026 path/application/function assertions all pass on the same applicable revision/evidence chain.
+
+## Patch-preimage and unified-diff escaping correction (2026-11-09)
+
+Two follow-up Action attempts exposed mechanical defects in the first corrections above. They are corrected in the current branch; the intermediate failed attempts remain part of the audit history.
+
+- The first 019 edit accidentally changed the **deleted preimage** lines as well as the replacement lines. WAPP source audit run `42533454089` reported `Hunk #8 FAILED at 7406`. The final 019 patch restores the vendor-source preimage exactly (`cac_status.cac_ongoing_channel[cac_status.ongoing_cac_channel_num]`) and changes only the new pointer-based result to `cac_status->cac_ongoing_channel[cac_status->ongoing_cac_channel_num]` for all three fields.
+  - Final correction commit: `8027a9ddbd4f5aa8c7579a3626313c8bae96d414`.
+  - Final 019 blob: `b12cd31478ee32400ebcacfc6565a2ca5683b9c6`.
+- The first restored 013 deletion hunk encoded the C string newline as a double backslash in the patch text. That caused the post-011 context hunk to fail. The patch now contains the same single-backslash C escape as the captured vendor source.
+  - Final 013 correction commit: `75d2e283463047edfa368387190bf26616798e70`.
+  - Final 013 blob: `6ef4bd9da3583bb9419210d2ed4df40f16ed9a2e`.
+- The final 013 deletion hunk was independently dry-run and applied against the exact uploaded post-011 WAPP parser source with `--batch --forward --fuzz=0`; its parser assertions passed locally. The current 019 diff has the original vendor preimage on the removed side and the pointer-safe member/index expressions on the added side.
+- Runs `42533453959` and `42533454089` are failed attempts against the intermediate 75d/8027 predecessor revisions and must not be counted as validation of the corrected final patch pair. The current branch head is `8027a9ddbd4f5aa8c7579a3626313c8bae96d414`; wait for and inspect the newly triggered full vendor and WAPP source audits at this exact HEAD.
+- The eight original design artifacts and all pre-existing SHA256 credentials remain preserved. Fresh audit evidence must be produced for the final patch blobs and exact HEAD; Quick/Full remain frozen.
