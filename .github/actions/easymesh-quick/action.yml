@@ -639,16 +639,15 @@ runs:
         PY
         python3 - "$WAPP_SRC/include/map_1905.h" <<'PY'
         import pathlib, sys
-        p = pathlib.Path(sys.argv[1])
-        b = p.read_bytes()
+        b = pathlib.Path(sys.argv[1]).read_bytes()
         pairs = [
             (b"struct GNU_PACKED air_monitor_query_rsp{", b"struct air_monitor_query_rsp{"),
             (b"struct GNU_PACKED bh_assoc_ctrl {", b"struct bh_assoc_ctrl {"),
         ]
-        for old, new in pairs:
-            assert b.count(old) == 1, "expected one packed in-memory list structure: " + old.decode()
-            b = b.replace(old, new, 1)
-        p.write_bytes(b)
+        for packed, normalized in pairs:
+            assert b.count(packed) == 0, "Build/Prepare packed-structure normalization is missing: " + packed.decode()
+            assert b.count(normalized) == 1, "expected exactly one normalized in-memory list structure: " + normalized.decode()
+        print("PASS: both in-memory list structures are already normalized in the audited source snapshot.")
         PY
         python3 - "$WAPP_SRC" <<'PY'
         import pathlib, re, sys
