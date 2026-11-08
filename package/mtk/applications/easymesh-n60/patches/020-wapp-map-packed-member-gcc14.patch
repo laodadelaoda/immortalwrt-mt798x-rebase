@@ -1,21 +1,35 @@
 --- a/wappd/map/map_1905.c
 +++ b/wappd/map/map_1905.c
-@@ -7431,3 +7431,3 @@
+@@ -7428,9 +7428,9 @@
+ 					os_free(cac_status);
+ 					return FALSE;
+ 				}
 -				cac_status->cac_ongoing_channel[cac_status.ongoing_cac_channel_num].ch_num = driver_cap->ch_num;
 -				cac_status->cac_ongoing_channel[cac_status.ongoing_cac_channel_num].op_class = ap->ch_info.op_class;
 -				cac_status->cac_ongoing_channel[cac_status.ongoing_cac_channel_num].remain_interval = driver_cap->cac_remain_time;
 +				cac_status->cac_ongoing_channel[cac_status->ongoing_cac_channel_num].ch_num = driver_cap->ch_num;
 +				cac_status->cac_ongoing_channel[cac_status->ongoing_cac_channel_num].op_class = ap->ch_info.op_class;
 +				cac_status->cac_ongoing_channel[cac_status->ongoing_cac_channel_num].remain_interval = driver_cap->cac_remain_time;
-@@ -8178,4 +8178,7 @@
+ 				cac_status->ongoing_cac_channel_num++;
+ 				status_len += 5;
+ 			}
+@@ -8178,6 +8178,12 @@
  	if (wdev->radio == NULL)
  		return;
  
-+	if (wapp->map->cac_list.ch_num > MAX_DFS_CH)
++	if (wapp->map->cac_list.ch_num > MAX_DFS_CH) {
++		DBGPRINT(RT_DEBUG_ERROR, "%s invalid CAC list count %u\\n",
++			__func__, wapp->map->cac_list.ch_num);
 +		return;
++	}
 +
  	if(ret == TRUE) {
-@@ -8193,1 +8196,8 @@
+ 		for (i = 0; i < wapp->map->cac_list.ch_num; i++) {
+ 			if(*channel == wapp->map->cac_list.ch_list[i]) {
+@@ -8190,14 +8196,28 @@
+ 		}
+ 
+ 		if (matched == TRUE) {
 -			os_get_time(&wapp->map->cac_list.last_cac_time[i]);
 +			{
 +				struct os_time now;
@@ -25,7 +39,12 @@
 +					offsetof(struct cac_run_list, last_cac_time) +
 +					(size_t)i * sizeof(now), &now, sizeof(now));
 +			}
-@@ -8200,1 +8210,8 @@
+ 		} else if (i < MAX_DFS_CH) {
+ 			if (*channel >= 36 && *channel <= 48)
+ 				wapp->map->cac_list.ch_list[i] = 50;
+ 			else
+ 				wapp->map->cac_list.ch_list[i] = *channel;
+ 			wapp->map->cac_list.ch_num++;
 -			os_get_time(&wapp->map->cac_list.last_cac_time[i]);
 +			{
 +				struct os_time now;
@@ -35,21 +54,31 @@
 +					offsetof(struct cac_run_list, last_cac_time) +
 +					(size_t)i * sizeof(now), &now, sizeof(now));
 +			}
-@@ -9538,1 +9555,10 @@
+ 			i++;
+ 		}
+ 	}
+@@ -9533,14 +9553,22 @@
+ 	struct wapp_dev *wdev,
+ 	struct ts_common_setting *setting)
  {
 +	unsigned short policy_vids[MAX_VLAN_NUM];
 +	unsigned char policy_vid_num;
 +
-+	if (setting->policy_vid_num > MAX_VLAN_NUM)
++	if (!setting || setting->policy_vid_num > MAX_VLAN_NUM)
 +		return;
 +	policy_vid_num = setting->policy_vid_num;
 +	os_memcpy(policy_vids, (const u8 *)setting +
 +		offsetof(struct ts_common_setting, policy_vids),
 +		(size_t)policy_vid_num * sizeof(policy_vids[0]));
-@@ -9542,2 +9568,1 @@
+ #if NL80211_SUPPORT
+ 	ts_bh_set_default_8021q(wapp, wdev, setting->primary_vid,
+ 						setting->primary_pcp);
 -	ts_bh_set_all_vid(wapp, wdev, setting->policy_vid_num,
 -						setting->policy_vids);
 +	ts_bh_set_all_vid(wapp, wdev, policy_vid_num, policy_vids);
-@@ -9547,1 +9572,1 @@
+ #else
+ 	ts_bh_set_default_8021q(wdev, setting->primary_vid, setting->primary_pcp);
 -	ts_bh_set_all_vid(wdev, setting->policy_vid_num, setting->policy_vids);
 +	ts_bh_set_all_vid(wdev, policy_vid_num, policy_vids);
+ #endif
+}
