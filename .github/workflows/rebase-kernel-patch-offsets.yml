@@ -28,7 +28,6 @@ jobs:
           python3 target/linux/mediatek/tests/rebase-kernel-patch-offsets.py \
             --repo "$GITHUB_WORKSPACE" \
             --csv docs/audit/kernel-patch-offsets-42436263338.csv \
-            --check-only \
             --report "$RUNNER_TEMP/kernel-patch-offset-check.json"
 
       - name: Rebase hunk coordinates without changing patch payloads
