@@ -516,3 +516,24 @@ for signature, token in (
 ):
     copy_fn = extract_c_function(src["dpp"], signature)
     require(token in copy_fn, f"DPP key replacement does not clear old material: {signature}")
+
+
+# Hex restoration regression vectors: decoded capacity is bytes, not hex characters.
+require(fetch_saved_dpp.count("if (!hex_len || (hex_len & 1) || hex_len / 2 > sizeof(buftemp))") == 2,
+        "both saved DPP key parsers must reject empty, odd-length and over-capacity hex")
+def dpp_hex_decoded_length(value):
+    if (not value or len(value) % 2 or len(value) // 2 > 512 or
+            re.fullmatch(r"[0-9a-fA-F]+", value) is None):
+        return None
+    return len(value) // 2
+
+for raw, expected in (
+    ("00", 1),
+    ("0123456789abcdef", 8),
+    ("ab" * 512, 512),
+):
+    require(dpp_hex_decoded_length(raw) == expected,
+            f"DPP hex restore decoded-byte boundary is wrong for {len(raw)} hex chars")
+for raw in ("", "0", "0g", "ab" * 513, " 0"):
+    require(dpp_hex_decoded_length(raw) is None,
+            f"DPP hex restore accepted invalid/oversized input: {raw[:16]!r}")
