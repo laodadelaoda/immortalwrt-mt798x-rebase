@@ -183,7 +183,8 @@
         "013-wapp-wts-parser-fail-closed.patch",
         "003-wapp-gcc14-copy-semantics.patch",
         "004-libmapd-target-flags.patch",
-        "005-wapp-hotspot-realloc-pointer-arithmetic.patch"
+        "005-wapp-hotspot-realloc-pointer-arithmetic.patch",
+        "019-wapp-map-buffer-safety.patch"
       ],
       "scope": "EasyMesh Build/Prepare ordered vendor patch series",
       "post_normalize_order": [
