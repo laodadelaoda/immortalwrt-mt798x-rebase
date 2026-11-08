@@ -9,19 +9,6 @@
  
  	if (radio_num == 0 || radio_num > MAP_MAX_RADIO) {
  		printf("invalid radio num %d\n", radio_num);
-@@ -7428,9 +7428,9 @@
- 					os_free(cac_status);
- 					return FALSE;
- 				}
--				cac_status->cac_ongoing_channel[cac_status.ongoing_cac_channel_num].ch_num = driver_cap->ch_num;
--				cac_status->cac_ongoing_channel[cac_status.ongoing_cac_channel_num].op_class = ap->ch_info.op_class;
--				cac_status->cac_ongoing_channel[cac_status.ongoing_cac_channel_num].remain_interval = driver_cap->cac_remain_time;
-+				cac_status->cac_ongoing_channel[cac_status->ongoing_cac_channel_num].ch_num = driver_cap->ch_num;
-+				cac_status->cac_ongoing_channel[cac_status->ongoing_cac_channel_num].op_class = ap->ch_info.op_class;
-+				cac_status->cac_ongoing_channel[cac_status->ongoing_cac_channel_num].remain_interval = driver_cap->cac_remain_time;
- 				cac_status->ongoing_cac_channel_num++;
- 				status_len += 5;
- 			}
 @@ -7469,7 +7469,10 @@
  							{
  								if(cac_status->allowed_channel[o].ch_num == wapp->map->cac_list.ch_list[p]) {
