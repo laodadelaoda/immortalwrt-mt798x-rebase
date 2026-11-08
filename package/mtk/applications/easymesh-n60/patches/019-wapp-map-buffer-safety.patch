@@ -1,5 +1,5 @@
---- a/map/map_1905.c
-+++ b/map/map_1905.c
+--- a/wappd/map/map_1905.c
++++ b/wappd/map/map_1905.c
 @@ -35,6 +35,7 @@
   * any receiver's applicable license agreements with MediaTek Inc.
   */
