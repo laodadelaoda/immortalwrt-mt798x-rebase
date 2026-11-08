@@ -889,7 +889,7 @@ runs:
           echo "::error::P1905 DSA libbridge recursive build does not inherit target tools and flags."
           exit 1
         }
-        grep -Fq '$(CC) $(CFLAGS) $(LDFLAGS) -I../inc -I. -I$(INC) -fPIC -shared -o $@ $^' "$P1905_ETH_MAKEFILE" || {
+        grep -Eq '^[[:space:]]*\\$\\(CC\\)[[:space:]]+\\$\\(CFLAGS\\)([[:space:]]+\\$\\(EXTRA_CFLAGS\\))?[[:space:]]+\\$\\(LDFLAGS\\)[[:space:]]+-I\\.\\./inc[[:space:]]+-I\\.[[:space:]]+-I\\$\\(INC\\)[[:space:]]+-fPIC[[:space:]]+-shared[[:space:]]+-o[[:space:]]+\\$@[[:space:]]+\\$\\^' "$P1905_ETH_MAKEFILE" || {
           echo "::error::P1905 Ethernet shared-library link does not consume target LDFLAGS."
           exit 1
         }
