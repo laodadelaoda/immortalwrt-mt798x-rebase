@@ -67,12 +67,20 @@ def make_values(repo,item):
     config=repo/".config"
     if not config.is_file():
         fail("N60 Pro normalized .config is missing; run cp config/n60pro-1001.config .config && make defconfig first")
-    probe="""# Match native Package evaluation: CURDIR is the Package directory.
+    source_url_var=item.get("source_url_var","PKG_SOURCE_URL")
+    if not source_url_var or not source_url_var.replace("_","").isalnum():
+        fail(item["id"]+" Lock source_url_var is not a valid GNU Make variable name: "+repr(source_url_var))
+    probe_vars=["PKG_NAME","PKG_VERSION","PKG_SOURCE","PKG_SOURCE_URL",source_url_var,
+                "PKG_HASH","PKG_BUILD_DIR","PATCH_DIR","BUILD_DIR","KERNEL_BUILD_DIR",
+                "REPO_URL","CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673","CURDIR"]
+    probe_vars=list(dict.fromkeys(probe_vars))
+    probe_fields=" ".join("'"+key+"=$("+key+")'" for key in probe_vars)
+    probe=f"""# Match native Package evaluation: CURDIR is the Package directory.
 -include $(TOPDIR)/.config
 include Makefile
 .PHONY: __n60_vendor_dump
 __n60_vendor_dump:
-\t@printf '%s\\n' 'PKG_NAME=$(PKG_NAME)' 'PKG_VERSION=$(PKG_VERSION)' 'PKG_SOURCE=$(PKG_SOURCE)' 'PKG_SOURCE_URL=$(PKG_SOURCE_URL)' 'PKG_HASH=$(PKG_HASH)' 'PKG_BUILD_DIR=$(PKG_BUILD_DIR)' 'PATCH_DIR=$(PATCH_DIR)' 'BUILD_DIR=$(BUILD_DIR)' 'KERNEL_BUILD_DIR=$(KERNEL_BUILD_DIR)' 'REPO_URL=$(REPO_URL)' 'CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=$(CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673)' 'CURDIR=$(CURDIR)'
+\\t@printf '%s\\\\n' {probe_fields}
 """
     cmd=["make","--no-print-directory","--silent","-C",str(package_dir),"-f","-","TOPDIR="+str(repo),"__n60_vendor_dump"]
     proc=subprocess.run(cmd,input=probe,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,cwd=repo)
@@ -83,7 +91,7 @@ __n60_vendor_dump:
             k,v=line.split("=",1); values[k]=v.strip()
     for key in ("PKG_BUILD_DIR","PATCH_DIR"):
         if not values.get(key): fail(item["id"]+" GNU Make returned empty "+key+": "+proc.stdout)
-    for key in ("PKG_SOURCE","PKG_SOURCE_URL","PKG_HASH","REPO_URL","PKG_VERSION"):
+    for key in ("PKG_SOURCE","PKG_SOURCE_URL","PKG_HASH","REPO_URL","PKG_VERSION",source_url_var):
         values.setdefault(key,"")
     if item["id"]=="mtwifi":
         if values.get("CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673")!="y":
@@ -96,6 +104,25 @@ def relative(repo,package_dir,value,label,sid):
     p=Path(value); p=p if p.is_absolute() else package_dir/p
     try: return p.resolve().relative_to(repo.resolve()).as_posix()
     except ValueError: fail(sid+" "+label+" escapes repository: "+value)
+
+def verify_source_declaration(sid,item,values):
+    """Validate Package source identity using only Lock-selected Make variables."""
+    source_var=item.get("source_var","PKG_SOURCE")
+    hash_var=item.get("hash_var","PKG_HASH")
+    source_url_var=item.get("source_url_var","PKG_SOURCE_URL")
+    expected_base=item["url"].rsplit("/",1)[0]
+    expected={source_var:item["archive"],hash_var:item["sha256"]}
+    for key,value in expected.items():
+        if values.get(key)!=value:
+            fail(sid+" GNU Make "+key+" mismatch: "+repr(values.get(key))+" != "+repr(value))
+    actual_source_url=values.get(source_url_var,"").rstrip("/")
+    if actual_source_url!=expected_base:
+        fail(sid+" GNU Make "+source_url_var+" mismatch: "+repr(actual_source_url)+" != "+repr(expected_base))
+    resolved_url=actual_source_url+"/"+values[source_var]
+    if item["url"] != resolved_url:
+        fail(sid+" Lock URL does not resolve from evaluated "+source_url_var+" and "+source_var)
+    return source_url_var
+
 
 def verify_packages(repo):
     lock=load(repo); seen=set()
@@ -121,19 +148,12 @@ def verify_packages(repo):
         if scope=="openwrt-package":
             source_var=item.get("source_var","PKG_SOURCE")
             hash_var=item.get("hash_var","PKG_HASH")
-            source_url_var=item.get("source_url_var","PKG_SOURCE_URL")
-            expected_base=item["url"].rsplit("/",1)[0]
-            expected={source_var:item["archive"],hash_var:item["sha256"],
-                      "PKG_SOURCE_URL":expected_base,source_url_var:expected_base}
-            for key,value in expected.items():
-                if values.get(key)!=value:
-                    fail(sid+" GNU Make "+key+" mismatch: "+repr(values.get(key))+" != "+repr(value))
-            if item["url"] != expected_base + "/" + values[source_var]:
-                fail(sid+" Lock URL does not resolve from evaluated Package source URL and filename")
+            source_url_var=verify_source_declaration(sid,item,values)
         else:
             if any(values.get(k) for k in ("PKG_SOURCE","PKG_SOURCE_URL","PKG_HASH")):
                 fail(sid+" manual Package unexpectedly defines native source download variables")
-        print("GNU MAKE PACKAGE VARS PASS: "+sid+" scope="+scope+" PKG_SOURCE="+values["PKG_SOURCE"]+" PKG_SOURCE_URL="+values["PKG_SOURCE_URL"]+" PKG_HASH="+values["PKG_HASH"]+" PKG_BUILD_DIR="+build+" PATCH_DIR="+patch)
+        source_url_var=item.get("source_url_var","PKG_SOURCE_URL")
+        print("GNU MAKE PACKAGE VARS PASS: "+sid+" scope="+scope+" PKG_SOURCE="+values["PKG_SOURCE"]+" "+source_url_var+"="+values.get(source_url_var,"")+" PKG_HASH="+values["PKG_HASH"]+" PKG_BUILD_DIR="+build+" PATCH_DIR="+patch)
 
 def patch_set(repo,sid):
     matches=[p for p in load(repo)["patch_sets"] if p.get("id")==sid]

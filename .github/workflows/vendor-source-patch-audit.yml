@@ -1,6 +1,9 @@
 name: N60 Pro fixed-vendor-source patch audit
 
 on:
+  push:
+    branches:
+      - n60pro-mtk-closed-driver
   workflow_call:
   workflow_dispatch:
 
@@ -23,21 +26,33 @@ jobs:
         run: |
           set -Eeuo pipefail
           export LC_ALL=C
-          cp config/n60pro-1001.config .config
-          make defconfig
-          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-source-transforms.py verify-lock "$GITHUB_WORKSPACE"
-          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py verify-packages --repo "$GITHUB_WORKSPACE"
-          echo "===== Generate unified Linux kernel + fixed-vendor patch manifest ====="
-          python3 target/linux/mediatek/tests/audit-kernel-patch-stack.py inventory \
-            --repo "$GITHUB_WORKSPACE" \
-            --output-dir "$GITHUB_WORKSPACE/kernel-patch-audit"
+          # Establish report output and EXIT capture before config generation or
+          # any preflight. A failed preflight must still leave a diagnostic artifact.
           ROOT="$RUNNER_TEMP/n60-vendor-patch-audit"
           INPUT="$ROOT/input"
           SRC="$ROOT/source"
           OUT="$ROOT/report"
           mkdir -p "$INPUT" "$SRC" "$OUT"
           : > "$OUT/PATCH-APPLICATION-REPORT.txt"
-          trap 'cp "$OUT/PATCH-APPLICATION-REPORT.txt" PATCH-APPLICATION-REPORT.txt 2>/dev/null || true' EXIT
+          trap 'status=$?; if [ -f "$OUT/PATCH-APPLICATION-REPORT.txt" ]; then cp "$OUT/PATCH-APPLICATION-REPORT.txt" PATCH-APPLICATION-REPORT.txt; fi; exit "$status"' EXIT
+
+          cp config/n60pro-1001.config .config
+          if ! make defconfig 2>&1 | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"; then
+            echo "FAIL: N60 Pro make defconfig failed" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+            exit 1
+          fi
+          if ! python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-source-transforms.py verify-lock "$GITHUB_WORKSPACE" 2>&1 | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"; then
+            echo "FAIL: canonical vendor Lock verification failed" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+            exit 1
+          fi
+          if ! python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py verify-packages --repo "$GITHUB_WORKSPACE" 2>&1 | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"; then
+            echo "FAIL: GNU Make Package variable verification failed" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+            exit 1
+          fi
+          echo "===== Generate unified Linux kernel + fixed-vendor patch manifest ====="
+          python3 target/linux/mediatek/tests/audit-kernel-patch-stack.py inventory \
+            --repo "$GITHUB_WORKSPACE" \
+            --output-dir "$GITHUB_WORKSPACE/kernel-patch-audit"
           FAILURES=0
           CHECKED=0
 
