@@ -661,7 +661,7 @@ def validate_patch_application_log(inv, log, repo):
         if re.search(r"with fuzz [1-9]|fuzz [1-9]", block, re.I):
             raise RuntimeError("Patch used non-zero fuzz: " + name)
         offsets = re.findall(
-            r"^Hunk #\d+ succeeded at .*\(offset [+-]?[1-9]\d* lines?\)\s*$",
+            r"^Hunk #\d+ succeeded at .*\(offset [+-]?[1-9]\d* lines?\)\.?\s*$",
             block, re.M
         )
         if offsets:
