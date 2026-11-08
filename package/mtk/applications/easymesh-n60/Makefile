@@ -70,6 +70,7 @@ define Build/Prepare
 	python3 ./scripts/n60-vendor-source-transforms.py finalize "$(PKG_BUILD_DIR)"; \
 	python3 ./tests/test-dpp-source-contract.py $(PKG_BUILD_DIR); \
 	python3 ./tests/test-easymesh-static-contract.py $(PKG_BUILD_DIR) $(TOPDIR); \
+	python3 ./tests/test-wapp-map-buffer-contract.py $(PKG_BUILD_DIR); \
 	python3 ./tests/test-vendor-artifact-inventory.py $(PKG_BUILD_DIR) $(TOPDIR)
 endef
 
