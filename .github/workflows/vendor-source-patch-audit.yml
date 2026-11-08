@@ -440,6 +440,24 @@ jobs:
           echo "PASS: every active fixed-vendor patch applied to its pinned archive with zero fuzz."
           echo "Package preparation simulation: datconf archive -> ./src overlay -> Lock-ordered Build/Patch series."
 
+      - name: Assert MT Wi-Fi 026 exact Prepare path, patch result and function replacement
+        if: success()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 package/mtk/drivers/mt_wifi/tests/test-026-prandom-u32-prepare.py \
+            --repo "$GITHUB_WORKSPACE" \
+            --evidence-dir "$RUNNER_TEMP/mtwifi-026-audit"
+
+      - name: Upload MT Wi-Fi 026 source, path and function evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-mtwifi-026-source-audit
+          path: ${{ runner.temp }}/mtwifi-026-audit/
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Create immutable audit attestation
         if: success()
         shell: bash
