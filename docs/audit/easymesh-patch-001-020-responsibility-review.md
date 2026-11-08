@@ -78,3 +78,48 @@ Important inconsistency: the active lock still includes `019-wapp-map-buffer-saf
 ## Change decision
 
 No source patch or canonical lock entry is changed by this review commit. The branch currently has a demonstrable lock-vs-decision inconsistency for 019 and several DPP/WAPP overlap questions whose safe resolution depends on exact source-backed patch replay. Making speculative edits without those exact replay results would risk modifying correct vendor fixes or breaking the existing regression contract.
+
+## Follow-up: static hunk overlap review and minimal patch cleanup
+
+This section supersedes the earlier statements that the active 019 patch should be excluded. The current project correction is that the active MAP patch `019-wapp-map-buffer-safety.patch` is retained; the historical/obsolete 019 reference is a different item and must not be confused with this file.
+
+- Follow-up branch base: `b080ed3b5fce23077bb5605e706a5a00f396ef4b`
+- Follow-up resulting branch HEAD: `7830c077117959bf8e5425a343f2d52e36242404`
+- Canonical Lock was not changed; its blob remains `26dc245b7d94009143531143a989c36adf514b80`.
+- No changes were made to the eight original design artifacts or their stored SHA256 credential files.
+
+### Minimal corrections committed
+
+1. `013-wapp-wts-parser-fail-closed.patch`
+   - Removed the second hunk that deleted the post-increment `i >= max_bss_num` guard.
+   - Patch 011 already moves the BSS bound check to the top of the parser iteration and removes that old post-increment guard. Keeping the deletion in 013 duplicated a change already made by 011 and could make 013 search for context that no longer exists.
+   - Retained 013's unique hidden-SSID malformed-format change from `break` to `goto err`.
+   - New blob: `f7e1a0002379369240bc02e0e1ac8c59332cf023`.
+   - Commit: `9bd189c4909be45b0f604d781fc6baa17b5957df`.
+
+2. `020-wapp-map-packed-member-gcc14.patch`
+   - Removed the CAC pointer-index hunk at old source line 7428.
+   - Patch 019 already changes the allocation from a stack object to a pointer and changes both the `cac_status` object access and `ongoing_cac_channel_num` access to pointer syntax. The old context in 020 still used `cac_status.ongoing_cac_channel_num`, so it was superseded by 019 and could not apply to the post-019 tree.
+   - Retained 020's packed CAC timestamp read/write via byte-offset plus `memcpy`, CAC list bound check, and bounded policy VID copy.
+   - New blob: `9e386d9e2e4207b309ba1701076647d668c8537b`.
+   - Commit: `7830c077117959bf8e5425a343f2d52e36242404`.
+
+### Revised overlap classification
+
+| Group | Classification after cleanup | Remaining work |
+|---|---|---|
+| 002 / 008 | Caller-side DPP parameter validation versus shared getter capacity/error contract; dependent, not duplicate by itself | Replay exact source; verify getter's OPENWRT and non-OPENWRT branches and every caller's error handling |
+| 002 / 009 | 009 removes unused `cred_len` and corrects MAP_R3-only `dev_list` initialization; narrow follow-up | Verify preprocessor configurations and no stale declaration/use |
+| 010 / 017 / 018 | Same config ownership/cleanup region; additive rollback and zeroization layers, with potential lifecycle conflicts | Build pointer ownership table from actual source; check every success/error exit for one free, correct wipe length, and no stale alias |
+| 008 / 014 / 018 | Logging policy overlap, but 014's WPS event is separate from 018's DPP/test-file and DPP diagnostic changes | Search final preprocessed source for remaining key/passphrase/PMK/PTK/connector/private-key output |
+| 011 / 013 | One redundant 013 hunk removed; remaining hidden-SSID fail-closed correction is unique | Replay 013 after 011 and prove zero offset/fuzz |
+| 012 | P1905 daemon WTS parser, separate from WAPP parser | Keep independent; test parser state rollback and BSS bounds |
+| 019 / 020 | Superseded pointer hunk removed from 020; remaining 020 work is packed-member/alignment and CAC timestamp handling | Replay 019 then 020; validate actual packed struct layout, flexible tails, event length, and wire encoding |
+
+### Replay limitation and gate
+
+This follow-up was a patch-to-patch static hunk comparison. The locked WAPP vendor source archive is a binary release asset; the available repository file reader returned text files but could not retrieve that binary archive for extraction in this session. Therefore this update does **not** claim source-backed replay, zero-fuzz/zero-offset acceptance, DPP lifecycle proof, WAPP WTS regression success, or MAP/GCC14 compilation.
+
+The Lock digest did not change, but two patch inputs did. Any prior audit credential bound to the old patch blobs/commit is stale for this tree. The next fixed-vendor audit must hash the new patch blobs and bind a fresh credential to the resulting commit/run/attempt. Preserve the eight original design artifacts and all existing credentials as historical evidence; do not overwrite or reuse them as a pass for this revision.
+
+No EasyMesh Quick or Full compile/link was started. The complete fixed-vendor audit, exact locked-source patch replay, Quick Prepare, and MT Wi-Fi 026 path/application/function assertions remain mandatory gates.
