@@ -114,9 +114,9 @@
 +			}
 +			m = 0;
  			if (driver_cap->active_cac == TRUE) {
--				cac_status.cac_ongoing_channel[cac_status.ongoing_cac_channel_num].ch_num = driver_cap->ch_num;
--				cac_status.cac_ongoing_channel[cac_status.ongoing_cac_channel_num].op_class = ap->ch_info.op_class;
--				cac_status.cac_ongoing_channel[cac_status.ongoing_cac_channel_num].remain_interval = driver_cap->cac_remain_time;
+-				cac_status->cac_ongoing_channel[cac_status->ongoing_cac_channel_num].ch_num = driver_cap->ch_num;
+-				cac_status->cac_ongoing_channel[cac_status->ongoing_cac_channel_num].op_class = ap->ch_info.op_class;
+-				cac_status->cac_ongoing_channel[cac_status->ongoing_cac_channel_num].remain_interval = driver_cap->cac_remain_time;
 -				cac_status.ongoing_cac_channel_num++;
 +				if (cac_status->ongoing_cac_channel_num >= MAP_MAX_RADIO) {
 +					os_free(cac_status);
