@@ -31,10 +31,11 @@ def normalize_path(value: str) -> str:
         value = value[1:-1]
     if value == "/dev/null":
         return value
-    if value.startswith(("a/", "b/")):
-        value = value[2:]
     if value.startswith("./"):
         value = value[2:]
+    parts = value.split("/")
+    if len(parts) > 1 and (parts[0] in {"a", "b"} or parts[0].startswith("linux-")):
+        value = "/".join(parts[1:])
     return value
 
 
