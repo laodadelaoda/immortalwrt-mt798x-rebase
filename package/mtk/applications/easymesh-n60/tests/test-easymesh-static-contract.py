@@ -13,6 +13,25 @@ if len(sys.argv) != 3:
 
 build = Path(sys.argv[1])
 repo = Path(sys.argv[2])
+
+# Regression: GNU Make consumes dollar references inside recipes. The
+# OpenSSL-major ERE must preserve its end-of-line anchor through nested Make
+# expansion, otherwise grep receives an unmatched opening parenthesis.
+package_makefile = (repo / "package/mtk/applications/easymesh-n60/Makefile").read_text(encoding="utf-8")
+openssl_check = next((line for line in package_makefile.splitlines()
+                      if "OPENSSL_VERSION_MAJOR" in line and "grep -Eq" in line), "")
+require("([[:space:]]|$$)'" in openssl_check,
+        "OpenSSL major-version recipe must escape the ERE end anchor as $$ for nested GNU Make")
+# Model the two Make expansion passes and verify the exact ERE accepts a
+# canonical OpenSSL 3 header declaration without a syntax error.
+expanded_check = openssl_check.replace("$$", "$")
+match = re.search(r"grep -Eq '([^']+)'", expanded_check)
+require(match is not None, "cannot extract OpenSSL major-version ERE after Make expansion")
+try:
+    require(re.search(match.group(1), "# define OPENSSL_VERSION_MAJOR  3\\n") is not None,
+            "OpenSSL major-version ERE rejects a valid OpenSSL 3 header")
+except re.error as exc:
+    raise SystemExit("FAIL: OpenSSL major-version ERE is invalid after Make expansion: " + str(exc))
 wapp = build / "wappd"
 p1905 = build / "1905daemon"
 mapd = build / "mapd"
