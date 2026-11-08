@@ -79,7 +79,7 @@ def main() -> int:
         check(reverse.returncode == 0,
               "patch 026 reverse dry-run matches the prepared source with fuzz disabled (confirms the patch result)")
         reverse_offsets = re.findall(
-            r"Hunk #[0-9]+ succeeded at .*\\(offset [+-]?[1-9][0-9]* lines?\\)",
+            r"Hunk #[0-9]+ succeeded at .*\(offset [+-]?[1-9][0-9]* lines?\)",
             reverse.stdout,
         )
         check(not reverse_offsets,
