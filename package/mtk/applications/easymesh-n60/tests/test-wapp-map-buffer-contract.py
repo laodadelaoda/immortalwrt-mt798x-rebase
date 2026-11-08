@@ -144,6 +144,9 @@ need("cac_status.ongoing_cac_channel_num" not in cac,
      "CAC flexible-tail index still uses pointer as a struct object")
 need("&wapp->map->cac_list.last_cac_time[" not in src,
      "address of packed CAC timestamp member is still taken")
+
+need("os_time_sub(&now, &last_cac, &delta)" in src,
+     "CAC elapsed-time calculation must use an aligned timestamp copy")
 need("offsetof(struct cac_run_list, last_cac_time)" in src,
      "CAC timestamp accesses are not staged through byte offsets")
 need("setting->policy_vids" not in src,
