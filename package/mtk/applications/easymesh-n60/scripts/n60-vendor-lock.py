@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Canonical vendor lock: downloads, real GNU Make evaluation and patch order."""
 from __future__ import annotations
-import argparse, hashlib, json, subprocess, urllib.request
+import argparse, hashlib, json, subprocess, time, urllib.error, urllib.request
 from pathlib import Path
 LOCK="package/mtk/vendor-sources.lock.json"
 
@@ -17,11 +17,33 @@ def download(repo, dl_dir, ids):
         item=sources[sid]; target=dl_dir/item["archive"]
         if not target.is_file():
             req=urllib.request.Request(item["url"],headers={"User-Agent":"N60-vendor-lock/2"})
-            with urllib.request.urlopen(req,timeout=90) as src,target.open("wb") as dst:
-                while True:
-                    block=src.read(1024*1024)
-                    if not block: break
-                    dst.write(block)
+            partial=target.with_name(target.name+".part")
+            last_error=None
+            for attempt in range(1,5):
+                partial.unlink(missing_ok=True)
+                try:
+                    with urllib.request.urlopen(req,timeout=180) as src,partial.open("wb") as dst:
+                        while True:
+                            block=src.read(1024*1024)
+                            if not block: break
+                            dst.write(block)
+                    partial.replace(target)
+                    last_error=None
+                    break
+                except urllib.error.HTTPError as exc:
+                    partial.unlink(missing_ok=True)
+                    if exc.code not in (408,425,429) and exc.code < 500:
+                        fail(f"{sid} download returned non-retryable HTTP {exc.code}: {exc.reason}")
+                    last_error=exc
+                except (TimeoutError,ConnectionError,urllib.error.URLError) as exc:
+                    partial.unlink(missing_ok=True)
+                    last_error=exc
+                if attempt < 4:
+                    delay=5*(2**(attempt-1))
+                    print(f"LOCK DOWNLOAD RETRY: {sid} attempt={attempt}/4 error={last_error!r}; retrying in {delay}s",flush=True)
+                    time.sleep(delay)
+            if last_error is not None:
+                fail(f"{sid} download failed after 4 attempts: {last_error!r}")
         digest=hashlib.sha256(target.read_bytes()).hexdigest()
         if digest!=item["sha256"]:
             target.unlink(missing_ok=True); fail(f"{sid} SHA256 mismatch: {digest} != {item['sha256']}")
