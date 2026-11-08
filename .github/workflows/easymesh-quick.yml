@@ -1,6 +1,11 @@
 name: N60 Pro EasyMesh Quick Build
 
 on:
+  # One-shot trigger for strict post-rebase Quick preflight and compile.
+  push:
+    branches: ["n60pro-mtk-closed-driver"]
+    paths:
+      - ".github/workflows/easymesh-quick.yml"
   workflow_dispatch:
     inputs:
       device:
