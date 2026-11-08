@@ -20,7 +20,7 @@ Signed-off-by: Rex Lu <rex.lu@mediatek.com>
 
 --- a/drivers/net/ethernet/mediatek/mtk_wed.c
 +++ b/drivers/net/ethernet/mediatek/mtk_wed.c
-@@ -2226,7 +2226,6 @@ mtk_wed_start_hw_rro(struct mtk_wed_devi
+@@ -2239,7 +2239,6 @@ mtk_wed_start_hw_rro(struct mtk_wed_devi
  		return;
  	}
  

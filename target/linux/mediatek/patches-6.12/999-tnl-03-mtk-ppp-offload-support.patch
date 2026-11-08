@@ -14,7 +14,7 @@ v1: Move openwrt-master files to openwrt-25.12 branch after OpenWrt official
 
 --- a/drivers/net/ppp/ppp_generic.c
 +++ b/drivers/net/ppp/ppp_generic.c
-@@ -1911,6 +1911,41 @@ ppp_send_frame(struct ppp *ppp, struct s
+@@ -1925,6 +1925,41 @@ ppp_send_frame(struct ppp *ppp, struct s
  	++ppp->dev->stats.tx_errors;
  }
  

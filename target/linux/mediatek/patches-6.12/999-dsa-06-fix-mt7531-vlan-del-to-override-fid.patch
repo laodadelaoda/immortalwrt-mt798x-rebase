@@ -20,7 +20,7 @@ diff --git a/drivers/net/dsa/mt7530.c b/drivers/net/dsa/mt7530.c
 index f8e6ca3..74bcefb 100644
 --- a/drivers/net/dsa/mt7530.c
 +++ b/drivers/net/dsa/mt7530.c
-@@ -1747,7 +1747,7 @@ mt7530_hw_vlan_del(struct mt7530_priv *priv,
+@@ -1736,7 +1736,7 @@ mt7530_hw_vlan_del(struct mt7530_priv *priv,
  
  	if (new_members) {
  		val = IVL_MAC | VTAG_EN | PORT_MEM(new_members) |

@@ -102,7 +102,7 @@ Subject: [PATCH] netfilter: nft_flow_offload: add ttl learning flow
  #include <net/netfilter/nf_conntrack_ecache.h>
  #include <net/netfilter/nf_conntrack_zones.h>
  #include <net/netfilter/nf_conntrack_timestamp.h>
-@@ -1798,6 +1799,7 @@ init_conntrack(struct net *net, struct n
+@@ -1757,6 +1758,7 @@ init_conntrack(struct net *net, struct n
  
  	nf_ct_acct_ext_add(ct, GFP_ATOMIC);
  	nf_ct_qos_ext_add(ct, GFP_ATOMIC);
@@ -120,7 +120,7 @@ Subject: [PATCH] netfilter: nft_flow_offload: add ttl learning flow
  #include <net/netfilter/nf_nat.h>
  
  #define NF_CT_EXT_PREALLOC	128u /* conntrack events are on by default */
-@@ -38,6 +39,7 @@ static const u8 nf_ct_ext_type_len[NF_CT
+@@ -36,6 +37,7 @@ static const u8 nf_ct_ext_type_len[NF_CT
  	[NF_CT_EXT_SEQADJ] = sizeof(struct nf_conn_seqadj),
  	[NF_CT_EXT_ACCT] = sizeof(struct nf_conn_acct),
  	[NF_CT_EXT_QOS] = sizeof(struct nf_conn_qos),
@@ -128,7 +128,7 @@ Subject: [PATCH] netfilter: nft_flow_offload: add ttl learning flow
  #ifdef CONFIG_NF_CONNTRACK_EVENTS
  	[NF_CT_EXT_ECACHE] = sizeof(struct nf_conntrack_ecache),
  #endif
-@@ -70,6 +72,7 @@ static __always_inline unsigned int tota
+@@ -68,6 +70,7 @@ static __always_inline unsigned int tota
  #endif
  		+ sizeof(struct nf_conn_seqadj)
  		+ sizeof(struct nf_conn_acct)
@@ -138,7 +138,7 @@ Subject: [PATCH] netfilter: nft_flow_offload: add ttl learning flow
  #endif
 --- a/net/netfilter/nf_conntrack_netlink.c
 +++ b/net/netfilter/nf_conntrack_netlink.c
-@@ -43,6 +43,7 @@
+@@ -44,6 +44,7 @@
  #include <net/netfilter/nf_conntrack_tuple.h>
  #include <net/netfilter/nf_conntrack_acct.h>
  #include <net/netfilter/nf_conntrack_qos.h>
@@ -146,7 +146,7 @@ Subject: [PATCH] netfilter: nft_flow_offload: add ttl learning flow
  #include <net/netfilter/nf_conntrack_zones.h>
  #include <net/netfilter/nf_conntrack_timestamp.h>
  #include <net/netfilter/nf_conntrack_labels.h>
-@@ -2307,6 +2308,7 @@ ctnetlink_create_conntrack(struct net *net,
+@@ -2304,6 +2305,7 @@ ctnetlink_create_conntrack(struct net *net,
  
  	nf_ct_acct_ext_add(ct, GFP_ATOMIC);
  	nf_ct_qos_ext_add(ct, GFP_ATOMIC);
@@ -156,7 +156,7 @@ Subject: [PATCH] netfilter: nft_flow_offload: add ttl learning flow
  	nf_ct_labels_ext_add(ct);
 --- a/net/netfilter/nf_flow_table_offload.c
 +++ b/net/netfilter/nf_flow_table_offload.c
-@@ -185,6 +185,8 @@ static int nf_flow_rule_match(struct nf_
+@@ -187,6 +187,8 @@ static int nf_flow_rule_match(struct nf_
  
  	key->ip.tos = tuple->tos;
  	mask->ip.tos = 0xff;
@@ -195,7 +195,7 @@ Subject: [PATCH] netfilter: nft_flow_offload: add ttl learning flow
  static enum flow_offload_xmit_type nft_xmit_type(struct dst_entry *dst)
  {
  	if (dst_xfrm(dst))
-@@ -544,11 +558,13 @@ static void nft_flow_offload_eval(const
+@@ -531,11 +545,13 @@ static void nft_flow_offload_eval(const
  	enum ip_conntrack_dir dir;
  	struct nf_conn *ct;
  	struct nf_conn_qos *qos;
@@ -209,7 +209,7 @@ Subject: [PATCH] netfilter: nft_flow_offload: add ttl learning flow
  	int ret;
  
  	if (nft_flow_offload_skip(pkt->skb, nft_pf(pkt)))
-@@ -558,6 +574,23 @@ static void nft_flow_offload_eval(const
+@@ -545,6 +561,23 @@ static void nft_flow_offload_eval(const
  	if (!ct)
  		goto out;
  
@@ -233,7 +233,7 @@ Subject: [PATCH] netfilter: nft_flow_offload: add ttl learning flow
  	switch (ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple.dst.protonum) {
  	case IPPROTO_TCP:
  		if (ct->proto.tcp.state != TCP_CONNTRACK_ESTABLISHED)
-@@ -600,8 +633,6 @@ static void nft_flow_offload_eval(const
+@@ -587,8 +620,6 @@ static void nft_flow_offload_eval(const
  	if (!nf_ct_is_confirmed(ct))
  		goto out;
  
@@ -242,7 +242,7 @@ Subject: [PATCH] netfilter: nft_flow_offload: add ttl learning flow
  	qos = nf_conn_qos_find(ct);
  	if (qos) {
  		struct net *net = nf_ct_net(ct);
-@@ -645,6 +676,7 @@ static void nft_flow_offload_eval(const
+@@ -632,6 +663,7 @@ static void nft_flow_offload_eval(const
  		flow_offload_ct_tcp(ct);
  
  	nft_flow_offload_dscp_init(flow, ct, dir);

@@ -21,7 +21,7 @@ diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
 index 516c934..80aec3f 100644
 --- a/drivers/net/phy/phylink.c
 +++ b/drivers/net/phy/phylink.c
-@@ -3938,11 +3938,15 @@ void phylink_mii_c22_pcs_decode_state(struct phylink_link_state *state,
+@@ -4313,11 +4313,15 @@ void phylink_mii_c22_pcs_decode_state(struct phylink_link_state *state,
  {
  	state->link = !!(bmsr & BMSR_LSTATUS);
  	state->an_complete = !!(bmsr & BMSR_ANEGCOMPLETE);

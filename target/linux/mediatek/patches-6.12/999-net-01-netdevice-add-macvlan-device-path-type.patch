@@ -9,7 +9,7 @@ v1: Initial MACVLAN device path type support.
 
 --- a/include/linux/netdevice.h
 +++ b/include/linux/netdevice.h
-@@ -836,6 +836,7 @@ enum net_device_path_type {
+@@ -840,6 +840,7 @@ enum net_device_path_type {
  	DEV_PATH_BRIDGE,
  	DEV_PATH_PPPOE,
  	DEV_PATH_DSA,

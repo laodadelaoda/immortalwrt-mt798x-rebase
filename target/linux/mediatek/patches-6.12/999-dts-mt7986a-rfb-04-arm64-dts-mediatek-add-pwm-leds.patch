@@ -32,7 +32,7 @@ v1: Move openwrt-master files to openwrt-25.12 branch after OpenWrt official
  	reg_1p8v: regulator-1p8v {
  		compatible = "regulator-fixed";
  		regulator-name = "fixed-1.8V";
-@@ -356,6 +368,12 @@
+@@ -230,6 +242,12 @@
  	};
  };
  

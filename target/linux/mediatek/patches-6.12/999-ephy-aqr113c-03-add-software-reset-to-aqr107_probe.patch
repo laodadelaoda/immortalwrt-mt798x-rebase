@@ -20,7 +20,7 @@ diff --git a/drivers/net/phy/aquantia/aquantia_main.c b/drivers/net/phy/aquantia
 index 95a15ce..972fa89 100644
 --- a/drivers/net/phy/aquantia/aquantia_main.c
 +++ b/drivers/net/phy/aquantia/aquantia_main.c
-@@ -123,6 +123,10 @@
+@@ -122,6 +122,10 @@
  #define AQUANTIA_VND1_GSYSCFG_5G		3
  #define AQUANTIA_VND1_GSYSCFG_10G		4
  
@@ -31,7 +31,7 @@ index 95a15ce..972fa89 100644
  static int aqr107_get_sset_count(struct phy_device *phydev)
  {
  	return AQR107_SGMII_STAT_SZ;
-@@ -925,6 +929,27 @@ static int aqr113c_config_init(struct phy_device *phydev)
+@@ -895,6 +899,27 @@ static int aqr113c_config_init(struct phy_device *phydev)
  	return aqr113c_fill_interface_modes(phydev);
  }
  
@@ -59,7 +59,7 @@ index 95a15ce..972fa89 100644
  static int aqr107_probe(struct phy_device *phydev)
  {
  	int ret;
-@@ -934,6 +959,8 @@ static int aqr107_probe(struct phy_device *phydev)
+@@ -904,6 +929,8 @@ static int aqr107_probe(struct phy_device *phydev)
  	if (!phydev->priv)
  		return -ENOMEM;
  

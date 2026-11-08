@@ -32,7 +32,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.h
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.h
-@@ -2033,6 +2033,9 @@ mtk_ppe_check_pppq_path(struct mtk_eth *
+@@ -2067,6 +2067,9 @@ mtk_ppe_check_pppq_path(struct mtk_eth *
  		/* Handle cases of GMAC port linked less or equal to 1Gbps */
  		if (odev_speed <= SPEED_1000)
  			return 1;
@@ -68,7 +68,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  		if (state == MTK_FOE_STATE_BIND)
  			mtk_ppe_cache_clear(ppe);
  	}
-@@ -848,7 +860,8 @@ __mtk_foe_entry_commit(struct mtk_ppe *p
+@@ -825,7 +837,8 @@ __mtk_foe_entry_commit(struct mtk_ppe *p
  	struct mtk_eth *eth = ppe->eth;
  	u16 timestamp = mtk_eth_timestamp(eth);
  	struct mtk_foe_entry *hwe;
@@ -78,7 +78,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  
  	hwe = mtk_foe_get_entry(ppe, hash);
  
-@@ -865,6 +878,21 @@ __mtk_foe_entry_commit(struct mtk_ppe *p
+@@ -842,6 +855,21 @@ __mtk_foe_entry_commit(struct mtk_ppe *p
  					 timestamp);
  	}
  
@@ -102,7 +102,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	hwe->ib1 = entry->ib1;
 --- a/drivers/net/ethernet/mediatek/mtk_ppe.h
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe.h
-@@ -380,6 +380,7 @@ mtk_ppe_check_skb(struct mtk_ppe *ppe, s
+@@ -378,6 +378,7 @@ mtk_ppe_check_skb(struct mtk_ppe *ppe, s
  	__mtk_ppe_check_skb(ppe, skb, hash);
  }
  
@@ -112,7 +112,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  			  u8 *dest_mac);
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_debugfs.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_debugfs.c
-@@ -207,5 +207,7 @@ mtk_ppe_internal_debugfs_read_qos
+@@ -208,5 +208,7 @@ mtk_ppe_internal_debugfs_read_qos
  	else if (eth->qos_toggle == 2)
  		seq_puts(m, "Per-port-per-queue mode is enabled!\n");
 +	else if (eth->qos_toggle == 3)
@@ -120,7 +120,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  
  	return 0;
  }
-@@ -239,7 +239,8 @@ mtk_ppe_internal_debugfs_write_qos
+@@ -248,7 +248,8 @@ mtk_ppe_internal_debugfs_write_qos
  	case '3':
  		eth->qos_toggle = 3;
 +		eth->qdma_shaper.threshold = 6000;
@@ -131,7 +131,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  }
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
-@@ -331,7 +331,8 @@ mtk_flow_set_output_device(struct mtk_et
+@@ -341,7 +341,8 @@ mtk_flow_set_output_device(struct mtk_et
  		ct_mark = mtk_flow_get_ct_mark(ct);
  	}
  

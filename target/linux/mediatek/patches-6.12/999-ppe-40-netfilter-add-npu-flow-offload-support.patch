@@ -71,7 +71,7 @@ v2: Add tunnel over IPSec hardware offload
  };
  
  struct flow_offload_tuple_rhash {
-@@ -218,6 +224,10 @@ struct nf_flow_route {
+@@ -231,6 +237,10 @@ struct nf_flow_route {
  			u8			h_dest[ETH_ALEN];
  		} out;
  		enum flow_offload_xmit_type	xmit_type;
@@ -84,7 +84,7 @@ v2: Add tunnel over IPSec hardware offload
  
 --- a/net/netfilter/nf_flow_table_core.c
 +++ b/net/netfilter/nf_flow_table_core.c
-@@ -140,6 +140,9 @@ static int flow_offload_fill_route(struc
+@@ -155,6 +155,9 @@ static int flow_offload_fill_route(struc
  		break;
  	}
  	flow_tuple->xmit_type = route->tuple[dir].xmit_type;
@@ -94,7 +94,7 @@ v2: Add tunnel over IPSec hardware offload
  
  	return 0;
  }
-@@ -203,6 +206,12 @@ static void flow_offload_route_release(s
+@@ -218,6 +221,12 @@ static void flow_offload_route_release(s
  {
  	nft_flow_dst_release(flow, FLOW_OFFLOAD_DIR_ORIGINAL);
  	nft_flow_dst_release(flow, FLOW_OFFLOAD_DIR_REPLY);

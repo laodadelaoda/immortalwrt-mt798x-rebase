@@ -23,7 +23,7 @@ diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
 index 80aec3f..6059fe6 100644
 --- a/drivers/net/phy/phylink.c
 +++ b/drivers/net/phy/phylink.c
-@@ -3943,27 +3943,35 @@ void phylink_mii_c22_pcs_decode_state(struct phylink_link_state *state,
+@@ -4318,27 +4318,35 @@ void phylink_mii_c22_pcs_decode_state(struct phylink_link_state *state,
  	if (!state->link)
  		return;
  

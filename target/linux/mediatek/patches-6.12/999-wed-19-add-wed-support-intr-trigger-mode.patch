@@ -21,7 +21,7 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_wed.c b/drivers/net/ethernet/medi
 index e4fc718..8b9243f 100644
 --- a/drivers/net/ethernet/mediatek/mtk_wed.c
 +++ b/drivers/net/ethernet/mediatek/mtk_wed.c
-@@ -1145,6 +1145,41 @@ mtk_wed_dma_disable(struct mtk_wed_device *dev)
+@@ -1158,6 +1158,41 @@ mtk_wed_dma_disable(struct mtk_wed_device *dev)
  	mtk_wed_set_512_support(dev, false);
  }
  
@@ -63,7 +63,7 @@ index e4fc718..8b9243f 100644
  static void
  mtk_wed_stop(struct mtk_wed_device *dev)
  {
-@@ -1156,6 +1191,7 @@ mtk_wed_stop(struct mtk_wed_device *dev)
+@@ -1169,6 +1204,7 @@ mtk_wed_stop(struct mtk_wed_device *dev)
  	wdma_w32(dev, MTK_WDMA_INT_MASK, 0);
  	wdma_w32(dev, MTK_WDMA_INT_GRP2, 0);
  
@@ -71,7 +71,7 @@ index e4fc718..8b9243f 100644
  	if (!mtk_wed_get_rx_capa(dev))
  		return;
  
-@@ -1273,8 +1309,9 @@ mtk_wed_bus_init(struct mtk_wed_device *dev)
+@@ -1286,8 +1322,9 @@ mtk_wed_bus_init(struct mtk_wed_device *dev)
  				wed_w32(dev, MTK_WED_PCIE_INT_CLR, BIT(24));
  		}
  
@@ -83,7 +83,7 @@ index e4fc718..8b9243f 100644
  
  		/* pcie interrupt control: pola/source selection */
  		wed_set(dev, MTK_WED_PCIE_INT_CTRL,
-@@ -2788,6 +2825,7 @@ mtk_wed_start(struct mtk_wed_device *dev, u32 irq_mask)
+@@ -2801,6 +2838,7 @@ mtk_wed_start(struct mtk_wed_device *dev, u32 irq_mask)
  
  	mtk_wed_set_512_support(dev, dev->wlan.wcid_512);
  	mtk_wed_amsdu_init(dev);
@@ -91,7 +91,7 @@ index e4fc718..8b9243f 100644
  
  	mtk_wed_dma_enable(dev);
  	mtk_pse_wdma_enable(dev->hw->eth, dev->wdma_idx, true);
-@@ -3223,6 +3261,7 @@ void mtk_wed_add_hw(struct device_node *np, struct mtk_eth *eth,
+@@ -3236,6 +3274,7 @@ void mtk_wed_add_hw(struct device_node *np, struct mtk_eth *eth,
  		.msdu_pg_rx_ring_setup = mtk_wed_msdu_pg_rx_ring_setup,
  		.ind_rx_ring_setup = mtk_wed_ind_rx_ring_setup,
  		.rro_3_1_rx_ring_setup = mtk_wed_rro_3_1_rx_ring_setup,

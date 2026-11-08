@@ -31,7 +31,7 @@ v2: Add tunnel over IPSec hardware offload
  };
  
  static const struct rhashtable_params mtk_flow_ht_params = {
-@@ -660,6 +661,31 @@ mtk_flow_offload_replace(struct mtk_eth
+@@ -670,6 +671,31 @@ mtk_flow_offload_replace(struct mtk_eth
  			if (data.ipsec.cdrt_id == 0)
  				return -EOPNOTSUPP;
  			break;
@@ -63,7 +63,7 @@ v2: Add tunnel over IPSec hardware offload
  		default:
  			return -EOPNOTSUPP;
  		}
-@@ -816,6 +842,14 @@ mtk_flow_offload_replace(struct mtk_eth
+@@ -828,6 +854,14 @@ mtk_flow_offload_replace(struct mtk_eth
  		mtk_foe_entry_set_tport(eth, &foe, TPORT_EIP197_QDMA);
  	}
  

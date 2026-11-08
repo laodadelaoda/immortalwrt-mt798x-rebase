@@ -27,7 +27,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-@@ -276,6 +276,24 @@ static const struct mtk_ethtool_stats {
+@@ -282,6 +282,24 @@ static const struct mtk_ethtool_stats {
  	MTK_ETHTOOL_XDP_STAT(tx_xdp_xmit_errors),
  };
  
@@ -52,7 +52,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  static const char * const mtk_clks_source_name[] = {
  	"ethif",
  	"sgmiitop",
-@@ -347,6 +365,11 @@ u32 mtk_m32(struct mtk_eth *eth, u32 mas
+@@ -353,6 +371,11 @@ u32 mtk_m32(struct mtk_eth *eth, u32 mas
  	return reg;
  }
  
@@ -64,7 +64,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  static int mtk_mdio_busy_wait(struct mtk_eth *eth)
  {
  	unsigned long t_start = jiffies;
-@@ -1349,6 +1372,146 @@ static int mtk_set_mac_address(struct ne
+@@ -1355,6 +1378,146 @@ static int mtk_set_mac_address(struct ne
  	return 0;
  }
  
@@ -211,7 +211,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  void mtk_stats_update_mac(struct mtk_mac *mac)
  {
  	struct mtk_hw_stats *hw_stats = mac->hw_stats;
-@@ -1367,88 +1530,14 @@ void mtk_stats_update_mac(struct mtk_mac
+@@ -1373,88 +1536,14 @@ void mtk_stats_update_mac(struct mtk_mac
  		hw_stats->rx_checksum_errors +=
  			mtk_r32(mac->hw, MT7628_SDM_CS_ERR);
  	} else {
@@ -306,7 +306,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  		}
  	}
  
-@@ -5412,6 +5501,7 @@ static int mtk_hw_init(struct mtk_eth *e
+@@ -5465,6 +5554,7 @@ static int mtk_hw_init(struct mtk_eth *e
  					     XMAC_FORCE_LINK_MODE, MTK_XMAC_STS_FRC(i));
  
  			mtk_m32(eth, XMAC_MCR_TRX_DISABLE, XMAC_MCR_TRX_DISABLE, MTK_XMAC_MCR(i));
@@ -314,7 +314,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  		}
  	}
  
-@@ -5909,6 +5999,8 @@ static void mtk_get_drvinfo(struct net_d
+@@ -5965,6 +6055,8 @@ static void mtk_get_drvinfo(struct net_d
  	strscpy(info->driver, mac->hw->dev->driver->name, sizeof(info->driver));
  	strscpy(info->bus_info, dev_name(mac->hw->dev), sizeof(info->bus_info));
  	info->n_stats = ARRAY_SIZE(mtk_ethtool_stats);
@@ -323,7 +323,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  }
  
  static u32 mtk_get_msglevel(struct net_device *dev)
-@@ -5950,6 +6042,12 @@ static void mtk_get_strings(struct net_d
+@@ -6006,6 +6098,12 @@ static void mtk_get_strings(struct net_d
  			memcpy(data, mtk_ethtool_stats[i].str, ETH_GSTRING_LEN);
  			data += ETH_GSTRING_LEN;
  		}
@@ -336,7 +336,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  		if (mtk_page_pool_enabled(mac->hw))
  			page_pool_ethtool_stats_get_strings(data);
  		break;
-@@ -5966,6 +6064,8 @@ static int mtk_get_sset_count(struct net
+@@ -6022,6 +6120,8 @@ static int mtk_get_sset_count(struct net
  		int count = ARRAY_SIZE(mtk_ethtool_stats);
  		struct mtk_mac *mac = netdev_priv(dev);
  
@@ -345,7 +345,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  		if (mtk_page_pool_enabled(mac->hw))
  			count += page_pool_ethtool_stats_get_count();
  		return count;
-@@ -6020,6 +6120,10 @@ static void mtk_get_ethtool_stats(struct
+@@ -6076,6 +6176,10 @@ static void mtk_get_ethtool_stats(struct
  
  		for (i = 0; i < ARRAY_SIZE(mtk_ethtool_stats); i++)
  			*data_dst++ = *(data_src + mtk_ethtool_stats[i].offset);
@@ -358,7 +358,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	} while (u64_stats_fetch_retry(&hwstats->syncp, start));
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.h
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.h
-@@ -646,6 +646,9 @@
+@@ -645,6 +645,9 @@
  #define MAC_MSR_DPX		BIT(1)
  #define MAC_MSR_LINK		BIT(0)
  
@@ -368,7 +368,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  /* TRGMII RXC control register */
  #define TRGMII_RCK_CTRL		0x10300
  #define DQSI0(x)		((x << 0) & GENMASK(6, 0))
-@@ -951,10 +954,22 @@ struct mtk_xdp_stats {
+@@ -955,10 +958,22 @@ struct mtk_xdp_stats {
  struct mtk_hw_stats {
  	u64 tx_bytes;
  	u64 tx_packets;

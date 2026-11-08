@@ -39,7 +39,7 @@ diff --git a/drivers/net/dsa/an8855.c b/drivers/net/dsa/an8855.c
 index c184b84..d8b9bb3 100644
 --- a/drivers/net/dsa/an8855.c
 +++ b/drivers/net/dsa/an8855.c
-@@ -1693,6 +1693,7 @@ static unsigned int an8855_pcs_inband_caps(struct phylink_pcs *pcs,
+@@ -1625,6 +1625,7 @@ static unsigned int an8855_pcs_inband_caps(struct phylink_pcs *pcs,
  }
  
  static void an8855_pcs_get_state(struct phylink_pcs *pcs,
@@ -64,7 +64,7 @@ diff --git a/drivers/net/dsa/mt7530.c b/drivers/net/dsa/mt7530.c
 index 29b55ee..5331379 100644
 --- a/drivers/net/dsa/mt7530.c
 +++ b/drivers/net/dsa/mt7530.c
-@@ -2976,7 +2976,7 @@ static int mt753x_pcs_validate(struct phylink_pcs *pcs,
+@@ -2982,7 +2982,7 @@ static int mt753x_pcs_validate(struct phylink_pcs *pcs,
  	return 0;
  }
  
@@ -198,7 +198,7 @@ diff --git a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c b/drivers/net/ether
 index 4411dc9..416ebd1 100644
 --- a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
 +++ b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
-@@ -6220,6 +6220,7 @@ static struct mvpp2_port *mvpp2_pcs_gmac_to_port(struct phylink_pcs *pcs)
+@@ -6221,6 +6221,7 @@ static struct mvpp2_port *mvpp2_pcs_gmac_to_port(struct phylink_pcs *pcs)
  }
  
  static void mvpp2_xlg_pcs_get_state(struct phylink_pcs *pcs,
@@ -206,7 +206,7 @@ index 4411dc9..416ebd1 100644
  				    struct phylink_link_state *state)
  {
  	struct mvpp2_port *port = mvpp2_pcs_xlg_to_port(pcs);
-@@ -6279,6 +6280,7 @@ static unsigned int mvpp2_gmac_pcs_inband_caps(struct phylink_pcs *pcs,
+@@ -6280,6 +6281,7 @@ static unsigned int mvpp2_gmac_pcs_inband_caps(struct phylink_pcs *pcs,
  }
  
  static void mvpp2_gmac_pcs_get_state(struct phylink_pcs *pcs,
@@ -281,7 +281,7 @@ diff --git a/drivers/net/pcs/pcs-mtk-lynxi.c b/drivers/net/pcs/pcs-mtk-lynxi.c
 index 95c6187..48496b5 100644
 --- a/drivers/net/pcs/pcs-mtk-lynxi.c
 +++ b/drivers/net/pcs/pcs-mtk-lynxi.c
-@@ -164,6 +164,7 @@ static void mtk_pcs_lynxi_update_state(struct mtk_pcs_lynxi *mpcs)
+@@ -129,6 +129,7 @@ static void mtk_pcs_lynxi_update_state(struct mtk_pcs_lynxi *mpcs)
  }
  
  static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
@@ -293,7 +293,7 @@ diff --git a/drivers/net/pcs/pcs-mtk-usxgmii.c b/drivers/net/pcs/pcs-mtk-usxgmii
 index 1e77896..16b9f7a 100644
 --- a/drivers/net/pcs/pcs-mtk-usxgmii.c
 +++ b/drivers/net/pcs/pcs-mtk-usxgmii.c
-@@ -326,6 +326,7 @@ static void mtk_usxgmii_pcs_update_state(struct mtk_usxgmii_pcs *mpcs)
+@@ -279,6 +279,7 @@ static void mtk_usxgmii_pcs_update_state(struct mtk_usxgmii_pcs *mpcs)
  }
  
  static void mtk_usxgmii_pcs_get_state(struct phylink_pcs *pcs,
@@ -318,7 +318,7 @@ diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
 index 1266c64..7999187 100644
 --- a/drivers/net/phy/phylink.c
 +++ b/drivers/net/phy/phylink.c
-@@ -1535,7 +1535,7 @@ static void phylink_mac_pcs_get_state(struct phylink *pl,
+@@ -1667,7 +1667,7 @@ static void phylink_mac_pcs_get_state(struct phylink *pl,
  	}
  
  	if (pcs)
@@ -331,7 +331,7 @@ diff --git a/include/linux/phylink.h b/include/linux/phylink.h
 index 5462cc6..d6c6ccb 100644
 --- a/include/linux/phylink.h
 +++ b/include/linux/phylink.h
-@@ -443,7 +443,7 @@ struct phylink_pcs_ops {
+@@ -463,7 +463,7 @@ struct phylink_pcs_ops {
  			       phy_interface_t interface);
  	int (*pcs_post_config)(struct phylink_pcs *pcs,
  			       phy_interface_t interface);
@@ -340,7 +340,7 @@ index 5462cc6..d6c6ccb 100644
  			      struct phylink_link_state *state);
  	int (*pcs_config)(struct phylink_pcs *pcs, unsigned int neg_mode,
  			  phy_interface_t interface,
-@@ -502,6 +502,7 @@ void pcs_disable(struct phylink_pcs *pcs);
+@@ -523,6 +523,7 @@ void pcs_disable(struct phylink_pcs *pcs);
  /**
   * pcs_get_state() - Read the current inband link state from the hardware
   * @pcs: a pointer to a &struct phylink_pcs.
@@ -348,7 +348,7 @@ index 5462cc6..d6c6ccb 100644
   * @state: a pointer to a &struct phylink_link_state.
   *
   * Read the current inband link state from the MAC PCS, reporting the
-@@ -510,8 +511,11 @@ void pcs_disable(struct phylink_pcs *pcs);
+@@ -531,8 +532,11 @@ void pcs_disable(struct phylink_pcs *pcs);
   * negotiation completion state in @state->an_complete, and link up state
   * in @state->link. If possible, @state->lp_advertising should also be
   * populated.

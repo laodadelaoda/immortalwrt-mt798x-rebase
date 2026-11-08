@@ -22,7 +22,7 @@ index 0c1d086..8c03530 100644
    /* FIXME: Examine ipfilter's timeouts and conntrack transitions more
       closely.  They're more complex. --RR */
  
-@@ -520,6 +523,9 @@ tcp_in_window(struct nf_conn *ct, enum ip_conntrack_dir dir,
+@@ -564,6 +567,9 @@ tcp_in_window(struct nf_conn *ct, enum ip_conntrack_dir dir,
  	s32 receiver_offset;
  	u16 win_raw;
  
@@ -32,7 +32,7 @@ index 0c1d086..8c03530 100644
  	/*
  	 * Get the required data from the packet.
  	 */
-@@ -1286,7 +1292,7 @@ int nf_conntrack_tcp_packet(struct nf_conn *ct,
+@@ -1331,7 +1337,7 @@ int nf_conntrack_tcp_packet(struct nf_conn *ct,
  		 IP_CT_TCP_FLAG_DATA_UNACKNOWLEDGED &&
  		 timeouts[new_state] > timeouts[TCP_CONNTRACK_UNACK])
  		timeout = timeouts[TCP_CONNTRACK_UNACK];

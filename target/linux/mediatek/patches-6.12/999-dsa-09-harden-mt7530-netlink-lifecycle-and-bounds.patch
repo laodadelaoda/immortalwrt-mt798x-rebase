@@ -805,19 +805,19 @@ diff --git a/drivers/net/dsa/mt7530_nl.h b/drivers/net/dsa/mt7530_nl.h
 diff --git a/drivers/net/dsa/mt7530-mdio.c b/drivers/net/dsa/mt7530-mdio.c
 --- a/drivers/net/dsa/mt7530-mdio.c
 +++ b/drivers/net/dsa/mt7530-mdio.c
-@@ -223,1 +223,1 @@ mt7530_probe(struct mdio_device *mdiodev)
+@@ -229,1 +229,1 @@ mt7530_probe(struct mdio_device *mdiodev)
 -	ret = mt7530_nl_init(&priv);
 +	ret = mt7530_nl_init(priv);
-@@ -259,1 +260,2 @@ mt7530_remove(struct mdio_device *mdiodev)
+@@ -260,1 +261,2 @@ mt7530_remove(struct mdio_device *mdiodev)
 +	mt7530_nl_exit(priv);
  	mt7530_remove_common(priv);
 diff --git a/drivers/net/dsa/mt7530-mmio.c b/drivers/net/dsa/mt7530-mmio.c
 --- a/drivers/net/dsa/mt7530-mmio.c
 +++ b/drivers/net/dsa/mt7530-mmio.c
-@@ -65,1 +65,1 @@ mt7988_probe(struct platform_device *pdev)
+@@ -71,1 +71,1 @@ mt7988_probe(struct platform_device *pdev)
 -	ret = mt7530_nl_init(&priv);
 +	ret = mt7530_nl_init(priv);
-@@ -84,4 +84,4 @@ static void mt7988_remove(struct platform_device *pdev)
+@@ -85,4 +85,4 @@ static void mt7988_remove(struct platform_device *pdev)
 -	if (priv)
 -		mt7530_remove_common(priv);
 -

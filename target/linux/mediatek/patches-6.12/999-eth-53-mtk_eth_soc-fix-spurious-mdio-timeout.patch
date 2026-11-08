@@ -27,7 +27,7 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.c b/drivers/net/ethernet/
 index 43744d2..f840446 100644
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-@@ -375,18 +375,19 @@ u64 mtk_r64(struct mtk_eth *eth, unsigned reg)
+@@ -378,18 +378,19 @@ u64 mtk_r64(struct mtk_eth *eth, unsigned reg)
  
  static int mtk_mdio_busy_wait(struct mtk_eth *eth)
  {

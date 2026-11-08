@@ -27,7 +27,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.h
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.h
-@@ -2106,6 +2106,18 @@ static inline void mtk_pse_gdm_enable(st
+@@ -2124,6 +2124,18 @@ static inline void mtk_pse_gdm_enable(st
  	mtk_w32(eth, val, MTK_FE_GLO_CFG(PSE_GDM_PORT(id)));
  }
  

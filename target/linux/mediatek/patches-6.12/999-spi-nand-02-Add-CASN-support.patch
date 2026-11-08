@@ -130,7 +130,7 @@ Signed-off-by: SkyLake.Huang <skylake.huang@mediatek.com>
  static int spinand_check_ecc_status(struct spinand_device *spinand, u8 status)
  {
  	struct nand_device *nand = spinand_to_nand(spinand);
-@@ -1209,6 +1273,242 @@ static int spinand_cal_read(void *priv,
+@@ -1264,6 +1328,242 @@ static int spinand_cal_read(void *priv,
  	return 0;
  }
  
@@ -373,7 +373,7 @@ Signed-off-by: SkyLake.Huang <skylake.huang@mediatek.com>
  static int spinand_id_detect(struct spinand_device *spinand)
  {
  	u8 *id = spinand->id.data;
-@@ -1240,7 +1540,7 @@ static int spinand_id_detect(struct spin
+@@ -1295,7 +1595,7 @@ static int spinand_id_detect(struct spin
  
  static int spinand_manufacturer_init(struct spinand_device *spinand)
  {
@@ -382,7 +382,7 @@ Signed-off-by: SkyLake.Huang <skylake.huang@mediatek.com>
  		return spinand->manufacturer->ops->init(spinand);
  
  	return 0;
-@@ -1249,7 +1549,7 @@ static int spinand_manufacturer_init(str
+@@ -1304,7 +1604,7 @@ static int spinand_manufacturer_init(str
  static void spinand_manufacturer_cleanup(struct spinand_device *spinand)
  {
  	/* Release manufacturer private data */
@@ -391,7 +391,7 @@ Signed-off-by: SkyLake.Huang <skylake.huang@mediatek.com>
  		return spinand->manufacturer->ops->cleanup(spinand);
  }
  
-@@ -1353,37 +1653,456 @@ int spinand_match_and_init(struct spinan
+@@ -1410,37 +1710,456 @@ int spinand_match_and_init(struct spinan
  	return -ENOTSUPP;
  }
  
@@ -920,7 +920,7 @@ Signed-off-by: SkyLake.Huang <skylake.huang@mediatek.com>
  #define SPINAND_PAGE_READ_FROM_CACHE_OP(fast, addr, ndummy, buf, len)	\
  	SPI_MEM_OP(SPI_MEM_OP_CMD(fast ? 0x0b : 0x03, 1),		\
  		   SPI_MEM_OP_ADDR(2, addr, 1),				\
-@@ -313,10 +366,15 @@ struct spinand_ecc_info {
+@@ -316,10 +369,15 @@ struct spinand_ecc_info {
  	const struct mtd_ooblayout_ops *ooblayout;
  };
  
@@ -940,7 +940,7 @@ Signed-off-by: SkyLake.Huang <skylake.huang@mediatek.com>
  
  /**
   * struct spinand_ondie_ecc_conf - private SPI-NAND on-die ECC engine structure
-@@ -410,6 +468,28 @@ struct spinand_dirmap {
+@@ -413,6 +471,28 @@ struct spinand_dirmap {
  };
  
  /**
@@ -969,7 +969,7 @@ Signed-off-by: SkyLake.Huang <skylake.huang@mediatek.com>
   * struct spinand_device - SPI NAND device instance
   * @base: NAND device instance
   * @spimem: pointer to the SPI mem object
-@@ -467,6 +547,23 @@ struct spinand_device {
+@@ -470,6 +550,23 @@ struct spinand_device {
  	u8 *oobbuf;
  	u8 *scratchbuf;
  	const struct spinand_manufacturer *manufacturer;
@@ -993,7 +993,7 @@ Signed-off-by: SkyLake.Huang <skylake.huang@mediatek.com>
  	void *priv;
  
  	bool cont_read_possible;
-@@ -542,3 +639,4 @@ int spinand_write_reg_op(struct spinand_
+@@ -545,3 +642,4 @@ int spinand_write_reg_op(struct spinand_
  int spinand_select_target(struct spinand_device *spinand, unsigned int target);
  
  #endif /* __LINUX_MTD_SPINAND_H */

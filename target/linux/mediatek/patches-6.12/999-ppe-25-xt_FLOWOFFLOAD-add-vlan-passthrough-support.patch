@@ -23,7 +23,7 @@ Signed-off-by: "chak-kei.lam" <chak-kei.lam@mediatek.com>
 
 --- a/net/netfilter/xt_FLOWOFFLOAD.c
 +++ b/net/netfilter/xt_FLOWOFFLOAD.c
-@@ -335,6 +335,29 @@ static bool nf_is_valid_ether_device(con
+@@ -341,6 +341,29 @@ static bool nf_is_valid_ether_device(con
  	return true;
  }
  
@@ -53,7 +53,7 @@ Signed-off-by: "chak-kei.lam" <chak-kei.lam@mediatek.com>
  static void nf_dev_path_info(const struct net_device_path_stack *stack,
  			     struct nf_forward_info *info,
  			     unsigned char *ha)
-@@ -502,8 +525,12 @@ static int nf_dev_forward_path(struct sk
+@@ -508,8 +531,12 @@ static int nf_dev_forward_path(struct sk
  		xt_flowoffload_br_vlan_dev_fill_forward_path(skb, &ctx);
  	}
  

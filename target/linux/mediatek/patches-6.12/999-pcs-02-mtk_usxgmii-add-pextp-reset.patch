@@ -46,7 +46,7 @@ index 4ce212e..b7729fd 100644
  	mtk_usxgmii_reset(mpcs);
  
  	/* Configure the interface polarity */
-@@ -298,6 +301,7 @@ static void mtk_usxgmii_pcs_get_state(struct phylink_pcs *pcs,
+@@ -299,6 +302,7 @@ static void mtk_usxgmii_pcs_get_state(struct phylink_pcs *pcs,
  	if (!state->link) {
  		mtk_usxgmii_pcs_config(pcs, mpcs->neg_mode,
  				       state->interface, NULL, false);
@@ -54,7 +54,7 @@ index 4ce212e..b7729fd 100644
  		return;
  	}
  
-@@ -318,10 +322,22 @@ static void mtk_usxgmii_pcs_link_up(struct phylink_pcs *pcs, unsigned int neg_mo
+@@ -319,10 +323,22 @@ static void mtk_usxgmii_pcs_link_up(struct phylink_pcs *pcs, unsigned int neg_mo
  				    phy_interface_t interface,
  				    int speed, int duplex)
  {
@@ -77,7 +77,7 @@ index 4ce212e..b7729fd 100644
  }
  
  static void mtk_usxgmii_pcs_disable(struct phylink_pcs *pcs)
-@@ -330,6 +346,8 @@ static void mtk_usxgmii_pcs_disable(struct phylink_pcs *pcs)
+@@ -331,6 +347,8 @@ static void mtk_usxgmii_pcs_disable(struct phylink_pcs *pcs)
  
  	mpcs->interface = PHY_INTERFACE_MODE_NA;
  	mpcs->neg_mode = -1;
@@ -86,7 +86,7 @@ index 4ce212e..b7729fd 100644
  }
  
  static const struct phylink_pcs_ops mtk_usxgmii_pcs_ops = {
-@@ -337,6 +355,7 @@ static const struct phylink_pcs_ops mtk_usxgmii_pcs_ops = {
+@@ -338,6 +356,7 @@ static const struct phylink_pcs_ops mtk_usxgmii_pcs_ops = {
  	.pcs_get_state = mtk_usxgmii_pcs_get_state,
  	.pcs_an_restart = mtk_usxgmii_pcs_restart_an,
  	.pcs_link_up = mtk_usxgmii_pcs_link_up,
@@ -94,7 +94,7 @@ index 4ce212e..b7729fd 100644
  	.pcs_disable = mtk_usxgmii_pcs_disable,
  };
  
-@@ -372,6 +391,10 @@ static int mtk_usxgmii_probe(struct platform_device *pdev)
+@@ -373,6 +392,10 @@ static int mtk_usxgmii_probe(struct platform_device *pdev)
  	if (IS_ERR(mpcs->clk))
  		return PTR_ERR(mpcs->clk);
  

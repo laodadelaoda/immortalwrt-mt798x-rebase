@@ -41,7 +41,7 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.c b/drivers/net/ethernet/
 index 74a6fe5..42e28be 100644
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-@@ -5699,13 +5699,45 @@ static void mtk_uninit(struct net_device *dev)
+@@ -5746,13 +5746,45 @@ static void mtk_uninit(struct net_device *dev)
  	mtk_rx_irq_disable(eth, ~0);
  }
  
@@ -87,7 +87,7 @@ index 74a6fe5..42e28be 100644
  
  	max_mtu = mtk_max_gmac_mtu(eth);
  	for (i = 0; i < ARRAY_SIZE(eth->ppe); i++)
-@@ -5725,6 +5757,13 @@ static int mtk_change_mtu(struct net_device *dev, int new_mtu)
+@@ -5772,6 +5804,13 @@ static int mtk_change_mtu(struct net_device *dev, int new_mtu)
  		eth->rx_buf_len = DIV_ROUND_UP(length, MTK_MAX_RX_LENGTH_UNIT) *
  				  MTK_MAX_RX_LENGTH_UNIT;
  
@@ -101,7 +101,7 @@ index 74a6fe5..42e28be 100644
  	return 0;
  }
  
-@@ -6013,6 +6052,7 @@ static int mtk_cleanup(struct mtk_eth *eth)
+@@ -6057,6 +6096,7 @@ static int mtk_cleanup(struct mtk_eth *eth)
  	mtk_unreg_dev(eth);
  	mtk_free_dev(eth);
  	cancel_work_sync(&eth->pending_work);
@@ -109,7 +109,7 @@ index 74a6fe5..42e28be 100644
  	cancel_delayed_work_sync(&eth->reset.monitor_work);
  
  	return 0;
-@@ -7210,6 +7250,7 @@ static int mtk_probe(struct platform_device *pdev)
+@@ -7213,6 +7253,7 @@ static int mtk_probe(struct platform_device *pdev)
  
  	eth->msg_enable = netif_msg_init(mtk_msg_level, MTK_DEFAULT_MSG_ENABLE);
  	INIT_WORK(&eth->pending_work, mtk_pending_work);
@@ -121,7 +121,7 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.h b/drivers/net/ethernet/
 index 78e572e..a40183b 100644
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.h
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.h
-@@ -1747,6 +1747,7 @@ struct mtk_eth {
+@@ -1738,6 +1738,7 @@ struct mtk_eth {
  	struct mii_bus			*mii_bus;
  	unsigned int			mdc_divider;
  	struct work_struct		pending_work;

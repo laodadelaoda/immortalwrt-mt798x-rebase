@@ -42,7 +42,7 @@ index d36cd52..9ca4447 100644
  
  #define MTK_NETSYS_V3_AMA_RGC3		0x128
  
-@@ -202,6 +203,7 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
+@@ -182,6 +183,7 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
  	struct mtk_pcs_lynxi *mpcs = pcs_to_mtk_pcs_lynxi(pcs);
  	bool mode_changed = false, changed;
  	unsigned int rgc3, sgm_mode, bmcr = 0, trxbuf_thr = 0x3112;
@@ -50,7 +50,7 @@ index d36cd52..9ca4447 100644
  	int advertise, link_timer;
  
  	advertise = phylink_mii_c22_pcs_encode_advertisement(interface,
-@@ -251,10 +253,14 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
+@@ -231,10 +233,14 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
  		regmap_set_bits(mpcs->regmap, SGMSYS_RESERVED_0,
  				SGMII_SW_RESET);
  
@@ -69,7 +69,7 @@ index d36cd52..9ca4447 100644
  
  		if (interface == PHY_INTERFACE_MODE_2500BASEX)
  			rgc3 = SGMII_PHY_SPEED_3_125G;
-@@ -469,7 +475,11 @@ static int mtk_pcs_lynxi_probe(struct platform_device *pdev)
+@@ -449,7 +455,11 @@ static int mtk_pcs_lynxi_probe(struct platform_device *pdev)
  		return PTR_ERR(regmap);
  
  	if (of_property_read_bool(np->parent, "mediatek,pnswap"))

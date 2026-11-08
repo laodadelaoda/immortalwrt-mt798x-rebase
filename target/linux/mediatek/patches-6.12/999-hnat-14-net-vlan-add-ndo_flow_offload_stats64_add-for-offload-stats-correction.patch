@@ -23,7 +23,7 @@ diff --git a/net/8021q/vlan_dev.c b/net/8021q/vlan_dev.c
 index aa5ba71..e6c27e2 100644
 --- a/net/8021q/vlan_dev.c
 +++ b/net/8021q/vlan_dev.c
-@@ -704,6 +704,26 @@ static void vlan_dev_get_stats64(struct net_device *dev,
+@@ -685,6 +685,26 @@ static void vlan_dev_get_stats64(struct net_device *dev,
  	stats->tx_dropped = tx_dropped;
  }
  
@@ -50,7 +50,7 @@ index aa5ba71..e6c27e2 100644
  #ifdef CONFIG_NET_POLL_CONTROLLER
  static void vlan_dev_poll_controller(struct net_device *dev)
  {
-@@ -1073,6 +1093,7 @@ static const struct net_device_ops vlan_netdev_ops = {
+@@ -1054,6 +1074,7 @@ static const struct net_device_ops vlan_netdev_ops = {
  #if IS_ENABLED(CONFIG_NF_FLOW_TABLE)
  	.ndo_flow_offload_check = vlan_dev_flow_offload_check,
  #endif

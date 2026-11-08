@@ -19,7 +19,7 @@ Subject: [PATCH 04/15] Fix reinsert wifi module cause memory leak issue
 
 --- a/drivers/net/ethernet/mediatek/mtk_wed.c
 +++ b/drivers/net/ethernet/mediatek/mtk_wed.c
-@@ -936,6 +936,16 @@ mtk_wed_free_ring(struct mtk_wed_device
+@@ -949,6 +949,16 @@ mtk_wed_free_ring(struct mtk_wed_device
  static void
  mtk_wed_free_rx_rings(struct mtk_wed_device *dev)
  {
@@ -36,7 +36,7 @@ Subject: [PATCH 04/15] Fix reinsert wifi module cause memory leak issue
  	mtk_wed_free_rx_buffer(dev);
  	mtk_wed_free_ring(dev, &dev->rro.ring);
  }
-@@ -946,9 +956,12 @@ mtk_wed_free_tx_rings(struct mtk_wed_dev
+@@ -959,9 +969,12 @@ mtk_wed_free_tx_rings(struct mtk_wed_dev
  	int i;
  
  	for (i = 0; i < ARRAY_SIZE(dev->tx_ring); i++)
@@ -51,7 +51,7 @@ Subject: [PATCH 04/15] Fix reinsert wifi module cause memory leak issue
  }
  
  static void
-@@ -1917,6 +1930,8 @@ mtk_wed_wdma_rx_ring_setup(struct mtk_we
+@@ -1930,6 +1943,8 @@ mtk_wed_wdma_rx_ring_setup(struct mtk_we
  					 dev->hw->soc->wdma_desc_size, true))
  		return -ENOMEM;
  
@@ -60,7 +60,7 @@ Subject: [PATCH 04/15] Fix reinsert wifi module cause memory leak issue
  	wdma_w32(dev, MTK_WDMA_RING_RX(idx) + MTK_WED_RING_OFS_BASE,
  		 wdma->desc_phys);
  	wdma_w32(dev, MTK_WDMA_RING_RX(idx) + MTK_WED_RING_OFS_COUNT,
-@@ -1963,6 +1978,8 @@ mtk_wed_wdma_tx_ring_setup(struct mtk_we
+@@ -1976,6 +1991,8 @@ mtk_wed_wdma_tx_ring_setup(struct mtk_we
  		}
  	}
  
@@ -69,7 +69,7 @@ Subject: [PATCH 04/15] Fix reinsert wifi module cause memory leak issue
  	wdma_w32(dev, MTK_WDMA_RING_TX(idx) + MTK_WED_RING_OFS_BASE,
  		 wdma->desc_phys);
  	wdma_w32(dev, MTK_WDMA_RING_TX(idx) + MTK_WED_RING_OFS_COUNT,
-@@ -2529,6 +2546,7 @@ mtk_wed_tx_ring_setup(struct mtk_wed_dev
+@@ -2542,6 +2559,7 @@ mtk_wed_tx_ring_setup(struct mtk_wed_dev
  
  	ring->reg_base = MTK_WED_RING_TX(idx);
  	ring->wpdma = regs;

@@ -32,7 +32,7 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.c b/drivers/net/ethernet/
 index c56af53..7954d95 100644
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-@@ -5311,7 +5311,11 @@ static int mtk_sgmii_init(struct mtk_eth *eth)
+@@ -5449,7 +5449,11 @@ static int mtk_sgmii_init(struct mtk_eth *eth)
  		regmap = syscon_node_to_regmap(np);
  		flags = 0;
  		if (of_property_read_bool(np, "mediatek,pnswap"))

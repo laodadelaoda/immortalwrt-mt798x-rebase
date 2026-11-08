@@ -75,7 +75,7 @@ diff --git a/drivers/net/phy/Makefile b/drivers/net/phy/Makefile
 index 4521ff7..80af0e8 100644
 --- a/drivers/net/phy/Makefile
 +++ b/drivers/net/phy/Makefile
-@@ -122,3 +122,4 @@ obj-$(CONFIG_STE10XP)		+= ste10Xp.o
+@@ -124,3 +124,4 @@ obj-$(CONFIG_STE10XP)		+= ste10Xp.o
  obj-$(CONFIG_TERANETICS_PHY)	+= teranetics.o
  obj-$(CONFIG_VITESSE_PHY)	+= vitesse.o
  obj-$(CONFIG_XILINX_GMII2RGMII) += xilinx_gmii2rgmii.o

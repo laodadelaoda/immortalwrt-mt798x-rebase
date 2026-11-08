@@ -23,7 +23,7 @@ index e1a5010..a7c7527 100644
  #define MACVLAN_HASH_BITS	8
  #define MACVLAN_HASH_SIZE	(1<<MACVLAN_HASH_BITS)
  #define MACVLAN_DEFAULT_BC_QUEUE_LEN	1000
-@@ -1162,6 +1167,20 @@ static int macvlan_dev_get_iflink(const struct net_device *dev)
+@@ -1171,6 +1176,20 @@ static int macvlan_dev_get_iflink(const struct net_device *dev)
  	return READ_ONCE(vlan->lowerdev->ifindex);
  }
  

@@ -29,7 +29,7 @@ index 62f99e3..a0aad82 100644
  #include <dt-bindings/thermal/mediatek,lvts-thermal.h>
  
  / {
-@@ -57,6 +58,7 @@ cpu0: cpu@0 {
+@@ -59,6 +60,7 @@ cpu0: cpu@0 {
  			nvmem-cells = <&cpufreq_calibration>;
  			nvmem-cell-names = "calibration-data";
  			mediatek,cci = <&cci>;
@@ -37,7 +37,7 @@ index 62f99e3..a0aad82 100644
  		};
  
  		cpu1: cpu@1 {
-@@ -1308,6 +1310,19 @@ cpu_trip_crit: crit {
+@@ -1316,6 +1318,19 @@ cpu_trip_crit: crit {
  					hysteresis = <2000>;
  					type = "critical";
  				};
@@ -57,7 +57,7 @@ index 62f99e3..a0aad82 100644
  			};
  		};
  
-@@ -1321,6 +1336,19 @@ cpu_1_trip_crit: crit {
+@@ -1329,6 +1344,19 @@ cpu_1_trip_crit: crit {
  					hysteresis = <2000>;
  					type = "critical";
  				};

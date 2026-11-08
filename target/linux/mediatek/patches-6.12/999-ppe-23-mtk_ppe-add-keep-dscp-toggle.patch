@@ -36,7 +36,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.h
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.h
-@@ -1775,6 +1775,7 @@ struct mtk_eth {
+@@ -1801,6 +1801,7 @@ struct mtk_eth {
  
  	struct metadata_dst		*dsa_meta[MTK_MAX_DSA_PORTS];
  
@@ -77,7 +77,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	return 0;
  }
  
-@@ -1246,6 +1263,8 @@ void mtk_ppe_start(struct mtk_ppe *ppe)
+@@ -1245,6 +1262,8 @@ void mtk_ppe_start(struct mtk_ppe *ppe)
  			 MTK_PPE_ENTRIES_SHIFT);
  	if (mtk_is_netsys_v2_or_greater(ppe->eth))
  		val |= MTK_PPE_TB_CFG_INFO_SEL;
@@ -163,7 +163,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  mtk_ppe_internal_debugfs_read_qos(struct seq_file *m, void *private)
  {
  	struct mtk_eth *eth = m->private;
-@@ -316,6 +366,8 @@ int mtk_ppe_internal_debugfs_init(struct
+@@ -321,6 +371,8 @@ int mtk_ppe_internal_debugfs_init(struct
  			    &mtk_ppe_internal_debugfs_foe_all_fops);
  	debugfs_create_file("bind", S_IRUGO, root, eth,
  			    &mtk_ppe_internal_debugfs_foe_bind_fops);

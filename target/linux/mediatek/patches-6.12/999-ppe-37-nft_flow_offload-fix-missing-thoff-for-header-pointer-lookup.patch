@@ -27,7 +27,7 @@ incorrectly offloaded or rejected.
 
 --- a/net/netfilter/nft_flow_offload.c
 +++ b/net/netfilter/nft_flow_offload.c
-@@ -547,6 +547,7 @@ static void nft_flow_offload_eval(const
+@@ -534,6 +534,7 @@ static void nft_flow_offload_eval(const
  	struct ipv6hdr *ip6h;
  	struct iphdr *iph;
  	u32 offset = 0;
@@ -35,7 +35,7 @@ incorrectly offloaded or rejected.
  	u8 tos = 0;
  	int ret;
  
-@@ -562,7 +563,13 @@ static void nft_flow_offload_eval(const
+@@ -549,7 +550,13 @@ static void nft_flow_offload_eval(const
  		if (ct->proto.tcp.state != TCP_CONNTRACK_ESTABLISHED)
  			goto out;
  

@@ -12,7 +12,7 @@ v1: Backport xfrm fixes from kernel-7.1
 ---
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
-@@ -3780,6 +3780,9 @@ sw_checksum:
+@@ -3766,6 +3766,9 @@ sw_checksum:
  }
  EXPORT_SYMBOL(skb_csum_hwoffload_help);
  
@@ -22,7 +22,7 @@ v1: Backport xfrm fixes from kernel-7.1
  static struct sk_buff *validate_xmit_skb(struct sk_buff *skb, struct net_device *dev, bool *again)
  {
  	netdev_features_t features;
-@@ -3853,7 +3856,7 @@ struct sk_buff *validate_xmit_skb_list(s
+@@ -3836,7 +3839,7 @@ struct sk_buff *validate_xmit_skb_list(s
  		skb->prev = skb;
  
  		skb = validate_xmit_skb(skb, dev, again);
@@ -31,7 +31,7 @@ v1: Backport xfrm fixes from kernel-7.1
  			continue;
  
  		if (!head)
-@@ -4559,8 +4562,11 @@ int __dev_queue_xmit(struct sk_buff *skb
+@@ -4542,8 +4545,11 @@ int __dev_queue_xmit(struct sk_buff *skb
  				goto recursion_alert;
  
  			skb = validate_xmit_skb(skb, dev, &again);

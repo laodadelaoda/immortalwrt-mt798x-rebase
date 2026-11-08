@@ -23,7 +23,7 @@ Signed-off-by: chak-kei.lam <chak-kei.lam@mediatek.com>
 
 --- a/drivers/net/macvlan.c
 +++ b/drivers/net/macvlan.c
-@@ -895,6 +895,16 @@ static int macvlan_hwtstamp_set(struct n
+@@ -901,6 +901,16 @@ static int macvlan_hwtstamp_set(struct n
  	return generic_hwtstamp_set_lower(real_dev, cfg, extack);
  }
  
@@ -40,7 +40,7 @@ Signed-off-by: chak-kei.lam <chak-kei.lam@mediatek.com>
  /*
   * macvlan network devices have devices nesting below it and are a special
   * "super class" of normal network devices; split their locks off into a
-@@ -1202,6 +1212,7 @@ static const struct net_device_ops macvl
+@@ -1227,6 +1237,7 @@ static const struct net_device_ops macvl
  	.ndo_features_check	= passthru_features_check,
  	.ndo_hwtstamp_get	= macvlan_hwtstamp_get,
  	.ndo_hwtstamp_set	= macvlan_hwtstamp_set,
@@ -50,7 +50,7 @@ Signed-off-by: chak-kei.lam <chak-kei.lam@mediatek.com>
  static void macvlan_dev_free(struct net_device *dev)
 --- a/net/netfilter/xt_FLOWOFFLOAD.c
 +++ b/net/netfilter/xt_FLOWOFFLOAD.c
-@@ -352,10 +352,12 @@ static void nf_dev_path_info(const struc
+@@ -358,10 +358,12 @@ static void nf_dev_path_info(const struc
  		case DEV_PATH_DSA:
  		case DEV_PATH_VLAN:
  		case DEV_PATH_PPPOE:

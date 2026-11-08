@@ -124,7 +124,7 @@ index e6666d2..c184b84 100644
  static void
  an8855_port_stp_state_set(struct dsa_switch *ds, int port, u8 state)
  {
-@@ -2152,6 +2220,41 @@ static void an8855_pcs_an_restart(struct phylink_pcs *pcs)
+@@ -2153,6 +2221,41 @@ static void an8855_pcs_an_restart(struct phylink_pcs *pcs)
  	return;
  }
  
@@ -166,7 +166,7 @@ index e6666d2..c184b84 100644
  static const struct phylink_pcs_ops an8855_pcs_ops = {
  	.pcs_inband_caps = an8855_pcs_inband_caps,
  	.pcs_get_state = an8855_pcs_get_state,
-@@ -2275,7 +2378,22 @@ static int an8855_switch_probe(struct platform_device *pdev)
+@@ -2276,7 +2379,22 @@ static int an8855_switch_probe(struct platform_device *pdev)
  
  	dev_set_drvdata(priv->dev, priv);
  
@@ -190,7 +190,7 @@ index e6666d2..c184b84 100644
  }
  
  static void an8855_switch_remove(struct platform_device *pdev)
-@@ -2284,6 +2402,8 @@ static void an8855_switch_remove(struct platform_device *pdev)
+@@ -2285,6 +2403,8 @@ static void an8855_switch_remove(struct platform_device *pdev)
  
  	if (priv)
  		dsa_unregister_switch(priv->ds);

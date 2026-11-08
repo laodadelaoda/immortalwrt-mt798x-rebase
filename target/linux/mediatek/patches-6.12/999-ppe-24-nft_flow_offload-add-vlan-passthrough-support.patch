@@ -54,7 +54,7 @@ Signed-off-by: "chak-kei.lam" <chak-kei.lam@mediatek.com>
  static void nft_dev_path_info(const struct net_device_path_stack *stack,
  			      struct nft_forward_info *info,
  			      unsigned char *ha, struct nf_flowtable *flowtable)
-@@ -308,8 +332,12 @@ static int nft_dev_forward_path(const st
+@@ -303,8 +327,12 @@ static int nft_dev_forward_path(const st
  		nft_br_vlan_dev_fill_forward_path(pkt, &ctx);
  	}
  

@@ -47,7 +47,7 @@ v1: Add xfrm hw offload
  int mtk_foe_entry_set_wdma(struct mtk_eth *eth, struct mtk_foe_entry *entry,
  			   int wdma_idx, int txq, int bss, int wcid,
  			   bool amsdu_en)
-@@ -932,6 +955,76 @@ void mtk_foe_entry_clear(struct mtk_ppe
+@@ -931,6 +954,76 @@ void mtk_foe_entry_clear(struct mtk_ppe
  	spin_unlock_bh(&ppe_lock);
  }
  
@@ -192,7 +192,7 @@ v1: Add xfrm hw offload
  static int
  mtk_flow_set_ipv4_addr(struct mtk_eth *eth, struct mtk_foe_entry *foe,
  		       struct mtk_flow_data *data, bool egress)
-@@ -524,6 +530,14 @@ mtk_flow_offload_replace(struct mtk_eth
+@@ -534,6 +540,14 @@ mtk_flow_offload_replace(struct mtk_eth
  			data.pppoe.sid = act->pppoe.sid;
  			data.pppoe.num++;
  			break;
@@ -207,7 +207,7 @@ v1: Add xfrm hw offload
  		default:
  			return -EOPNOTSUPP;
  		}
-@@ -622,6 +636,11 @@ mtk_flow_offload_replace(struct mtk_eth
+@@ -632,6 +646,11 @@ mtk_flow_offload_replace(struct mtk_eth
  	if (data.pppoe.num == 1)
  		mtk_foe_entry_set_pppoe(eth, &foe, data.pppoe.sid);
  

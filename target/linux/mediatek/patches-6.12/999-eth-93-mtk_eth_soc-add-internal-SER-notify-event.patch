@@ -215,7 +215,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  #include "mtk_wed.h"
  
  #if defined(CONFIG_NET_MEDIATEK_HNAT) || defined(CONFIG_NET_MEDIATEK_HNAT_MODULE)
-@@ -5305,7 +5306,8 @@ static void mtk_hw_warm_reset(struct mtk
+@@ -5344,7 +5345,8 @@ static void mtk_hw_warm_reset(struct mtk
  		if (MTK_HAS_CAPS(eth->soc->caps, MTK_RSTCTRL_PPE2))
  			rst_mask |= RSTCTRL_PPE2;
  
@@ -225,7 +225,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	} else if (mtk_is_netsys_v2_or_greater(eth)) {
  		rst_mask = RSTCTRL_PPE0_V2;
  		if (MTK_HAS_CAPS(eth->soc->caps, MTK_RSTCTRL_PPE1))
-@@ -5409,6 +5411,7 @@ static bool mtk_hw_check_dma_hang(struct
+@@ -5448,6 +5450,7 @@ static bool mtk_hw_check_dma_hang(struct
  		    wtx_busy && cdm_busy && oq_free) {
  			if (++eth->reset.wdma_hang_count[i] > 2) {
  				dev_warn(eth->dev, "detect WDMA%d Tx hang!\n", i);
@@ -233,7 +233,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  				eth->reset.wdma_hang_count[i] = 0;
  				ret = true;
  			}
-@@ -5445,6 +5448,7 @@ static bool mtk_hw_check_dma_hang(struct
+@@ -5484,6 +5487,7 @@ static bool mtk_hw_check_dma_hang(struct
  		    (rxfc_cnt == eth->reset.gdm_rxfc_cnt[i])) {
  			if (++eth->reset.mac_tx_hang_count[i] > 2) {
  				dev_warn(eth->dev, "detect GMAC%d Tx hang!\n", i + 1);
@@ -241,7 +241,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  				eth->reset.mac_tx_hang_count[i] = 0;
  				ret = true;
  			}
-@@ -5457,6 +5461,7 @@ static bool mtk_hw_check_dma_hang(struct
+@@ -5496,6 +5500,7 @@ static bool mtk_hw_check_dma_hang(struct
  		if (gmac_rx && (rxgp_cnt == eth->reset.gdm_rxgp_cnt[i])) {
  			if (++eth->reset.mac_rx_hang_count[i] > 2) {
  				dev_warn(eth->dev, "detect GMAC%d Rx hang!\n", i + 1);
@@ -249,7 +249,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  				eth->reset.mac_rx_hang_count[i] = 0;
  				ret = true;
  			}
-@@ -5474,6 +5479,7 @@ skip_gmac:
+@@ -5513,6 +5518,7 @@ skip_gmac:
  		    ((gdm_txfsm == eth->reset.gdm_txfsm[i]) && (gdm_txfsm == 0x1033))) {
  			if (++eth->reset.gdm_tx_hang_count[i] > 2) {
  				dev_warn(eth->dev, "detect GDM%d Tx hang!\n", i + 1);
@@ -257,7 +257,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  				eth->reset.gdm_tx_hang_count[i] = 0;
  				ret = true;
  			}
-@@ -5497,6 +5503,7 @@ skip_gmac:
+@@ -5536,6 +5542,7 @@ skip_gmac:
  		     (gdm_rxfsm == 0x23 || gdm_rxfsm == 0x24))) {
  			if (++eth->reset.gdm_rx_hang_count[i] > 2) {
  				dev_warn(eth->dev, "detect GDM%d Rx hang!\n", i + 1);
@@ -265,7 +265,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  				eth->reset.gdm_rx_hang_count[i] = 0;
  				ret = true;
  			}
-@@ -5531,6 +5538,7 @@ skip_gmac:
+@@ -5570,6 +5577,7 @@ skip_gmac:
  	    ((cdma_rxfsm != 0) && (cdma_rxfsm == eth->reset.cdma_rxfsm))) {
  		if (++eth->reset.adma_hang_count > 2) {
  			dev_warn(eth->dev, "detect ADMA Rx hang!\n");
@@ -273,7 +273,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  			eth->reset.adma_hang_count = 0;
  			ret = true;
  		}
-@@ -5548,6 +5556,7 @@ skip_gmac:
+@@ -5587,6 +5595,7 @@ skip_gmac:
  	if (!gdm_rxfc && qfsm_hang && qfwd_hang) {
  		if (++eth->reset.qdma_hang_count > 2) {
  			dev_warn(eth->dev, "detect QDMA Tx hang !\n");
@@ -281,7 +281,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  			eth->reset.qdma_hang_count = 0;
  			ret = true;
  		}
-@@ -6097,7 +6106,41 @@ static void mtk_pending_work(struct work
+@@ -6136,7 +6145,41 @@ static void mtk_pending_work(struct work
  
  	mtk_save_qdma_cfg(eth);
  	mtk_prepare_for_reset(eth);
@@ -323,7 +323,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	/* Run again reset preliminary configuration in order to avoid any
  	 * possible race during FE reset since it can run releasing RTNL lock.
  	 */
-@@ -6138,6 +6181,34 @@ static void mtk_pending_work(struct work
+@@ -6177,6 +6220,34 @@ static void mtk_pending_work(struct work
  
  	mtk_mac_fe_reset_complete(eth, restart);
  
@@ -358,7 +358,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	clear_bit(MTK_RESETTING, &eth->state);
  
  	mtk_wed_fe_reset_complete();
-@@ -7566,6 +7637,9 @@ static int mtk_probe(struct platform_dev
+@@ -7627,6 +7698,9 @@ static int mtk_probe(struct platform_dev
  	eth->rx_buf_len = MTK_MAX_RX_LENGTH;
  
  	platform_set_drvdata(pdev, eth);
@@ -370,7 +370,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.h
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.h
-@@ -1806,7 +1806,9 @@ struct mtk_eth {
+@@ -1808,7 +1808,9 @@ struct mtk_eth {
  
  	struct {
  		struct delayed_work monitor_work;

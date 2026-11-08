@@ -11,7 +11,7 @@ diff --git a/arch/arm64/boot/dts/mediatek/mt7988a.dtsi b/arch/arm64/boot/dts/med
 index b4cdd21dd264..37b0420aa520 100644
 --- a/arch/arm64/boot/dts/mediatek/mt7988a.dtsi
 +++ b/arch/arm64/boot/dts/mediatek/mt7988a.dtsi
-@@ -1414,6 +1414,13 @@ devapc: devapc@1a110000 {
+@@ -1399,6 +1399,13 @@ devapc: devapc@1a110000 {
  			reg = <0 0x1a110000 0 0x1000>;
  			interrupts = <GIC_SPI 174 IRQ_TYPE_LEVEL_HIGH>;
  		};

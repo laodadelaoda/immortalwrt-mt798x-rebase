@@ -1,6 +1,6 @@
 --- a/include/linux/netdevice.h
 +++ b/include/linux/netdevice.h
-@@ -838,8 +838,9 @@ enum net_device_path_type {
+@@ -844,8 +844,9 @@ enum net_device_path_type {
  	DEV_PATH_MACVLAN,
  	DEV_PATH_DSLITE,
  	DEV_PATH_6RD,

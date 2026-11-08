@@ -34,7 +34,7 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_ppe.c b/drivers/net/ethernet/medi
 index 92d8e22..101e753 100644
 --- a/drivers/net/ethernet/mediatek/mtk_ppe.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe.c
-@@ -595,10 +595,10 @@ int mtk_foe_entry_set_dsa(struct mtk_eth *eth, struct mtk_foe_entry *entry,
+@@ -584,10 +584,10 @@ int mtk_foe_entry_set_dsa(struct mtk_eth *eth, struct mtk_foe_entry *entry,
  			entry->ib1 |= mtk_prep_ib1_vlan_layer(eth, 1);
  		else
  			l2->etype |= BIT(8);
@@ -47,7 +47,7 @@ index 92d8e22..101e753 100644
  	return 0;
  #else
  	return -ENOTSUPP;
-@@ -637,12 +637,12 @@ int mtk_foe_entry_set_vlan(struct mtk_eth *eth, struct mtk_foe_entry *entry,
+@@ -631,12 +631,12 @@ int mtk_foe_entry_set_vlan(struct mtk_eth *eth, struct mtk_foe_entry *entry,
 
  	switch (mtk_get_ib1_vlan_layer(eth, entry->ib1)) {
  	case 0:
@@ -63,7 +63,7 @@ index 92d8e22..101e753 100644
  			l2->vlan1 = vid;
  			l2->etype |= BIT(8);
  		} else {
-@@ -660,8 +660,7 @@ int mtk_foe_entry_set_pppoe(struct mtk_eth *eth, struct mtk_foe_entry *entry,
+@@ -654,8 +654,7 @@ int mtk_foe_entry_set_pppoe(struct mtk_eth *eth, struct mtk_foe_entry *entry,
  {
  	struct mtk_foe_mac_info *l2 = mtk_foe_entry_l2(eth, entry);
  
@@ -73,7 +73,7 @@ index 92d8e22..101e753 100644
  		l2->etype = ETH_P_PPP_SES;
  
  	entry->ib1 |= mtk_get_ib1_ppoe_mask(eth);
-@@ -1322,7 +1321,8 @@ void mtk_ppe_start(struct mtk_ppe *ppe)
+@@ -1426,7 +1425,8 @@ void mtk_ppe_start(struct mtk_ppe *ppe)
  	if (mtk_is_netsys_v2_or_greater(ppe->eth))
  		val |= MTK_PPE_TB_CFG_INFO_SEL;
  	if (mtk_is_netsys_v3_or_greater(ppe->eth))
@@ -87,7 +87,7 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_ppe.h b/drivers/net/ethernet/medi
 index 5032019..cbc2ad3 100644
 --- a/drivers/net/ethernet/mediatek/mtk_ppe.h
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe.h
-@@ -43,6 +43,9 @@
+@@ -45,6 +45,9 @@
  #define MTK_FOE_IB1_BIND_TTL_V2		BIT(22)
  #define MTK_FOE_IB1_PACKET_TYPE_V2	GENMASK(27, 23)
 
@@ -101,7 +101,7 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_ppe_regs.h b/drivers/net/ethernet
 index 0252f9c..b39e52c 100644
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_regs.h
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_regs.h
-@@ -67,6 +67,7 @@
+@@ -68,6 +68,7 @@
  #define MTK_PPE_TB_CFG_INFO_SEL			BIT(20)
  #define MTK_PPE_TB_TICK_SEL			BIT(24)
  #define MTK_PPE_TB_CFG_KEEP_DSCP_ECN_EN		BIT(25)

@@ -19,7 +19,7 @@ v1: Move openwrt-master files to openwrt-25.12 branch after OpenWrt official
  / {
  	model = "MediaTek MT7986b RFB";
  	chassis-type = "embedded";
-@@ -129,53 +129,6 @@
+@@ -141,53 +141,6 @@
  		};
  	};
  };

@@ -19,7 +19,7 @@ Subject: [PATCH 15/15] Refactor wed amsdu init value
 
 --- a/drivers/net/ethernet/mediatek/mtk_wed.c
 +++ b/drivers/net/ethernet/mediatek/mtk_wed.c
-@@ -619,7 +619,7 @@ mtk_wed_amsdu_init(struct mtk_wed_device
+@@ -632,7 +632,7 @@ mtk_wed_amsdu_init(struct mtk_wed_device
  
  	if (mtk_wed_is_v3(dev->hw)) {
  		/* init all sta parameter */

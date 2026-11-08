@@ -22,7 +22,7 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_wed.c b/drivers/net/ethernet/medi
 index a09e5d5..50d6ef0 100644
 --- a/drivers/net/ethernet/mediatek/mtk_wed.c
 +++ b/drivers/net/ethernet/mediatek/mtk_wed.c
-@@ -1565,6 +1565,10 @@ mtk_wed_rro_hw_init(struct mtk_wed_device *dev)
+@@ -1578,6 +1578,10 @@ mtk_wed_rro_hw_init(struct mtk_wed_device *dev)
  
  	wed_w32(dev, MTK_WED_RROQM_RST_IDX, 0);
  	wed_w32(dev, MTK_WED_RROQM_MIOD_CTRL2, MTK_WED_MIOD_CNT - 1);
@@ -33,7 +33,7 @@ index a09e5d5..50d6ef0 100644
  	wed_set(dev, MTK_WED_CTRL, MTK_WED_CTRL_RX_RRO_QM_EN);
  }
  
-@@ -1592,6 +1596,11 @@ mtk_wed_route_qm_hw_init(struct mtk_wed_device *dev)
+@@ -1605,6 +1609,11 @@ mtk_wed_route_qm_hw_init(struct mtk_wed_device *dev)
  			FIELD_PREP(MTK_WED_RTQM_ENQ_CFG_TXDMAD_FPORT,
  				   0x3 + dev->hw->index));
  	}

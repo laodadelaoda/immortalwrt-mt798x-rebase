@@ -14,7 +14,7 @@ v1: Refactor and decouple crypto TX with NF_HNAT driver.
 
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-@@ -1965,6 +1965,9 @@ static void mtk_tx_set_dma_desc_v2(struc
+@@ -1788,6 +1788,9 @@ static void mtk_tx_set_dma_desc_v2(struc
  	}
  
  	data |= TX_DMA_SWC_V2 | QID_BITS_V2(info->qid);
@@ -24,7 +24,7 @@ v1: Refactor and decouple crypto TX with NF_HNAT driver.
  	WRITE_ONCE(desc->txd4, data);
  
  	data = 0;
-@@ -1985,7 +1988,11 @@ static void mtk_tx_set_dma_desc_v2(struc
+@@ -1808,7 +1811,11 @@ static void mtk_tx_set_dma_desc_v2(struc
  	WRITE_ONCE(desc->txd6, data);
  
  	WRITE_ONCE(desc->txd7, 0);
@@ -37,7 +37,7 @@ v1: Refactor and decouple crypto TX with NF_HNAT driver.
  }
  
  static void mtk_tx_set_dma_desc(struct net_device *dev, void *txd,
-@@ -2118,12 +2125,22 @@ next:
+@@ -1941,12 +1948,22 @@ next:
  	txd_info = (struct mtk_tx_dma_desc_info){
  		.gso = gso,
  		.qid = queue,
@@ -60,7 +60,7 @@ v1: Refactor and decouple crypto TX with NF_HNAT driver.
  	if (cur_skb != skb) {
  		struct tcphdr *th, *th2;
  
-@@ -2198,6 +2215,14 @@ next_frag:
+@@ -2021,6 +2038,14 @@ next_frag:
  		memset(&txd_info, 0, sizeof(struct mtk_tx_dma_desc_info));
  		txd_info.qid = queue;
  		offset = 0;
@@ -85,7 +85,7 @@ v1: Refactor and decouple crypto TX with NF_HNAT driver.
  
  #define MTK_MAX_DSA_PORTS	7
  #define MTK_DSA_PORT_MASK	GENMASK(2, 0)
-@@ -453,6 +454,10 @@
+@@ -437,6 +438,10 @@
  
  #define MTK_TX_DMA_BUF_SHIFT	8
  
@@ -96,7 +96,7 @@ v1: Refactor and decouple crypto TX with NF_HNAT driver.
  /* QDMA V2 descriptor txd6 */
  #define TX_DMA_INS_VLAN_V2	BIT(16)
  /* QDMA V2 descriptor txd5 */
-@@ -462,6 +467,10 @@
+@@ -446,6 +451,10 @@
  #define TX_DMA_SPTAG_V3         BIT(27)
  
  /* QDMA V2 descriptor txd4 */
@@ -107,7 +107,7 @@ v1: Refactor and decouple crypto TX with NF_HNAT driver.
  #define TX_DMA_FPORT_SHIFT_V2	8
  #define TX_DMA_FPORT_MASK_V2	0xf
  #define TX_DMA_SWC_V2		BIT(30)
-@@ -544,6 +553,12 @@
+@@ -528,6 +537,12 @@
  /* PDMA V2 descriptor rxd6 */
  #define RX_DMA_GET_FLUSH_RSN_V2	GENMASK(2, 0)
  #define RX_DMA_GET_AGG_CNT_V2	GENMASK(23, 16)
@@ -120,7 +120,7 @@ v1: Refactor and decouple crypto TX with NF_HNAT driver.
  
  /* PHY Polling and SMI Master Control registers */
  #define MTK_PPSC		0x10000
-@@ -1527,6 +1542,9 @@ struct mtk_tx_dma_desc_info {
+@@ -1492,6 +1507,9 @@ struct mtk_tx_dma_desc_info {
  	u32		size;
  	u16		vlan_tci;
  	u16		qid;

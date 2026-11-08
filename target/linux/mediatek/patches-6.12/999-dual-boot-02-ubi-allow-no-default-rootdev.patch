@@ -15,7 +15,7 @@ Add control to bypass setting rootdev to ubi volume
 
 --- a/drivers/mtd/ubi/block.c
 +++ b/drivers/mtd/ubi/block.c
-@@ -94,6 +94,9 @@ static DEFINE_IDR(ubiblock_minor_idr);
+@@ -93,6 +93,9 @@ static DEFINE_IDR(ubiblock_minor_idr);
  static DEFINE_MUTEX(devices_mutex);
  static int ubiblock_major;
  

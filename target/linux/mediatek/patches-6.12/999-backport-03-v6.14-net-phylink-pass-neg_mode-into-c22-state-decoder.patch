@@ -141,7 +141,7 @@ Signed-off-by: Jakub Kicinski <kuba@kernel.org>
  			       ERR_PTR(ret));
 --- a/drivers/net/phy/phylink.c
 +++ b/drivers/net/phy/phylink.c
-@@ -3912,6 +3912,7 @@ static void phylink_decode_usgmii_word(s
+@@ -4296,6 +4296,7 @@ static void phylink_decode_usgmii_word(s
  /**
   * phylink_mii_c22_pcs_decode_state() - Decode MAC PCS state from MII registers
   * @state: a pointer to a &struct phylink_link_state.
@@ -149,7 +149,7 @@ Signed-off-by: Jakub Kicinski <kuba@kernel.org>
   * @bmsr: The value of the %MII_BMSR register
   * @lpa: The value of the %MII_LPA register
   *
-@@ -3924,7 +3925,7 @@ static void phylink_decode_usgmii_word(s
+@@ -4308,7 +4309,7 @@ static void phylink_decode_usgmii_word(s
   * accessing @bmsr and @lpa cannot be done with MDIO directly.
   */
  void phylink_mii_c22_pcs_decode_state(struct phylink_link_state *state,
@@ -158,7 +158,7 @@ Signed-off-by: Jakub Kicinski <kuba@kernel.org>
  {
  	state->link = !!(bmsr & BMSR_LSTATUS);
  	state->an_complete = !!(bmsr & BMSR_ANEGCOMPLETE);
-@@ -3962,6 +3963,7 @@ EXPORT_SYMBOL_GPL(phylink_mii_c22_pcs_de
+@@ -4346,6 +4347,7 @@ EXPORT_SYMBOL_GPL(phylink_mii_c22_pcs_de
  /**
   * phylink_mii_c22_pcs_get_state() - read the MAC PCS state
   * @pcs: a pointer to a &struct mdio_device.
@@ -166,7 +166,7 @@ Signed-off-by: Jakub Kicinski <kuba@kernel.org>
   * @state: a pointer to a &struct phylink_link_state.
   *
   * Helper for MAC PCS supporting the 802.3 clause 22 register set for
-@@ -3974,6 +3976,7 @@ EXPORT_SYMBOL_GPL(phylink_mii_c22_pcs_de
+@@ -4358,6 +4360,7 @@ EXPORT_SYMBOL_GPL(phylink_mii_c22_pcs_de
   * structure.
   */
  void phylink_mii_c22_pcs_get_state(struct mdio_device *pcs,
@@ -174,7 +174,7 @@ Signed-off-by: Jakub Kicinski <kuba@kernel.org>
  				   struct phylink_link_state *state)
  {
  	int bmsr, lpa;
-@@ -3985,7 +3988,7 @@ void phylink_mii_c22_pcs_get_state(struc
+@@ -4369,7 +4372,7 @@ void phylink_mii_c22_pcs_get_state(struc
  		return;
  	}
  
@@ -185,7 +185,7 @@ Signed-off-by: Jakub Kicinski <kuba@kernel.org>
  
 --- a/include/linux/phylink.h
 +++ b/include/linux/phylink.h
-@@ -690,8 +690,9 @@ static inline int phylink_get_link_timer
+@@ -721,8 +721,9 @@ static inline int phylink_get_link_timer
  }
  
  void phylink_mii_c22_pcs_decode_state(struct phylink_link_state *state,

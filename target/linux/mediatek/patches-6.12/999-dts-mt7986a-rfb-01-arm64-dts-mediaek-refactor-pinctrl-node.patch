@@ -25,7 +25,7 @@ v1: Initial release for the openwrt-25.12 branch.
 -
 --- a/arch/arm64/boot/dts/mediatek/mt7986a-rfb.dts
 +++ b/arch/arm64/boot/dts/mediatek/mt7986a-rfb.dts
-@@ -178,132 +178,6 @@
+@@ -118,132 +118,6 @@
  	status = "okay";
  };
  

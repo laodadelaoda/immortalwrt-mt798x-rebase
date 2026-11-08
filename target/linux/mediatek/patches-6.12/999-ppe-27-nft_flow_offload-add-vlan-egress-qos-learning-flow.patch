@@ -53,7 +53,7 @@ when the below command is configured.
  			info->num_encaps++;
  			if (path->type == DEV_PATH_PPPOE)
  				memcpy(info->h_dest, path->encap.h_dest, ETH_ALEN);
-@@ -310,7 +319,10 @@ static int nft_dev_forward_path(const st
+@@ -305,7 +314,10 @@ static int nft_dev_forward_path(const st
  	struct net_device_path_ctx ctx = {
  		.dev	= dst->dev,
  	};
@@ -65,7 +65,7 @@ when the below command is configured.
  	struct ethhdr *eth;
  	enum ip_conntrack_dir skb_dir;
  	unsigned char ha[ETH_ALEN];
-@@ -600,6 +612,7 @@ static void nft_flow_offload_eval(const
+@@ -587,6 +599,7 @@ static void nft_flow_offload_eval(const
  
  		qos->tos[dir].value = tos;
  		atomic64_add(1, &qos->tos[dir].counter);

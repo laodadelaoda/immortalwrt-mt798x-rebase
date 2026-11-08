@@ -22,7 +22,7 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_wed.c b/drivers/net/ethernet/medi
 index a67270d..4ae5e7b 100644
 --- a/drivers/net/ethernet/mediatek/mtk_wed.c
 +++ b/drivers/net/ethernet/mediatek/mtk_wed.c
-@@ -650,7 +650,7 @@ mtk_wed_amsdu_init(struct mtk_wed_device *dev)
+@@ -663,7 +663,7 @@ mtk_wed_amsdu_init(struct mtk_wed_device *dev)
  	}
  
  	/* Kite and Eagle E1 PCIE1 tx ring 22 flow control issue */
@@ -31,7 +31,7 @@ index a67270d..4ae5e7b 100644
  		wed_clr(dev, MTK_WED_AMSDU_FIFO, MTK_WED_AMSDU_IS_PRIOR0_RING);
  
  	wed_set(dev, MTK_WED_CTRL, MTK_WED_CTRL_TX_AMSDU_EN);
-@@ -1331,7 +1331,7 @@ mtk_wed_v3_1_set_wpdma(struct mtk_wed_device *dev)
+@@ -1344,7 +1344,7 @@ mtk_wed_v3_1_set_wpdma(struct mtk_wed_device *dev)
  
  	if (dev->wlan.hw_rro == MTK_WED_HWRRO_V3) {
  		/* RRO MSDU page rings */
@@ -40,7 +40,7 @@ index a67270d..4ae5e7b 100644
  			wed_w32(dev, MTK_WED_RRO_MSDU_PG_RING_CFG_CIDX(i),
  				dev->wlan.wpdma_rx_pg + i * 0x10 + MTK_WED_RING_OFS_CPU_IDX);
  			wed_w32(dev, MTK_WED_RRO_MSDU_PG_RING_CFG_DIDX(i),
-@@ -1385,7 +1385,7 @@ mtk_wed_set_wpdma(struct mtk_wed_device *dev)
+@@ -1398,7 +1398,7 @@ mtk_wed_set_wpdma(struct mtk_wed_device *dev)
  
  	wed_w32(dev, MTK_WED_RRO_RX_D_CFG(0), dev->wlan.wpdma_rx_rro[0]);
  	wed_w32(dev, MTK_WED_RRO_RX_D_CFG(1), dev->wlan.wpdma_rx_rro[1]);
@@ -49,7 +49,7 @@ index a67270d..4ae5e7b 100644
  		wed_w32(dev, MTK_WED_RRO_MSDU_PG_RING_CFG(i),
  			dev->wlan.wpdma_rx_pg + i * 0x10);
  }
-@@ -2519,6 +2519,7 @@ static void
+@@ -2541,6 +2541,7 @@ static void
  mtk_wed_start_hw_rro(struct mtk_wed_device *dev, u32 irq_mask, bool reset)
  {
  	int i;
@@ -57,7 +57,7 @@ index a67270d..4ae5e7b 100644
  
  	wed_w32(dev, MTK_WED_WPDMA_INT_MASK, irq_mask);
  	wed_w32(dev, MTK_WED_INT_MASK, irq_mask);
-@@ -2558,20 +2559,30 @@ mtk_wed_start_hw_rro(struct mtk_wed_device *dev, u32 irq_mask, bool reset)
+@@ -2580,20 +2581,30 @@ mtk_wed_start_hw_rro(struct mtk_wed_device *dev, u32 irq_mask, bool reset)
  			FIELD_PREP(MTK_WED_WPDMA_INT_CTRL_RX_RRO_3_1_TRIG,
  				   dev->wlan.rro_3_1_rx_tbit));
  

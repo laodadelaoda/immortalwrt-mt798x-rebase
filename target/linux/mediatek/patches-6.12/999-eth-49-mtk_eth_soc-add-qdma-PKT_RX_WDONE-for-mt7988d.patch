@@ -23,7 +23,7 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.c b/drivers/net/ethernet/
 index c13fd2d..33e2410 100644
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-@@ -4445,6 +4445,9 @@ static int mtk_start_dma(struct mtk_eth *eth)
+@@ -4481,6 +4481,9 @@ static int mtk_start_dma(struct mtk_eth *eth)
  			val |= MTK_MUTLI_CNT | MTK_RESV_BUF |
  			       MTK_WCOMP_EN | MTK_DMAD_WR_WDONE |
  			       MTK_CHK_DDONE_EN;
@@ -37,7 +37,7 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.h b/drivers/net/ethernet/
 index 0bb984a..f337da7 100644
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.h
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.h
-@@ -406,6 +406,7 @@
+@@ -392,6 +392,7 @@
  
  /* QDMA V2 Global Configuration Register */
  #define MTK_CHK_DDONE_EN	BIT(28)

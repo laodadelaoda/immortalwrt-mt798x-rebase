@@ -38,7 +38,7 @@ index af6c0d7..9495328 100644
  #include <linux/phy.h>
  #include <net/dsa.h>
  #include <linux/dsa/8021q.h>
-@@ -3712,11 +3714,220 @@ static const struct dsa_switch_ops mxl862xx_switch_ops = {
+@@ -3713,11 +3715,220 @@ static const struct dsa_switch_ops mxl862xx_switch_ops = {
  	.setup = mxl862xx_setup,
  };
  
@@ -259,7 +259,7 @@ index af6c0d7..9495328 100644
  	struct dsa_switch *ds;
  	int ret;
  
-@@ -3782,6 +3993,28 @@ static int mxl862xx_probe(struct mdio_device *mdiodev)
+@@ -3783,6 +3994,28 @@ static int mxl862xx_probe(struct mdio_device *mdiodev)
  		dev_info(dev, "%s:%u: Enable force isolate", __func__, __LINE__);
  	}
  
@@ -288,7 +288,7 @@ index af6c0d7..9495328 100644
  	return 0;
  }
  
-@@ -3789,6 +4022,7 @@ static void mxl862xx_remove(struct mdio_device *mdiodev)
+@@ -3790,6 +4023,7 @@ static void mxl862xx_remove(struct mdio_device *mdiodev)
  {
  	struct dsa_switch *ds = dev_get_drvdata(&mdiodev->dev);
  

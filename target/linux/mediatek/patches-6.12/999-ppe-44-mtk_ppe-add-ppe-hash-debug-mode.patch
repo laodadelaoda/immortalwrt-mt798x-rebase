@@ -96,7 +96,7 @@ Usage:
  	hash &= MTK_PPE_ENTRIES - 1;
  
  	return hash;
-@@ -1104,7 +1146,7 @@ int mtk_foe_entry_commit(struct mtk_ppe
+@@ -1106,7 +1148,7 @@ int mtk_foe_entry_commit(struct mtk_ppe
  	if (type == MTK_PPE_PKT_TYPE_BRIDGE)
  		return mtk_foe_entry_commit_l2(ppe, entry);
  
@@ -105,7 +105,7 @@ Usage:
  	entry->hash = 0xffff;
  	spin_lock_bh(&ppe_lock);
  	hlist_add_head(&entry->list, &ppe->foe_flow[hash / soc->hash_offset]);
-@@ -1421,7 +1463,9 @@ void mtk_ppe_start(struct mtk_ppe *ppe)
+@@ -1423,7 +1465,9 @@ void mtk_ppe_start(struct mtk_ppe *ppe)
  	      FIELD_PREP(MTK_PPE_TB_CFG_ENTRY_NUM,
  			 MTK_PPE_ENTRIES_SHIFT);
  	if (mtk_is_netsys_v2_or_greater(ppe->eth))
@@ -136,7 +136,7 @@ Usage:
  
  #include "mtk_eth_soc.h"
  #include "mtk_ppe_regs.h"
-@@ -416,6 +417,87 @@ static const struct file_operations mtk_
+@@ -433,6 +434,87 @@ static const struct file_operations mtk_
  	.release = single_release,
  };
  
@@ -224,7 +224,7 @@ Usage:
  static int
  mtk_ppe_internal_debugfs_foe_all_show(struct seq_file *m, void *private)
  {
-@@ -559,6 +641,9 @@ int mtk_ppe_internal_debugfs_init(struct
+@@ -576,6 +658,9 @@ int mtk_ppe_internal_debugfs_init(struct
  			    &mtk_ppe_internal_debugfs_dscp_fops);
  	debugfs_create_file("qos_toggle", S_IRUGO | S_IWUSR, root, eth,
  			    &mtk_ppe_internal_debugfs_qos_fops);

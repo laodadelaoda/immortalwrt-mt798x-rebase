@@ -10,7 +10,7 @@ v1: Initial 3B/4B calibration fix.
 
 --- a/drivers/mtd/spi-nor/core.c
 +++ b/drivers/mtd/spi-nor/core.c
-@@ -3309,7 +3309,21 @@ static int spi_nor_cal_read(void *priv,
+@@ -3450,7 +3450,21 @@ static int spi_nor_cal_read(void *priv,
  	nor->read_opcode = SPINOR_OP_READ;
  	nor->read_dummy = 0;
  
@@ -33,7 +33,7 @@ v1: Initial 3B/4B calibration fix.
  }
  
  static const struct flash_info *spi_nor_get_flash_info(struct spi_nor *nor,
-@@ -3452,6 +3466,15 @@ static int spi_nor_hw_reset(struct spi_n
+@@ -3593,6 +3607,15 @@ static int spi_nor_hw_reset(struct spi_n
  	return 0;
  }
  
@@ -49,7 +49,7 @@ v1: Initial 3B/4B calibration fix.
  int spi_nor_scan(struct spi_nor *nor, const char *name,
  		 const struct spi_nor_hwcaps *hwcaps)
  {
-@@ -3486,8 +3509,16 @@ int spi_nor_scan(struct spi_nor *nor, co
+@@ -3627,8 +3650,16 @@ int spi_nor_scan(struct spi_nor *nor, co
  	if (ret)
  		return ret;
  

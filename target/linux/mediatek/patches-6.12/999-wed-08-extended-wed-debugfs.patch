@@ -46,7 +46,7 @@ Subject: [PATCH] extended wed debugfs
  		.tx_bm_tkid		= 0x0c8,
  		.wpdma_rx_ring = {
  			0x7d0,
-@@ -1696,8 +1699,8 @@ mtk_wed_rx_reset(struct mtk_wed_device *
+@@ -1709,8 +1712,8 @@ mtk_wed_rx_reset(struct mtk_wed_device *
  	/* reset tx wdma drv */
  	wed_clr(dev, MTK_WED_WDMA_GLO_CFG, MTK_WED_WDMA_GLO_CFG_TX_DRV_EN);
  	if (mtk_wed_is_v3_or_greater(dev->hw))
@@ -57,7 +57,7 @@ Subject: [PATCH] extended wed debugfs
  	else
  		mtk_wed_poll_busy(dev, MTK_WED_CTRL,
  				  MTK_WED_CTRL_WDMA_INT_AGENT_BUSY);
-@@ -2500,7 +2503,7 @@ mtk_wed_attach(struct mtk_wed_device *de
+@@ -2513,7 +2516,7 @@ mtk_wed_attach(struct mtk_wed_device *de
  		regmap_update_bits(hw->hifsys, HIFSYS_DMA_AG_MAP,
  				   BIT(hw->index), 0);
  	else

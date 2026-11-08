@@ -89,7 +89,7 @@ v1: Align PHY library with OpenWrt 24.10.
  
  	if (!rules)
  		return 0;
-@@ -188,11 +210,10 @@ int mtk_phy_led_hw_ctrl_get(struct phy_d
+@@ -195,11 +217,10 @@ int mtk_phy_led_hw_ctrl_get(struct phy_d
  EXPORT_SYMBOL_GPL(mtk_phy_led_hw_ctrl_get);
  
  int mtk_phy_led_hw_ctrl_set(struct phy_device *phydev, u8 index,
@@ -103,7 +103,7 @@ v1: Align PHY library with OpenWrt 24.10.
  	u16 on = 0, blink = 0;
  	int ret;
  
-@@ -248,9 +269,9 @@ int mtk_phy_led_hw_ctrl_set(struct phy_d
+@@ -255,9 +276,9 @@ int mtk_phy_led_hw_ctrl_set(struct phy_d
  	}
  
  	if (blink || on)
@@ -115,7 +115,7 @@ v1: Align PHY library with OpenWrt 24.10.
  
  	ret = phy_modify_mmd(phydev, MDIO_MMD_VEND2, index ?
  			     MTK_PHY_LED1_ON_CTRL : MTK_PHY_LED0_ON_CTRL,
-@@ -283,19 +304,18 @@ int mtk_phy_led_num_dly_cfg(u8 index, un
+@@ -290,19 +311,18 @@ int mtk_phy_led_num_dly_cfg(u8 index, un
  EXPORT_SYMBOL_GPL(mtk_phy_led_num_dly_cfg);
  
  int mtk_phy_hw_led_on_set(struct phy_device *phydev, u8 index,
@@ -139,7 +139,7 @@ v1: Align PHY library with OpenWrt 24.10.
  	if (changed)
  		return phy_modify_mmd(phydev, MDIO_MMD_VEND2, index ?
  				      MTK_PHY_LED1_ON_CTRL :
-@@ -307,20 +327,20 @@ int mtk_phy_hw_led_on_set(struct phy_dev
+@@ -314,20 +334,20 @@ int mtk_phy_hw_led_on_set(struct phy_dev
  }
  EXPORT_SYMBOL_GPL(mtk_phy_hw_led_on_set);
  

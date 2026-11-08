@@ -72,7 +72,7 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: refactor forced reset monitor
  
  	return (val & MTK_FE_INT_FQ_EMPTY) || (val & MTK_FE_INT_RFIFO_UF) ||
  	       (val & MTK_FE_INT_RFIFO_OV) || (val & MTK_FE_INT_TSO_FAIL) ||
-@@ -4613,81 +4616,230 @@ static void mtk_hw_warm_reset(struct mtk
+@@ -4626,81 +4629,230 @@ static void mtk_hw_warm_reset(struct mtk
  			val, rst_mask);
  }
  

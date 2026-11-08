@@ -8,7 +8,7 @@
  #include <net/netns/generic.h>
  #include <net/tun_proto.h>
  #include <net/vxlan.h>
-@@ -3268,6 +3269,24 @@ static int vxlan_fill_metadata_dst(struc
+@@ -3300,6 +3301,24 @@ static int vxlan_fill_metadata_dst(struc
  	return 0;
  }
  
@@ -33,7 +33,7 @@
  static const struct net_device_ops vxlan_netdev_ether_ops = {
  	.ndo_init		= vxlan_init,
  	.ndo_uninit		= vxlan_uninit,
-@@ -3289,6 +3308,9 @@ static const struct net_device_ops vxlan
+@@ -3321,6 +3340,9 @@ static const struct net_device_ops vxlan
  	.ndo_mdb_dump		= vxlan_mdb_dump,
  	.ndo_mdb_get		= vxlan_mdb_get,
  	.ndo_fill_metadata_dst	= vxlan_fill_metadata_dst,

@@ -18,7 +18,7 @@ v1: Move openwrt-master files to openwrt-25.12 branch after OpenWrt official
  #include <dt-bindings/reset/mediatek,mt7988-resets.h>
  #include <dt-bindings/leds/common.h>
  #include <dt-bindings/thermal/thermal.h>
-@@ -860,6 +861,7 @@
+@@ -855,6 +856,7 @@
  			compatible = "mediatek,mt7988-topmisc", "syscon",
  				     "mediatek,mt7988-power-controller";
  			reg = <0 0x11d10000 0 0x10000>;
@@ -26,7 +26,7 @@ v1: Move openwrt-master files to openwrt-25.12 branch after OpenWrt official
  		};
  
  		xsphy: xs-phy@11e10000 {
-@@ -1286,6 +1288,36 @@
+@@ -1281,6 +1283,36 @@
  			status = "disabled";
  		};
  

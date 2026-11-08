@@ -27,7 +27,7 @@ diff --git a/net/8021q/vlan_dev.c b/net/8021q/vlan_dev.c
 index 11170bc..98daca5 100644
 --- a/net/8021q/vlan_dev.c
 +++ b/net/8021q/vlan_dev.c
-@@ -1018,6 +1018,7 @@ static int vlan_dev_flow_offload_check(struct flow_offload_hw_path *path)
+@@ -1002,6 +1002,7 @@ static int vlan_dev_flow_offload_check(struct flow_offload_hw_path *path)
  	path->flags |= BIT(DEV_PATH_VLAN);
  	path->vlan_proto = vlan->vlan_proto;
  	path->vlan_id = vlan->vlan_id;
@@ -51,7 +51,7 @@ index be98274..f6bb32c 100644
  MODULE_AUTHOR("Ville Nuorvala");
  MODULE_DESCRIPTION("IPv6 tunneling device");
  MODULE_LICENSE("GPL");
-@@ -1935,6 +1940,22 @@ int ip6_tnl_get_iflink(const struct net_device *dev)
+@@ -1934,6 +1939,22 @@ int ip6_tnl_get_iflink(const struct net_device *dev)
  }
  EXPORT_SYMBOL(ip6_tnl_get_iflink);
  
@@ -74,7 +74,7 @@ index be98274..f6bb32c 100644
  int ip6_tnl_encap_add_ops(const struct ip6_tnl_encap_ops *ops,
  			  unsigned int num)
  {
-@@ -1996,6 +2017,9 @@ static const struct net_device_ops ip6_tnl_netdev_ops = {
+@@ -1995,6 +2016,9 @@ static const struct net_device_ops ip6_tnl_netdev_ops = {
  	.ndo_change_mtu = ip6_tnl_change_mtu,
  	.ndo_get_stats64 = dev_get_tstats64,
  	.ndo_get_iflink = ip6_tnl_get_iflink,
@@ -100,7 +100,7 @@ index 3c15a0a..7b70790 100644
  /*
     This version of net/ipv6/sit.c is cloned of net/ipv4/ip_gre.c
  
-@@ -1398,6 +1403,22 @@ ipip6_tunnel_siocdevprivate(struct net_device *dev, struct ifreq *ifr,
+@@ -1399,6 +1404,22 @@ ipip6_tunnel_siocdevprivate(struct net_device *dev, struct ifreq *ifr,
  	}
  }
  
@@ -123,7 +123,7 @@ index 3c15a0a..7b70790 100644
  static const struct net_device_ops ipip6_netdev_ops = {
  	.ndo_init	= ipip6_tunnel_init,
  	.ndo_uninit	= ipip6_tunnel_uninit,
-@@ -1405,6 +1426,9 @@ static const struct net_device_ops ipip6_netdev_ops = {
+@@ -1406,6 +1427,9 @@ static const struct net_device_ops ipip6_netdev_ops = {
  	.ndo_siocdevprivate = ipip6_tunnel_siocdevprivate,
  	.ndo_get_iflink = ip_tunnel_get_iflink,
  	.ndo_tunnel_ctl = ipip6_tunnel_ctl,

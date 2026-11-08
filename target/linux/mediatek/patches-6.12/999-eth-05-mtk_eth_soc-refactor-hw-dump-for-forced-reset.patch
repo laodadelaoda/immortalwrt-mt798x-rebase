@@ -24,7 +24,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-@@ -4108,7 +4108,7 @@ static void mtk_hw_dump_reg(struct mtk_e
+@@ -4151,7 +4151,7 @@ static void mtk_hw_dump_reg(struct mtk_e
  	}
  }
  
@@ -33,7 +33,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  {
  	const struct mtk_reg_map *reg_map = eth->soc->reg_map;
  	u32 id;
-@@ -4140,8 +4140,47 @@ static void mtk_hw_dump(struct mtk_eth *
+@@ -4183,8 +4183,47 @@ static void mtk_hw_dump(struct mtk_eth *
  	if (mtk_is_netsys_v3_or_greater(eth))
  		mtk_hw_dump_reg(eth, "GMAC", 0x10300, 0x100);
  	if (mtk_is_netsys_v3_or_greater(eth)) {
@@ -83,7 +83,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	}
  }
  
-@@ -4193,6 +4232,8 @@ static void mtk_hw_warm_reset(struct mtk
+@@ -4236,6 +4275,8 @@ static void mtk_hw_warm_reset(struct mtk
  {
  	u32 rst_mask, val;
  
@@ -92,7 +92,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	regmap_update_bits(eth->ethsys, ETHSYS_RSTCTRL, RSTCTRL_FE,
  			   RSTCTRL_FE);
  	if (readx_poll_timeout_atomic(mtk_hw_reset_read, eth, val,
-@@ -4655,7 +4696,7 @@ static void mtk_pending_work(struct work
+@@ -4698,7 +4739,7 @@ static void mtk_pending_work(struct work
  	rtnl_lock();
  	set_bit(MTK_RESETTING, &eth->state);
  

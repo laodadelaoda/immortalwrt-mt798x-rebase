@@ -23,7 +23,7 @@ diff --git a/drivers/net/ppp/ppp_generic.c b/drivers/net/ppp/ppp_generic.c
 index 8a052c5..70c67e6 100644
 --- a/drivers/net/ppp/ppp_generic.c
 +++ b/drivers/net/ppp/ppp_generic.c
-@@ -1541,6 +1541,25 @@ ppp_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats64)
+@@ -1549,6 +1549,25 @@ ppp_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats64)
  	dev_fetch_sw_netstats(stats64, dev->tstats);
  }
  
@@ -49,7 +49,7 @@ index 8a052c5..70c67e6 100644
  static int ppp_dev_init(struct net_device *dev)
  {
  	struct ppp *ppp;
-@@ -1641,6 +1660,7 @@ static const struct net_device_ops ppp_netdev_ops = {
+@@ -1649,6 +1668,7 @@ static const struct net_device_ops ppp_netdev_ops = {
  #if IS_ENABLED(CONFIG_NF_FLOW_TABLE)
  	.ndo_flow_offload_check = ppp_flow_offload_check,
  #endif

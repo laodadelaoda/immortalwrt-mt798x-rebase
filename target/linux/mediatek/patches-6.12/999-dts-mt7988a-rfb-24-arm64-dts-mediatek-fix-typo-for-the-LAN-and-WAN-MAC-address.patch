@@ -26,7 +26,7 @@ diff --git a/arch/arm64/boot/dts/mediatek/mt7988a-rfb-spim-nand-factory.dtso b/a
 index 4b554a1..3130ba4 100644
 --- a/arch/arm64/boot/dts/mediatek/mt7988a-rfb-spim-nand-factory.dtso
 +++ b/arch/arm64/boot/dts/mediatek/mt7988a-rfb-spim-nand-factory.dtso
-@@ -27,12 +27,12 @@ gmac2_mac: eeprom@fffee {
+@@ -23,12 +23,12 @@ gmac2_mac: eeprom@fffee {
  							reg = <0xfffee 0x6>;
  						};
  

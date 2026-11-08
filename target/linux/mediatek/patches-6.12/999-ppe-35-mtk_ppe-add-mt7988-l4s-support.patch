@@ -55,7 +55,7 @@ Subject: [PATCH] net: ethernet: mtk_ppe: add mt7988 l4s support
  			   bool amsdu_en);
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_debugfs.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_debugfs.c
-@@ -310,6 +310,97 @@ static const struct file_operations mtk_
+@@ -321,6 +321,97 @@ static const struct file_operations mtk_
  };
  
  static int
@@ -153,7 +153,7 @@ Subject: [PATCH] net: ethernet: mtk_ppe: add mt7988 l4s support
  mtk_ppe_internal_debugfs_foe_all_show(struct seq_file *m, void *private)
  {
  	struct mtk_eth *eth = m->private;
-@@ -370,6 +461,10 @@ int mtk_ppe_internal_debugfs_init(struct
+@@ -381,6 +472,10 @@ int mtk_ppe_internal_debugfs_init(struct
  			    &mtk_ppe_internal_debugfs_dscp_fops);
  	debugfs_create_file("qos_toggle", S_IRUGO | S_IWUSR, root, eth,
  			    &mtk_ppe_internal_debugfs_qos_fops);
@@ -166,7 +166,7 @@ Subject: [PATCH] net: ethernet: mtk_ppe: add mt7988 l4s support
  		ret = snprintf(name, sizeof(name), "qdma_sch%ld", i);
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
-@@ -341,8 +341,13 @@ mtk_flow_set_output_device(struct mtk_et
+@@ -351,8 +351,13 @@ mtk_flow_set_output_device(struct mtk_et
  		ct_mark = mtk_flow_get_ct_mark(ct);
  	}
  

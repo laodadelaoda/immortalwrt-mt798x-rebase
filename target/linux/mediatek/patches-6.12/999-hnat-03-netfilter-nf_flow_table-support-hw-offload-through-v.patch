@@ -20,7 +20,7 @@ diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
 index b7f18ee..3968436 100644
 --- a/include/linux/netdevice.h
 +++ b/include/linux/netdevice.h
-@@ -1008,6 +1008,8 @@ struct netdev_net_notifier {
+@@ -1009,6 +1009,8 @@ struct netdev_net_notifier {
  	struct notifier_block *nb;
  };
  
@@ -29,7 +29,7 @@ index b7f18ee..3968436 100644
  /*
   * This structure defines the management hooks for network devices.
   * The following hooks can be defined; unless noted otherwise, they are
-@@ -1271,6 +1273,11 @@ struct netdev_net_notifier {
+@@ -1272,6 +1274,11 @@ struct netdev_net_notifier {
   * int (*ndo_bridge_dellink)(struct net_device *dev, struct nlmsghdr *nlh,
   *			     u16 flags);
   *
@@ -41,7 +41,7 @@ index b7f18ee..3968436 100644
   * int (*ndo_change_carrier)(struct net_device *dev, bool new_carrier);
   *	Called to change device carrier. Soft-devices (like dummy, team, etc)
   *	which do not represent real hardware may define this to allow their
-@@ -1562,6 +1569,7 @@ struct net_device_ops {
+@@ -1563,6 +1570,7 @@ struct net_device_ops {
  	int			(*ndo_bridge_dellink)(struct net_device *dev,
  						      struct nlmsghdr *nlh,
  						      u16 flags);

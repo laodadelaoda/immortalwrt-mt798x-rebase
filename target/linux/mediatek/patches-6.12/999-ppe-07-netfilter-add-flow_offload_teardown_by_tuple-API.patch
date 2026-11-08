@@ -23,7 +23,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 
 --- a/include/net/netfilter/nf_flow_table.h
 +++ b/include/net/netfilter/nf_flow_table.h
-@@ -295,6 +295,7 @@ int nf_flow_table_init(struct nf_flowtab
+@@ -308,6 +308,7 @@ int nf_flow_table_init(struct nf_flowtab
  void nf_flow_table_free(struct nf_flowtable *flow_table);
  
  void flow_offload_teardown(struct flow_offload *flow);
@@ -33,7 +33,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
                        void (*iter)(struct nf_flowtable *flowtable,
 --- a/net/netfilter/nf_flow_table_core.c
 +++ b/net/netfilter/nf_flow_table_core.c
-@@ -349,6 +349,29 @@ void flow_offload_teardown(struct flow_o
+@@ -357,6 +357,29 @@ void flow_offload_teardown(struct flow_o
  }
  EXPORT_SYMBOL_GPL(flow_offload_teardown);
  

@@ -41,7 +41,7 @@ index 6163be7..5a99a68 100644
  
  static int
  mt7530_regmap_write(void *context, unsigned int reg, unsigned int val)
-@@ -212,7 +213,20 @@ mt7530_probe(struct mdio_device *mdiodev)
+@@ -219,7 +220,20 @@ mt7530_probe(struct mdio_device *mdiodev)
  	if (priv->id == ID_MT7531)
  		priv->create_sgmii = mt7531_create_sgmii;
  
@@ -120,7 +120,7 @@ index 93bf085..f8e6ca3 100644
  {
  	mt7530_mutex_lock(priv);
  
-@@ -239,8 +238,7 @@ _mt7530_read(struct mt7530_dummy_poll *p)
+@@ -233,8 +232,7 @@ _mt7530_read(struct mt7530_dummy_poll *p)
  	return val;
  }
  
@@ -130,19 +130,19 @@ index 93bf085..f8e6ca3 100644
  {
  	struct mt7530_dummy_poll p;
  
-@@ -573,2 +571,1 @@
+@@ -570,2 +568,1 @@
 -static int
 -mt7531_ind_c45_phy_read(struct mt7530_priv *priv, int port, int devad,
 +int mt7531_ind_c45_phy_read(struct mt7530_priv *priv, int port, int devad,
-@@ -621,2 +618,1 @@
+@@ -615,2 +612,1 @@
 -static int
 -mt7531_ind_c45_phy_write(struct mt7530_priv *priv, int port, int devad,
 +int mt7531_ind_c45_phy_write(struct mt7530_priv *priv, int port, int devad,
-@@ -668,2 +664,1 @@
+@@ -659,2 +655,1 @@
 -static int
 -mt7531_ind_c22_phy_read(struct mt7530_priv *priv, int port, int regnum)
 +int mt7531_ind_c22_phy_read(struct mt7530_priv *priv, int port, int regnum)
-@@ -705,2 +700,1 @@
+@@ -693,2 +688,1 @@
 -static int
 -mt7531_ind_c22_phy_write(struct mt7530_priv *priv, int port, int regnum,
 +int mt7531_ind_c22_phy_write(struct mt7530_priv *priv, int port, int regnum,

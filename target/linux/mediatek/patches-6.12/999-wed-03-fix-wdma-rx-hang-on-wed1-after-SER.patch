@@ -28,7 +28,7 @@ Subject: [PATCH 03/15] fix wdma rx hang on wed1 after SER
  			continue;
  
  		wdma_w32(dev,
-@@ -1796,6 +1796,21 @@ mtk_wed_reset_dma(struct mtk_wed_device
+@@ -1809,6 +1809,21 @@ mtk_wed_reset_dma(struct mtk_wed_device
  			wed_clr(dev, MTK_WED_WDMA_RX_PREF_CFG,
  				MTK_WED_WDMA_RX_PREF_DDONE2_EN);
  

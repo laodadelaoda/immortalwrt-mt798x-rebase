@@ -19,7 +19,7 @@ diff --git a/drivers/net/phy/marvell.c b/drivers/net/phy/marvell.c
 index 9c761b8..b4285ce 100644
 --- a/drivers/net/phy/marvell.c
 +++ b/drivers/net/phy/marvell.c
-@@ -3729,7 +3729,7 @@ static struct phy_driver marvell_drivers[] = {
+@@ -3766,7 +3766,7 @@ static struct phy_driver marvell_drivers[] = {
  		.phy_id = MARVELL_PHY_ID_88E1111,
  		.phy_id_mask = MARVELL_PHY_ID_MASK,
  		.name = "Marvell 88E1111",

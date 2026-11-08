@@ -42,7 +42,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	int version;
  	char dirname[5];
  	bool accounting;
-@@ -401,6 +402,7 @@ int mtk_foe_entry_set_queue(struct mtk_e
+@@ -402,6 +403,7 @@ int mtk_foe_entry_set_queue(struct mtk_e
  int mtk_foe_entry_commit(struct mtk_ppe *ppe, struct mtk_flow_entry *entry);
  void mtk_foe_entry_clear(struct mtk_ppe *ppe, struct mtk_flow_entry *entry);
  int mtk_ppe_debugfs_init(struct mtk_ppe *ppe, int index);

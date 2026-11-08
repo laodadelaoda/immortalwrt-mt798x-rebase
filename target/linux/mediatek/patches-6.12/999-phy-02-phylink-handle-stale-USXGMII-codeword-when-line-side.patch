@@ -16,7 +16,7 @@ diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
 index 6059fe6..17265c7 100644
 --- a/drivers/net/phy/phylink.c
 +++ b/drivers/net/phy/phylink.c
-@@ -3852,6 +3852,15 @@ static void phylink_decode_sgmii_word(struct phylink_link_state *state,
+@@ -4227,6 +4227,15 @@ static void phylink_decode_sgmii_word(struct phylink_link_state *state,
  void phylink_decode_usxgmii_word(struct phylink_link_state *state,
  				 uint16_t lpa)
  {

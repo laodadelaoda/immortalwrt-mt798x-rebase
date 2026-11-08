@@ -56,7 +56,7 @@
   *
 --- a/net/l2tp/l2tp_core.c
 +++ b/net/l2tp/l2tp_core.c
-@@ -1231,6 +1231,10 @@ static int l2tp_xmit_core(struct l2tp_se
+@@ -1232,6 +1232,10 @@ static int l2tp_xmit_core(struct l2tp_se
  	struct inet_sock *inet;
  	struct udphdr *uh;
  

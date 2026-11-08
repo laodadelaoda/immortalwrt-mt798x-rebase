@@ -10,7 +10,7 @@ v1: Enable IPSec flow offload in nft_flow_offload
 
 --- a/net/netfilter/nft_flow_offload.c
 +++ b/net/netfilter/nft_flow_offload.c
-@@ -362,7 +362,8 @@ static int nft_dev_forward_path(const st
+@@ -357,7 +357,8 @@ static int nft_dev_forward_path(const st
  	route->tuple[!dir].in.num_encaps = info.num_encaps;
  	route->tuple[!dir].in.ingress_vlans = info.ingress_vlans;
  
@@ -20,7 +20,7 @@ v1: Enable IPSec flow offload in nft_flow_offload
  		memcpy(route->tuple[dir].out.h_source, info.h_source, ETH_ALEN);
  		memcpy(route->tuple[dir].out.h_dest, info.h_dest, ETH_ALEN);
  		route->tuple[dir].out.ifindex = info.outdev->ifindex;
-@@ -417,14 +418,11 @@ static int nft_flow_route_routing(const
+@@ -412,14 +413,11 @@ static int nft_flow_route_routing(const
  	nft_default_forward_path(route, this_dst, dir);
  	nft_default_forward_path(route, other_dst, !dir);
  

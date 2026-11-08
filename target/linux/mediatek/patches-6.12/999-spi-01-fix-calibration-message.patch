@@ -10,7 +10,7 @@ v1: Initial calibration message handling fix.
 
 --- a/drivers/mtd/nand/spi/core.c
 +++ b/drivers/mtd/nand/spi/core.c
-@@ -1285,7 +1285,7 @@ static int spinand_init(struct spinand_d
+@@ -1519,7 +1519,7 @@ static int spinand_init(struct spinand_d
  
  	ret = spi_mem_do_calibration(spinand->spimem, spinand_cal_read, spinand);
  	if (ret)
@@ -21,7 +21,7 @@ v1: Initial calibration message handling fix.
  	if (ret)
 --- a/drivers/spi/spi.c
 +++ b/drivers/spi/spi.c
-@@ -1434,7 +1434,9 @@ int spi_do_calibration(struct spi_contro
+@@ -1554,7 +1554,9 @@ int spi_do_calibration(struct spi_contro
  			dev_info(&spi->dev, "calibration result: 0x%x", *target->cal_item);
  		} else {
  			*target->cal_item = origin;

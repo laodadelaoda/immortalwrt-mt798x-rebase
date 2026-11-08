@@ -25,7 +25,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 
 --- a/drivers/net/ethernet/mediatek/mtk_ppe.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe.c
-@@ -505,8 +505,17 @@ int mtk_foe_entry_set_queue(struct mtk_e
+@@ -504,8 +504,17 @@ int mtk_foe_entry_set_queue(struct mtk_e
  	return 0;
  }
  
@@ -45,7 +45,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  {
  	int type = mtk_get_ib1_pkt_type(eth, entry->ib1);
  
-@@ -516,9 +525,8 @@ mtk_flow_entry_match_len(struct mtk_eth
+@@ -515,9 +524,8 @@ mtk_flow_entry_match_len(struct mtk_eth
  		return offsetof(struct mtk_foe_entry, ipv4.ib2);
  }
  
@@ -59,7 +59,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  		return false;
 --- a/drivers/net/ethernet/mediatek/mtk_ppe.h
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe.h
-@@ -411,5 +411,8 @@ int mtk_ppe_debugfs_init(struct mtk_ppe
+@@ -409,5 +409,8 @@ int mtk_ppe_debugfs_init(struct mtk_ppe
  int mtk_ppe_internal_debugfs_init(struct mtk_eth *eth);
  void mtk_foe_entry_get_stats(struct mtk_ppe *ppe, struct mtk_flow_entry *entry,
  			     int *idle);
@@ -70,7 +70,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  #endif
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
-@@ -190,6 +190,89 @@ mtk_flow_get_dsa_port(struct net_device
+@@ -200,6 +200,89 @@ mtk_flow_get_dsa_port(struct net_device
  }
  
  static int
@@ -160,7 +160,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  mtk_flow_set_output_device(struct mtk_eth *eth, struct mtk_foe_entry *foe,
  			   struct net_device *idev, struct net_device *odev,
  			   struct flow_cls_offload *f, const u8 *dest_mac,
-@@ -248,13 +331,20 @@ mtk_flow_set_output_device(struct mtk_et
+@@ -258,13 +341,20 @@ mtk_flow_set_output_device(struct mtk_et
  		ct_mark = mtk_flow_get_ct_mark(ct);
  	}
  

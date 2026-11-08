@@ -22,7 +22,7 @@ diff --git a/drivers/phy/mediatek/phy-mtk-tphy.c b/drivers/phy/mediatek/phy-mtk-
 index 3e7b2f7d9796..d2a4cf21226b 100644
 --- a/drivers/phy/mediatek/phy-mtk-tphy.c
 +++ b/drivers/phy/mediatek/phy-mtk-tphy.c
-@@ -204,6 +204,12 @@
+@@ -206,6 +206,12 @@
  #define U3P_U3_PHYD_RXDET2		0x12c
  #define P3D_RG_RXDET_STB2_SET_P3	GENMASK(8, 0)
  
@@ -35,7 +35,7 @@ index 3e7b2f7d9796..d2a4cf21226b 100644
  #define U3P_SPLLC_XTALCTL3		0x018
  #define XC3_RG_U3_XTAL_RX_PWD		BIT(9)
  #define XC3_RG_U3_FRC_XTAL_RX_PWD	BIT(8)
-@@ -349,6 +355,8 @@ struct mtk_phy_instance {
+@@ -354,6 +360,8 @@ struct mtk_phy_instance {
  	int pre_emphasis;
  	bool bc12_en;
  	bool type_force_mode;
@@ -44,7 +44,7 @@ index 3e7b2f7d9796..d2a4cf21226b 100644
  };
  
  struct mtk_tphy {
-@@ -829,6 +837,12 @@ static void u3_phy_instance_init(struct mtk_tphy *tphy,
+@@ -835,6 +843,12 @@ static void u3_phy_instance_init(struct mtk_tphy *tphy,
  
  	mtk_phy_update_field(phyd + U3P_U3_PHYD_RXDET2, P3D_RG_RXDET_STB2_SET_P3, 0x10);
  
@@ -57,7 +57,7 @@ index 3e7b2f7d9796..d2a4cf21226b 100644
  	dev_dbg(tphy->dev, "%s(%d)\n", __func__, instance->index);
  }
  
-@@ -1189,6 +1203,19 @@ static void phy_parse_property(struct mtk_tphy *tphy,
+@@ -1199,6 +1213,19 @@ static void phy_parse_property(struct mtk_tphy *tphy,
  {
  	struct device *dev = &instance->phy->dev;
  

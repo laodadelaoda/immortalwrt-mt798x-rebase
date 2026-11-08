@@ -15,7 +15,7 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_wed.c b/drivers/net/ethernet/medi
 index 0c2bb61..d26d3d6 100644
 --- a/drivers/net/ethernet/mediatek/mtk_wed.c
 +++ b/drivers/net/ethernet/mediatek/mtk_wed.c
-@@ -2182,21 +2182,32 @@ mtk_wed_reset_dma(struct mtk_wed_device *dev)
+@@ -2195,21 +2195,32 @@ mtk_wed_reset_dma(struct mtk_wed_device *dev)
  
  	/* 3. reset WED TX BM */
  	wed_clr(dev, MTK_WED_CTRL, MTK_WED_CTRL_WED_TX_FREE_AGENT_EN);

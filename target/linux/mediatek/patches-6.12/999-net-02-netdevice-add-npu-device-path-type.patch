@@ -23,7 +23,7 @@ v1: Add L2TP flow offload support for NPU
 +	DEV_PATH_L2TP,
 +	DEV_PATH_PPTP,
  };
-@@ -873,8 +876,34 @@ struct net_device_path {
+@@ -877,8 +880,34 @@ struct net_device_path {
  			u8 amsdu;
  		} mtk_wdma;
 +		struct {

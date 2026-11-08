@@ -33,7 +33,7 @@ index 5f4dc0a..43bcc16 100644
  	GPIOD_IN,
  	GPIOD_IN,
  	GPIOD_ASIS,
-@@ -597,7 +597,7 @@ static unsigned int sfp_gpio_get_state(struct sfp *sfp)
+@@ -635,7 +635,7 @@ static unsigned int sfp_gpio_get_state(struct sfp *sfp)
  	unsigned int i, state, v;
  
  	for (i = state = 0; i < GPIO_MAX; i++) {
@@ -42,7 +42,7 @@ index 5f4dc0a..43bcc16 100644
  			continue;
  
  		v = gpiod_get_value_cansleep(sfp->gpio[i]);
-@@ -3095,7 +3095,7 @@ static int sfp_probe(struct platform_device *pdev)
+@@ -3134,7 +3134,7 @@ static int sfp_probe(struct platform_device *pdev)
  	}
  
  	for (i = 0; i < GPIO_MAX; i++) {

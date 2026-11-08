@@ -61,7 +61,7 @@ index 4b0f6b3..0697671 100644
  	switch: switch@0 {
  		compatible = "mediatek,mt7531";
  		reg = <31>;
-@@ -332,14 +343,9 @@ port@4 {
+@@ -199,14 +210,9 @@ port@4 {
  
  		port@5 {
  			reg = <5>;

@@ -27,7 +27,7 @@ diff --git a/net/core/skbuff.c b/net/core/skbuff.c
  
  #include <linux/uaccess.h>
  #include <trace/events/skb.h>
-@@ -2293,6 +2294,10 @@ int pskb_expand_head(struct sk_buff *skb
+@@ -2302,6 +2303,10 @@ int pskb_expand_head(struct sk_buff *skb
  	       skb_shinfo(skb),
  	       offsetof(struct skb_shared_info, frags[skb_shinfo(skb)->nr_frags]));
  

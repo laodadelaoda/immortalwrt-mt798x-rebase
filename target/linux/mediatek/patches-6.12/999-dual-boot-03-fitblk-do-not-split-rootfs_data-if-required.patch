@@ -15,7 +15,7 @@ Add control to bypass creating fitrw
 
 --- a/drivers/block/fitblk.c
 +++ b/drivers/block/fitblk.c
-@@ -579,6 +579,12 @@ static int parse_fit_on_dev(struct devic
+@@ -581,6 +581,12 @@ static int parse_fit_on_dev(struct devic
  		 slot, (slot > 1)?"s":"", (slot > 1)?"[0...":"", slot - 1,
  		 (slot > 1)?"]":"");
  

@@ -54,7 +54,7 @@ index 837d20c..24e4028 100644
  	/* Enable SGMII */
  	if (interface == PHY_INTERFACE_MODE_SGMII ||
  	    phy_interface_mode_is_8023z(interface))
-@@ -972,15 +956,11 @@ static void mtk_mac_link_up(struct phylink_config *config,
+@@ -1002,15 +986,11 @@ static void mtk_mac_link_up(struct phylink_config *config,
  		mtk_gdm_mac_link_up(mac, phy, mode, interface, speed, duplex,
  				    tx_pause, rx_pause);
  
@@ -70,7 +70,7 @@ index 837d20c..24e4028 100644
  	.mac_finish = mtk_mac_finish,
  	.mac_link_down = mtk_mac_link_down,
  	.mac_link_up = mtk_mac_link_up,
-@@ -3729,9 +3709,6 @@ static int mtk_open(struct net_device *dev)
+@@ -3829,9 +3809,6 @@ static int mtk_open(struct net_device *dev)
  
  	ppe_num = eth->soc->ppe_num;
  
@@ -80,7 +80,7 @@ index 837d20c..24e4028 100644
  	err = phylink_of_phy_connect(mac->phylink, mac->of_node, 0);
  	if (err) {
  		netdev_err(dev, "%s: could not attach PHY: %d\n", __func__,
-@@ -3879,9 +3856,6 @@ static int mtk_stop(struct net_device *dev)
+@@ -3983,9 +3960,6 @@ static int mtk_stop(struct net_device *dev)
  	for (i = 0; i < ARRAY_SIZE(eth->ppe); i++)
  		mtk_ppe_stop(eth->ppe[i]);
  
@@ -90,7 +90,7 @@ index 837d20c..24e4028 100644
  	return 0;
  }
  
-@@ -5091,18 +5065,6 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
+@@ -5228,18 +5202,6 @@ static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
  		}
  	}
  
@@ -113,7 +113,7 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.h b/drivers/net/ethernet/
 index 72e6ed8..a729eff 100644
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.h
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.h
-@@ -1441,7 +1441,6 @@ struct mtk_mac {
+@@ -1449,7 +1449,6 @@ struct mtk_mac {
  	struct phylink_config		phylink_config;
  	struct phylink_pcs		*sgmii_pcs;
  	struct phylink_pcs		*usxgmii_pcs;

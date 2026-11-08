@@ -23,7 +23,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-@@ -818,6 +818,40 @@ static void mtk_mac_link_down(struct phy
+@@ -824,6 +824,40 @@ static void mtk_mac_link_down(struct phy
  	}
  }
  
@@ -64,7 +64,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  static void mtk_set_queue_speed(struct mtk_eth *eth, unsigned int idx,
  				int speed)
  {
-@@ -928,6 +962,10 @@ static void mtk_set_queue_speed(struct m
+@@ -934,6 +968,10 @@ static void mtk_set_queue_speed(struct m
  		}
  	}
  
@@ -75,7 +75,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	ofs = MTK_QTX_OFFSET * idx;
  	mtk_w32(eth, val, soc->reg_map->qdma.qtx_sch + ofs);
  }
-@@ -6577,6 +6615,7 @@ static int mtk_probe(struct platform_dev
+@@ -6658,6 +6696,7 @@ static int mtk_probe(struct platform_dev
  	spin_lock_init(&eth->tx_irq_lock);
  	spin_lock_init(&eth->rx_irq_lock);
  	spin_lock_init(&eth->dim_lock);
@@ -93,7 +93,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  #define MTK_QDMA_PAGE_SIZE	2048
  #define MTK_MAX_RX_LENGTH	1536
  #define MTK_MAX_RX_LENGTH_2K	2048
-@@ -1158,6 +1159,20 @@ struct mtk_qdma_params {
+@@ -1159,6 +1160,20 @@ struct mtk_qdma_params {
  	u32	tx_sch[2];
  };
  
@@ -114,7 +114,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  enum mkt_eth_capabilities {
  	MTK_RGMII_BIT = 0,
  	MTK_TRGMII_BIT,
-@@ -1566,6 +1581,7 @@ struct mtk_eth {
+@@ -1568,6 +1583,7 @@ struct mtk_eth {
  	struct mtk_napi			rx_napi[MTK_RX_NAPI_NUM];
  	struct mtk_rss_params		rss_params;
  	struct mtk_qdma_params		qdma_params;
@@ -122,7 +122,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	struct clk			*clks[MTK_CLK_MAX];
  
  	struct mii_bus			*mii_bus;
-@@ -1817,5 +1833,7 @@ int mtk_flow_offload_cmd(struct mtk_eth
+@@ -1819,5 +1835,7 @@ int mtk_flow_offload_cmd(struct mtk_eth
  void mtk_flow_offload_cleanup(struct mtk_eth *eth, struct list_head *list);
  void mtk_eth_set_dma_device(struct mtk_eth *eth, struct device *dma_dev);
  

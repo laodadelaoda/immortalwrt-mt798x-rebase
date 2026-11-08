@@ -22,7 +22,7 @@ v1: Move openwrt-master files to openwrt-25.12 branch after OpenWrt official
  			clock-names = "parent-clk", "sel-clk", "spi-clk", "hclk";
  			#address-cells = <1>;
  			#size-cells = <0>;
-@@ -263,6 +267,10 @@
+@@ -262,6 +266,10 @@
  				 <&topckgen CLK_TOP_SPI_SEL>,
  				 <&infracfg CLK_INFRA_SPI0_CK>,
  				 <&infracfg CLK_INFRA_SPI0_HCK_CK>;
@@ -33,7 +33,7 @@ v1: Move openwrt-master files to openwrt-25.12 branch after OpenWrt official
  			clock-names = "parent-clk", "sel-clk", "spi-clk", "hclk";
  			#address-cells = <1>;
  			#size-cells = <0>;
-@@ -274,9 +282,13 @@
+@@ -273,9 +281,13 @@
  			reg = <0 0x1100b000 0 0x1000>;
  			interrupts = <GIC_SPI 141 IRQ_TYPE_LEVEL_HIGH>;
  			clocks = <&topckgen CLK_TOP_CB_M_D2>,

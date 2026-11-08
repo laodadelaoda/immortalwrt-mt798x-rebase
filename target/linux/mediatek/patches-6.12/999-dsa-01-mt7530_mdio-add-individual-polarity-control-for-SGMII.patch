@@ -33,7 +33,7 @@ diff --git a/drivers/net/dsa/mt7530-mdio.c b/drivers/net/dsa/mt7530-mdio.c
 index 51df42c..6163be7 100644
 --- a/drivers/net/dsa/mt7530-mdio.c
 +++ b/drivers/net/dsa/mt7530-mdio.c
-@@ -114,7 +114,8 @@ mt7531_create_sgmii(struct mt7530_priv *priv)
+@@ -121,7 +121,8 @@ mt7531_create_sgmii(struct mt7530_priv *priv)
  			break;
  		}
  		pcs = mtk_pcs_lynxi_create(priv->dev, regmap,

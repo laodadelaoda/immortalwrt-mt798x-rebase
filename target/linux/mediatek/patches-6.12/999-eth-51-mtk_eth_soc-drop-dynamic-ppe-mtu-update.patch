@@ -31,7 +31,7 @@ diff --git a/drivers/net/ethernet/mediatek/mtk_eth_soc.c b/drivers/net/ethernet/
 index 42e28be..eb030b1 100644
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-@@ -4621,7 +4621,7 @@ static int mtk_open(struct net_device *dev)
+@@ -4666,7 +4666,7 @@ static int mtk_open(struct net_device *dev)
  	struct mtk_mac *mac = netdev_priv(dev);
  	struct mtk_eth *eth = mac->hw;
  	struct mtk_mac *target_mac;
@@ -40,7 +40,7 @@ index 42e28be..eb030b1 100644
  
  	ppe_num = eth->soc->ppe_num;
  
-@@ -4668,10 +4668,6 @@ static int mtk_open(struct net_device *dev)
+@@ -4708,10 +4708,6 @@ static int mtk_open(struct net_device *dev)
  			mtk_gdm_config(eth, target_mac->id, gdm_config);
  		}
  
@@ -51,7 +51,7 @@ index 42e28be..eb030b1 100644
  		if (MTK_HAS_CAPS(eth->soc->caps, MTK_HWTSTAMP))
  			mtk_ptp_clock_init(eth);
  
-@@ -5733,16 +5729,13 @@ static int mtk_change_mtu(struct net_device *dev, int new_mtu)
+@@ -5780,16 +5776,13 @@ static int mtk_change_mtu(struct net_device *dev, int new_mtu)
  {
  	struct mtk_mac *mac = netdev_priv(dev);
  	struct mtk_eth *eth = mac->hw;

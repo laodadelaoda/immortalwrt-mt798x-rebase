@@ -25,7 +25,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 
 --- a/net/netfilter/nft_flow_offload.c
 +++ b/net/netfilter/nft_flow_offload.c
-@@ -226,6 +226,10 @@ static void nft_dev_path_info(const stru
+@@ -221,6 +221,10 @@ static void nft_dev_path_info(const stru
  			}
  			info->xmit_type = FLOW_OFFLOAD_XMIT_DIRECT;
  			break;

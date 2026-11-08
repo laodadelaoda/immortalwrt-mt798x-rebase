@@ -25,7 +25,7 @@ Signed-off-by: Rex Lu <rex.lu@mediatek.com>
 
 --- a/drivers/net/ethernet/mediatek/mtk_ppe.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe.c
-@@ -705,7 +705,7 @@ int mtk_foe_entry_set_tops_entry(struct
+@@ -740,7 +740,7 @@ int mtk_foe_entry_set_tops_entry(struct
  
  int mtk_foe_entry_set_wdma(struct mtk_eth *eth, struct mtk_foe_entry *entry,
  			   int wdma_idx, int txq, int bss, int wcid,
@@ -34,7 +34,7 @@ Signed-off-by: Rex Lu <rex.lu@mediatek.com>
  {
  	struct mtk_foe_mac_info *l2 = mtk_foe_entry_l2(eth, entry);
  	u32 *ib2 = mtk_foe_entry_ib2(eth, entry);
-@@ -718,6 +718,7 @@ int mtk_foe_entry_set_wdma(struct mtk_et
+@@ -753,6 +753,7 @@ int mtk_foe_entry_set_wdma(struct mtk_et
  		l2->w3info = FIELD_PREP(MTK_FOE_WINFO_WCID_V3, wcid) |
  			     FIELD_PREP(MTK_FOE_WINFO_BSS_V3, bss);
  		l2->amsdu = FIELD_PREP(MTK_FOE_WINFO_AMSDU_EN, amsdu_en);
@@ -44,7 +44,7 @@ Signed-off-by: Rex Lu <rex.lu@mediatek.com>
  		*ib2 &= ~MTK_FOE_IB2_PORT_MG_V2;
 --- a/drivers/net/ethernet/mediatek/mtk_ppe.h
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe.h
-@@ -446,7 +446,7 @@ int mtk_foe_entry_set_tops_entry(struct
+@@ -451,7 +451,7 @@ int mtk_foe_entry_set_tops_entry(struct
  				 int tops_entry);
  int mtk_foe_entry_set_wdma(struct mtk_eth *eth, struct mtk_foe_entry *entry,
  			   int wdma_idx, int txq, int bss, int wcid,
@@ -55,7 +55,7 @@ Signed-off-by: Rex Lu <rex.lu@mediatek.com>
  int mtk_foe_entry_commit(struct mtk_ppe *ppe, struct mtk_flow_entry *entry);
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
-@@ -101,31 +101,36 @@ mtk_flow_offload_mangle_eth(const struct
+@@ -102,31 +102,36 @@ mtk_flow_offload_mangle_eth(const struct
  static int
  mtk_flow_get_wdma_info(struct net_device *dev, const u8 *addr, struct mtk_wdma_info *info)
  {
@@ -107,7 +107,7 @@ Signed-off-by: Rex Lu <rex.lu@mediatek.com>
  
  	return 0;
  }
-@@ -306,9 +311,10 @@ mtk_flow_set_output_device(struct mtk_et
+@@ -317,9 +322,10 @@ mtk_flow_set_output_device(struct mtk_et
  	u32 ct_mark = 0;
  	int pse_port, dsa_port, dsa_proto, queue;
  
@@ -121,7 +121,7 @@ Signed-off-by: Rex Lu <rex.lu@mediatek.com>
  			case 0:
 --- a/drivers/net/ethernet/mediatek/mtk_wed.h
 +++ b/drivers/net/ethernet/mediatek/mtk_wed.h
-@@ -62,6 +62,7 @@ struct mtk_wdma_info {
+@@ -59,6 +59,7 @@ struct mtk_wdma_info {
  	u16 wcid;
  	u8 bss;
  	u8 amsdu;

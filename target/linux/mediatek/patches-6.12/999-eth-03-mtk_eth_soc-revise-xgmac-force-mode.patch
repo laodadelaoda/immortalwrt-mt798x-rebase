@@ -55,7 +55,7 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: revise xgmac force mode
  
  	mcr = mtk_r32(mac->hw, MTK_XMAC_MCR(mac->id));
  	mcr &= ~(XMAC_MCR_FORCE_TX_FC | XMAC_MCR_FORCE_RX_FC | XMAC_MCR_TRX_DISABLE);
-@@ -4410,12 +4407,25 @@ static int mtk_hw_init(struct mtk_eth *e
+@@ -4453,12 +4450,25 @@ static int mtk_hw_init(struct mtk_eth *e
  	for (i = 0; i < MTK_MAX_DEVS; i++) {
  		struct net_device *dev = eth->netdev[i];
  

@@ -29,7 +29,7 @@ index d907769..62f99e3 100644
  
  / {
  	compatible = "mediatek,mt7988a";
-@@ -1300,7 +1301,7 @@ thermal-zones {
+@@ -1308,7 +1309,7 @@ thermal-zones {
  		cpu_thermal: cpu-thermal {
  			polling-delay-passive = <1000>;
  			polling-delay = <1000>;
@@ -38,7 +38,7 @@ index d907769..62f99e3 100644
  			trips {
  				cpu_trip_crit: crit {
  					temperature = <125000>;
-@@ -1309,6 +1310,97 @@ cpu_trip_crit: crit {
+@@ -1317,6 +1318,97 @@ cpu_trip_crit: crit {
  				};
  			};
  		};

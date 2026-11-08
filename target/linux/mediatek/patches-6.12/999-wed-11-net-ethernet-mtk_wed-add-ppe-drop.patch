@@ -22,7 +22,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.h
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.h
-@@ -2034,6 +2034,18 @@ u32 mtk_r32(struct mtk_eth *eth, unsigne
+@@ -2100,6 +2100,18 @@ u32 mtk_r32(struct mtk_eth *eth, unsigne
  u32 mtk_m32(struct mtk_eth *eth, u32 mask, u32 set, unsigned int reg);
  u64 mtk_r64(struct mtk_eth *eth, unsigned reg);
  
@@ -43,7 +43,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	u32 val;
 --- a/drivers/net/ethernet/mediatek/mtk_wed.c
 +++ b/drivers/net/ethernet/mediatek/mtk_wed.c
-@@ -2302,6 +2302,14 @@ mtk_wed_ppe_check(struct mtk_wed_device
+@@ -2315,6 +2315,14 @@ mtk_wed_ppe_check(struct mtk_wed_device
  }
  
  static void
@@ -58,7 +58,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  mtk_wed_configure_irq(struct mtk_wed_device *dev, u32 irq_mask)
  {
  	u32 wdma_mask = FIELD_PREP(MTK_WDMA_INT_MASK_RX_DONE, GENMASK(1, 0));
-@@ -3189,6 +3197,7 @@ void mtk_wed_add_hw(struct device_node *
+@@ -3202,6 +3210,7 @@ void mtk_wed_add_hw(struct device_node *
  		.irq_set_mask = mtk_wed_irq_set_mask,
  		.detach = mtk_wed_detach,
  		.ppe_check = mtk_wed_ppe_check,

@@ -21,7 +21,7 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: add 9k jumbo frame support
 
 --- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 +++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-@@ -619,7 +619,8 @@ static void mtk_set_mcr_max_rx(struct mt
+@@ -625,7 +625,8 @@ static void mtk_set_mcr_max_rx(struct mt
  
  	if (!mtk_interface_mode_is_xgmii(mac->interface)) {
  		mcr_cur = mtk_r32(mac->hw, MTK_MAC_MCR(mac->id));
@@ -31,7 +31,7 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: add 9k jumbo frame support
  
  		if (val <= 1518)
  			mcr_new |= MAC_MCR_MAX_RX(MAC_MCR_MAX_RX_1518);
-@@ -627,14 +628,21 @@ static void mtk_set_mcr_max_rx(struct mt
+@@ -633,14 +634,21 @@ static void mtk_set_mcr_max_rx(struct mt
  			mcr_new |= MAC_MCR_MAX_RX(MAC_MCR_MAX_RX_1536);
  		else if (val <= 1552)
  			mcr_new |= MAC_MCR_MAX_RX(MAC_MCR_MAX_RX_1552);
@@ -55,7 +55,7 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: add 9k jumbo frame support
  
  		if (mcr_new != mcr_cur)
  			mtk_w32(mac->hw, mcr_new, MTK_XMAC_RX_CFG2(mac->id));
-@@ -885,6 +893,19 @@ void mtk_shaper_update_refcnt(struct mtk
+@@ -891,6 +899,19 @@ void mtk_shaper_update_refcnt(struct mtk
  		atomic_dec(&eth->qdma_shaper.refcnt[idx]);
  }
  
@@ -75,7 +75,7 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: add 9k jumbo frame support
  static void mtk_set_queue_speed(struct mtk_eth *eth, unsigned int idx,
  				int speed)
  {
-@@ -1499,9 +1520,8 @@ static bool mtk_rx_get_desc(struct mtk_e
+@@ -1505,9 +1526,8 @@ static bool mtk_rx_get_desc(struct mtk_e
  	return true;
  }
  
@@ -86,7 +86,7 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: add 9k jumbo frame support
  	unsigned long data;
  
  	data = __get_free_pages(gfp_mask | __GFP_COMP | __GFP_NOWARN,
-@@ -2663,7 +2683,7 @@ static int mtk_poll_rx(struct napi_struc
+@@ -2669,7 +2689,7 @@ static int mtk_poll_rx(struct napi_struc
  			if (ring->frag_size <= PAGE_SIZE)
  				new_data = napi_alloc_frag(ring->frag_size);
  			else
@@ -95,7 +95,7 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: add 9k jumbo frame support
  
  			if (unlikely(!new_data)) {
  				netdev->stats.rx_dropped++;
-@@ -3237,7 +3257,7 @@ static int mtk_rx_alloc(struct mtk_eth *
+@@ -3243,7 +3263,7 @@ static int mtk_rx_alloc(struct mtk_eth *
  			if (ring->frag_size <= PAGE_SIZE)
  				data = netdev_alloc_frag(ring->frag_size);
  			else
@@ -104,7 +104,7 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: add 9k jumbo frame support
  
  			if (!data)
  				return -ENOMEM;
-@@ -6496,6 +6516,6 @@ static int mtk_add_mac(struct mtk_eth *e
+@@ -6579,6 +6599,6 @@ static int mtk_add_mac(struct mtk_eth *e
  	eth->netdev[id]->dev.of_node = np;
  
 -	eth->netdev[id]->max_mtu = MTK_MAX_RX_LENGTH - MTK_RX_ETH_HLEN;
@@ -124,7 +124,7 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: add 9k jumbo frame support
  #define MTK_TX_DMA_BUF_LEN	0x3fff
  #define MTK_TX_DMA_BUF_LEN_V2	0xffff
  #define MTK_QDMA_RING_SIZE	2048
-@@ -541,6 +543,8 @@
+@@ -537,6 +539,8 @@
  
  /* Mac control registers */
  #define MTK_MAC_MCR(x)		(0x10100 + (x * 0x100))
@@ -133,7 +133,7 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: add 9k jumbo frame support
  #define MAC_MCR_MAX_RX_MASK	GENMASK(25, 24)
  #define MAC_MCR_MAX_RX(_x)	(MAC_MCR_MAX_RX_MASK & ((_x) << 24))
  #define MAC_MCR_MAX_RX_1518	0x0
-@@ -1203,6 +1207,7 @@ enum mkt_eth_capabilities {
+@@ -1204,6 +1208,7 @@ enum mkt_eth_capabilities {
  	MTK_SRAM_BIT,
  	MTK_XGMAC_BIT,
  	MTK_XGMAC_V2_BIT,
@@ -141,7 +141,7 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: add 9k jumbo frame support
  	MTK_36BIT_DMA_BIT,
  
  	/* MUX BITS*/
-@@ -1255,6 +1260,7 @@ enum mkt_eth_capabilities {
+@@ -1256,6 +1261,7 @@ enum mkt_eth_capabilities {
  #define MTK_SRAM		BIT_ULL(MTK_SRAM_BIT)
  #define MTK_XGMAC		BIT_ULL(MTK_XGMAC_BIT)
  #define MTK_XGMAC_V2		BIT_ULL(MTK_XGMAC_V2_BIT)
@@ -149,7 +149,7 @@ Subject: [PATCH] net: ethernet: mtk_eth_soc: add 9k jumbo frame support
  #define MTK_36BIT_DMA	BIT_ULL(MTK_36BIT_DMA_BIT)
  
  #define MTK_ETH_MUX_GDM1_TO_GMAC1_ESW		\
-@@ -1377,7 +1383,8 @@ enum mkt_eth_capabilities {
+@@ -1378,7 +1384,8 @@ enum mkt_eth_capabilities {
  		      MTK_MUX_GMAC123_TO_GEPHY_SGMII | \
  		      MTK_MUX_GMAC123_TO_USXGMII | MTK_MUX_GMAC2_TO_2P5GPHY | \
  		      MTK_QDMA | MTK_SRAM | MTK_PDMA_INT | MTK_RSS | \

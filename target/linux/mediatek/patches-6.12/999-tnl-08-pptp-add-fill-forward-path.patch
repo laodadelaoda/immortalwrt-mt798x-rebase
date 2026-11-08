@@ -21,7 +21,7 @@ v1: Add PPTP fill_forward_path for NPU flow offload
 
 --- a/drivers/net/ppp/pptp.c
 +++ b/drivers/net/ppp/pptp.c
-@@ -628,9 +628,64 @@ static int pptp_ppp_ioctl(struct ppp_cha
+@@ -619,9 +619,64 @@ static int pptp_ppp_ioctl(struct ppp_cha
  	return err;
  }
  

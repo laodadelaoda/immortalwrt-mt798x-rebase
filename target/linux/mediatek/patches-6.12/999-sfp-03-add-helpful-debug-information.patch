@@ -35,7 +35,7 @@ diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
 index 8c2c342..3026ea4 100644
 --- a/drivers/net/phy/phylink.c
 +++ b/drivers/net/phy/phylink.c
-@@ -1726,6 +1726,15 @@ static void phylink_resolve(struct work_struct *w)
+@@ -1873,6 +1873,15 @@ static void phylink_resolve(struct work_struct *w)
  				link_state.duplex = pl->phy_state.duplex;
  			}
  
@@ -51,7 +51,7 @@ index 8c2c342..3026ea4 100644
  			/* If we have a PHY, we need to update with the PHY
  			 * flow control bits.
  			 */
-@@ -3429,7 +3438,7 @@ static void phylink_sfp_set_config(struct phylink *pl,
+@@ -3824,7 +3833,7 @@ static void phylink_sfp_set_config(struct phylink *pl,
  	u8 mode = MLO_AN_INBAND;
  	bool changed = false;
  
@@ -60,7 +60,7 @@ index 8c2c342..3026ea4 100644
  		    phylink_an_mode_str(mode), phy_modes(state->interface),
  		    __ETHTOOL_LINK_MODE_MASK_NBITS, supported);
  
-@@ -3523,7 +3532,7 @@ static int phylink_sfp_config_optical(struct phylink *pl)
+@@ -3918,7 +3927,7 @@ static int phylink_sfp_config_optical(struct phylink *pl)
  	phy_interface_t interface;
  	int ret;
  
@@ -87,7 +87,7 @@ diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
 index c7b15df..58dcf19 100644
 --- a/drivers/net/phy/sfp.c
 +++ b/drivers/net/phy/sfp.c
-@@ -578,7 +578,7 @@ static bool sfp_match(const char *qs, const char *str, size_t len)
+@@ -611,7 +611,7 @@ static bool sfp_match(const char *qs, const char *str, size_t len)
  	return !strncmp(qs, str, len);
  }
  
@@ -96,7 +96,7 @@ index c7b15df..58dcf19 100644
  {
  	const struct sfp_quirk *q;
  	unsigned int i;
-@@ -589,8 +589,14 @@ static const struct sfp_quirk *sfp_lookup_quirk(const struct sfp_eeprom_id *id)
+@@ -622,8 +622,14 @@ static const struct sfp_quirk *sfp_lookup_quirk(const struct sfp_eeprom_id *id)
  
  	for (i = 0, q = sfp_quirks; i < ARRAY_SIZE(sfp_quirks); i++, q++)
  		if (sfp_match(q->vendor, id->base.vendor_name, vs) &&
@@ -112,7 +112,7 @@ index c7b15df..58dcf19 100644
  
  	return NULL;
  }
-@@ -1711,14 +1717,14 @@ static void sfp_hwmon_exit(struct sfp *sfp)
+@@ -1745,14 +1751,14 @@ static void sfp_hwmon_exit(struct sfp *sfp)
  /* Helpers */
  static void sfp_module_tx_disable(struct sfp *sfp)
  {
@@ -129,7 +129,7 @@ index c7b15df..58dcf19 100644
  		sfp->state & SFP_F_TX_DISABLE ? 1 : 0, 0);
  	sfp_mod_state(sfp, SFP_F_TX_DISABLE, 0);
  }
-@@ -1827,7 +1833,8 @@ static void sfp_sm_phy_detach(struct sfp *sfp)
+@@ -1861,7 +1867,8 @@ static void sfp_sm_phy_detach(struct sfp *sfp)
  static int sfp_sm_probe_phy(struct sfp *sfp, int addr, bool is_c45)
  {
  	struct phy_device *phy;
@@ -139,7 +139,7 @@ index c7b15df..58dcf19 100644
  
  	phy = get_phy_device(sfp->i2c_mii, addr, is_c45);
  	if (phy == ERR_PTR(-ENODEV))
-@@ -1848,6 +1855,30 @@ static int sfp_sm_probe_phy(struct sfp *sfp, int addr, bool is_c45)
+@@ -1882,6 +1889,30 @@ static int sfp_sm_probe_phy(struct sfp *sfp, int addr, bool is_c45)
  		return err;
  	}
  
@@ -170,7 +170,7 @@ index c7b15df..58dcf19 100644
  	err = sfp_add_phy(sfp->sfp_bus, phy);
  	if (err) {
  		phy_device_remove(phy);
-@@ -1930,6 +1961,9 @@ static void sfp_sm_fault(struct sfp *sfp, unsigned int next_state, bool warn)
+@@ -1964,6 +1995,9 @@ static void sfp_sm_fault(struct sfp *sfp, unsigned int next_state, bool warn)
  
  static int sfp_sm_add_mdio_bus(struct sfp *sfp)
  {
@@ -180,7 +180,7 @@ index c7b15df..58dcf19 100644
  	if (sfp->mdio_protocol != MDIO_I2C_NONE)
  		return sfp_i2c_mdiobus_create(sfp);
  
-@@ -2396,7 +2430,7 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
+@@ -2430,7 +2464,7 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
  	else
  		sfp->mdio_protocol = MDIO_I2C_NONE;
  
@@ -189,7 +189,7 @@ index c7b15df..58dcf19 100644
  
  	mutex_lock(&sfp->st_mutex);
  	/* Initialise state bits to use from hardware */
-@@ -2749,7 +2783,7 @@ static void sfp_sm_main(struct sfp *sfp, unsigned int event)
+@@ -2783,7 +2817,7 @@ static void sfp_sm_main(struct sfp *sfp, unsigned int event)
  
  static void __sfp_sm_event(struct sfp *sfp, unsigned int event)
  {
@@ -198,7 +198,7 @@ index c7b15df..58dcf19 100644
  		mod_state_to_str(sfp->sm_mod_state),
  		dev_state_to_str(sfp->sm_dev_state),
  		sm_state_to_str(sfp->sm_state),
-@@ -2759,7 +2793,7 @@ static void __sfp_sm_event(struct sfp *sfp, unsigned int event)
+@@ -2793,7 +2827,7 @@ static void __sfp_sm_event(struct sfp *sfp, unsigned int event)
  	sfp_sm_module(sfp, event);
  	sfp_sm_main(sfp, event);
  

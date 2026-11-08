@@ -24,7 +24,7 @@ diff --git a/drivers/usb/core/hub.c b/drivers/usb/core/hub.c
 index 090b3a757112..3b555b7364a9 100644
 --- a/drivers/usb/core/hub.c
 +++ b/drivers/usb/core/hub.c
-@@ -2552,6 +2552,8 @@ static int usb_enumerate_device(struct usb_device *udev)
+@@ -2557,6 +2557,8 @@ static int usb_enumerate_device(struct usb_device *udev)
  			if (err < 0)
  				dev_dbg(&udev->dev, "HNP fail, %d\n", err);
  		}
@@ -33,7 +33,7 @@ index 090b3a757112..3b555b7364a9 100644
  		return -ENOTSUPP;
  	}
  
-@@ -5060,9 +5062,11 @@ hub_port_init(struct usb_hub *hub, struct usb_device *udev, int port1,
+@@ -5065,9 +5067,11 @@ hub_port_init(struct usb_hub *hub, struct usb_device *udev, int port1,
  				goto fail;
  			}
  			if (maxp0 < 0) {

@@ -805,13 +805,13 @@ diff --git a/drivers/net/dsa/an8855_nl.h b/drivers/net/dsa/an8855_nl.h
 diff --git a/drivers/net/dsa/an8855.c b/drivers/net/dsa/an8855.c
 --- a/drivers/net/dsa/an8855.c
 +++ b/drivers/net/dsa/an8855.c
-@@ -24,1 +24,1 @@
+@@ -30,1 +30,1 @@
 -struct proc_dir_entry *proc_an8855_dsa_dir;
 +static struct proc_dir_entry *proc_an8855_dsa_dir;
 diff --git a/drivers/net/dsa/an8855.c b/drivers/net/dsa/an8855.c
 --- a/drivers/net/dsa/an8855.c
 +++ b/drivers/net/dsa/an8855.c
-@@ -137,58 +137,103 @@
+@@ -140,58 +140,103 @@
 -void an8855_write(struct an8855_priv *priv, u32 reg, u32 val)
 -{
 -	regmap_write(priv->regmap, reg, val);
@@ -976,7 +976,7 @@ diff --git a/drivers/net/dsa/an8855.c b/drivers/net/dsa/an8855.c
 diff --git a/drivers/net/dsa/an8855.c b/drivers/net/dsa/an8855.c
 --- a/drivers/net/dsa/an8855.c
 +++ b/drivers/net/dsa/an8855.c
-@@ -2220,15 +2220,25 @@
+@@ -2288,15 +2288,25 @@
 -static int an8855_proc_device_init(void)
 -{
 -	if (!proc_an8855_dsa_dir)
@@ -1020,7 +1020,7 @@ diff --git a/drivers/net/dsa/an8855.c b/drivers/net/dsa/an8855.c
 diff --git a/drivers/net/dsa/an8855.c b/drivers/net/dsa/an8855.c
 --- a/drivers/net/dsa/an8855.c
 +++ b/drivers/net/dsa/an8855.c
-@@ -2385,10 +2385,15 @@
+@@ -2443,10 +2443,15 @@
 -	ret = an8855_nl_init(&priv);
 -	if (ret) {
 -		dev_err(priv->dev, "Failed to initialize netlink with DSA: %d\n", ret);
@@ -1049,7 +1049,7 @@ diff --git a/drivers/net/dsa/an8855.c b/drivers/net/dsa/an8855.c
 diff --git a/drivers/net/dsa/an8855.c b/drivers/net/dsa/an8855.c
 --- a/drivers/net/dsa/an8855.c
 +++ b/drivers/net/dsa/an8855.c
-@@ -2410,4 +2410,6 @@
+@@ -2464,4 +2464,6 @@
 -	if (priv)
 -		dsa_unregister_switch(priv->ds);
 -	an8855_nl_exit();
@@ -1063,7 +1063,7 @@ diff --git a/drivers/net/dsa/an8855.c b/drivers/net/dsa/an8855.c
 diff --git a/drivers/net/dsa/an8855.h b/drivers/net/dsa/an8855.h
 --- a/drivers/net/dsa/an8855.h
 +++ b/drivers/net/dsa/an8855.h
-@@ -789,2 +789,2 @@
+@@ -783,2 +783,2 @@
 -u32 an8855_read(struct an8855_priv *priv, u32 reg);
 -void an8855_write(struct an8855_priv *priv, u32 reg, u32 val);
 +int an8855_read(struct an8855_priv *priv, u32 reg, u32 *val);
