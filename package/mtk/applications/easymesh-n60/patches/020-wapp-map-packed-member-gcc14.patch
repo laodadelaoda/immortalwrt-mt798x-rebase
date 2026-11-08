@@ -1,5 +1,14 @@
 --- a/wappd/map/map_1905.c
 +++ b/wappd/map/map_1905.c
+@@ -7370,7 +7370,7 @@
+ 	u16 status_len=0;
+ 	char radio_id[MAC_ADDR_LEN];
+ 	struct ap_dev *ap = NULL;
+-	struct os_time now, delta;
++	struct os_time now, delta, last_cac;
+ 
+ 	if (radio_num == 0 || radio_num > MAP_MAX_RADIO) {
+ 		printf("invalid radio num %d\n", radio_num);
 @@ -7428,9 +7428,9 @@
  					os_free(cac_status);
  					return FALSE;
@@ -13,7 +22,19 @@
  				cac_status->ongoing_cac_channel_num++;
  				status_len += 5;
  			}
-@@ -8178,6 +8178,12 @@
+@@ -7469,7 +7469,10 @@
+ 							{
+ 								if(cac_status->allowed_channel[o].ch_num == wapp->map->cac_list.ch_list[p]) {
+ 									os_get_time(&now);
+-									os_time_sub(&now, &wapp->map->cac_list.last_cac_time[p], &delta);
++									os_memcpy(&last_cac, (const u8 *)&wapp->map->cac_list +
++										offsetof(struct cac_run_list, last_cac_time) +
++										(size_t)p * sizeof(last_cac), sizeof(last_cac));
++									os_time_sub(&now, &last_cac, &delta);
+ 									cac_status->allowed_channel[o].cac_interval =
+ 										(u16)(delta.sec / 60) ? (u16)(delta.sec / 60): (u16)1;
+ 									break;
+@@ -8178,6 +8181,12 @@
  	if (wdev->radio == NULL)
  		return;
  
@@ -26,38 +47,34 @@
  	if(ret == TRUE) {
  		for (i = 0; i < wapp->map->cac_list.ch_num; i++) {
  			if(*channel == wapp->map->cac_list.ch_list[i]) {
-@@ -8190,14 +8196,28 @@
+@@ -8190,14 +8199,24 @@
  		}
  
  		if (matched == TRUE) {
 -			os_get_time(&wapp->map->cac_list.last_cac_time[i]);
-+			{
-+				struct os_time now;
-+				if (os_get_time(&now) < 0)
-+					return;
-+				os_memcpy((u8 *)&wapp->map->cac_list +
-+					offsetof(struct cac_run_list, last_cac_time) +
-+					(size_t)i * sizeof(now), &now, sizeof(now));
-+			}
++			struct os_time now;
++			if (os_get_time(&now) < 0)
++				return;
++			os_memcpy((u8 *)&wapp->map->cac_list +
++				offsetof(struct cac_run_list, last_cac_time) +
++				(size_t)i * sizeof(now), &now, sizeof(now));
  		} else if (i < MAX_DFS_CH) {
++			struct os_time now;
++			if (os_get_time(&now) < 0)
++				return;
  			if (*channel >= 36 && *channel <= 48)
  				wapp->map->cac_list.ch_list[i] = 50;
  			else
  				wapp->map->cac_list.ch_list[i] = *channel;
++			os_memcpy((u8 *)&wapp->map->cac_list +
++				offsetof(struct cac_run_list, last_cac_time) +
++				(size_t)i * sizeof(now), &now, sizeof(now));
  			wapp->map->cac_list.ch_num++;
 -			os_get_time(&wapp->map->cac_list.last_cac_time[i]);
-+			{
-+				struct os_time now;
-+				if (os_get_time(&now) < 0)
-+					return;
-+				os_memcpy((u8 *)&wapp->map->cac_list +
-+					offsetof(struct cac_run_list, last_cac_time) +
-+					(size_t)i * sizeof(now), &now, sizeof(now));
-+			}
  			i++;
  		}
  	}
-@@ -9533,14 +9553,22 @@
+@@ -9533,14 +9552,22 @@
  	struct wapp_dev *wdev,
  	struct ts_common_setting *setting)
  {
