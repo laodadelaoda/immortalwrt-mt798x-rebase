@@ -77,7 +77,13 @@ def main() -> int:
             text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         )
         check(reverse.returncode == 0,
-              "patch 026 reverse dry-run matches the prepared source with zero fuzz (proves forward application)")
+              "patch 026 reverse dry-run matches the prepared source with fuzz disabled (confirms the patch result)")
+        reverse_offsets = re.findall(
+            r"Hunk #[0-9]+ succeeded at .*\\(offset [+-]?[1-9][0-9]* lines?\\)",
+            reverse.stdout,
+        )
+        check(not reverse_offsets,
+              "patch 026 reverse dry-run has zero line offset")
         report.append("PATCH 026 reverse dry-run output:")
         report.extend("  " + line for line in reverse.stdout.splitlines())
 
