@@ -660,6 +660,14 @@ def validate_patch_application_log(inv, log, repo):
             raise RuntimeError("Patch contains a failed/malformed hunk: " + name)
         if re.search(r"with fuzz [1-9]|fuzz [1-9]", block, re.I):
             raise RuntimeError("Patch used non-zero fuzz: " + name)
+        offsets = re.findall(
+            r"^Hunk #\\d+ succeeded at .*\\(offset [+-]?[1-9]\\d* lines?\\)\\s*$",
+            block, re.M
+        )
+        if offsets:
+            raise RuntimeError(
+                "Patch used non-zero line offset: " + name + ": " + "; ".join(offsets)
+            )
         # GNU patch emits "Hunk #N succeeded" only when a hunk needed
         # an offset diagnostic. Exact-position successful hunks are silent,
         # so counting those messages falsely reports valid patches as missing
