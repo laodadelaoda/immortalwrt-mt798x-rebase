@@ -660,7 +660,7 @@ runs:
         start = source.find(symbol)
         if start < 0:
             raise SystemExit("ERROR: DPP connection-config parser is missing.")
-        end = source.find("\\n}", start)
+        end = source.find(chr(10) + "}", start)
         if end < 0:
             raise SystemExit("ERROR: DPP connection-config parser has no closing brace.")
         body = source[start:end + 2]
