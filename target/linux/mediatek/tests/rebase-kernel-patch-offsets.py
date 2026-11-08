@@ -140,8 +140,8 @@ def transform_patch(patch_path: Path, records: list[dict]) -> tuple[str, list[di
                     f"{record['file']} hunk {record['hunk']}, reached {current_file} hunk {hunk_number}"
                 )
 
-            old_remaining = int(match.group("old_count") or "1")
-            new_remaining = int(match.group("new_count") or "1")
+            old_remaining = int((match.group("old_count") or ",1").lstrip(","))
+            new_remaining = int((match.group("new_count") or ",1").lstrip(","))
             in_hunk = old_remaining > 0 or new_remaining > 0
             continue
 

@@ -1,4 +1,4 @@
-name: One-shot Linux 6.12 patch offset rebase
+name: One-shot Linux 6.12 patch offset rebase (hunk count parser fix)
 
 on:
   push:
