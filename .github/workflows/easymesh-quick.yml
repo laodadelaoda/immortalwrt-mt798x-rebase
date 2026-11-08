@@ -1,15 +1,6 @@
 name: N60 Pro EasyMesh Quick Build
 
 on:
-  push:
-    branches:
-      - n60pro-mtk-closed-driver
-    paths:
-      - package/mtk/applications/easymesh-n60/patches/019-wapp-map-buffer-safety.patch
-      - package/mtk/applications/easymesh-n60/tests/test-wapp-map-buffer-contract.py
-      - package/mtk/applications/easymesh-n60/Makefile
-      - package/mtk/vendor-sources.lock.json
-      - .github/workflows/easymesh-quick.yml
   workflow_dispatch:
     inputs:
       device:
