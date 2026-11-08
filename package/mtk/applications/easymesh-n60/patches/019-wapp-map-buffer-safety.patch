@@ -333,16 +333,15 @@
  
  		completion_report->cac_completion_status[0].op_class = wapp->map->cac_req.body[wapp->map->cac_radio_ongoing].op_class_num;
  		completion_report->cac_completion_status[0].channel = *channel;
-@@ -8201,3 +8258,7 @@
- 			completion_report->cac_completion_status[0].op_class_num = 1;
--			completion_report->cac_completion_status[0].opcap[0].ch_num = completion_report->cac_completion_status[0].channel;
--			completion_report->cac_completion_status[0].opcap[0].op_class = completion_report->cac_completion_status[0].op_class;
-+			{
-+				struct cac_completion_report_opcap *opcap =
-+					(struct cac_completion_report_opcap *)((u8 *)completion_report + sizeof(*completion_report) + (size_t)radio_num * sizeof(struct cac_completion_status_lib));
-+				opcap->ch_num = completion_report->cac_completion_status[0].channel;
-+				opcap->op_class = completion_report->cac_completion_status[0].op_class;
-+			}
+@@ -8199,2 +8256,6 @@
+-\t\t\tcompletion_report->cac_completion_status[0].opcap[0].ch_num = completion_report->cac_completion_status[0].channel;
+-\t\t\tcompletion_report->cac_completion_status[0].opcap[0].op_class = completion_report->cac_completion_status[0].op_class;
++\t\t\t{
++\t\t\t\tstruct cac_completion_report_opcap *opcap =
++\t\t\t\t\t(struct cac_completion_report_opcap *)((u8 *)completion_report + sizeof(*completion_report) + (size_t)radio_num * sizeof(struct cac_completion_status_lib));
++\t\t\t\topcap->ch_num = completion_report->cac_completion_status[0].channel;
++\t\t\t\topcap->op_class = completion_report->cac_completion_status[0].op_class;
++\t\t\t}
 
 @@ -8205,8 +8266,6 @@
  			else
@@ -368,14 +367,13 @@
  		if (radar_status == FALSE)
  		{
  #ifdef MAP_R2
-@@ -8363,4 +8424,8 @@
- 			completion_report->cac_completion_status[0].op_class_num = 1;
- 			completion_report->cac_completion_status[0].channel = *channel;
--			completion_report->cac_completion_status[0].opcap[0].ch_num = *channel;
--			completion_report->cac_completion_status[0].opcap[0].op_class = completion_report->cac_completion_status[0].op_class;
-+			{
-+				struct cac_completion_report_opcap *opcap =
-+					(struct cac_completion_report_opcap *)((u8 *)completion_report + sizeof(*completion_report) + (size_t)radio_num * sizeof(struct cac_completion_status_lib));
-+				opcap->ch_num = *channel;
-+				opcap->op_class = completion_report->cac_completion_status[0].op_class;
-+			}
+
+@@ -8362,2 +8427,6 @@
+-\t\t\tcompletion_report->cac_completion_status[0].opcap[0].ch_num = *channel;
+-\t\t\tcompletion_report->cac_completion_status[0].opcap[0].op_class = completion_report->cac_completion_status[0].op_class;
++\t\t\t{
++\t\t\t\tstruct cac_completion_report_opcap *opcap =
++\t\t\t\t\t(struct cac_completion_report_opcap *)((u8 *)completion_report + sizeof(*completion_report) + (size_t)radio_num * sizeof(struct cac_completion_status_lib));
++\t\t\t\topcap->ch_num = *channel;
++\t\t\t\topcap->op_class = completion_report->cac_completion_status[0].op_class;
++\t\t\t}
