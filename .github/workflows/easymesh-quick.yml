@@ -1,6 +1,11 @@
 name: N60 Pro EasyMesh Quick Build
 
 on:
+  # One-shot push trigger used to run the audited Quick pipeline on this exact revision.
+  push:
+    branches: ["n60pro-mtk-closed-driver"]
+    paths:
+      - ".github/workflows/easymesh-quick.yml"
   workflow_dispatch:
     inputs:
       device:
