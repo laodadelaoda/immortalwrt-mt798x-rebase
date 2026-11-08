@@ -1,0 +1,66 @@
+name: One-shot Linux 6.12 patch offset rebase
+
+on:
+  push:
+    branches: ["n60pro-mtk-closed-driver"]
+    paths:
+      - ".github/workflows/rebase-kernel-patch-offsets.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: n60-linux-612-offset-rebase
+  cancel-in-progress: false
+
+jobs:
+  rebase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact trigger revision
+        uses: actions/checkout@v5
+        with:
+          ref: \${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Validate all offset records map to exact patch hunks
+        run: |
+          python3 target/linux/mediatek/tests/rebase-kernel-patch-offsets.py \
+            --repo "$GITHUB_WORKSPACE" \
+            --csv docs/audit/kernel-patch-offsets-42436263338.csv \
+            --check-only \
+            --report "$RUNNER_TEMP/kernel-patch-offset-check.json"
+
+      - name: Rebase hunk coordinates without changing patch payloads
+        run: |
+          python3 target/linux/mediatek/tests/rebase-kernel-patch-offsets.py \
+            --repo "$GITHUB_WORKSPACE" \
+            --csv docs/audit/kernel-patch-offsets-42436263338.csv \
+            --apply \
+            --report docs/audit/kernel-patch-offset-rebase-result.json
+          git diff --check
+          git diff --stat
+
+      - name: Commit the complete offset rebase
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add target/linux/generic target/linux/mediatek/patches-6.12 \
+            docs/audit/kernel-patch-offset-rebase-result.json
+          git diff --cached --quiet && {
+            echo "::error::Offset rebase produced no patch changes."
+            exit 1
+          }
+          git commit -m "kernel: rebase 743 hunk coordinates for Linux 6.12.112"
+          git push origin "HEAD:\${{ github.ref_name }}"
+
+      - name: Upload offset rebase attestation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-patch-offset-rebase-result
+          path: |
+            docs/audit/kernel-patch-offset-rebase-result.json
+            \${{ runner.temp }}/kernel-patch-offset-check.json
+          if-no-files-found: warn
+          retention-days: 30
