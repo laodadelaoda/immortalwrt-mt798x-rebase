@@ -32,9 +32,9 @@ for source_root in (wapp, p1905, mapd):
     for source_file in source_root.rglob("*"):
         if source_file.is_file() and source_file.suffix in {".c", ".h"}:
             source_text = source_file.read_text(encoding="utf-8", errors="replace")
-            if re.search(r"(?m)^\\s*#\\s*include\\s*[<\\\"]openssl/", source_text) or re.search(
-                r"\\b(?:EVP_|EC_KEY|OPENSSL_|OSSL_)", source_text
-            ):
+            if ("#include <openssl/" in source_text or
+                    '#include "openssl/' in source_text or
+                    re.search(r"\b(?:EVP_|EC_KEY|OPENSSL_|OSSL_)", source_text)):
                 openssl_files.append(source_file)
 
 # Regression: GNU Make consumes dollar references inside recipes. The
