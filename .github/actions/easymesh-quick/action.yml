@@ -470,14 +470,10 @@ runs:
           echo "::error::Conninfra Makefile weakens compiler diagnostics or sets an unsupported modpost assignment."
           exit 1
         fi
+        CONNINFRA_SHA256="$(python3 -c 'import json, pathlib, sys; lock=json.loads((pathlib.Path(sys.argv[1])/"package/mtk/vendor-sources.lock.json").read_text()); print(next(x["sha256"] for x in lock["sources"] if x["id"]=="conninfra"))' "$GITHUB_WORKSPACE")"
         {
           echo "Archive: $ARCHIVE"
-          echo "SHA256: $(python3 - "$GITHUB_WORKSPACE" <<'PY'
-          import json, pathlib, sys
-          lock=json.loads((pathlib.Path(sys.argv[1])/"package/mtk/vendor-sources.lock.json").read_text())
-          print(next(x["sha256"] for x in lock["sources"] if x["id"]=="conninfra"))
-          PY
-          ) (verified against canonical Lock)"
+          echo "SHA256: $CONNINFRA_SHA256 (verified against canonical Lock)"
           echo "Source files: $(find "$SRC" -type f | wc -l)"
           echo "Target kernel: Linux 6.12.112"
           echo "Patch series: all non-empty conninfra patches dry-run and applied in lexical order"
