@@ -1030,7 +1030,7 @@ runs:
         mkdir -p artifacts/easymesh-quick
         MT_WIFI_PREPARE_LOG="artifacts/easymesh-quick/mtwifi-prepare-quick.log"
         make package/mtk/drivers/mt_wifi/prepare V=s 2>&1 | tee "$MT_WIFI_PREPARE_LOG"
-        for patch in 094-fix-wnm-fortify.patch 095-fix-wnm-fortify-rsp.patch 096-wnm-fix-send-btm-req-fortify.patch; do
+        for patch in 026-since-v6.1-replace-deprecated-prandom_u32-usage.patch 094-fix-wnm-fortify.patch 095-fix-wnm-fortify-rsp.patch 096-wnm-fix-send-btm-req-fortify.patch; do
           test -s "package/mtk/drivers/mt_wifi/patches-7673/$patch" || {
             echo "::error::Missing MT Wi-Fi 7.6.7.3 compatibility patch: $patch"; exit 1;
           }
