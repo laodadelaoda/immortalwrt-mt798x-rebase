@@ -8,7 +8,7 @@
  #include <stdlib.h>
  #include <stdio.h>
  #include <pthread.h>
-@@ -7298,7 +7299,11 @@
+@@ -7299,7 +7300,11 @@
  	u16 i=0, ptr=0;
  
  	DBGPRINT(RT_DEBUG_OFF, "%s\n", __func__);
@@ -21,7 +21,7 @@
  
  	if(!cac_completion) {
  		map_event = (struct evt *)evt_buf;
-@@ -7320,7 +7325,8 @@
+@@ -7321,7 +7326,8 @@
  		ptr += 1;
  		buff[ptr] = cac_status->allowed_channel[i].ch_num;
  		ptr += 1;
@@ -31,7 +31,7 @@
  		ptr += 2;
  	}
  
-@@ -7330,7 +7336,8 @@
+@@ -7331,7 +7337,8 @@
  		ptr += 1;
  		buff[ptr] = cac_status->non_allowed_channel[i].ch_num;
  		ptr += 1;
@@ -41,7 +41,7 @@
  		ptr += 2;
  	}
  
-@@ -7339,8 +7346,9 @@
+@@ -7340,8 +7347,9 @@
  		ptr += 1;
  		buff[ptr] = cac_status->cac_ongoing_channel[i].ch_num;
  		ptr += 1;
@@ -53,7 +53,7 @@
  	}
  	*status_len = sizeof(struct evt) + (*status_len);
  	return MAP_SUCCESS;
-@@ -7352,9 +7360,10 @@
+@@ -7353,9 +7361,10 @@
  {
  	u8 radio_num = wapp_get_radio_num(wapp);
  	struct wapp_dev *wdev = NULL;
@@ -66,7 +66,7 @@
  	char buf[4096]={0};
  	u32 len=4096;
  	u16 status_len=0;
-@@ -7362,14 +7371,20 @@
+@@ -7363,14 +7372,20 @@
  	struct ap_dev *ap = NULL;
  	struct os_time now, delta;
  
@@ -91,7 +91,7 @@
  
  	for (i=0; i < radio_num; i++) {
  		if(wapp->radio[i].adpt_id == 0) {
-@@ -7390,16 +7405,32 @@
+@@ -7391,16 +7406,32 @@
  		wdev = wapp_dev_list_lookup_by_radio(wapp, radio_id);
  		if (!wdev) {
  			DBGPRINT(RT_DEBUG_ERROR, "%s null wdev\n", __func__);
@@ -129,7 +129,7 @@
  				status_len += 5;
  			}
  
-@@ -7409,28 +7440,36 @@
+@@ -7410,28 +7441,36 @@
  						//not available channel
  						if((IS_MAP_CH_5GL(wapp->radio[i].op_ch)) ||
  							(IS_MAP_CH_5GH(wapp->radio[i].op_ch))){
@@ -176,7 +176,7 @@
  										(u16)(delta.sec / 60) ? (u16)(delta.sec / 60): (u16)1;
  									break;
  								}
-@@ -7444,8 +7483,13 @@
+@@ -7445,8 +7484,13 @@
  	}
  
  	status_len += 3; // 3 bytes for allowed/non_allowed/ongoing cac channel number
@@ -192,7 +192,7 @@
  	return TRUE;
  
  }
-@@ -7814,16 +7858,19 @@
+@@ -7815,16 +7859,19 @@
  	buf = (u8 *)assoc_notification->notification_tlv;
  
  	struct assoc_notification_tlv * assoc_status_evt = (struct assoc_notification_tlv *)buf;
@@ -214,7 +214,7 @@
  }
  
  #if 0
-@@ -7847,59 +7894,63 @@
+@@ -7848,59 +7895,63 @@
  #endif
  
  
@@ -317,7 +317,7 @@
  #define CATEGORY_PUBLIC		4
  #define BSS_TRANSITION_QUERY    6
  #define CATEGORY_WNM            10
-@@ -8180,7 +8231,13 @@
+@@ -8181,7 +8232,13 @@
  
  		completion_report->radio_num = radio_num;
  
@@ -332,7 +332,7 @@
  
  		completion_report->cac_completion_status[0].op_class = wapp->map->cac_req.body[wapp->map->cac_radio_ongoing].op_class_num;
  		completion_report->cac_completion_status[0].channel = *channel;
-@@ -8204,8 +8261,6 @@
+@@ -8205,8 +8262,6 @@
  			else
  				completion_report->cac_completion_status[0].cac_status = CAC_FAILURE;
  			completion_report->cac_completion_status[0].op_class_num = 0;
@@ -341,7 +341,7 @@
  		}
  
  
-@@ -8336,7 +8391,13 @@
+@@ -8337,7 +8392,13 @@
  			return;
  		completion_report = (struct cac_completion_report_lib *)map_event->buffer;
  		completion_report->radio_num = radio_num;
