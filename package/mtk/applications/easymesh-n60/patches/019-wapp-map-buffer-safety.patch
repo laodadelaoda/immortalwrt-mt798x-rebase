@@ -317,7 +317,6 @@
  #define CATEGORY_PUBLIC		4
  #define BSS_TRANSITION_QUERY    6
  #define CATEGORY_WNM            10
-
 @@ -8181,7 +8232,13 @@
  
  		completion_report->radio_num = radio_num;
@@ -342,7 +341,6 @@
 +				opcap->ch_num = completion_report->cac_completion_status[0].channel;
 +				opcap->op_class = completion_report->cac_completion_status[0].op_class;
 +			}
-
 @@ -8205,8 +8266,6 @@
  			else
  				completion_report->cac_completion_status[0].cac_status = CAC_FAILURE;
@@ -367,8 +365,6 @@
  		if (radar_status == FALSE)
  		{
  #ifdef MAP_R2
-
-
 @@ -8362,2 +8427,6 @@
 -			completion_report->cac_completion_status[0].opcap[0].ch_num = *channel;
 -			completion_report->cac_completion_status[0].opcap[0].op_class = completion_report->cac_completion_status[0].op_class;
