@@ -20,7 +20,7 @@ jobs:
       - name: Checkout exact trigger revision
         uses: actions/checkout@v5
         with:
-          ref: \${{ github.ref_name }}
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
 
       - name: Validate all offset records map to exact patch hunks
@@ -52,7 +52,7 @@ jobs:
             exit 1
           }
           git commit -m "kernel: rebase 743 hunk coordinates for Linux 6.12.112"
-          git push origin "HEAD:\${{ github.ref_name }}"
+          git push origin "HEAD:${{ github.ref_name }}"
 
       - name: Upload offset rebase attestation
         if: always()
@@ -61,6 +61,6 @@ jobs:
           name: kernel-patch-offset-rebase-result
           path: |
             docs/audit/kernel-patch-offset-rebase-result.json
-            \${{ runner.temp }}/kernel-patch-offset-check.json
+            ${{ runner.temp }}/kernel-patch-offset-check.json
           if-no-files-found: warn
           retention-days: 30
