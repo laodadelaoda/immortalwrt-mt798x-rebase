@@ -80,7 +80,7 @@ def make_values(repo,item):
 include Makefile
 .PHONY: __n60_vendor_dump
 __n60_vendor_dump:
-\\t@printf '%s\\\\n' {probe_fields}
+\t@printf '%s\\n' {probe_fields}
 """
     cmd=["make","--no-print-directory","--silent","-C",str(package_dir),"-f","-","TOPDIR="+str(repo),"__n60_vendor_dump"]
     proc=subprocess.run(cmd,input=probe,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,cwd=repo)
