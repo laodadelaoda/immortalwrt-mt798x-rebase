@@ -74,7 +74,7 @@
  			i++;
  		}
  	}
-@@ -9533,14 +9552,22 @@
+@@ -9541,14 +9560,22 @@
  	struct wapp_dev *wdev,
  	struct ts_common_setting *setting)
  {
