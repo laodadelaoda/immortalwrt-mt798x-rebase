@@ -467,7 +467,7 @@ print("PASS: DPP BSS/credential bounds/ownership/log redaction, main config guar
 # The active OpenWrt WAPP build disables DPP_R2_MUOBJ. Its saved-config
 # restore path must decode hexadecimal credentials as bytes, fail closed,
 # and release every temporary auth-owned credential on every exit.
-wapp_make = (root / "Makefile").read_text(encoding="utf-8")
+wapp_make = (root / "wappd" / "Makefile").read_text(encoding="utf-8")
 require("#CFLAGS += -DDPP_R2_MUOBJ" in wapp_make and
         re.search(r"(?m)^CFLAGS\s*\+=\s*-DDPP_R2_MUOBJ\b", wapp_make) is None,
         "the audited active WAPP profile is no longer the non-MUOBJ DPP path")
