@@ -147,7 +147,7 @@ def transform_patch(patch_path: Path, records: list[dict]) -> tuple[str, list[di
             continue
 
         if in_hunk:
-            if raw_line.startswith(" "):
+            if raw_line.startswith(" ") or raw_line in ("", "\n", "\r\n"):
                 old_remaining -= 1
                 new_remaining -= 1
             elif raw_line.startswith("-"):
