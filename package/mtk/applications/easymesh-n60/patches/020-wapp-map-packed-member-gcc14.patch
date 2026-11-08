@@ -74,7 +74,7 @@
  			i++;
  		}
  	}
-@@ -9533,13 +9552,21 @@
+@@ -9533,14 +9552,22 @@
  	struct wapp_dev *wdev,
  	struct ts_common_setting *setting)
  {
@@ -99,3 +99,4 @@
 +	ts_bh_set_all_vid(wdev, policy_vid_num, policy_vids);
  #endif
  }
+ 
