@@ -1,6 +1,12 @@
 name: N60 Pro EasyMesh Quick Build
 
 on:
+  # One-shot trigger for the repaired DPP source-contract gate and actual Quick compile/link.
+  push:
+    branches: ["n60pro-mtk-closed-driver"]
+    paths:
+      - ".github/actions/easymesh-quick/action.yml"
+      - ".github/workflows/easymesh-quick.yml"
   workflow_dispatch:
     inputs:
       device:
