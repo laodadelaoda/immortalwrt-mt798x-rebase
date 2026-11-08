@@ -589,50 +589,36 @@ runs:
         print(report.read_text(encoding="utf-8"))
         print("PASS: DPP source/API audit completed before target toolchain build.")
         PY
+    - name: Download exact fully patched DPP source from vendor audit
+      uses: actions/download-artifact@v4
+      with:
+        name: dpp-security-audit-source
+        path: ${{ runner.temp }}/n60-dpp-security-audit
     - name: Audit DPP caller, compile gates, configuration API and repaired credential parser
       shell: bash
       run: |
         set -euo pipefail
-        AUDIT_ROOT="$RUNNER_TEMP/n60-wapp-dpp-audit"
+        AUDIT_ROOT="$RUNNER_TEMP/n60-dpp-security-audit"
         WAPP_SRC="$AUDIT_ROOT/wappd"
-        PATCH="package/mtk/applications/easymesh-n60/patches/002-dpp-parser-safety.patch"
-        COPY_PATCH="package/mtk/applications/easymesh-n60/patches/003-wapp-gcc14-copy-semantics.patch"
-        HOTSPOT_PATCH="package/mtk/applications/easymesh-n60/patches/005-wapp-hotspot-realloc-pointer-arithmetic.patch"
-        OPENSSL3_PATCH="package/mtk/applications/easymesh-n60/patches/007-openssl3-use-native-evp-pkey-get0-ec-key.patch"
-        BOUNDARY_PATCH="package/mtk/applications/easymesh-n60/patches/008-dpp-parser-bounds-and-secret-redaction.patch"
-        NULL_GUARD_PATCH="package/mtk/applications/easymesh-n60/patches/009-dpp-null-guard-and-unused-cred-length.patch"
-        WDEV_ALLOC_PATCH="package/mtk/applications/easymesh-n60/patches/010-dpp-wdev-config-allocation-rollback.patch"
         DPP_CONTRACT_TEST="package/mtk/applications/easymesh-n60/tests/test-dpp-source-contract.py"
-        test -s "$PATCH"
-        test -s "$COPY_PATCH"
+        test -s "$AUDIT_ROOT/SOURCE-MANIFEST.txt"
+        test -d "$AUDIT_ROOT/patched"
+        grep -Fq "Repository revision: $GITHUB_SHA" "$AUDIT_ROOT/SOURCE-MANIFEST.txt"
+        grep -Fq "DPP patch series: 017-dpp-credential-bounds-zeroization-and-log-redaction.patch -> 018-dpp-security-logging-and-credential-lifecycle.patch" "$AUDIT_ROOT/SOURCE-MANIFEST.txt"
+        test ! -e "$WAPP_SRC"
+        ln -s "$AUDIT_ROOT/patched" "$WAPP_SRC"
         test -s "$WAPP_SRC/common/main.c"
-        # Patch paths are rooted at the extracted archive root (which contains wappd/).
+        test -s "$WAPP_SRC/dpp/dpp.c"
+        test -s "$WAPP_SRC/dpp/dpp_wdev.c"
         test -s "$WAPP_SRC/hotspot/hotspot.c"
-        mapfile -t LOCKED_EASYMESH_PATCHES < <(python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py patch-order --repo "$GITHUB_WORKSPACE" --set easymesh --phase application)
-        for patch_name in "${LOCKED_EASYMESH_PATCHES[@]}"; do
-          case "$patch_name" in
-            002-dpp-parser-safety.patch|003-wapp-gcc14-copy-semantics.patch|005-wapp-hotspot-realloc-pointer-arithmetic.patch|007-openssl3-use-native-evp-pkey-get0-ec-key.patch|008-dpp-parser-bounds-and-secret-redaction.patch|009-dpp-null-guard-and-unused-cred-length.patch|010-dpp-wdev-config-allocation-rollback.patch)
-              patch_file="package/mtk/applications/easymesh-n60/patches/$patch_name"
-              test -s "$patch_file" || { echo "::error::Missing Lock-listed DPP/WAPP patch: $patch_file"; exit 1; }
-              patch --dry-run --batch --forward --fuzz=0 -d "$AUDIT_ROOT" -p1 < "$patch_file"
-              patch --batch --forward --fuzz=0 -d "$AUDIT_ROOT" -p1 < "$patch_file"
-              ;;
-          esac
-        done
         python3 - "$WAPP_SRC/dpp/dpp.h" <<'PY'
         import pathlib, sys
         source = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
         old = "EC_KEY * EVP_PKEY_get0_EC_KEY(EVP_PKEY *pkey);"
         if old in source:
             raise SystemExit("ERROR: local EVP_PKEY_get0_EC_KEY prototype remains; OpenSSL 3 native declaration must be used.")
-        print("PASS: local legacy EVP_PKEY_get0_EC_KEY prototype is removed by patch 007.")
+        print("PASS: local legacy EVP_PKEY_get0_EC_KEY prototype is absent from the fully patched DPP source.")
         PY
-        patch --dry-run --batch --forward --fuzz=0 -d "$AUDIT_ROOT" -p1 < "$BOUNDARY_PATCH"
-        patch --batch --forward --fuzz=0 -d "$AUDIT_ROOT" -p1 < "$BOUNDARY_PATCH"
-        patch --dry-run --batch --forward --fuzz=0 -d "$AUDIT_ROOT" -p1 < "$NULL_GUARD_PATCH"
-        patch --batch --forward --fuzz=0 -d "$AUDIT_ROOT" -p1 < "$NULL_GUARD_PATCH"
-        patch --dry-run --batch --forward --fuzz=0 -d "$AUDIT_ROOT" -p1 < "$WDEV_ALLOC_PATCH"
-        patch --batch --forward --fuzz=0 -d "$AUDIT_ROOT" -p1 < "$WDEV_ALLOC_PATCH"
         python3 "$DPP_CONTRACT_TEST" "$AUDIT_ROOT"
         python3 - "$WAPP_SRC/hotspot/hotspot.c" <<'PY'
         import pathlib, sys
