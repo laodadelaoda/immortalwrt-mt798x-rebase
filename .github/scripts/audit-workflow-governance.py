@@ -9,7 +9,7 @@ def load(p):
  if not isinstance(x,dict): bad(f"invalid YAML mapping: {p}")
  return x
 D={p.name:load(p) for p in W.glob("*.yml")}; act=load(A)
-need={"build-package.yml","main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","vendor-patch-audit-only.yml","wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-template-audit.yml","copilot-ai-audit.yml","workflow-governance-audit.yml"}
+need={"build-package.yml","main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml","vendor-patch-audit-only.yml","wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-template-audit.yml","copilot-ai-audit.yml","workflow-governance-audit.yml"}
 if need-D.keys(): bad("missing workflow "+str(sorted(need-D.keys())))
 def tr(n): return D[n].get("on",{})
 def steps(d):
@@ -61,10 +61,14 @@ vendor_paths=[
  "target/linux/mediatek/patches-6.12/**",
  "target/linux/mediatek/tests/**",
 ]
-if (set(vendor)!={"push","workflow_call","workflow_dispatch"} or
-    vendor["push"].get("branches")!=["n60pro-mtk-closed-driver"] or
-    vendor["push"].get("paths")!=vendor_paths):
- bad("vendor audit trigger mismatch")
+if set(vendor)!={"workflow_call","workflow_dispatch"}:
+ bad("vendor audit must be reusable and manually dispatchable")
+prepare_only=tr("quick-prepare-only.yml")
+prepare_only_paths=vendor_paths+[".github/workflows/quick-prepare-only.yml"]
+if (set(prepare_only)!={"push","workflow_dispatch"} or
+    prepare_only["push"].get("branches")!=["n60pro-mtk-closed-driver"] or
+    prepare_only["push"].get("paths")!=prepare_only_paths):
+ bad("standalone Quick Prepare trigger mismatch")
 if set(tr("quick-prepare-audit.yml"))!={"workflow_call"}: bad("Prepare must be reusable-only")
 v=tr("vendor-patch-audit-only.yml")
 if set(v)!={"workflow_dispatch","push"} or v["push"].get("paths")!=["docs/vendor-patch-audit-trigger.txt"]: bad("standalone patch audit trigger mismatch")
@@ -74,7 +78,7 @@ for n in ("wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-tem
  if "package/mtk/vendor-sources.lock.json" not in t["push"]["paths"]: bad(n+" must trigger when canonical vendor Lock changes")
 if set(tr("copilot-ai-audit.yml"))!={"workflow_dispatch"}: bad("Copilot audit must remain manual-only")
 if set(tr("workflow-governance-audit.yml"))!={"push"} or not tr("workflow-governance-audit.yml")["push"].get("paths"): bad("governance trigger mismatch")
-for n in ("main.yml","build-package.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml"):
+for n in ("main.yml","build-package.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml"):
  if D[n].get("permissions",{}).get("contents")!="read": bad(n+" contents permission must be read")
 for n in ("main.yml","build-package.yml","workflow-governance-audit.yml"):
  for s in steps(D[n]):
