@@ -17,8 +17,31 @@ def steps(d):
   if isinstance(j,dict):
    for s in j.get("steps",[]):
     if isinstance(s,dict): yield s
-if set(tr("main.yml"))!={"workflow_dispatch"}: bad("Full must remain manual-only while frozen")
-if set(tr("easymesh-quick.yml"))!={"workflow_dispatch"}: bad("Quick must remain manual-only")
+main_triggers=tr("main.yml")
+full_build=D["main.yml"].get("jobs",{}).get("build",{})
+full_frozen=str(full_build.get("if","")).strip().lower()=="false"
+if full_frozen:
+ if set(main_triggers)!={"workflow_dispatch"}: bad("Full must remain manual-only while frozen")
+elif set(main_triggers)=={"workflow_dispatch"}:
+ pass
+elif (set(main_triggers)=={"workflow_dispatch","push"} and
+      main_triggers["push"].get("branches")==["n60pro-mtk-closed-driver"] and
+      main_triggers["push"].get("paths")==[".github/workflows/main.yml"]):
+ pass
+else:
+ bad("Unfrozen Full may use manual dispatch or the exact one-shot branch/path trigger only")
+
+quick_triggers=tr("easymesh-quick.yml")
+if set(quick_triggers)=={"workflow_dispatch"}:
+ pass
+elif (set(quick_triggers)=={"workflow_dispatch","push"} and
+      quick_triggers["push"].get("branches")==["n60pro-mtk-closed-driver"] and
+      quick_triggers["push"].get("paths")==[
+       ".github/actions/easymesh-quick/action.yml",
+       ".github/workflows/easymesh-quick.yml"]):
+ pass
+else:
+ bad("Quick must be manual-only except for the exact one-shot source-build trigger")
 if set(tr("vendor-source-patch-audit.yml"))!={"workflow_call","workflow_dispatch"}: bad("vendor audit trigger mismatch")
 if set(tr("quick-prepare-audit.yml"))!={"workflow_call"}: bad("Prepare must be reusable-only")
 v=tr("vendor-patch-audit-only.yml")
