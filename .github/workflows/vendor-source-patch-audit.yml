@@ -289,6 +289,9 @@ jobs:
           # The exact same helper is invoked by package Build/Prepare.
           # This prevents the audit's transformation logic drifting from the real build.
           python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-source-transforms.py finalize "$SRC/easymesh"
+          # Run the same semantic DPP source contract used by Build/Prepare before
+          # issuing the fixed-vendor audit attestation.
+          python3 package/mtk/applications/easymesh-n60/tests/test-dpp-source-contract.py "$SRC/easymesh"
           python3 package/mtk/applications/easymesh-n60/scripts/test-dpp-cred-len-preprocess.py "$SRC/easymesh" "$GITHUB_WORKSPACE" "$OUT/cred-len-preprocess"
 
           # Preserve an independently reviewable DPP source pair: pristine vendor
