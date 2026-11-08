@@ -2,6 +2,7 @@
 """Static contracts for OpenSSL 3, runtime MAC discovery and EasyMesh startup ordering."""
 from pathlib import Path
 import re
+import subprocess
 import sys
 
 def require(condition, message):
@@ -28,11 +29,38 @@ require(f"([[:space:]]|{dollar4})'" in openssl_check,
 expanded_check = openssl_check.replace(dollar4, chr(36))
 match = re.search(r"grep -Eq '([^']+)'", expanded_check)
 require(match is not None, "cannot extract OpenSSL major-version ERE after Make expansion")
-try:
-    require(re.search(match.group(1), "# define OPENSSL_VERSION_MAJOR  3\\n") is not None,
-            "OpenSSL major-version ERE rejects a valid OpenSSL 3 header")
-except re.error as exc:
-    raise SystemExit("FAIL: OpenSSL major-version ERE is invalid after Make expansion: " + str(exc))
+# The Makefile expression is POSIX ERE, not Python's regex dialect.
+# Use the same grep -E engine as the native Build/Prepare recipe so POSIX
+# character classes such as [[:space:]] are tested without false warnings.
+valid_header = "# define OPENSSL_VERSION_MAJOR  3\n"
+ere_result = subprocess.run(
+    ["grep", "-Eq", match.group(1)],
+    input=valid_header,
+    text=True,
+    capture_output=True,
+    check=False,
+)
+require(ere_result.returncode == 0,
+        "OpenSSL major-version POSIX ERE rejects a valid OpenSSL 3 header"
+        + (": " + ere_result.stderr.strip() if ere_result.stderr.strip() else ""))
+invalid_ere = subprocess.run(
+    ["grep", "-Eq", "[[:space:]"],
+    input=valid_header,
+    text=True,
+    capture_output=True,
+    check=False,
+)
+require(invalid_ere.returncode == 2,
+        "regression: invalid POSIX ERE was not rejected by grep -E")
+nonmatching_header = subprocess.run(
+    ["grep", "-Eq", match.group(1)],
+    input="# define OPENSSL_VERSION_MAJOR  4\n",
+    text=True,
+    capture_output=True,
+    check=False,
+)
+require(nonmatching_header.returncode == 1,
+        "OpenSSL major-version POSIX ERE must reject a non-3 major version")
 
 dpp_c = (wapp / "dpp/dpp.c").read_text(encoding="utf-8", errors="replace")
 dpp_h = (wapp / "dpp/dpp.h").read_text(encoding="utf-8", errors="replace")
