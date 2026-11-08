@@ -461,7 +461,6 @@ for token in (
 
 
 
-print("PASS: DPP BSS/credential bounds/ownership/log redaction, main config guards, parser bounds, QR count 0..100 validation, QR load/save/reset/remove error paths, OpenSSL 3 accessor and secret redaction")
 
 
 # The active OpenWrt WAPP build disables DPP_R2_MUOBJ. Its saved-config
@@ -473,17 +472,25 @@ require("#CFLAGS += -DDPP_R2_MUOBJ" in wapp_make and
         "the audited active WAPP profile is no longer the non-MUOBJ DPP path")
 fetch_saved_dpp = extract_c_function(
     src["dpp_wdev"], "static int dpp_fetch_dpp_akm_param(")
-require(fetch_saved_dpp.count("hex_len / 2 > sizeof(buftemp)") == 2 and
+require(fetch_saved_dpp.count("hex_len > sizeof(buftemp) * 2") == 2 and
         fetch_saved_dpp.count("hexstr2bin(buf, buftemp, key_len) < 0") == 2,
         "saved DPP NetAccessKey/C-Sign hex parsing lacks even-length and byte-capacity checks")
 require(fetch_saved_dpp.count("wpabuf_alloc(key_len)") == 2 and
-        "auth->net_access_key->used = key_len;" in fetch_saved_dpp and
-        "auth->c_sign_key->used = key_len;" in fetch_saved_dpp,
-        "saved DPP key buffers are not allocated and sized in decoded bytes")
+        fetch_saved_dpp.count("wpabuf_put_data(") == 2 and
+        "auth->net_access_key->used" not in fetch_saved_dpp and
+        "auth->c_sign_key->used" not in fetch_saved_dpp,
+        "saved DPP key buffers are not populated using decoded byte lengths")
+require(fetch_saved_dpp.count("if (!buf || !buf[0])") == 3 and
+        fetch_saved_dpp.count("NdisZeroMemory(ifparam, sizeof(ifparam))") == 3 and
+        fetch_saved_dpp.count("os_snprintf_error(sizeof(ifparam), ret)") == 3,
+        "saved DPP restore accepts empty fields or lacks bounded interface-key formatting")
 require("hexstr2bin(buf, buftemp, os_strlen(buf))" not in fetch_saved_dpp and
         "return -1;" in fetch_saved_dpp and
         "forced_memzero(buftemp, sizeof(buftemp));" in fetch_saved_dpp,
         "saved DPP parser retains the hex-length overrun or lacks fail cleanup")
+system_fail = fetch_saved_dpp.find("if (ret != 0) {")
+require(system_fail >= 0 and fetch_saved_dpp.find("goto fail;", system_fail) > system_fail,
+        "saved DPP restore continues after DPP-enable command failure")
 saved_conf_init = extract_c_function(src["dpp_wdev"], "void dpp_conf_init(", occurrence=1)
 require("if (dpp_fetch_dpp_akm_param(wdev, auth, dat_ctx) < 0)" in saved_conf_init and
         "goto out;" in saved_conf_init,
@@ -519,7 +526,7 @@ for signature, token in (
 
 
 # Hex restoration regression vectors: decoded capacity is bytes, not hex characters.
-require(fetch_saved_dpp.count("if (!hex_len || (hex_len & 1) || hex_len / 2 > sizeof(buftemp))") == 2,
+require(fetch_saved_dpp.count("if (!hex_len || (hex_len & 1) || hex_len > sizeof(buftemp) * 2)") == 2,
         "both saved DPP key parsers must reject empty, odd-length and over-capacity hex")
 def dpp_hex_decoded_length(value):
     if (not value or len(value) % 2 or len(value) // 2 > 512 or
@@ -537,3 +544,6 @@ for raw, expected in (
 for raw in ("", "0", "0g", "ab" * 513, " 0"):
     require(dpp_hex_decoded_length(raw) is None,
             f"DPP hex restore accepted invalid/oversized input: {raw[:16]!r}")
+
+
+print("PASS: DPP saved-config bounds, fail-closed rollback, auth cleanup and log redaction")
