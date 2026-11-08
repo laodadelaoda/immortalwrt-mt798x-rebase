@@ -56,6 +56,10 @@ FIXED = [
 def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
+def is_transient_python_artifact(path: Path) -> bool:
+    """Exclude interpreter caches: they are runtime outputs, not audited inputs."""
+    return "__pycache__" in path.parts or path.suffix in {".pyc", ".pyo"}
+
 def inventory(root: Path) -> dict[str, str]:
     lock = json.loads((root / LOCK).read_text(encoding="utf-8"))
     paths = set(FIXED + [LOCK, TRANSFORM])
@@ -78,7 +82,11 @@ def inventory(root: Path) -> dict[str, str]:
     ]:
         folder = root / base
         if folder.is_dir():
-            paths.update(p.relative_to(root).as_posix() for p in folder.rglob("*") if p.is_file())
+            paths.update(
+                p.relative_to(root).as_posix()
+                for p in folder.rglob("*")
+                if p.is_file() and not is_transient_python_artifact(p.relative_to(root))
+            )
     result = {}
     for name in sorted(paths):
         path = root / name
