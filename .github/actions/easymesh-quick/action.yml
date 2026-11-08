@@ -1042,12 +1042,21 @@ runs:
           echo "::error::MT Wi-Fi 7.6.7.3 patch application failed."; exit 1
         fi
         MT_WIFI_SRC="build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/mt_wifi"
-        grep -Fq '#include <linux/random.h>' "$MT_WIFI_SRC/embedded/common/rt_os_util.c" || {
-          echo "::error::MT Wi-Fi get_random_u32 patch is missing its Linux random API declaration."
+        # PKG_BUILD_DIR is .../mt_wifi; the vendor tarball keeps the driver
+        # sources under its own mt_wifi/ directory (see package FILES paths).
+        # Patch 026 targets mt_wifi/embedded/common/rt_os_util.c relative to
+        # the extracted archive root, not directly under PKG_BUILD_DIR.
+        MT_WIFI_RANDOM_SOURCE="$MT_WIFI_SRC/mt_wifi/embedded/common/rt_os_util.c"
+        test -s "$MT_WIFI_RANDOM_SOURCE" || {
+          echo "::error::MT Wi-Fi random API source was not found at the vendor archive path: $MT_WIFI_RANDOM_SOURCE"
           exit 1
         }
-        grep -Fq 'return get_random_u32();' "$MT_WIFI_SRC/embedded/common/rt_os_util.c" || {
-          echo "::error::MT Wi-Fi Linux 6.1 random API replacement was not applied."
+        grep -Fq '#include <linux/random.h>' "$MT_WIFI_RANDOM_SOURCE" || {
+          echo "::error::MT Wi-Fi get_random_u32 patch 026 is missing its Linux random API declaration."
+          exit 1
+        }
+        grep -Fq 'return get_random_u32();' "$MT_WIFI_RANDOM_SOURCE" || {
+          echo "::error::MT Wi-Fi Linux 6.1 random API replacement from patch 026 was not applied."
           exit 1
         }
         echo "PASS: matching MT Wi-Fi 7.6.7.3 source prepared; all patch files applied; random API declaration verified; no driver compilation."
