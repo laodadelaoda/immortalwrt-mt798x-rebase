@@ -81,4 +81,4 @@
 -	ts_bh_set_all_vid(wdev, setting->policy_vid_num, setting->policy_vids);
 +	ts_bh_set_all_vid(wdev, policy_vid_num, policy_vids);
  #endif
-}
+ }
