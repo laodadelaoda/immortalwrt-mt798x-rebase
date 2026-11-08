@@ -1,0 +1,42 @@
+name: N60 Pro Quick precompile Package Prepare only
+
+on:
+  push:
+    branches:
+      - n60pro-mtk-closed-driver
+    paths:
+      - ".github/workflows/vendor-source-patch-audit.yml"
+      - ".github/workflows/quick-prepare-audit.yml"
+      - ".github/scripts/**"
+      - "config/n60pro-1001.config"
+      - "feeds.conf.default"
+      - "include/**"
+      - "Makefile"
+      - "package/kernel/mapfilter/**"
+      - "package/libs/libnl-tiny/**"
+      - "package/libs/openssl/**"
+      - "package/mtk/**"
+      - "package/vendor/**"
+      - "scripts/**"
+      - "target/linux/generic/patches-6.12/**"
+      - "target/linux/mediatek/patches-6.12/**"
+      - "target/linux/mediatek/tests/**"
+      - ".github/workflows/quick-prepare-only.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: n60-pro-quick-prepare-only-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  vendor_source_patch_audit:
+    name: Fixed vendor source patch audit
+    uses: ./.github/workflows/vendor-source-patch-audit.yml
+
+  quick_prepare_audit:
+    name: Quick precompile Package Prepare audit
+    needs: vendor_source_patch_audit
+    uses: ./.github/workflows/quick-prepare-audit.yml
