@@ -129,10 +129,14 @@ cac_stop_end = src.find("\n#ifdef V10_DFS_SUPPORT", cac_stop_start)
 need(cac_stop_start >= 0 and cac_stop_end > cac_stop_start,
      "CAC completion handler missing")
 cac_stop = src[cac_stop_start:cac_stop_end]
-need(cac_stop.count("opcap = (struct cac_completion_report_opcap *)") == 2,
+need(cac_stop.count("struct cac_completion_report_opcap *opcap =") == 2,
      "both CAC completion paths must calculate the opcap tail from the full radio-status prefix")
 need("completion_report->cac_completion_status[0].opcap[0]" not in cac_stop,
      "CAC completion still indexes a zero-length opcap member")
+need(cac_stop.count("(size_t)radio_num * sizeof(struct cac_completion_status_lib)") == 2,
+     "both CAC opcap pointers must begin after the complete radio-status array")
+need(cac_stop.count("(radio_num* sizeof(struct cac_completion_status_lib))") == 2,
+     "both CAC report allocations must reserve the complete radio-status array")
 need("opcap->ch_num" in cac_stop and "opcap->op_class" in cac_stop,
      "CAC completion does not populate the tail record through its bounded pointer")
 need(cac_stop.count("op_class_num*sizeof(struct cac_completion_report_opcap)") == 2,
