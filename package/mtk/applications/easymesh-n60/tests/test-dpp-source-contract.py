@@ -462,3 +462,57 @@ for token in (
 
 
 print("PASS: DPP BSS/credential bounds/ownership/log redaction, main config guards, parser bounds, QR count 0..100 validation, QR load/save/reset/remove error paths, OpenSSL 3 accessor and secret redaction")
+
+
+# The active OpenWrt WAPP build disables DPP_R2_MUOBJ. Its saved-config
+# restore path must decode hexadecimal credentials as bytes, fail closed,
+# and release every temporary auth-owned credential on every exit.
+wapp_make = (root / "Makefile").read_text(encoding="utf-8")
+require("#CFLAGS += -DDPP_R2_MUOBJ" in wapp_make and
+        re.search(r"(?m)^CFLAGS\s*\+=\s*-DDPP_R2_MUOBJ\b", wapp_make) is None,
+        "the audited active WAPP profile is no longer the non-MUOBJ DPP path")
+fetch_saved_dpp = extract_c_function(
+    src["dpp_wdev"], "static int dpp_fetch_dpp_akm_param(")
+require(fetch_saved_dpp.count("hex_len / 2 > sizeof(buftemp)") == 2 and
+        fetch_saved_dpp.count("hexstr2bin(buf, buftemp, key_len) < 0") == 2,
+        "saved DPP NetAccessKey/C-Sign hex parsing lacks even-length and byte-capacity checks")
+require(fetch_saved_dpp.count("wpabuf_alloc(key_len)") == 2 and
+        "auth->net_access_key->used = key_len;" in fetch_saved_dpp and
+        "auth->c_sign_key->used = key_len;" in fetch_saved_dpp,
+        "saved DPP key buffers are not allocated and sized in decoded bytes")
+require("hexstr2bin(buf, buftemp, os_strlen(buf))" not in fetch_saved_dpp and
+        "return -1;" in fetch_saved_dpp and
+        "forced_memzero(buftemp, sizeof(buftemp));" in fetch_saved_dpp,
+        "saved DPP parser retains the hex-length overrun or lacks fail cleanup")
+saved_conf_init = extract_c_function(src["dpp_wdev"], "void dpp_conf_init(", occurrence=1)
+require("if (dpp_fetch_dpp_akm_param(wdev, auth, dat_ctx) < 0)" in saved_conf_init and
+        "goto out;" in saved_conf_init,
+        "DPP saved-config restore continues after a credential parse/allocation failure")
+for token in ("forced_memzero(auth->connector, os_strlen(auth->connector) + 1);",
+              "wpabuf_clear_free(auth->net_access_key);",
+              "wpabuf_clear_free(auth->c_sign_key);",
+              "forced_memzero(auth, sizeof(*auth));",
+              "os_free_mem(NULL, auth);"):
+    require(token in saved_conf_init,
+            f"temporary DPP auth cleanup is missing: {token}")
+require(saved_conf_init.find("forced_memzero(auth, sizeof(*auth));") <
+        saved_conf_init.find("os_free_mem(NULL, auth);"),
+        "temporary DPP auth object is freed before its inline credential state is cleared")
+
+for occurrence in (0, 1):
+    deinit_fn = extract_c_function(src["dpp"], "void dpp_auth_deinit(", occurrence=occurrence)
+    for token in ("wpabuf_clear_free(auth->net_access_key);",
+                  "wpabuf_clear_free(auth->c_sign_key);",
+                  "wpabuf_clear_free(auth->pp_key);"):
+        require(token in deinit_fn,
+                f"DPP auth deinit variant {occurrence + 1} does not clear {token}")
+default_deinit = extract_c_function(src["dpp"], "void dpp_auth_deinit(", occurrence=1)
+require("forced_memzero(auth->connector, os_strlen(auth->connector) + 1);" in default_deinit,
+        "DPP auth deinit frees the signed Connector without clearing it")
+for signature, token in (
+    ("static void dpp_copy_csign(", "wpabuf_clear_free(auth->c_sign_key);"),
+    ("static void dpp_copy_ppkey(", "wpabuf_clear_free(auth->pp_key);"),
+    ("static void dpp_copy_netaccesskey(", "wpabuf_clear_free(auth->net_access_key);"),
+):
+    copy_fn = extract_c_function(src["dpp"], signature)
+    require(token in copy_fn, f"DPP key replacement does not clear old material: {signature}")
