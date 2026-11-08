@@ -1,0 +1,37 @@
+name: Workflow governance audit
+
+on:
+  push:
+    branches: ["n60pro-mtk-closed-driver"]
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - ".github/scripts/audit-workflow-governance.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: n60-workflow-governance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout workflow revision
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Install YAML parser
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-yaml
+      - name: Validate workflow governance matrix
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/audit-workflow-governance.py

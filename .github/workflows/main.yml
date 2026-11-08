@@ -1,29 +1,6 @@
 name: Build N60 Pro - ImmortalWrt 25.12 (Standard Only)
 
 on:
-  push:
-    branches: ["n60pro-mtk-closed-driver"]
-    paths:
-      - "package/**"
-      - "target/**"
-      - "toolchain/**"
-      - "tools/**"
-      - "include/**"
-      - "scripts/**"
-      - "config/**"
-      - "feeds.conf.default"
-      - "files/**"
-      - "Makefile"
-      - "rules.mk"
-      - ".github/workflows/main.yml"
-      - ".github/workflows/vendor-source-patch-audit.yml"
-      - ".github/workflows/easymesh-quick.yml"
-      - ".github/workflows/wapp-source-audit.yml"
-      - ".github/workflows/conninfra-source-audit.yml"
-      - ".github/workflows/easymesh-wts-template-audit.yml"
-      - ".github/workflows/build-package.yml"
-      - ".github/workflows/quick-prepare-audit.yml"
-      - ".github/actions/easymesh-quick/**"
   workflow_dispatch:
     inputs:
       device:
@@ -33,6 +10,9 @@ on:
         default: netcore_n60-pro
         options:
           - netcore_n60-pro
+
+permissions:
+  contents: read
 
 concurrency:
   group: n60-pro-full-${{ github.ref }}
@@ -64,6 +44,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Download attestation from this workflow run
         uses: actions/download-artifact@v6
@@ -76,7 +57,7 @@ jobs:
           set -Eeuo pipefail
           python3 package/mtk/applications/easymesh-n60/scripts/verify-vendor-audit-attestation.py verify --repo "$GITHUB_WORKSPACE" --attestation .audit-attestation/vendor-audit-attestation.json --expected-run-id "$GITHUB_RUN_ID" --expected-run-attempt "$GITHUB_RUN_ATTEMPT"
 
-      - name: Download kernel patch stack attestation from Quick
+      - name: Download kernel patch stack attestation from same-run Prepare audit
         uses: actions/download-artifact@v6
         with:
           name: n60-kernel-patch-attestation
@@ -317,11 +298,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.cache/ccache
-          key: ${{ runner.os }}-n60pro-ccache-${{ github.ref_name }}-${{ env.DEVICE }}-${{ env.PROFILE }}
-          restore-keys: |
-            ${{ runner.os }}-n60pro-ccache-${{ github.ref_name }}-${{ env.DEVICE }}-
-            ${{ runner.os }}-n60pro-ccache-${{ github.ref_name }}-
-            ${{ runner.os }}-n60pro-ccache-
+          key: ${{ runner.os }}-n60pro-full-ccache-${{ github.ref_name }}-${{ env.DEVICE }}-${{ env.PROFILE }}-${{ hashFiles('toolchain/**', 'include/**', 'config/n60pro-1001.config') }}
 
       - name: Restore OpenWrt build environment cache
         uses: actions/cache@v5
@@ -331,9 +308,7 @@ jobs:
             staging_dir
             dl
             tmp
-          key: ${{ runner.os }}-n60pro-openwrt-${{ hashFiles('Makefile', 'rules.mk', 'config/**', 'feeds.conf.default', 'include/**', 'scripts/**', 'tools/**', 'toolchain/**', 'target/linux/generic/**', 'target/linux/mediatek/**', 'package/mtk/applications/easymesh-n60/**', 'package/mtk/applications/datconf/**', 'package/libs/openssl/**', 'package/libs/libnl-tiny/**', 'package/kernel/mapfilter/**', 'package/mtk/drivers/mt_wifi/**', '.github/workflows/main.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-n60pro-openwrt-
+          key: ${{ runner.os }}-n60pro-full-openwrt-${{ hashFiles('Makefile', 'rules.mk', 'config/**', 'feeds.conf.default', 'include/**', 'scripts/**', 'tools/**', 'toolchain/**', 'target/linux/generic/**', 'target/linux/mediatek/**', 'package/mtk/applications/easymesh-n60/**', 'package/mtk/applications/datconf/**', 'package/libs/openssl/**', 'package/libs/libnl-tiny/**', 'package/kernel/mapfilter/**', 'package/mtk/drivers/mt_wifi/**', 'package/mtk/drivers/conninfra/**', 'package/mtk/drivers/warp/**', 'package/mtk/vendor-sources.lock.json', '.github/workflows/main.yml', '.github/workflows/vendor-source-patch-audit.yml', '.github/workflows/quick-prepare-audit.yml', '.github/actions/easymesh-quick/action.yml') }}
 
       - name: Update and install feeds
         run: |

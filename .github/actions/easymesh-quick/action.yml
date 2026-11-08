@@ -292,9 +292,7 @@ runs:
           build_dir
           staging_dir
           dl
-        key: ${{ runner.os }}-n60pro-openwrt-${{ hashFiles('Makefile', 'rules.mk', 'config/**', 'feeds.conf.default', 'include/**', 'scripts/**', 'tools/**', 'toolchain/**', 'target/linux/generic/**', 'target/linux/mediatek/**', 'package/mtk/applications/easymesh-n60/**', 'package/mtk/applications/datconf/**', 'package/libs/openssl/**', 'package/libs/libnl-tiny/**', '.github/workflows/easymesh-quick.yml') }}
-        restore-keys: |
-          ${{ runner.os }}-n60pro-openwrt-
+        key: ${{ runner.os }}-n60pro-quick-openwrt-${{ hashFiles('Makefile', 'rules.mk', 'config/**', 'feeds.conf.default', 'include/**', 'scripts/**', 'tools/**', 'toolchain/**', 'target/linux/generic/**', 'target/linux/mediatek/**', 'package/mtk/applications/easymesh-n60/**', 'package/mtk/applications/datconf/**', 'package/libs/openssl/**', 'package/libs/libnl-tiny/**', 'package/mtk/drivers/mt_wifi/**', 'package/mtk/drivers/conninfra/**', 'package/mtk/drivers/warp/**', 'package/mtk/vendor-sources.lock.json', '.github/workflows/easymesh-quick.yml', '.github/workflows/vendor-source-patch-audit.yml', '.github/workflows/quick-prepare-audit.yml', '.github/actions/easymesh-quick/action.yml') }}
 
     - name: Update and install feeds
       shell: bash

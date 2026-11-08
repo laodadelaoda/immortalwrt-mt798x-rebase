@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+from pathlib import Path
+import yaml
+R=Path(__file__).resolve().parents[2]; W=R/".github/workflows"; A=R/".github/actions/easymesh-quick/action.yml"
+def bad(s): raise SystemExit("FAIL: "+s)
+def load(p):
+ try: x=yaml.load(p.read_text(encoding="utf-8"),Loader=yaml.BaseLoader)
+ except Exception as e: bad(f"YAML syntax {p.relative_to(R)}: {e}")
+ if not isinstance(x,dict): bad(f"invalid YAML mapping: {p}")
+ return x
+D={p.name:load(p) for p in W.glob("*.yml")}; act=load(A)
+need={"build-package.yml","main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","vendor-patch-audit-only.yml","wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-template-audit.yml","copilot-ai-audit.yml","workflow-governance-audit.yml"}
+if need-D.keys(): bad("missing workflow "+str(sorted(need-D.keys())))
+def tr(n): return D[n].get("on",{})
+def steps(d):
+ for j in d.get("jobs",{}).values():
+  if isinstance(j,dict):
+   for s in j.get("steps",[]):
+    if isinstance(s,dict): yield s
+if set(tr("main.yml"))!={"workflow_dispatch"}: bad("Full must remain manual-only while frozen")
+if set(tr("easymesh-quick.yml"))!={"workflow_dispatch"}: bad("Quick must remain manual-only")
+if set(tr("vendor-source-patch-audit.yml"))!={"workflow_call","workflow_dispatch"}: bad("vendor audit trigger mismatch")
+if set(tr("quick-prepare-audit.yml"))!={"workflow_call"}: bad("Prepare must be reusable-only")
+v=tr("vendor-patch-audit-only.yml")
+if set(v)!={"workflow_dispatch","push"} or v["push"].get("paths")!=["docs/vendor-patch-audit-trigger.txt"]: bad("standalone patch audit trigger mismatch")
+for n in ("wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-template-audit.yml"):
+ t=tr(n)
+ if set(t)!={"push","workflow_dispatch"} or not t["push"].get("branches") or not t["push"].get("paths"): bad(n+" must remain path-filtered")
+if set(tr("copilot-ai-audit.yml"))!={"workflow_dispatch"}: bad("Copilot audit must remain manual-only")
+if set(tr("workflow-governance-audit.yml"))!={"push"} or not tr("workflow-governance-audit.yml")["push"].get("paths"): bad("governance trigger mismatch")
+for n in ("main.yml","build-package.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml"):
+ if D[n].get("permissions",{}).get("contents")!="read": bad(n+" contents permission must be read")
+for n in ("main.yml","build-package.yml","workflow-governance-audit.yml"):
+ for s in steps(D[n]):
+  if str(s.get("uses","")).startswith("actions/checkout@") and s.get("with",{}).get("persist-credentials")!="false": bad(n+" checkout credentials must be disabled")
+for n in ("main.yml","copilot-ai-audit.yml"):
+ ss=[s for s in steps(D[n]) if s.get("uses","").startswith("actions/setup-node@")]
+ if not ss or any(s.get("with",{}).get("node-version")!="24" for s in ss): bad(n+" Node must be 24")
+ss=[s for s in act.get("runs",{}).get("steps",[]) if s.get("uses","").startswith("actions/setup-node@")]
+if not ss or any(s.get("with",{}).get("node-version")!="24" for s in ss): bad("composite action Node must be 24")
+mc=[s for s in steps(D["main.yml"]) if s.get("uses","").startswith("actions/cache@")]; keys=[s.get("with",{}).get("key","") for s in mc]
+if not any("n60pro-full-openwrt-" in k and ".github/actions/easymesh-quick/action.yml" in k for k in keys): bad("Full cache key lacks phase prefix/action hash")
+if not any("n60pro-full-ccache-" in k and "hashFiles(" in k for k in keys): bad("Full ccache key lacks config/toolchain hash")
+if any(s.get("with",{}).get("restore-keys") for s in mc): bad("Full cache broad restore key present")
+qc=[s for s in act.get("runs",{}).get("steps",[]) if s.get("uses","").startswith("actions/cache@")]
+if not qc: bad("Quick cache missing")
+qw=qc[0].get("with",{})
+if "n60pro-quick-openwrt-" not in qw.get("key","") or ".github/actions/easymesh-quick/action.yml" not in qw.get("key","") or qw.get("restore-keys"): bad("Quick cache isolation/hash mismatch")
+bi=tr("build-package.yml")["workflow_dispatch"]["inputs"]; safe={"luci-app-ttyd","kmod-fs-ksmbd"}
+if bi["package_name"].get("type")!="choice" or set(bi["package_name"].get("options",[]))!=safe: bad("package input allowlist mismatch")
+if bi["device"].get("type")!="choice" or bi["device"].get("options")!=["netcore_n60-pro"]: bad("device choice mismatch")
+for s in steps(D["build-package.yml"]):
+ if "\${{ github.event.inputs." in s.get("run","") or "\${{ inputs." in s.get("run",""): bad("untrusted input interpolated into shell")
+pc=[s for s in steps(D["build-package.yml"]) if s.get("uses","").startswith("actions/cache@")]
+if not pc or not any("-n60pro-package-" in s.get("with",{}).get("key","") and "hashFiles(" in s.get("with",{}).get("key","") for s in pc): bad("package cache missing isolation/hash")
+if any(s.get("with",{}).get("restore-keys") for s in pc): bad("package cache broad restore key present")
+ver=(R/"package/mtk/applications/easymesh-n60/scripts/verify-vendor-audit-attestation.py").read_text()
+for fld in ('"commit_sha"','"lock_sha256"','"files"','"run_id"','"run_attempt"'):
+ if fld not in ver: bad("attestation verifier missing "+fld)
+for n in ("main.yml","easymesh-quick.yml"):
+ ds=[s for s in steps(D[n]) if s.get("uses","").startswith("actions/download-artifact@")]
+ if not any(s.get("with",{}).get("name")=="n60-vendor-audit-attestation" and "run-id" not in s.get("with",{}) for s in ds): bad(n+" attestation must be same-run")
+ if not any("expected-run-id" in s.get("run","") and "expected-run-attempt" in s.get("run","") for s in steps(D[n])): bad(n+" run identity verification missing")
+if not any(s.get("name")=="Download kernel patch stack attestation from same-run Prepare audit" for s in steps(D["main.yml"])): bad("kernel attestation provenance label incorrect")
+for n,d in D.items():
+ for s in steps(d):
+  if s.get("uses","").startswith("actions/upload-artifact@") and not s.get("with",{}).get("retention-days"): bad(n+" artifact retention missing")
+print(f"PASS: YAML syntax parsed for {len(D)} workflows and EasyMesh composite action")
+print("PASS: trigger/call matrix, permissions, checkout credentials, Node.js 24")
+print("PASS: Quick/Full/package cache isolation and cache-key policy")
+print("PASS: same-run artifact provenance, attestation identity and retention")
+print("PASS: package allowlist, shell injection prevention and vendor bypass boundary")
