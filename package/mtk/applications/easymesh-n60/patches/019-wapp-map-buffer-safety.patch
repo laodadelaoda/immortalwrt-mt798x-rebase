@@ -1,0 +1,358 @@
+--- a/map/map_1905.c
++++ b/map/map_1905.c
+@@ -35,6 +35,7 @@
+  * any receiver's applicable license agreements with MediaTek Inc.
+  */
+ 
++#include <stddef.h>
+ #include <stdlib.h>
+ #include <stdio.h>
+ #include <pthread.h>
+@@ -7298,7 +7299,11 @@
+ 	u16 i=0, ptr=0;
+ 
+ 	DBGPRINT(RT_DEBUG_OFF, "%s\n", __func__);
+-	*status_len = sizeof(struct cac_status_report_lib) + (cac_status->ongoing_cac_channel_num * sizeof(struct cac_ongoing_channel));
++	/* CAC remaining time is encoded as three wire bytes, not sizeof(u32). */
++	if (cac_status->ongoing_cac_channel_num > MAP_MAX_RADIO)
++		return MAP_ERROR;
++	*status_len = sizeof(struct cac_status_report_lib) +
++		(cac_status->ongoing_cac_channel_num * 5);
+ 
+ 	if(!cac_completion) {
+ 		map_event = (struct evt *)evt_buf;
+@@ -7320,7 +7325,8 @@
+ 		ptr += 1;
+ 		buff[ptr] = cac_status->allowed_channel[i].ch_num;
+ 		ptr += 1;
+-		os_memcpy(&buff[ptr], &cac_status->allowed_channel[i].cac_interval, 2);
++		os_memcpy(&buff[ptr], (const u8 *)&cac_status->allowed_channel[i] +
++			offsetof(struct cac_allowed_channel, cac_interval), 2);
+ 		ptr += 2;
+ 	}
+ 
+@@ -7330,7 +7336,8 @@
+ 		ptr += 1;
+ 		buff[ptr] = cac_status->non_allowed_channel[i].ch_num;
+ 		ptr += 1;
+-		os_memcpy(&buff[ptr], &cac_status->non_allowed_channel[i].remain_interval, 2);
++		os_memcpy(&buff[ptr], (const u8 *)&cac_status->non_allowed_channel[i] +
++			offsetof(struct cac_non_allowed_channel, remain_interval), 2);
+ 		ptr += 2;
+ 	}
+ 
+@@ -7339,8 +7346,9 @@
+ 		ptr += 1;
+ 		buff[ptr] = cac_status->cac_ongoing_channel[i].ch_num;
+ 		ptr += 1;
+-		os_memcpy(&buff[ptr], &cac_status->cac_ongoing_channel[i].remain_interval, 3);
+-		ptr += 2;
++		os_memcpy(&buff[ptr], (const u8 *)&cac_status->cac_ongoing_channel[i] +
++			offsetof(struct cac_ongoing_channel, remain_interval), 3);
++		ptr += 3;
+ 	}
+ 	*status_len = sizeof(struct evt) + (*status_len);
+ 	return MAP_SUCCESS;
+@@ -7352,9 +7360,10 @@
+ {
+ 	u8 radio_num = wapp_get_radio_num(wapp);
+ 	struct wapp_dev *wdev = NULL;
+-	struct cac_status_report_lib cac_status = {0};
++	struct cac_status_report_lib *cac_status = NULL;
+ 	struct cac_driver_capab *driver_cap = NULL;
+-	u8 i=0, k=0, m=0, n=0, o=0, p=0;
++	u8 i=0, m=0, n=0, o=0, p=0;
++	u8 index = 0;
+ 	char buf[4096]={0};
+ 	u32 len=4096;
+ 	u16 status_len=0;
+@@ -7362,14 +7371,20 @@
+ 	struct ap_dev *ap = NULL;
+ 	struct os_time now, delta;
+ 
+-	if(!(radio_num == 1 || radio_num == 2 || radio_num == 3)) {
++	if (radio_num == 0 || radio_num > MAP_MAX_RADIO) {
+ 		printf("invalid radio num %d\n", radio_num);
+-#ifndef SINGLE_BAND_SUPPORT	/* for single/no wifi radio*/
+ 		return FALSE;
+-#endif
++	}
++	if (wapp->map->cac_list.ch_num > MAX_DFS_CH) {
++		DBGPRINT(RT_DEBUG_ERROR, "%s invalid CAC list count %u\n",
++			__func__, wapp->map->cac_list.ch_num);
++		return FALSE;
+ 	}
+ 
+-	os_memset(&cac_status, 0, sizeof(struct cac_status_report_lib));
++	cac_status = os_zalloc(sizeof(*cac_status) +
++		MAP_MAX_RADIO * sizeof(struct cac_ongoing_channel));
++	if (!cac_status)
++		return FALSE;
+ 
+ 	for (i=0; i < radio_num; i++) {
+ 		if(wapp->radio[i].adpt_id == 0) {
+@@ -7390,16 +7405,32 @@
+ 		wdev = wapp_dev_list_lookup_by_radio(wapp, radio_id);
+ 		if (!wdev) {
+ 			DBGPRINT(RT_DEBUG_ERROR, "%s null wdev\n", __func__);
+-			return 0;
++			os_free(cac_status);
++			return FALSE;
+ 		}
+ 			ap = (struct ap_dev *)wdev->p_dev;
+ 			driver_wext_get_cac_capability(wapp->drv_data, wdev->ifname, buf, len);
+ 			driver_cap = (struct cac_driver_capab *)buf;
++			if (driver_cap->op_class_num > ARRAY_SIZE(driver_cap->opcap)) {
++				os_free(cac_status);
++				return FALSE;
++			}
++			for (m = 0; m < driver_cap->op_class_num; m++) {
++				if (driver_cap->opcap[m].ch_num > ARRAY_SIZE(driver_cap->opcap[m].ch_list)) {
++					os_free(cac_status);
++					return FALSE;
++				}
++			}
++			m = 0;
+ 			if (driver_cap->active_cac == TRUE) {
+-				cac_status.cac_ongoing_channel[cac_status.ongoing_cac_channel_num].ch_num = driver_cap->ch_num;
+-				cac_status.cac_ongoing_channel[cac_status.ongoing_cac_channel_num].op_class = ap->ch_info.op_class;
+-				cac_status.cac_ongoing_channel[cac_status.ongoing_cac_channel_num].remain_interval = driver_cap->cac_remain_time;
+-				cac_status.ongoing_cac_channel_num++;
++				if (cac_status->ongoing_cac_channel_num >= MAP_MAX_RADIO) {
++					os_free(cac_status);
++					return FALSE;
++				}
++				cac_status->cac_ongoing_channel[cac_status.ongoing_cac_channel_num].ch_num = driver_cap->ch_num;
++				cac_status->cac_ongoing_channel[cac_status.ongoing_cac_channel_num].op_class = ap->ch_info.op_class;
++				cac_status->cac_ongoing_channel[cac_status.ongoing_cac_channel_num].remain_interval = driver_cap->cac_remain_time;
++				cac_status->ongoing_cac_channel_num++;
+ 				status_len += 5;
+ 			}
+ 
+@@ -7409,28 +7440,36 @@
+ 						//not available channel
+ 						if((IS_MAP_CH_5GL(wapp->radio[i].op_ch)) ||
+ 							(IS_MAP_CH_5GH(wapp->radio[i].op_ch))){
+-							cac_status.non_allowed_channel_num++;
+-							cac_status.non_allowed_channel[k].op_class = driver_cap->opcap[m].op_class;
+-							cac_status.non_allowed_channel[k].ch_num = driver_cap->opcap[m].ch_list[n];
+-							cac_status.non_allowed_channel[k].remain_interval = (u16)driver_cap->opcap[m].non_occupancy_remain[n];
++							if (cac_status->non_allowed_channel_num >= MAX_CLASS_CHAN_NON_ALLOWED) {
++								os_free(cac_status);
++								return FALSE;
++							}
++							index = cac_status->non_allowed_channel_num;
++							cac_status->non_allowed_channel[index].op_class = driver_cap->opcap[m].op_class;
++							cac_status->non_allowed_channel[index].ch_num = driver_cap->opcap[m].ch_list[n];
++							cac_status->non_allowed_channel[index].remain_interval = (u16)driver_cap->opcap[m].non_occupancy_remain[n];
++							cac_status->non_allowed_channel_num++;
+ 							status_len += 4;
+ 						}
+ 
+-						k++;
+ 					}else { //available channels
+ 						if((IS_MAP_CH_5GL(wapp->radio[i].op_ch)) ||
+ 							(IS_MAP_CH_5GH(wapp->radio[i].op_ch))){
+-							cac_status.allowed_channel[o].op_class = driver_cap->opcap[m].op_class;
+-							cac_status.allowed_channel[o].ch_num = driver_cap->opcap[m].ch_list[n];
+-							cac_status.allowed_channel_num++;
++							if (cac_status->allowed_channel_num >= MAX_CLASS_CHANNEL) {
++								os_free(cac_status);
++								return FALSE;
++							}
++							cac_status->allowed_channel[o].op_class = driver_cap->opcap[m].op_class;
++							cac_status->allowed_channel[o].ch_num = driver_cap->opcap[m].ch_list[n];
++							cac_status->allowed_channel_num++;
+ 							status_len += 4;
+ 
+ 							for(p=0; p<wapp->map->cac_list.ch_num; p++)
+ 							{
+-								if(cac_status.allowed_channel[o].ch_num == wapp->map->cac_list.ch_list[p]) {
++								if(cac_status->allowed_channel[o].ch_num == wapp->map->cac_list.ch_list[p]) {
+ 									os_get_time(&now);
+ 									os_time_sub(&now, &wapp->map->cac_list.last_cac_time[p], &delta);
+-									cac_status.allowed_channel[o].cac_interval =
++									cac_status->allowed_channel[o].cac_interval =
+ 										(u16)(delta.sec / 60) ? (u16)(delta.sec / 60): (u16)1;
+ 									break;
+ 								}
+@@ -7444,8 +7483,13 @@
+ 	}
+ 
+ 	status_len += 3; // 3 bytes for allowed/non_allowed/ongoing cac channel number
+-	map_send_cac_status(wapp, evt_buf, &cac_status, &status_len, cac_completion);
+-	*len_buf = status_len;
++	if (map_send_cac_status(wapp, evt_buf, cac_status, &status_len, cac_completion) != MAP_SUCCESS) {
++		os_free(cac_status);
++		return FALSE;
++	}
++	/* evt_buf is a payload buffer during CAC completion composition. */
++	*len_buf = cac_completion ? (int)(status_len - sizeof(struct evt)) : status_len;
++	os_free(cac_status);
+ 	return TRUE;
+ 
+ }
+@@ -7814,16 +7858,19 @@
+ 	buf = (u8 *)assoc_notification->notification_tlv;
+ 
+ 	struct assoc_notification_tlv * assoc_status_evt = (struct assoc_notification_tlv *)buf;
++	struct assoc_status *status;
+ 
+ 	for (i = 0; i < assoc_tlv_num; i++) {
+ 		assoc_status_evt->bssid_num = bssid_num;
++		status = (struct assoc_status *)((u8 *)assoc_status_evt + sizeof(*assoc_status_evt));
+ 		for (j = 0; j < bssid_num; j++) {
+-			os_memcpy(&assoc_status_evt->status[j].bssid, wdev->mac_addr, MAC_ADDR_LEN);
+-			assoc_status_evt->status[j].status = !assoc_disallow_reason;/*0 = Disallow, 1 = Allow*/
++			os_memcpy(status[j].bssid, wdev->mac_addr, MAC_ADDR_LEN);
++			status[j].status = !assoc_disallow_reason;/*0 = Disallow, 1 = Allow*/
+ 		}
+ 	}
+ 
+ 	map_build_and_send_assoc_status_notification(wapp, assoc_notification, bssid_num);
++	os_free(assoc_notification);
+ }
+ 
+ #if 0
+@@ -7847,59 +7894,63 @@
+ #endif
+ 
+ 
+-void map_build_and_send_assoc_status_notification(struct wifi_app *wapp, struct assoc_notification_lib *assoc_notify,u8  bssid_num)
++void map_build_and_send_assoc_status_notification(
++	struct wifi_app *wapp, struct assoc_notification_lib *assoc_notify, u8 bssid_num)
+ {
+ 	struct evt *map_event = NULL;
+-	struct assoc_notification_lib *assoc_notification = NULL;
+-	u16 evt_len = 0;
+-	u16 assoc_status_len = 0;
+-	int i=0, j=0;
+-	u8 *buf = NULL;
+-	struct assoc_notification_tlv * assoc_status_evt = NULL;
++	size_t assoc_status_len = sizeof(struct assoc_notification_lib);
++	size_t evt_len;
++	const u8 *src;
++	u8 *dst;
++	u8 i;
+ 
+-	assoc_status_len = sizeof(struct assoc_notification_lib) + (assoc_notify->assoc_notification_tlv_num* sizeof(struct assoc_notification_tlv))
+-				+ (bssid_num* sizeof(struct assoc_status));
++	(void)bssid_num; /* TLV-local counts are authoritative for variable-length input. */
++	if (!assoc_notify || !assoc_notify->assoc_notification_tlv_num)
++		return;
+ 
++	/* Each TLV is followed by its own variable-length status array. */
++	src = (const u8 *)assoc_notify->notification_tlv;
++	for (i = 0; i < assoc_notify->assoc_notification_tlv_num; i++) {
++		const struct assoc_notification_tlv *tlv =
++			(const struct assoc_notification_tlv *)src;
++		size_t entries_len = (size_t)tlv->bssid_num * sizeof(struct assoc_status);
++
++		if (entries_len > ((size_t)-1 - assoc_status_len - sizeof(*tlv)))
++			return;
++		assoc_status_len += sizeof(*tlv) + entries_len;
++		src += sizeof(*tlv) + entries_len;
++	}
++
++	if (assoc_status_len > 0xffffU - sizeof(struct evt))
++		return;
+ 	evt_len = sizeof(struct evt) + assoc_status_len;
+ 	map_event = os_zalloc(evt_len);
+-	if(map_event == NULL)
+-		goto Error;
++	if (!map_event)
++		return;
+ 
+ 	map_event->type = WAPP_ASSOC_STATUS_NOTIFICATION;
+-	map_event->length = assoc_status_len;
+-
+-	assoc_notification = (struct assoc_notification_lib *)map_event->buffer;
+-
+-	assoc_notification->assoc_notification_tlv_num = assoc_notify->assoc_notification_tlv_num;
+-
+-	buf = (u8 *)assoc_notification->notification_tlv;
+-
+-	assoc_status_evt = (struct assoc_notification_tlv *)buf;
++	map_event->length = (u16)assoc_status_len;
++	((struct assoc_notification_lib *)map_event->buffer)->assoc_notification_tlv_num =
++		assoc_notify->assoc_notification_tlv_num;
+ 
++	src = (const u8 *)assoc_notify->notification_tlv;
++	dst = map_event->buffer + sizeof(struct assoc_notification_lib);
+ 	for (i = 0; i < assoc_notify->assoc_notification_tlv_num; i++) {
+-		assoc_status_evt->bssid_num = assoc_notify->notification_tlv[i].bssid_num;
+-		for (j = 0; j < assoc_status_evt->bssid_num; j++) {
+-			os_memcpy(&assoc_status_evt->status[j].bssid, assoc_notify->notification_tlv[i].status[j].bssid, MAC_ADDR_LEN);
+-			assoc_status_evt->status[j].status = assoc_notify->notification_tlv[i].status[j].status;
+-		}
+-	}
+-
+-	//dump_assoc(assoc_notification);
+-
+-	if (0 > map_1905_send(wapp, (char *)map_event, evt_len)) {
+-		DBGPRINT(RT_DEBUG_ERROR, "%s send ch scan msg fail\n", __func__);
++		const struct assoc_notification_tlv *src_tlv =
++			(const struct assoc_notification_tlv *)src;
++		size_t entries_len = (size_t)src_tlv->bssid_num * sizeof(struct assoc_status);
++
++		os_memcpy(dst, src, sizeof(*src_tlv) + entries_len);
++		src += sizeof(*src_tlv) + entries_len;
++		dst += sizeof(*src_tlv) + entries_len;
+ 	}
+ 
+-
+-	Error:
+-
+-		if(map_event)
+-			os_free(map_event);
+-
+-		os_free(assoc_notify);
+-	return;
++	if (0 > map_1905_send(wapp, (char *)map_event, (int)evt_len))
++		DBGPRINT(RT_DEBUG_ERROR, "%s send association status notification failed\n", __func__);
++	os_free(map_event);
+ }
+ 
++
+ #define CATEGORY_PUBLIC		4
+ #define BSS_TRANSITION_QUERY    6
+ #define CATEGORY_WNM            10
+@@ -8180,7 +8231,13 @@
+ 
+ 		completion_report->radio_num = radio_num;
+ 
+-		MAP_GET_RADIO_IDNFER(wdev->radio,&completion_report->cac_completion_status[0].identifier);
++		{
++			struct map_radio_identifier radio_identifier;
++			MAP_GET_RADIO_IDNFER(wdev->radio, &radio_identifier);
++			os_memcpy((u8 *)completion_report + sizeof(struct cac_completion_report_lib) +
++				offsetof(struct cac_completion_status_lib, identifier),
++				&radio_identifier, MAC_ADDR_LEN);
++		}
+ 
+ 		completion_report->cac_completion_status[0].op_class = wapp->map->cac_req.body[wapp->map->cac_radio_ongoing].op_class_num;
+ 		completion_report->cac_completion_status[0].channel = *channel;
+@@ -8204,8 +8261,6 @@
+ 			else
+ 				completion_report->cac_completion_status[0].cac_status = CAC_FAILURE;
+ 			completion_report->cac_completion_status[0].op_class_num = 0;
+-			completion_report->cac_completion_status[0].opcap[0].ch_num = *channel;
+-			completion_report->cac_completion_status[0].opcap[0].op_class = 0;
+ 		}
+ 
+ 
+@@ -8336,7 +8391,13 @@
+ 			return;
+ 		completion_report = (struct cac_completion_report_lib *)map_event->buffer;
+ 		completion_report->radio_num = radio_num;
+-		MAP_GET_RADIO_IDNFER(wdev->radio,&completion_report->cac_completion_status[0].identifier);
++		{
++			struct map_radio_identifier radio_identifier;
++			MAP_GET_RADIO_IDNFER(wdev->radio, &radio_identifier);
++			os_memcpy((u8 *)completion_report + sizeof(struct cac_completion_report_lib) +
++				offsetof(struct cac_completion_status_lib, identifier),
++				&radio_identifier, MAC_ADDR_LEN);
++		}
+ 		if (radar_status == FALSE)
+ 		{
+ #ifdef MAP_R2
