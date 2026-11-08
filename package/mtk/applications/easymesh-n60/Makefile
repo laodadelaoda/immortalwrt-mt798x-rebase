@@ -88,7 +88,7 @@ define Build/Compile
 	test -s "$(STAGING_DIR)/usr/include/openssl/x509.h" || { echo "Missing target OpenSSL headers: $(STAGING_DIR)/usr/include/openssl/x509.h" >&2; exit 1; }; \
 	OPENSSL_VERSION_HEADER="$(STAGING_DIR)/usr/include/openssl/opensslv.h"; \
 	test -s "$$$$OPENSSL_VERSION_HEADER" || { echo "Missing target OpenSSL version header: $$$$OPENSSL_VERSION_HEADER" >&2; exit 1; }; \
-	grep -Eq '^[[:space:]]*#[[:space:]]*define[[:space:]]+OPENSSL_VERSION_MAJOR[[:space:]]+3([[:space:]]|$)' "$$$$OPENSSL_VERSION_HEADER" || { echo "EasyMesh requires target OpenSSL major version 3" >&2; grep -E "OPENSSL_VERSION_(MAJOR|NUMBER)" "$$$$OPENSSL_VERSION_HEADER" >&2 || true; exit 1; }; \
+	grep -Eq '^[[:space:]]*#[[:space:]]*define[[:space:]]+OPENSSL_VERSION_MAJOR[[:space:]]+3([[:space:]]|$$)' "$$$$OPENSSL_VERSION_HEADER" || { echo "EasyMesh requires target OpenSSL major version 3" >&2; grep -E "OPENSSL_VERSION_(MAJOR|NUMBER)" "$$$$OPENSSL_VERSION_HEADER" >&2 || true; exit 1; }; \
 	WAPP_COMPILE_LOG="$(PKG_BUILD_DIR)/wapp-compile.log"; \
 	$(MAKE) -C $(PKG_BUILD_DIR)/wappd \
 		TOPDIR="$(TOPDIR)" UAPD_INCLUDE_PATH="$(LINUX_DIR)/include/uapi/linux/wapp -I$(STAGING_DIR)/usr/include" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R2_SUPPORT=y CONFIG_MAP_R3_SUPPORT=y \
