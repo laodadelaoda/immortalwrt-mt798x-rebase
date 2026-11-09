@@ -142,8 +142,10 @@ jobs:
             mkdir -p "$dir"
             printf 'archive=%s\nrequest_url=%s\nlock_sha256=%s\n' "$name" "$url" "$sha" | tee "$dir/summary.txt" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
             release_asset_preflight "$name" "$url" "$sha" || return 1
-            # One request per archive: preserve the first failure instead of masking it with blind retries.
-            for n in 1; do
+            # Retry only transient transport/service failures. Every attempt is
+            # retained separately; immutable Lock SHA256 remains authoritative.
+            # Permanent failures and hash mismatches are never retried or bypassed.
+            for n in 1 2 3; do
               tmp="$INPUT/$name.part"; hdr="$dir/attempt-$n.headers"; rm -f "$tmp"; : > "$hdr"
               if metrics="$(curl --silent --show-error --location --connect-timeout 30 --max-time 300 \
                 --dump-header "$hdr" --output "$tmp" \
@@ -186,7 +188,21 @@ jobs:
                 echo "FAIL: LOCAL_LOCK_SHA256_MISMATCH archive=$name" | tee -a "$dir/summary.txt"; rm -f "$tmp"; return 1
               fi
               rm -f "$tmp"
-              echo "FAIL: DOWNLOAD_FAILED archive=$name class=$cls attempts=$n" | tee -a "$dir/summary.txt" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+              retryable=0
+              case "$cls" in
+                NETWORK_DNS_TCP_TLS_OR_TRANSFER|GITHUB_DOWNLOAD_ENTRY_5XX|REDIRECTED_CDN_5XX|REDIRECT_TARGET_UPSTREAM_5XX|HTTP_429_RATE_LIMIT)
+                  retryable=1
+                  ;;
+              esac
+              if [ "$retryable" -eq 1 ] && [ "$n" -lt 3 ]; then
+                delay=$((5 * n))
+                echo "RETRY: archive=$name class=$cls next_attempt=$((n + 1))/3 delay_seconds=$delay" \
+                  | tee -a "$dir/summary.txt" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+                sleep "$delay"
+                continue
+              fi
+              echo "FAIL: DOWNLOAD_FAILED archive=$name class=$cls attempts=$n retryable=$retryable" \
+                | tee -a "$dir/summary.txt" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
               return 1
             done
           }
