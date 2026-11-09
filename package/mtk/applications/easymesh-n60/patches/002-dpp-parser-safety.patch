@@ -294,7 +294,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  
  	if(!auth)
  		return msg;
-@@ -14662,7 +14661,6 @@
+@@ -14662,8 +14661,7 @@
  	msg = dpp_alloc_msg(DPP_PA_RECONFIG_AUTH_REQ,
  			    5 + 5 + 4 + wpabuf_len(connector) + 4 + auth->curve->nonce_len);
  
@@ -312,7 +312,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  	//const struct dpp_curve_params *own_curve;
  	struct dpp_signed_connector_info info;
  	const unsigned char *p;
-@@ -14909,14 +14907,12 @@
+@@ -14909,13 +14907,11 @@
  
  	res = dpp_process_signed_connector(&info, csign, signed_connector);
  	if (res != DPP_STATUS_OK) {
