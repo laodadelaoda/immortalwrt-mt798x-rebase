@@ -68,8 +68,8 @@ if actual != expected:
     fail("index rows do not exactly match vendor Lock phase/order/name sequence\n"
          f"expected={expected}\nactual={actual}")
 
-if len(rows) != 21:
-    fail(f"expected 21 EasyMesh patches, found {len(rows)}")
+if len(rows) != 22:
+    fail(f"expected 22 EasyMesh patches, found {len(rows)}")
 
 print("PASS: EasyMesh patch maintenance index exactly matches all 21 Lock entries.")
 print("PASS: application/post-normalize phase boundaries and order are preserved.")
