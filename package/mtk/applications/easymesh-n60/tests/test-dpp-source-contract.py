@@ -249,6 +249,13 @@ require("if (!wapp || !wapp->map || !wapp->dpp || !uri_temp || !uri_temp[0])" in
         "os_free(uri_values);" in qr_remove_fn,
         "DPP QR remove path lacks bounded full-list read, exact comparison or checked updates")
 
+# DPP 023: the MAP R3 bootstrap-removal loop must not retain a write-only flag.
+bootstrap_remove_fn = extract_c_function(
+    src["dpp"], "int dpp_bootstrap_remove(")
+require("int found = 0;" not in bootstrap_remove_fn and
+        "found = 1;" not in bootstrap_remove_fn,
+        "DPP bootstrap removal retains an unused-set variable rejected by -Werror")
+
 qr_save_fn = extract_c_function(src["dpp_wdev"], "void dpp_save_dpp_uri_to_file(")
 require("if (!wapp || !wapp->map || !wapp->dpp || !uri_str || !uri_str[0])" in qr_save_fn and
         "os_strlen(uri_str) >= 150" in qr_save_fn and
