@@ -178,7 +178,7 @@
  
  		strncat(ifparam, param, os_strlen(param));
  		dat_ctx = dat_load(MAPD_USER_CFG_FILE);
-@@ -10533,98 +10608,69 @@
+@@ -10533,98 +10608,82 @@
  #endif /*MAP R3 */
  void  dpp_remove_uri_from_file(struct wifi_app *wapp, unsigned int id , const char *uri_temp)
  {
@@ -315,7 +315,7 @@
 -		return;
 +	ret = os_snprintf(qr_param, sizeof(qr_param), "agt_qr_code_%u", uri_cnt);
 +	if (os_snprintf_error(sizeof(qr_param), ret))
-+		goto out;
++		goto rollback;
 +	if (dpp_delete_parameter_from_file(wapp, qr_param) < 0)
 +		goto rollback;
 +	ret = os_snprintf(count_buf, sizeof(count_buf), "%u", uri_cnt - 1);
