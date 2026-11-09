@@ -1,2 +1,2 @@
 This file triggers only the fixed-vendor source patch audit. It does not authorize Quick or Full compilation.
-Revision: capture-exact-post-008-context-for-009-rebase-20261108
+Revision: easymesh-patch-maintenance-review-20261109
