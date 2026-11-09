@@ -1,0 +1,2 @@
+This marker triggers the full N60 Pro EasyMesh Quick workflow. It runs fixed-vendor audit and Quick Prepare before source compilation.
+Revision: qos-list-alignment-022-20261109
