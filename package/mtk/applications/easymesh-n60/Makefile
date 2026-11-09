@@ -39,10 +39,15 @@ define Build/Prepare
 	DRIVER_MAKEFILE="$(TOPDIR)/package/mtk/drivers/mt_wifi/Makefile"; \
 	grep -Fqx 'PKG_VERSION:=7.6.7.3' "$$$$DRIVER_MAKEFILE" || { echo "MT Wi-Fi 7.6.7.3 package version declaration missing" >&2; exit 1; }; \
 	rm -rf $(PKG_BUILD_DIR); mkdir -p $(PKG_BUILD_DIR); \
+	OPENSSL_AUDIT_PRISTINE="$(PKG_BUILD_DIR)-openssl-pristine"; rm -rf "$$OPENSSL_AUDIT_PRISTINE"; \
 	tar -xjf '$(DL_DIR)/wappd-80ca5724.tar.bz2' -C $(PKG_BUILD_DIR); \
 	tar -xjf '$(DL_DIR)/mapd-6eca4331.tar.bz2' -C $(PKG_BUILD_DIR); \
 	tar -xjf '$(DL_DIR)/1905daemon-35234223.tar.bz2' -C $(PKG_BUILD_DIR); \
 	tar -xjf '$(DL_DIR)/libmapd-0132d199.tar.bz2' -C $(PKG_BUILD_DIR); \
+	mkdir -p "$$OPENSSL_AUDIT_PRISTINE"; \
+	for component in wappd mapd 1905daemon libmapd; do \
+		cp -a "$(PKG_BUILD_DIR)/$$component" "$$OPENSSL_AUDIT_PRISTINE/"; \
+	done; \
 	patch_names="$$$$(python3 ./scripts/n60-vendor-lock.py patch-order --repo "$(TOPDIR)" --set easymesh --phase application)"; \
 	test -n "$$$$patch_names" || { echo "EasyMesh application patch order is empty in vendor Lock" >&2; exit 1; }; \
 	printf "LOCK APPLICATION PATCH: %s\\n" "$$$$patch_names"; \
@@ -73,7 +78,17 @@ define Build/Prepare
 	python3 ./tests/test-easymesh-static-contract.py $(PKG_BUILD_DIR) $(TOPDIR); \
 	python3 ./tests/test-wapp-map-buffer-contract.py $(PKG_BUILD_DIR); \
 	python3 ./tests/test-wapp-wireless-mode-contract.py $(PKG_BUILD_DIR) $(TOPDIR); \
-	python3 ./tests/test-vendor-artifact-inventory.py $(PKG_BUILD_DIR) $(TOPDIR)
+	python3 ./tests/test-vendor-artifact-inventory.py $(PKG_BUILD_DIR) $(TOPDIR); \
+	OPENSSL_SOURCE_CONFIGURE="$$(find "$(TOPDIR)/build_dir" -type f -path '*/openssl-3.5.9/Configure' -print -quit)"; \
+	test -n "$$OPENSSL_SOURCE_CONFIGURE" || { echo "Pinned OpenSSL 3.5.9 native Prepare source tree is missing" >&2; exit 1; }; \
+	OPENSSL_SOURCE_ROOT="$$(dirname "$$OPENSSL_SOURCE_CONFIGURE")"; \
+	python3 ./tests/test-openssl-api-inventory-selftest.py; \
+	python3 ./tests/test-openssl-api-inventory.py \
+		--source-root "$(PKG_BUILD_DIR)" --repo-root "$(TOPDIR)" \
+		--pristine-root "$(PKG_BUILD_DIR)-openssl-pristine" \
+		--openssl-source "$$OPENSSL_SOURCE_ROOT" \
+		--policy ./tests/openssl-api-policy.json \
+		--output-dir "$(TOPDIR)/artifacts/easymesh-openssl-api-audit"
 endef
 
 define Build/Compile
