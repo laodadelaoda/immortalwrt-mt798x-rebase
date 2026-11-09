@@ -1,6 +1,6 @@
 name: N60 Pro EasyMesh compatibility and source-build gate
 description: Validate Linux 6.12, ImmortalWrt 25.12, OpenSSL 3.x and build the N60 EasyMesh userspace stack. Full firmware must depend on this gate.
-# Source-build regression revision: DPP unused-set-variable patch 023.
+# DPP unused-local regression checks are enforced by test-dpp-source-contract.py; patch 002 removes the dead locals, so no separate 023 patch is active.
 inputs:
   device:
     description: Target router profile
