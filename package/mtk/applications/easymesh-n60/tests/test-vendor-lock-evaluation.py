@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Regression tests for Vendor Lock -> actual GNU Make variable mapping."""
 from __future__ import annotations
+import csv
 import importlib.util
+import json
 import sys
 from pathlib import Path
 import unittest
@@ -19,6 +21,62 @@ ATTESTATION_SPEC = importlib.util.spec_from_file_location("verify_vendor_audit_a
 ATTESTATION_MODULE = importlib.util.module_from_spec(ATTESTATION_SPEC)
 assert ATTESTATION_SPEC and ATTESTATION_SPEC.loader
 ATTESTATION_SPEC.loader.exec_module(ATTESTATION_MODULE)
+
+
+
+class EasyMeshPatchDependencyManifestTests(unittest.TestCase):
+    def setUp(self):
+        self.repo = Path(__file__).resolve().parents[5]
+        self.lock = json.loads(
+            (self.repo / "package/mtk/vendor-sources.lock.json").read_text(encoding="utf-8")
+        )
+        self.patch_set = next(
+            item for item in self.lock["patch_sets"] if item.get("id") == "easymesh"
+        )
+        with (self.repo / "docs/audit/easymesh-patch-dependencies.csv").open(
+            newline="", encoding="utf-8"
+        ) as stream:
+            self.rows = list(csv.DictReader(stream))
+
+    def test_manifest_matches_canonical_lock_order_and_phase(self):
+        expected = {}
+        for phase, names in (
+            ("Build/Prepare", self.patch_set.get("application_order", [])),
+            ("post_normalize", self.patch_set.get("post_normalize_order", [])),
+        ):
+            for order, name in enumerate(names, start=1 if phase == "Build/Prepare" else
+                                         len(self.patch_set.get("application_order", [])) + 1):
+                expected[name] = (phase, order)
+
+        self.assertEqual(len(expected), 20, "canonical EasyMesh Lock must contain 20 active patches")
+        self.assertEqual(len(self.rows), 20, "dependency manifest must contain exactly 20 rows")
+        ids = [row["patch_id"] for row in self.rows]
+        files = [row["patch_file"] for row in self.rows]
+        self.assertEqual(sorted(ids), [f"{n:03d}" for n in range(1, 21)])
+        self.assertEqual(len(set(ids)), 20, "dependency manifest contains duplicate patch IDs")
+        self.assertEqual(len(set(files)), 20, "dependency manifest contains duplicate patch files")
+
+        by_id = {row["patch_id"]: row for row in self.rows}
+        for row in self.rows:
+            name = row["patch_file"]
+            self.assertIn(name, expected, f"{name} is not selected by the canonical Lock")
+            phase, order = expected[name]
+            self.assertEqual(row["application_phase"], phase, name)
+            self.assertEqual(int(row["application_order"]), order, name)
+            self.assertTrue((self.repo / self.patch_set["directory"] / name).is_file(), name)
+            self.assertTrue(row["responsibility"].strip(), name)
+            self.assertTrue(row["validation"].strip(), name)
+
+        for row in self.rows:
+            current_order = int(row["application_order"])
+            for dependency in filter(None, (item.strip() for item in row["depends_on"].split(";"))):
+                self.assertIn(dependency, by_id, f"{row['patch_id']} has unknown dependency {dependency}")
+                self.assertLess(
+                    int(by_id[dependency]["application_order"]),
+                    current_order,
+                    f"{row['patch_id']} is ordered before prerequisite {dependency}",
+                )
+
 
 
 class InventoryRuntimeArtifactTests(unittest.TestCase):
