@@ -212,6 +212,7 @@
  	}
 -	
 -	NdisZeroMemory(strbuf, 10);
++	wapp->dpp->qr_cmd = 0;
 +	if (!uri_cnt)
 +		return;
  
@@ -391,7 +392,6 @@
 -			if(!is_str_null(value))
 -				wapp_dpp_qr_code(wapp, (const char *)value);
 +	/* Keep the command disabled unless every configured entry is readable. */
-+	wapp->dpp->qr_cmd = 0;
 +	for (uri_num = 1; uri_num <= uri_cnt; uri_num++) {
 +		ret = os_snprintf(qr_param, sizeof(qr_param), "agt_qr_code_%u", uri_num);
 +		if (os_snprintf_error(sizeof(qr_param), ret))
@@ -402,7 +402,7 @@
 +			return;
  		}
 -		wapp->dpp->qr_cmd = 1;
-+		if (ret == 0 && !is_str_null(value))
++		if (!is_str_null(value))
 +			wapp_dpp_qr_code(wapp, (const char *)value);
  	}
 +	wapp->dpp->qr_cmd = 1;
