@@ -602,11 +602,11 @@ for raw in ("", "0", "0g", "ab" * 513, " 0"):
 # auth rather than exposing the legacy status variable.
 reconfig_req_fn = extract_c_function(src["dpp"], "struct wpabuf * dpp_build_reconfig_auth_req(")
 require(re.search(r"\blenmsg\b", reconfig_req_fn) is None,
-        "DPP reconfiguration request retains the unused lenmsg local")
+        "DPP reconfiguration request reintroduces lenmsg removed by patch 002; obsolete patch 023 must remain inactive")
 reconfig_connector_fn = extract_c_function(
     src["dpp"],
     "struct dpp_authentication * dpp_check_valid_connector(struct wifi_app *wapp, struct wapp_dev *wdev,")
 require(re.search(r"\bret\b", reconfig_connector_fn) is None,
-        "DPP auth-pointer connector validator retains the unused status local")
+        "DPP auth-pointer connector validator reintroduces ret removed by patch 002; obsolete patch 023 must remain inactive")
 
 print("PASS: DPP saved-config bounds, fail-closed rollback, auth cleanup and log redaction")
