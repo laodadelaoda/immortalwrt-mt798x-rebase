@@ -153,7 +153,11 @@ jobs:
               if [ "$rc" -ne 0 ] && [ "$status" = 000 ]; then cls=NETWORK_DNS_TCP_TLS_OR_TRANSFER
               elif [ "$status" -ge 500 ] 2>/dev/null; then
                 host="$(python3 -c 'import sys; from urllib.parse import urlparse; print(urlparse(sys.argv[1]).hostname or "")' "$final")"
-                if [ "$host" = github.com ]; then cls=GITHUB_DOWNLOAD_ENTRY_5XX; else cls=REDIRECT_TARGET_CDN_OR_UPSTREAM_5XX; fi
+                case "$host" in
+                  github.com) cls=GITHUB_DOWNLOAD_ENTRY_5XX ;;
+                  *.githubusercontent.com|*.githubassets.com|*.amazonaws.com|*.cloudfront.net) cls=REDIRECTED_CDN_5XX ;;
+                  *) cls=REDIRECT_TARGET_UPSTREAM_5XX ;;
+                esac
               elif [ "$status" = 404 ]; then cls=HTTP_404_ASSET_OR_PATH
               elif [ "$status" = 403 ]; then cls=HTTP_403_ACCESS_OR_POLICY
               elif [ "$status" = 429 ]; then cls=HTTP_429_RATE_LIMIT
