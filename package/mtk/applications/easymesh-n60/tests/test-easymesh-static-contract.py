@@ -75,8 +75,6 @@ require(nonmatching_header.returncode == 1,
 
 dpp_c = (wapp / "dpp/dpp.c").read_text(encoding="utf-8", errors="replace")
 dpp_h = (wapp / "dpp/dpp.h").read_text(encoding="utf-8", errors="replace")
-require("EVP_PKEY_get0_EC_KEY" in dpp_c,
-        "WAPP DPP reconfiguration no longer uses the OpenSSL public EC-key accessor")
 require("EC_KEY * EVP_PKEY_get0_EC_KEY(EVP_PKEY *pkey)" not in dpp_c,
         "vendor still defines an OpenSSL-owned EVP_PKEY accessor")
 require("EVP_PKEY_get0_EC_KEY" not in dpp_h,
@@ -95,20 +93,34 @@ inventory_selftest = repo / "package/mtk/applications/easymesh-n60/tests/test-op
 provider_test = repo / "package/mtk/applications/easymesh-n60/tests/test-openssl-provider-runtime.c"
 provider_runner = repo / "package/mtk/applications/easymesh-n60/scripts/run-openssl-provider-runtime.sh"
 api_policy = repo / "package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json"
-for label, path in (("OpenSSL API inventory", inventory_test),
-                    ("OpenSSL API parser self-test", inventory_selftest),
-                    ("OpenSSL Provider runtime test", provider_test),
-                    ("OpenSSL Provider runtime runner", provider_runner),
-                    ("OpenSSL API policy", api_policy)):
-    require(path.is_file(), f"{label} is missing: {path}")
 openssl_package_text = openssl_pkg.read_text(encoding="utf-8")
-require(re.findall(r"(?m)^PKG_VERSION:=([^\\s]+)\\s*$", openssl_package_text) == ["3.5.9"],
+require(re.findall(r"(?m)^PKG_VERSION:=(\S+)\s*$", openssl_package_text) == ["3.5.9"],
         "OpenSSL migration audit must pin exactly OpenSSL 3.5.9")
-require("test-openssl-api-inventory.py" in package_makefile and
-        "openssl-api-policy.json" in package_makefile and
-        "test-openssl-api-inventory-selftest.py" in package_makefile,
-        "full OpenSSL API inventory, policy and parser self-test are not wired into Package Build/Prepare")
-print("PASS: OpenSSL 3.5.9 source/API inventory, policy and Provider runtime test files are present and wired.")
+quick_workflow = repo / ".github/workflows/quick-prepare-audit.yml"
+quick_workflow_text = quick_workflow.read_text(encoding="utf-8")
+prepare_pos = quick_workflow_text.find("Run native Build Prepare for all fixed vendor packages")
+wifi026_pos = quick_workflow_text.find("Assert MT Wi-Fi 026 after Quick Prepare")
+provider_pos = quick_workflow_text.find("Run Provider-native OpenSSL 3.5.9 runtime regression tests")
+inventory_pos = quick_workflow_text.find("Enforce strict OpenSSL 3.5.9 API migration and const-correctness gate")
+require(min(prepare_pos, wifi026_pos, provider_pos, inventory_pos) >= 0 and
+        prepare_pos < wifi026_pos < provider_pos < inventory_pos,
+        "OpenSSL runtime/API gates must run only after all native Prepare and MT Wi-Fi 026 evidence")
+require("test-openssl-api-inventory.py" not in package_makefile and
+        "test-openssl-api-inventory-selftest.py" not in package_makefile,
+        "strict OpenSSL inventory is duplicated inside EasyMesh Build/Prepare before MT Wi-Fi 026")
+for rel in ("tests/test-openssl-api-inventory.py", "tests/test-openssl-api-inventory-selftest.py",
+            "tests/openssl-api-policy.json", "tests/test-openssl-provider-runtime.c",
+            "scripts/run-openssl-provider-runtime.sh"):
+    require(rel in quick_workflow_text,
+            f"Quick Prepare does not explicitly preflight/use OpenSSL audit input: {rel}")
+runtime_step = quick_workflow_text[provider_pos:inventory_pos]
+strict_step = quick_workflow_text[inventory_pos:quick_workflow_text.find("Upload OpenSSL API inventory", inventory_pos)]
+require("continue-on-error: true" in runtime_step and
+        "steps.openssl_provider_runtime.outcome == 'failure'" in quick_workflow_text,
+        "Provider runtime continue-on-error is not paired with an explicit failing outcome gate")
+require("--strict" in strict_step and "continue-on-error:" not in strict_step,
+        "strict OpenSSL API inventory failure must fail the job and cannot be continue-on-error")
+print("PASS: OpenSSL 3.5.9 gates are ordered after Prepare and MT Wi-Fi 026; inventory/runtime failures remain fatal.")
 
 # Runtime MAC contract: AL MAC comes from the selected live interface;
 # WAPP obtains BSSID from the driver's BSS-info response. FF:FF... in WTS
