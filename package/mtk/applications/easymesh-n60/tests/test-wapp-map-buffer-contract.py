@@ -48,9 +48,7 @@ for wire_struct in ("off_ch_scan_report_event", "off_ch_scan_result_event"):
          f"wire ABI record {wire_struct} must remain packed")
 need("os_memcpy(scan_result_evt->radio_id, scan_result->radio_id, MAC_ADDR_LEN)" in off_scan_src,
      "off-channel result serializer no longer copies fields explicitly")
-need("os_memcpy(scan_result_evt->radio_id, scan_result->radio_id, MAC_ADDR_LEN)" in off_scan_src,
-     "off-channel result serializer no longer copies fields explicitly")
-need("os_memcpy(.*scan_result.*sizeof(struct off_ch_scan_result_tlv)" not in off_scan_src,
+need(re.search(r"os_memcpy\\([^;]*sizeof\\(struct off_ch_scan_result_tlv\\)",\n               off_scan_src, re.S) is None,
      "runtime off-channel list node must not be serialized as a packed wire blob")
 
 offchannel_layout_probe = r"""
