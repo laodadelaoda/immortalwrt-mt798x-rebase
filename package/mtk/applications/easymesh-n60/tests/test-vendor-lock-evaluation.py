@@ -48,13 +48,13 @@ class EasyMeshPatchDependencyManifestTests(unittest.TestCase):
                                          len(self.patch_set.get("application_order", [])) + 1):
                 expected[name] = (phase, order)
 
-        self.assertEqual(len(expected), 23, "canonical EasyMesh Lock must contain 23 active patches")
-        self.assertEqual(len(self.rows), 23, "dependency manifest must contain exactly 23 rows")
+        self.assertEqual(len(expected), 22, "canonical EasyMesh Lock must contain 22 active patches")
+        self.assertEqual(len(self.rows), 22, "dependency manifest must contain exactly 22 rows")
         ids = [row["patch_id"] for row in self.rows]
         files = [row["patch_file"] for row in self.rows]
-        self.assertEqual(sorted(ids), [f"{n:03d}" for n in range(1, 24)])
-        self.assertEqual(len(set(ids)), 23, "dependency manifest contains duplicate patch IDs")
-        self.assertEqual(len(set(files)), 23, "dependency manifest contains duplicate patch files")
+        self.assertEqual(sorted(ids), [f"{n:03d}" for n in range(1, 23)])
+        self.assertEqual(len(set(ids)), 22, "dependency manifest contains duplicate patch IDs")
+        self.assertEqual(len(set(files)), 22, "dependency manifest contains duplicate patch files")
 
         by_id = {row["patch_id"]: row for row in self.rows}
         for row in self.rows:
