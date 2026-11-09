@@ -286,7 +286,7 @@
 diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
 --- a/wappd/dpp/dpp.c
 +++ b/wappd/dpp/dpp.c
-@@ -14646,7 +14646,6 @@ struct wpabuf * dpp_build_reconfig_auth_req(
+@@ -14644,7 +14644,6 @@
  {
  	struct wpabuf *msg = NULL;
  	struct wpabuf *connector  = NULL;
@@ -294,23 +294,25 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  
  	if(!auth)
  		return msg;
-@@ -14663,8 +14662,6 @@ struct wpabuf * dpp_build_reconfig_auth_req(
+@@ -14662,7 +14661,6 @@
  	msg = dpp_alloc_msg(DPP_PA_RECONFIG_AUTH_REQ,
  			    5 + 5 + 4 + wpabuf_len(connector) + 4 + auth->curve->nonce_len);
  
 -	lenmsg = (5 + 5 + 4 + wpabuf_len(connector) + 4 + auth->curve->nonce_len);
--
+ 
  	if (!msg) {
  		if (connector)
  			wpabuf_free(connector);
-@@ -14867,7 +14864,7 @@ struct dpp_authentication * dpp_check_valid_connector(struct wifi_app *wapp, struct wapp_dev *wdev,
+@@ -14865,7 +14863,7 @@
+ 	const u8 *c_nonce, u16 c_nonce_len, const u8 *trans_id, const u8 *version)
  {
  	struct json_token *root = NULL, *token = NULL, *own_root = NULL;
 -	enum dpp_status_error ret = 255, res;
 +	enum dpp_status_error res;
  	//const struct dpp_curve_params *own_curve;
  	struct dpp_signed_connector_info info;
-@@ -14911,13 +14908,11 @@ struct dpp_authentication * dpp_check_valid_connector(struct wifi_app *wapp, struct wapp_dev *wdev,
+ 	const unsigned char *p;
+@@ -14909,14 +14907,12 @@
  
  	res = dpp_process_signed_connector(&info, csign, signed_connector);
  	if (res != DPP_STATUS_OK) {
