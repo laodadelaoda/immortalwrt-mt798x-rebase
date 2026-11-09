@@ -187,8 +187,7 @@
         "019-wapp-map-buffer-safety.patch",
         "020-wapp-map-packed-member-gcc14.patch",
         "021-wapp-wireless-mode-capability-macros.patch",
-        "022-wapp-qos-list-node-alignment.patch",
-        "023-dpp-unused-set-variables-werror.patch"
+        "022-wapp-qos-list-node-alignment.patch"
       ],
       "scope": "EasyMesh Build/Prepare ordered vendor patch series",
       "post_normalize_order": [
