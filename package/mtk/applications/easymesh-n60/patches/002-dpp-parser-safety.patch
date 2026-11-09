@@ -312,7 +312,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  	//const struct dpp_curve_params *own_curve;
  	struct dpp_signed_connector_info info;
  	const unsigned char *p;
-@@ -14909,13 +14907,11 @@
+@@ -14909,14 +14907,12 @@
  
  	res = dpp_process_signed_connector(&info, csign, signed_connector);
  	if (res != DPP_STATUS_OK) {
@@ -326,3 +326,4 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
 -		ret = DPP_STATUS_INVALID_CONNECTOR;
  		goto fail;
  	}
+ 
