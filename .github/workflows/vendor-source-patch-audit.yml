@@ -56,6 +56,8 @@ jobs:
             echo "FAIL: GNU Make Package variable verification failed" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
             exit 1
           fi
+          echo "===== Validate EasyMesh patch maintenance index ====="
+          python3 package/mtk/applications/easymesh-n60/tests/test-patch-maintenance-index.py
           echo "===== Generate unified Linux kernel + fixed-vendor patch manifest ====="
           python3 target/linux/mediatek/tests/audit-kernel-patch-stack.py inventory \
             --repo "$GITHUB_WORKSPACE" \
