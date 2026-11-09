@@ -439,11 +439,11 @@ require(psk_clear >= 0 and psk_replace > psk_clear,
         "old per-interface PSK must be cleared before config replacement")
 csign_transaction_markers = {
     "transaction flag declaration": re.search(
-        r"\\bint\\s+dpp_csign_updated\\s*=\\s*0\\s*;", main) is not None,
+        r"\bint\s+dpp_csign_updated\s*=\s*0\s*;", main) is not None,
     "transaction flag update": re.search(
-        r"\\bdpp_csign_updated\\s*=\\s*1\\s*;", main) is not None,
+        r"\bdpp_csign_updated\s*=\s*1\s*;", main) is not None,
     "conditional global-key rollback": re.search(
-        r"if\\s*\\(\\s*dpp_csign_updated\\s*&&\\s*wapp->dpp_csign\\s*\\)", main) is not None,
+        r"if\s*\(\s*dpp_csign_updated\s*&&\s*wapp->dpp_csign\s*\)", main) is not None,
 }
 missing_csign_markers = [name for name, present in csign_transaction_markers.items()
                          if not present]
