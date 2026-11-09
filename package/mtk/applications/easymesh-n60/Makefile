@@ -69,6 +69,7 @@ define Build/Prepare
 	done; \
 	python3 ./scripts/n60-vendor-source-transforms.py finalize "$(PKG_BUILD_DIR)"; \
 	python3 ./tests/test-dpp-source-contract.py $(PKG_BUILD_DIR); \
+	python3 ./tests/test-wapp-qos-list-alignment-contract.py $(PKG_BUILD_DIR); \
 	python3 ./tests/test-easymesh-static-contract.py $(PKG_BUILD_DIR) $(TOPDIR); \
 	python3 ./tests/test-wapp-map-buffer-contract.py $(PKG_BUILD_DIR); \
 	python3 ./tests/test-wapp-wireless-mode-contract.py $(PKG_BUILD_DIR) $(TOPDIR); \
