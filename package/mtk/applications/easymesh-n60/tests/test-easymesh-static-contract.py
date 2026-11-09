@@ -110,9 +110,14 @@ prepare_pos = quick_workflow_text.find("Run native Build Prepare for all fixed v
 wifi026_pos = quick_workflow_text.find("Assert MT Wi-Fi 026 after Quick Prepare")
 provider_pos = quick_workflow_text.find("Run Provider-native OpenSSL 3.5.9 runtime regression tests")
 inventory_pos = quick_workflow_text.find("Enforce strict OpenSSL 3.5.9 API migration and const-correctness gate")
-require(min(prepare_pos, wifi026_pos, provider_pos, inventory_pos) >= 0 and
-        prepare_pos < wifi026_pos < provider_pos < inventory_pos,
-        "OpenSSL runtime/API gates must run only after all native Prepare and MT Wi-Fi 026 evidence")
+host_decompressor_pos = quick_workflow_text.find("Build the OpenWrt host decompressor required by native OpenSSL Prepare")
+require(min(host_decompressor_pos, prepare_pos, wifi026_pos, provider_pos, inventory_pos) >= 0 and
+        host_decompressor_pos < prepare_pos < wifi026_pos < provider_pos < inventory_pos,
+        "OpenWrt libdeflate host tool must be installed before native OpenSSL Prepare and OpenSSL audits must remain after MT Wi-Fi 026")
+host_decompressor_step = quick_workflow_text[host_decompressor_pos:prepare_pos]
+require("make tools/libdeflate/compile V=s" in host_decompressor_step and
+        "test -x staging_dir/host/bin/libdeflate-gzip" in host_decompressor_step,
+        "Quick Prepare must build and verify the exact libdeflate-gzip host tool before native OpenSSL extraction")
 require("test-openssl-api-inventory.py" not in package_makefile and
         "test-openssl-api-inventory-selftest.py" not in package_makefile,
         "strict OpenSSL inventory is duplicated inside EasyMesh Build/Prepare before MT Wi-Fi 026")
