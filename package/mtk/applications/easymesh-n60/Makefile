@@ -39,14 +39,14 @@ define Build/Prepare
 	DRIVER_MAKEFILE="$(TOPDIR)/package/mtk/drivers/mt_wifi/Makefile"; \
 	grep -Fqx 'PKG_VERSION:=7.6.7.3' "$$$$DRIVER_MAKEFILE" || { echo "MT Wi-Fi 7.6.7.3 package version declaration missing" >&2; exit 1; }; \
 	rm -rf $(PKG_BUILD_DIR); mkdir -p $(PKG_BUILD_DIR); \
-	OPENSSL_AUDIT_PRISTINE="$(PKG_BUILD_DIR)-openssl-pristine"; rm -rf "$$OPENSSL_AUDIT_PRISTINE"; \
+	OPENSSL_AUDIT_PRISTINE="$(PKG_BUILD_DIR)-openssl-pristine"; rm -rf "$$$$OPENSSL_AUDIT_PRISTINE"; \
 	tar -xjf '$(DL_DIR)/wappd-80ca5724.tar.bz2' -C $(PKG_BUILD_DIR); \
 	tar -xjf '$(DL_DIR)/mapd-6eca4331.tar.bz2' -C $(PKG_BUILD_DIR); \
 	tar -xjf '$(DL_DIR)/1905daemon-35234223.tar.bz2' -C $(PKG_BUILD_DIR); \
 	tar -xjf '$(DL_DIR)/libmapd-0132d199.tar.bz2' -C $(PKG_BUILD_DIR); \
-	mkdir -p "$$OPENSSL_AUDIT_PRISTINE"; \
+	mkdir -p "$$$$OPENSSL_AUDIT_PRISTINE"; \
 	for component in wappd mapd 1905daemon libmapd; do \
-		cp -a "$(PKG_BUILD_DIR)/$$component" "$$OPENSSL_AUDIT_PRISTINE/"; \
+		cp -a "$(PKG_BUILD_DIR)/$$$$component" "$$$$OPENSSL_AUDIT_PRISTINE/"; \
 	done; \
 	patch_names="$$$$(python3 ./scripts/n60-vendor-lock.py patch-order --repo "$(TOPDIR)" --set easymesh --phase application)"; \
 	test -n "$$$$patch_names" || { echo "EasyMesh application patch order is empty in vendor Lock" >&2; exit 1; }; \
