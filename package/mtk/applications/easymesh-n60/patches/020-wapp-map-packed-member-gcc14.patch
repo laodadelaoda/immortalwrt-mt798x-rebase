@@ -86,4 +86,26 @@
 +	ts_bh_set_all_vid(wdev, policy_vid_num, policy_vids);
  #endif
  }
+
+--- a/wappd/include/off_ch_scan.h
++++ b/wappd/include/off_ch_scan.h
+@@ -89,7 +89,8 @@
+ };
  
+ 
+-struct GNU_PACKED off_ch_scan_report {
++/* In-memory container: the dl_list must retain native pointer alignment. */
++struct off_ch_scan_report {
+ 	struct timestamp_tlv timestamp;
+ 	u8 scan_result_num;
+ 	struct dl_list scan_result_list;  //struct scan_result_tlv
+@@ -156,7 +157,8 @@
+ #endif
+ };
+ 
+-struct GNU_PACKED off_ch_scan_result_tlv {
++/* In-memory list node: it is serialized field-by-field, never as a wire blob. */
++struct off_ch_scan_result_tlv {
+ 	struct dl_list list;
+ 	u8 radio_id[MAC_ADDR_LEN];
+ 	u8 oper_class;
