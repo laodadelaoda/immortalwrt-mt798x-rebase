@@ -212,9 +212,6 @@
  	}
 -	
 -	NdisZeroMemory(strbuf, 10);
-+	wapp->dpp->qr_cmd = 0;
-+	if (!uri_cnt)
-+		return;
  
 -	get_dpp_parameters(wapp->map, "qr_count", value, sizeof(value));
 -	uri_cnt = atoi(value);
@@ -385,6 +382,7 @@
 -			}
 +		return;
 +	}
++	wapp->dpp->qr_cmd = 0;
 +	if (!uri_cnt)
 +		return;
  
