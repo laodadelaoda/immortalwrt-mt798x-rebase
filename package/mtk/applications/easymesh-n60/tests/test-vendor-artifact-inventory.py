@@ -188,6 +188,56 @@ archive_inventory = {
 generated_inventory = {
     "wappd": {"wapp_ap.conf"},
 }
+
+# Derive patch-created source files from the exact Lock-selected EasyMesh
+# application and post-normalize patch series. These files are not members of
+# pristine archives, but they are expected outputs of the pinned patch stack.
+easymesh_patch_sets = [item for item in lock["patch_sets"] if item.get("id") == "easymesh"]
+need(len(easymesh_patch_sets) == 1,
+     "canonical Lock must define exactly one EasyMesh patch set")
+easymesh_patch_set = easymesh_patch_sets[0]
+easymesh_patch_dir = repo / easymesh_patch_set["directory"]
+patch_generated_inventory = {root: set() for root in archive_inventory}
+patch_generated_sources = []
+post_roots = easymesh_patch_set.get("post_normalize_root_suffixes", {})
+
+for phase, patch_names in (
+    ("application", easymesh_patch_set.get("application_order", [])),
+    ("post_normalize", easymesh_patch_set.get("post_normalize_order", [])),
+):
+    for patch_name in patch_names:
+        patch_file = easymesh_patch_dir / patch_name
+        need(patch_file.is_file(),
+             f"Lock-selected EasyMesh patch missing while deriving generated files: {patch_name}")
+        lines = patch_file.read_text(encoding="utf-8", errors="replace").splitlines()
+        for index, line in enumerate(lines[:-1]):
+            if line.strip() != "--- /dev/null":
+                continue
+            added = re.match(r"^\\+\\+\\+ b/(.+)$", lines[index + 1])
+            need(added is not None,
+                 f"malformed new-file header in Lock-selected patch {patch_name}: {lines[index + 1]}")
+            target = Path(added.group(1))
+            need(not target.is_absolute() and ".." not in target.parts,
+                 f"unsafe patch-created source path in {patch_name}: {target}")
+            if phase == "post_normalize" and post_roots.get(patch_name, ""):
+                root_parts = Path(post_roots[patch_name]).parts
+                root_name = root_parts[0]
+                relative = Path(*root_parts[1:]) / target
+            else:
+                if not target.parts or target.parts[0] not in archive_inventory:
+                    continue
+                root_name = target.parts[0]
+                relative = Path(*target.parts[1:])
+            if root_name in archive_inventory and relative.parts:
+                rel = relative.as_posix()
+                need(rel not in patch_generated_inventory[root_name],
+                     f"duplicate Lock patch-created source path: {root_name}/{rel}")
+                patch_generated_inventory[root_name].add(rel)
+                patch_generated_sources.append((root_name, rel, patch_name))
+
+for root_name, relative, patch_name in patch_generated_sources:
+    print(f"PATCH-CREATED SOURCE: {root_name}/{relative} | {patch_name}")
+
 for root_name, archive_name in archive_inventory.items():
     root = build / root_name
     archive_path = repo / "dl" / archive_name
@@ -224,14 +274,22 @@ for root_name, archive_name in archive_inventory.items():
         need(relative[name].stat().st_size > 0,
              f"{root_name} generated/backup artifact is empty: {name}")
     actual = set(relative) - generated
-    need(actual == expected,
-         f"{root_name} prepared source paths differ from pinned archive manifest: "
-         f"missing={sorted(expected-actual)} extra={sorted(actual-expected)}")
+    patch_generated = patch_generated_inventory.get(root_name, set())
+    need(not (patch_generated & expected),
+         f"{root_name} Lock patch-created paths collide with pristine archive files: "
+         f"{sorted(patch_generated & expected)}")
+    need(actual == expected | patch_generated,
+         f"{root_name} prepared source paths differ from pinned archive + Lock patch outputs: "
+         f"missing={sorted((expected | patch_generated)-actual)} "
+         f"extra={sorted(actual-(expected | patch_generated))}")
+    for name in patch_generated:
+        need(relative[name].stat().st_size > 0,
+             f"{root_name} Lock patch-created source file is empty: {name}")
     headers = sum(Path(name).suffix.lower() in (".h", ".hh", ".hpp")
                   for name in actual)
     print(f"SOURCE INVENTORY: {root_name} | archive_files={len(expected)} | "
-          f"prepared_vendor_files={len(actual)} | headers={headers} | "
-          f"generated_artifacts={sorted(generated)}")
+          f"patch_created_files={sorted(patch_generated)} | prepared_vendor_files={len(actual)} | "
+          f"headers={headers} | generated_artifacts={sorted(generated)}")
 package_mk=(pkg/"Makefile").read_text(encoding="utf-8")
 need("version mapd >" in package_mk and "$(MAKE) -C $(PKG_BUILD_DIR)/mapd" in package_mk,
      "package must preserve prebuilt MAPD objects by invoking explicit version/mapd targets, not all/clean")
