@@ -424,6 +424,18 @@ jobs:
             test -x "$script" || { echo "::error::Required OpenWrt build script is not executable: $script"; exit 1; }
           done
 
+      - name: Build the OpenWrt host decompressor required by native OpenSSL Prepare
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "===== Build only the declared OpenWrt host decompressor prerequisite ====="
+          make tools/libdeflate/compile V=s
+          test -x staging_dir/host/bin/libdeflate-gzip || {
+            echo "::error::OpenWrt host libdeflate-gzip was not installed after tools/libdeflate/compile."
+            exit 1
+          }
+          sha256sum staging_dir/host/bin/libdeflate-gzip
+
       - name: Run native Build Prepare for all fixed vendor packages (no compile)
         shell: bash
         run: |
