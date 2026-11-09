@@ -9,10 +9,10 @@ assert [(x["api"],x["line"]) for x in r]==[("EVP_sha256",2),("EVP_PKEY_get0_EC_K
 with tempfile.TemporaryDirectory() as d:
  h=Path(d)/"include/openssl"; h.mkdir(parents=True)
  template=h/"opensslv.h.in"
- template.write_text("# define OPENSSL_VERSION_MAJOR 3\\n# define OPENSSL_VERSION_MINOR 5\\n# define OPENSSL_VERSION_PATCH 9\\n")
+ template.write_text("# define OPENSSL_VERSION_MAJOR 3\n# define OPENSSL_VERSION_MINOR 5\n# define OPENSSL_VERSION_PATCH 9\n")
  assert m.version_header(Path(d))==template
  assert not (h/"opensslv.h").exists()
- (h/"opensslv.h").write_text("# define OPENSSL_VERSION_MAJOR 3\\n")
+ (h/"opensslv.h").write_text("# define OPENSSL_VERSION_MAJOR 3\n")
  assert m.version_header(Path(d))==template  # source template remains authoritative
  (h/"evp.h").write_text("int EVP_sha256(void);\nOSSL_DEPRECATEDIN_3_0 const EC_KEY *EVP_PKEY_get0_EC_KEY(const EVP_PKEY *pkey);\n")
  names,depr=m.catalog(Path(d)); assert "EVP_sha256" in names and depr.get("EVP_PKEY_get0_EC_KEY")=="OSSL_DEPRECATEDIN_3_0"
