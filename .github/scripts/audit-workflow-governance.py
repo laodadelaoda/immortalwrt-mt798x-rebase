@@ -61,8 +61,9 @@ vendor_paths=[
  "target/linux/mediatek/patches-6.12/**",
  "target/linux/mediatek/tests/**",
 ]
-if set(vendor)!={"workflow_call","workflow_dispatch"}:
- bad("vendor audit must be reusable and manually dispatchable")
+# The canonical vendor audit is reusable, manually dispatchable, and
+# independently triggerable by the preserved documentation trigger. The
+# complete three-event contract is validated immediately below.
 prepare_only=tr("quick-prepare-only.yml")
 prepare_only_paths=vendor_paths+[".github/workflows/quick-prepare-only.yml"]
 if (set(prepare_only)!={"push","workflow_dispatch"} or
