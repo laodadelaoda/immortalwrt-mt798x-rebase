@@ -68,9 +68,12 @@ if actual != expected:
     fail("index rows do not exactly match vendor Lock phase/order/name sequence\n"
          f"expected={expected}\nactual={actual}")
 
-if len(rows) != 22:
-    fail(f"expected 22 active EasyMesh patches, found {len(rows)}")
+if len(rows) != len(expected):
+    fail(f"index row count {len(rows)} does not match canonical Lock entries {len(expected)}")
 
-print("PASS: EasyMesh patch maintenance index exactly matches all 22 Lock entries.")
+if len({row["patch_id"] for row in rows}) != len(rows):
+    fail("duplicate patch_id in maintenance index")
+
+print(f"PASS: EasyMesh patch maintenance index exactly matches all {len(expected)} Lock entries.")
 print("PASS: application/post-normalize phase boundaries and order are preserved.")
 print("PASS: every indexed patch exists and has a non-empty maintenance classification.")
