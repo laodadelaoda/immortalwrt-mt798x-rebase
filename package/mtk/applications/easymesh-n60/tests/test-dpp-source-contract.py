@@ -212,6 +212,8 @@ for raw in ("", "101", "1000", "-1", "+1", " 1", "1x"):
     require(qr_count_reference(raw) is None,
             f"DPP QR count reference parser accepted invalid value {raw!r}")
 
+# The QR reader uses 0 for success and nonzero for missing or failed entries;
+# rejecting every nonzero status is fail-closed and stronger than checking ret < 0.
 qr_load_fn = extract_c_function(src["dpp_wdev"], "void wapp_dpp_get_uri_frm_file(")
 require("if (!wapp || !wapp->map || !wapp->dpp)" in qr_load_fn and
         "dpp_read_qr_count(wapp, &uri_cnt) < 0" in qr_load_fn and
