@@ -21,18 +21,20 @@ def catalog(root):
    if ds: deprecated[ds[-1].group(1)]=m.group(1)
  if not names: raise ValueError("no public API declarations parsed")
  return names,deprecated
+def scan_text(text,names,depr,component,path):
+ s=clean(text); alt="|".join(re.escape(x) for x in sorted(names,key=lambda x:(-len(x),x)))
+ rx=re.compile(r"\b("+alt+r")\s*\("); rows=[]
+ for m in rx.finditer(s):
+  api=m.group(1); rows.append({"component":component,"path":path,"line":s.count("\n",0,m.start())+1,
+   "api":api,"deprecated_macro":depr.get(api,"")})
+ return rows
 def scan(root,names,depr):
  rows=[]
- alt="|".join(re.escape(x) for x in sorted(names,key=lambda x:(-len(x),x)))
- rx=re.compile(r"\b("+alt+r")\s*\(")
  for comp in COMP:
   base=root/comp
   if not base.is_dir(): raise ValueError("missing component source root: "+str(base))
   for p in sorted(x for x in base.rglob("*") if x.is_file() and x.suffix in EXT):
-   s=clean(p.read_text(encoding="utf-8",errors="replace"))
-   for m in rx.finditer(s):
-    api=m.group(1); rows.append({"component":comp,"path":p.relative_to(root).as_posix(),
-     "line":s.count("\n",0,m.start())+1,"api":api,"deprecated_macro":depr.get(api,"")})
+   rows.extend(scan_text(p.read_text(encoding="utf-8",errors="replace"),names,depr,comp,p.relative_to(root).as_posix()))
  return rows
 def const_audit(root):
  out=[]
