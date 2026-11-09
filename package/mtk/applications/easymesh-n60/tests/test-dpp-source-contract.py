@@ -437,10 +437,26 @@ psk_clear = main.find("forced_memzero(wdev->config->psk, sizeof(wdev->config->ps
 psk_replace = main.find("os_memcpy(wdev->config, (char *)(&config[k])")
 require(psk_clear >= 0 and psk_replace > psk_clear,
         "old per-interface PSK must be cleared before config replacement")
-require("int dpp_csign_updated = 0;" in main and
-        "dpp_csign_updated = 1;" in main and
-        "if (dpp_csign_updated && wapp->dpp_csign)" in main,
-        "global C-sign rollback must clear only a key installed by this transaction")
+csign_transaction_markers = {
+    "transaction flag declaration": re.search(
+        r"\\bint\\s+dpp_csign_updated\\s*=\\s*0\\s*;", main) is not None,
+    "transaction flag update": re.search(
+        r"\\bdpp_csign_updated\\s*=\\s*1\\s*;", main) is not None,
+    "conditional global-key rollback": re.search(
+        r"if\\s*\\(\\s*dpp_csign_updated\\s*&&\\s*wapp->dpp_csign\\s*\\)", main) is not None,
+}
+missing_csign_markers = [name for name, present in csign_transaction_markers.items()
+                         if not present]
+if missing_csign_markers:
+    csign_evidence = [
+        line.strip() for line in main.splitlines()
+        if "dpp_csign_updated" in line or "wapp->dpp_csign" in line
+    ]
+else:
+    csign_evidence = []
+require(not missing_csign_markers,
+        "global C-sign transaction rollback invariant missing "
+        f"{missing_csign_markers}; source matches={csign_evidence}")
 
 config_loader = extract_c_function(main, "int dpp_read_config_file_for_connection(")
 for token in (
