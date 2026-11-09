@@ -30,6 +30,14 @@ for label, source_root in (("WAPP", wapp), ("P1905", p1905), ("MAPD", mapd),
 # OpenSSL-major ERE must preserve its end-of-line anchor through nested Make
 # expansion, otherwise grep receives an unmatched opening parenthesis.
 package_makefile = (repo / "package/mtk/applications/easymesh-n60/Makefile").read_text(encoding="utf-8")
+# Build/Prepare is expanded through BuildPackage/eval and the package recipe.
+# Shell variables introduced there therefore need four dollars in source;
+# two dollars are consumed by GNU Make nested expansion and otherwise
+# silently turn $OPENSSL... / $component into PENSSL... / omponent.
+prepare_lines = package_makefile.split("define Build/Prepare", 1)[1].split("endef", 1)[0]
+for shell_ref in ("OPENSSL_AUDIT_PRISTINE", "component"):
+    require(("$$" + shell_ref) in prepare_lines,
+            "nested Build/Prepare shell variable must use four-dollar Make escaping: " + shell_ref)
 openssl_check = next((line for line in package_makefile.splitlines()
                       if "OPENSSL_VERSION_MAJOR" in line and "grep -Eq" in line), "")
 dollar4 = chr(36) * 4
