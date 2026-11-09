@@ -10,9 +10,9 @@
  #endif /* MAP_R3 */
 @@ -11046,7 +11045,6 @@
  			struct dpp_bootstrap_info, list) {
- 			if (id_val && bi->id != id_val)
- 				continue;
--			found = 1;
- 			ChirpTLV_1905_send(wapp, bi, 0);
- 		}
+ 		if (id_val && bi->id != id_val)
+ 			continue;
+-		found = 1;
+ 		ChirpTLV_1905_send(wapp, bi, 0);
+ 	}
  #endif
