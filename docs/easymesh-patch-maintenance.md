@@ -1,4 +1,4 @@
-# EasyMesh 001–022 补丁维护与合并审议
+# EasyMesh 001–023 补丁维护与合并审议
 
 基准分支：`n60pro-mtk-closed-driver`
 
@@ -9,9 +9,9 @@
 本次不直接把 22 个补丁压缩成少数大型补丁。采用“维护分组 + 原子补丁 + Lock 唯一执行顺序”的结构。补丁分组只服务于上游升级定位，不参与源码变换，也不替代标准 `.patch`。
 
 当前 Lock 定义：
-- Build/Prepare application 阶段 20 个补丁；
+- Build/Prepare application 阶段 21 个补丁；
 - post-normalize 阶段 2 个补丁（006、001）；
-- 总计 22 个补丁。
+- 总计 23 个补丁。
 
 必须继续以 `vendor-sources.lock.json` 的 `application_order`、`post_normalize_order` 和 `post_normalize_root_suffixes` 为唯一执行依据。不得按编号排序，不得把 post-normalize 补丁提前。
 
@@ -41,6 +41,7 @@
 - 004、006：分别是 libmapd 和 1905daemon 子 Make 构建参数，不跨目录合并；006 还必须保留 post-normalize 阶段。
 - 019、020：虽然都触及 `wappd/map/map_1905.c`，但一个是报文/缓冲区安全，一个是 packed member 对齐访问，保持独立。
 - 021：无线模式能力宏适配，保持独立。
+- 023：DPP `dpp_build_reconfig_auth_req()` 和 `dpp_check_valid_connector()` 两处未使用赋值变量的 `-Werror` 兼容修订；只增加显式 `(void)` 读取，不改变 DPP 行为，保持独立。
 - 022：MSCS/SCS/DSCP 内存链表容器对齐修复；与 020 采用相同的“链表节点不应 packed”原则，但作用于不同结构体和 `qos.h`，保持独立。
 - 001：DSA/Linux MII ioctl 修订，必须保留 post-normalize root=`1905daemon`。
 
@@ -57,4 +58,4 @@
 
 ## 本次审议范围与限制
 
-本次提交只增加维护分组说明，不修改任何现有补丁内容、供应商归档地址、SHA256、Lock 中的补丁顺序或 Quick/Full 门禁。两个合并候选尚未执行源码级合并；在完整原始归档重放和回归验证前，保持原补丁序列不变。
+本次追加 023 仅修复两个已由 GCC 日志确认的 `unused-but-set-variable` 编译错误。原有 001–022 补丁、供应商归档地址和 SHA256 不变；新增补丁纳入 Lock 与依赖清单。两个既有合并候选仍未执行源码级合并。
