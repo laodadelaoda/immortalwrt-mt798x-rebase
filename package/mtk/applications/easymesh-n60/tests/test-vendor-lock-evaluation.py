@@ -59,6 +59,7 @@ class EasyMeshPatchDependencyManifestTests(unittest.TestCase):
         by_id = {row["patch_id"]: row for row in self.rows}
         for row in self.rows:
             name = row["patch_file"]
+            self.assertEqual(row["patch_id"], name[:3], f"{name}: patch ID does not match filename")
             self.assertIn(name, expected, f"{name} is not selected by the canonical Lock")
             phase, order = expected[name]
             self.assertEqual(row["application_phase"], phase, name)
