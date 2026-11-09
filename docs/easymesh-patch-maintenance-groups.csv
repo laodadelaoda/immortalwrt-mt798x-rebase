@@ -18,6 +18,6 @@ application,16,005,005-wapp-hotspot-realloc-pointer-arithmetic.patch,wapp-hotspo
 application,17,019,019-wapp-map-buffer-safety.patch,wapp-map-buffer-safety,"MAP report/notification buffer and field bounds",keep-atomic
 application,18,020,020-wapp-map-packed-member-gcc14.patch,wapp-map-packed-alignment,"packed member alignment and unaligned access",keep-atomic
 application,19,021,021-wapp-wireless-mode-capability-macros.patch,wapp-wireless-mode,"wireless mode capability macro compatibility",keep-atomic
+application,20,022,022-wapp-qos-list-node-alignment.patch,wapp-qos-list-alignment,"MSCS/SCS/DSCP heap-backed intrusive-list containers; same native-alignment principle as 020 but separate qos.h types",keep-atomic
 post_normalize,1,006,006-p1905-libbridge-tool-propagation.patch,p1905-build,"1905daemon and ethernet sub-Make tool propagation; post-normalize root",keep-atomic-stage-bound
 post_normalize,2,001,001-dsa-use-linux-mii-ioctl.patch,dsa-mii-api,"DSA Linux MII ioctl adaptation; post-normalize root 1905daemon",keep-atomic-stage-bound
-application,20,022,022-wapp-qos-list-node-alignment.patch,wapp-qos-list-alignment,"MSCS/SCS/DSCP heap-backed intrusive-list containers; same native-alignment principle as 020 but separate qos.h types",keep-atomic
