@@ -283,3 +283,44 @@
  #endif
  			ret = MAP_SUCCESS;
  			break;
+diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
+--- a/wappd/dpp/dpp.c
++++ b/wappd/dpp/dpp.c
+@@ -14646,7 +14646,6 @@ struct wpabuf * dpp_build_reconfig_auth_req(
+ {
+ 	struct wpabuf *msg = NULL;
+ 	struct wpabuf *connector  = NULL;
+-	int lenmsg = 0;
+ 
+ 	if(!auth)
+ 		return msg;
+@@ -14663,8 +14662,6 @@ struct wpabuf * dpp_build_reconfig_auth_req(
+ 	msg = dpp_alloc_msg(DPP_PA_RECONFIG_AUTH_REQ,
+ 			    5 + 5 + 4 + wpabuf_len(connector) + 4 + auth->curve->nonce_len);
+ 
+-	lenmsg = (5 + 5 + 4 + wpabuf_len(connector) + 4 + auth->curve->nonce_len);
+-
+ 	if (!msg) {
+ 		if (connector)
+ 			wpabuf_free(connector);
+@@ -14867,7 +14864,7 @@ struct dpp_authentication * dpp_check_valid_connector(struct wifi_app *wapp, struct wapp_dev *wdev,
+ {
+ 	struct json_token *root = NULL, *token = NULL, *own_root = NULL;
+-	enum dpp_status_error ret = 255, res;
++	enum dpp_status_error res;
+ 	//const struct dpp_curve_params *own_curve;
+ 	struct dpp_signed_connector_info info;
+@@ -14911,13 +14908,11 @@ struct dpp_authentication * dpp_check_valid_connector(struct wifi_app *wapp, struct wapp_dev *wdev,
+ 
+ 	res = dpp_process_signed_connector(&info, csign, signed_connector);
+ 	if (res != DPP_STATUS_OK) {
+-		ret = res;
+ 		goto fail;
+ 	}
+ 
+ 	root = json_parse((const char *) info.payload, info.payload_len);
+ 	if (!root) {
+ 		wpa_printf(MSG_ERROR, "DPP: JSON parsing of connector failed");
+-		ret = DPP_STATUS_INVALID_CONNECTOR;
+ 		goto fail;
+ 	}
