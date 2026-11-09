@@ -282,9 +282,9 @@
 +			goto out;
 +		ret = dpp_read_qr_parameter(wapp, qr_param, uri_values[uri_num - 1],
 +					    sizeof(uri_values[uri_num - 1]));
-+		if (ret < 0)
++		if (ret != 0)
 +			goto out;
-+		if (!found && ret == 0 && uri_values[uri_num - 1][0] &&
++		if (!found && uri_values[uri_num - 1][0] &&
 +		    os_strcmp(uri_temp, uri_values[uri_num - 1]) == 0)
 +			found = uri_num;
 +	}
@@ -397,7 +397,7 @@
 +		if (os_snprintf_error(sizeof(qr_param), ret))
 +			return;
 +		ret = dpp_read_qr_parameter(wapp, qr_param, value, sizeof(value));
-+		if (ret < 0) {
++		if (ret != 0) {
 +			DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"failed to read QR entry %u\n", uri_num);
 +			return;
  		}
@@ -468,6 +468,8 @@
 +		return;
 +	}
 +	if (dpp_save_config(wapp, "qr_count", count_buf, NULL) < 0) {
++		if (dpp_delete_parameter_from_file(wapp, qr_param) < 0)
++			DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"failed to roll back QR entry %u\n", next_count);
 +		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"failed to update QR count\n");
 +		return;
 +	}
