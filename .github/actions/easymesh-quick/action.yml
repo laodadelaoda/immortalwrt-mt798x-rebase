@@ -44,6 +44,14 @@ runs:
         grep -Fq 'PKG_BUILD_DEPENDS:=datconf openssl libnl-tiny' package/mtk/applications/easymesh-n60/Makefile || {
           echo "::error::EasyMesh build dependency closure changed."; exit 1;
         }
+        for file in \
+          package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py \
+          package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py \
+          package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json \
+          package/mtk/applications/easymesh-n60/tests/test-openssl-provider-runtime.c \
+          package/mtk/applications/easymesh-n60/scripts/run-openssl-provider-runtime.sh; do
+          test -s "$file" || { echo "::error::OpenSSL migration audit input is missing: $file"; exit 1; }
+        done
         for patch in \
           022-since-v5.18-drop-deprecated-mm_segment_t-usages.patch \
           026-since-v6.1-replace-deprecated-prandom_u32-usage.patch \
