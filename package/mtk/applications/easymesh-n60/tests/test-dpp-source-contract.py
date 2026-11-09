@@ -21,6 +21,7 @@ paths = {
     "dpp_wdev": root / "wappd/dpp/dpp_wdev.c",
     "dpp_reconfig": root / "wappd/dpp/dpp_reconfig.c",
     "dpp_wired": root / "wappd/dpp/dpp_wired.c",
+    "dpp_debug": root / "wappd/dpp/dpp_debug.h",
 }
 for name, path in paths.items():
     require(path.is_file(), f"required DPP source is missing: {path}")
@@ -358,20 +359,25 @@ require('wpa_hexdump(MSG_DEBUG, DPP_MAP_PREX "in process config cign key"' not i
         "main DPP configuration still logs the C-sign key")
 
 
-# DPP 018: every DPP translation unit that emits binary diagnostics must redact payload bytes.
+# DPP 018: all DPP translation units share one payload-redaction policy.
+redaction_header = src["dpp_debug"]
+require("#ifndef DPP_DEBUG_REDACT_H" in redaction_header and
+        "#define DPP_REDACT_DUMP(level, title, data, data_len) do {" in redaction_header and
+        'wpa_printf((level), "%s: [REDACTED]", (title));' in redaction_header,
+        "shared DPP diagnostic redaction header is incomplete")
+for macro in (
+    "#define wpa_hexdump(level, title, buf, len) DPP_REDACT_DUMP(level, title, buf, len)",
+    "#define wpa_hexdump_ascii(level, title, buf, len) DPP_REDACT_DUMP(level, title, buf, len)",
+    "#define wpa_hexdump_buf(level, title, buf) DPP_REDACT_DUMP(level, title, buf, 0)",
+    "#define wpa_hexdump_key(level, title, buf, len) DPP_REDACT_DUMP(level, title, buf, len)",
+    "#define wpa_hexdump_buf_key(level, title, buf) DPP_REDACT_DUMP(level, title, buf, 0)",
+):
+    require(macro in redaction_header, f"shared DPP redaction policy omits {macro}")
 for name in ("dpp", "dpp_reconfig", "dpp_wdev", "dpp_wired"):
     source = src[name]
-    require("#define DPP_REDACT_DUMP(level, title, data, data_len) do {" in source and
-            "wpa_printf((level), \"%s: [REDACTED]\", (title));" in source,
-            f"{name}: DPP diagnostic redaction wrapper is missing")
-    for macro in (
-        "#define wpa_hexdump(level, title, buf, len) DPP_REDACT_DUMP(level, title, buf, len)",
-        "#define wpa_hexdump_ascii(level, title, buf, len) DPP_REDACT_DUMP(level, title, buf, len)",
-        "#define wpa_hexdump_buf(level, title, buf) DPP_REDACT_DUMP(level, title, buf, 0)",
-        "#define wpa_hexdump_key(level, title, buf, len) DPP_REDACT_DUMP(level, title, buf, len)",
-        "#define wpa_hexdump_buf_key(level, title, buf) DPP_REDACT_DUMP(level, title, buf, 0)",
-    ):
-        require(macro in source, f"{name}: unsafe hexdump path is not redacted: {macro}")
+    require(source.count('#include "dpp_debug.h"') == 1 and
+            "DPP_REDACT_DUMP" not in source,
+            f"{name}: shared DPP redaction header is not included exactly once")
 
 key_debug = extract_c_function(src["dpp"], "void dpp_debug_print_key(")
 require("dpp_debug_print_point(title, group, point)" in key_debug and
@@ -458,6 +464,15 @@ for token in (
 ):
     require(token in config_loader,
             f"successful DPP config load must release temporary owner: {token}")
+
+success_qr_start = config_loader.find("if (wapp->dpp) {")
+success_cleanup_start = config_loader.rfind("if (config[k].dpp_csign)", 0, success_qr_start)
+require(success_cleanup_start >= 0 and success_qr_start > success_cleanup_start,
+        "DPP parser success cleanup is not located before QR-count validation")
+success_cleanup = config_loader[success_cleanup_start:success_qr_start]
+for field in ("dpp_connector", "dpp_csign", "dpp_netaccesskey", "dpp_ppkey", "ssid"):
+    require(success_cleanup.count(f"os_free(config[k].{field})") == 1,
+            f"temporary DPP {field} must have exactly one success-path free")
 
 
 
