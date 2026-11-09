@@ -4,7 +4,7 @@
 
 The N60 Pro vendor source set is pinned by package/mtk/vendor-sources.lock.json. The lock binds archive names and SHA256 values, package ownership, extraction roots, patch directories, patch order, and audit-only source sets.
 
-The locked inventory contains 11 source archives and 90 ordered vendor patches across seven patch sets. n60-vendor-source-transforms.py is the single shared source-normalization/transform entry used by both native package Build/Prepare and the audit path; Quick and Full must consume the same lock and attestation.
+The locked inventory contains 11 source archives and 91 ordered vendor patches across seven patch sets. n60-vendor-source-transforms.py is the single shared source-normalization/transform entry used by both native package Build/Prepare and the audit path; Quick and Full must consume the same lock and attestation.
 
 ## Source ownership
 
