@@ -458,9 +458,11 @@ require(not missing_csign_markers,
         "global C-sign transaction rollback invariant missing "
         f"{missing_csign_markers}; source matches={csign_evidence}")
 
-error_label = main.rfind("\nerror:")
-rollback_pos = main.find("if (dpp_csign_updated && wapp->dpp_csign)", error_label)
-parser_cleanup_pos = main.find("if (config[k].dpp_connector)", error_label)
+main_dpp_fn = extract_c_function(
+    src["main"], "int dpp_read_config_file_for_connection(")
+error_label = main_dpp_fn.rfind("\nerror:")
+rollback_pos = main_dpp_fn.find("if (dpp_csign_updated && wapp->dpp_csign)", error_label)
+parser_cleanup_pos = main_dpp_fn.find("if (config[k].dpp_connector)", error_label)
 require(error_label >= 0 and rollback_pos > error_label and
         parser_cleanup_pos > rollback_pos,
         "transaction-owned global C-sign rollback must run at the common error exit")
