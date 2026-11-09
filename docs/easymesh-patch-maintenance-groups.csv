@@ -1,24 +1,24 @@
 lock_phase,lock_order,patch_id,patch_file,maintenance_group,overlap_or_relation,merge_decision
-application,1,002,undefined
-application,2,007,undefined
-application,3,008,undefined
-application,4,009,undefined
-application,5,010,undefined
-application,6,015,undefined
-application,7,016,undefined
-application,8,017,undefined
-application,9,018,undefined
-application,10,023,undefined
-application,11,011,undefined
-application,12,014,undefined
-application,13,012,undefined
-application,14,013,undefined
-application,15,003,undefined
-application,16,004,undefined
-application,17,005,undefined
-application,18,019,undefined
-application,19,020,undefined
-application,20,021,undefined
-application,21,022,undefined
+application,1,002,002-dpp-parser-safety.patch,dpp-config-read,"same main.c DPP config read path as 009; callers rely on get_dpp_parameters",candidate-target-for-009
+application,2,007,007-openssl3-use-native-evp-pkey-get0-ec-key.patch,openssl3-api,"native EVP_PKEY API compatibility",keep-atomic
+application,3,008,008-dpp-parser-bounds-and-secret-redaction.patch,dpp-parameter-bounds,"parameter reader plus credential log redaction across DPP files",keep-atomic
+application,4,009,009-dpp-null-guard-and-unused-cred-length.patch,dpp-config-read,"same main.c DPP config read path as 002; MAP_R3 conditional scope",candidate-merge-into-002
+application,5,010,010-dpp-wdev-config-allocation-rollback.patch,dpp-config-ownership,"allocation/copy rollback; overlaps ownership area later hardened by 017/018",keep-atomic
+application,6,015,015-dpp-config-lookup-null-and-error-guard.patch,dpp-config-lookup,"separate dpp_wdev.c config lookup API",keep-atomic
+application,7,016,016-dpp-qr-count-boundaries-and-error-propagation.patch,dpp-qr-state,"QR count parsing and multi-key update/rollback transaction",keep-atomic
+application,8,017,017-dpp-credential-bounds-zeroization-and-log-redaction.patch,dpp-credential-lifecycle,"credential bounds, ownership and zeroization; overlaps 010/018 areas",keep-atomic
+application,9,018,018-dpp-security-logging-and-credential-lifecycle.patch,dpp-security-lifecycle,"cross-file DPP log redaction, secret cleanup and error handling; overlaps 010/017 areas",keep-atomic
+application,10,023,023-dpp-unused-set-variables-werror.patch,dpp-compiler-diagnostic,"remove MAP_R3 DPP bootstrap-list assigned-but-unused flag; independent compiler warning cleanup",keep-atomic
+application,11,011,011-wapp-wts-security.patch,wapp-wts-parser,"WAPP WTS parser and fail-closed validation",candidate-target-for-013
+application,12,014,014-wapp-wps-key-log-redaction.patch,wapp-secret-logging,"independent WPS event key log in common/wdev.c",keep-atomic
+application,13,012,012-p1905-wts-hardening.patch,p1905-wts-parser,"separate 1905daemon WTS parser implementation",keep-atomic
+application,14,013,013-wapp-wts-parser-fail-closed.patch,wapp-wts-parser,"same WAPP WTS parser function as 011; hidden-SSID fail-closed and redundant guard removal",candidate-merge-into-011
+application,15,003,003-wapp-gcc14-copy-semantics.patch,wapp-gcc14,"venue/operator/friendly-name allocation and copy semantics",keep-atomic
+application,16,004,004-libmapd-target-flags.patch,libmapd-build,"libmapd Makefile target compiler flags",keep-atomic
+application,17,005,005-wapp-hotspot-realloc-pointer-arithmetic.patch,wapp-hotspot-memory,"hotspot realloc pointer arithmetic and buffer initialization",keep-atomic
+application,18,019,019-wapp-map-buffer-safety.patch,wapp-map-buffer-safety,"MAP report/notification buffer and field bounds",keep-atomic
+application,19,020,020-wapp-map-packed-member-gcc14.patch,wapp-map-packed-alignment,"packed member alignment and unaligned access",keep-atomic
+application,20,021,021-wapp-wireless-mode-capability-macros.patch,wapp-wireless-mode,"wireless mode capability macro compatibility",keep-atomic
+application,21,022,022-wapp-qos-list-node-alignment.patch,wapp-qos-list-alignment,"MSCS/SCS/DSCP heap-backed intrusive-list containers; same native-alignment principle as 020 but separate qos.h types",keep-atomic
 post_normalize,1,006,006-p1905-libbridge-tool-propagation.patch,p1905-build,"1905daemon and ethernet sub-Make tool propagation; post-normalize root",keep-atomic-stage-bound
 post_normalize,2,001,001-dsa-use-linux-mii-ioctl.patch,dsa-mii-api,"DSA Linux MII ioctl adaptation; post-normalize root 1905daemon",keep-atomic-stage-bound
