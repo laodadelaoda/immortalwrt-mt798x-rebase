@@ -1,6 +1,10 @@
 name: N60 Pro EasyMesh Quick Build
 
 on:
+  push:
+    branches: ["n60pro-mtk-closed-driver"]
+    paths:
+      - "docs/easymesh-quick-trigger.txt"
   workflow_dispatch:
     inputs:
       device:
