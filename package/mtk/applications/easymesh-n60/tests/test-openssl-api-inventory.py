@@ -15,13 +15,13 @@ def validate_openssl_source(root,repo_root):
  if not (inc/"opensslv.h.in").is_file(): raise FileNotFoundError("missing OpenSSL opensslv.h.in: "+str(inc))
  mk=repo_root/"package/libs/openssl/Makefile"
  text=mk.read_text(encoding="utf-8")
- m=re.search(r"(?m)^PKG_VERSION\\s*:=\\s*([^\\s#]+)",text)
+ m=re.search(r"(?m)^PKG_VERSION\s*:=\s*([^\s#]+)",text)
  if not m or m.group(1)!="3.5.9": raise ValueError("repository OpenSSL package is not pinned to 3.5.9")
  generated=inc/"opensslv.h"
  if generated.is_file():
   vh=generated.read_text(encoding="utf-8")
   for macro,v in (("OPENSSL_VERSION_MAJOR","3"),("OPENSSL_VERSION_MINOR","5"),("OPENSSL_VERSION_PATCH","9")):
-   if not re.search(r"(?m)^\\s*#\\s*define\\s+"+macro+r"\\s+"+v+r"(?:\\s|$)",vh): raise ValueError("generated OpenSSL version header mismatch: "+macro)
+   if not re.search(r"(?m)^\s*#\s*define\s+"+macro+r"\s+"+v+r"(?:\s|$)",vh): raise ValueError("generated OpenSSL version header mismatch: "+macro)
  return "3.5.9"
 def catalog(root):
  inc=root/"include/openssl"
