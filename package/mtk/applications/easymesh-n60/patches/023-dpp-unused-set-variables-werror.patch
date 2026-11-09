@@ -1,0 +1,8 @@
+--- a/wappd/dpp/dpp.c
++++ b/wappd/dpp/dpp.c
+@@ -14649,1 +14649,2 @@
+ 	int lenmsg = 0;
++	(void)lenmsg;
+@@ -14870,1 +14871,2 @@
+ 	enum dpp_status_error ret = 255, res;
++	(void)ret;
