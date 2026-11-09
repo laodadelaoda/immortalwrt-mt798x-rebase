@@ -1211,3 +1211,4 @@ runs:
         path: artifacts/easymesh-quick/
         if-no-files-found: error
         retention-days: 14
+# Re-run the gated Quick pipeline after DPP unused-local cleanup.
