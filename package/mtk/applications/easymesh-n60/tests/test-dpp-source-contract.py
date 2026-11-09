@@ -27,6 +27,14 @@ for name, path in paths.items():
     require(path.is_file(), f"required DPP source is missing: {path}")
 src = {name: path.read_text(encoding="utf-8") for name, path in paths.items()}
 
+# The shared DPP redaction header must cover key-aware ASCII dumps as well as
+# ordinary/key hex dumps, and every DPP translation unit must include it.
+require('#define wpa_hexdump_ascii_key(level, title, buf, len) DPP_REDACT_DUMP(level, title, buf, len)' in src["dpp_debug"],
+        "DPP key-aware ASCII hexdumps bypass the shared redaction policy")
+for name in ("dpp", "dpp_wdev", "dpp_reconfig", "dpp_wired"):
+    require('#include "dpp_debug.h"' in src[name],
+            f"{name}: shared DPP redaction header is not included")
+
 main = src["main"]
 start = main.find("int dpp_read_config_file_for_connection")
 require(start >= 0, "DPP connection-config parser is missing")
