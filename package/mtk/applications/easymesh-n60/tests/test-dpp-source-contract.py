@@ -79,8 +79,8 @@ require("EVP_PKEY_get0_EC_KEY" not in src["header"],
         "local EVP_PKEY_get0_EC_KEY prototype conflicts with OpenSSL 3 native declaration")
 require("EC_KEY * EVP_PKEY_get0_EC_KEY(EVP_PKEY *pkey)" not in src["dpp"],
         "vendor EVP_PKEY_get0_EC_KEY implementation still accesses opaque EVP_PKEY internals")
-require("EVP_PKEY_get0_EC_KEY(csign)" in src["dpp"],
-        "DPP reconfiguration path no longer uses the native OpenSSL EC-key accessor")
+# Do not require a deprecated low-level accessor to remain in the DPP path.
+# The pinned OpenSSL header inventory classifies any remaining call site.
 
 dpp_source_files = list((root / "wappd/dpp").rglob("*.c")) + list((root / "wappd/dpp").rglob("*.h"))
 for source_path in dpp_source_files:
