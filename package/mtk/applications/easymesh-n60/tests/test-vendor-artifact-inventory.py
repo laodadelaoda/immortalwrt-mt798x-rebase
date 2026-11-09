@@ -213,7 +213,7 @@ for phase, patch_names in (
         for index, line in enumerate(lines[:-1]):
             if line.strip() != "--- /dev/null":
                 continue
-            added = re.match(r"^\\+\\+\\+ b/(.+)$", lines[index + 1])
+            added = re.match(r"^\+\+\+ b/(.+)$", lines[index + 1])
             need(added is not None,
                  f"malformed new-file header in Lock-selected patch {patch_name}: {lines[index + 1]}")
             target = Path(added.group(1))
