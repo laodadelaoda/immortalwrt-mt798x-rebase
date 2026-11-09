@@ -217,7 +217,7 @@ require("if (!wapp || !wapp->map || !wapp->dpp)" in qr_load_fn and
         "dpp_read_qr_count(wapp, &uri_cnt) < 0" in qr_load_fn and
         "unsigned int uri_num, uri_cnt = 0;" in qr_load_fn and
         "dpp_read_qr_parameter(wapp, qr_param, value, sizeof(value))" in qr_load_fn and
-        "if (ret < 0)" in qr_load_fn and "atoi(value)" not in qr_load_fn and
+        "if (ret != 0)" in qr_load_fn and "atoi(value)" not in qr_load_fn and
         "char uri_num" not in qr_load_fn,
         "DPP QR load path lacks bounded count, NULL checks or read-error handling")
 
