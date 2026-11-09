@@ -21,21 +21,10 @@ repo = Path(sys.argv[2])
 wapp = build / "wappd"
 p1905 = build / "1905daemon"
 mapd = build / "mapd"
-for label, source_root in (("WAPP", wapp), ("P1905", p1905), ("MAPD", mapd)):
+libmapd = build / "libmapd"
+for label, source_root in (("WAPP", wapp), ("P1905", p1905), ("MAPD", mapd),
+                           ("libmapd", libmapd)):
     require(source_root.is_dir(), f"{label} source root is missing from prepared build tree: {source_root}")
-
-# Keep the OpenSSL inventory informational and derived from the real source
-# files. Deprecated API compatibility remains a compiler-diagnostic gate;
-# this script must not refer to undeclared inventory variables.
-openssl_files = []
-for source_root in (wapp, p1905, mapd):
-    for source_file in source_root.rglob("*"):
-        if source_file.is_file() and source_file.suffix in {".c", ".h"}:
-            source_text = source_file.read_text(encoding="utf-8", errors="replace")
-            if ("#include <openssl/" in source_text or
-                    '#include "openssl/' in source_text or
-                    re.search(r"\b(?:EVP_|EC_KEY|OPENSSL_|OSSL_)", source_text)):
-                openssl_files.append(source_file)
 
 # Regression: GNU Make consumes dollar references inside recipes. The
 # OpenSSL-major ERE must preserve its end-of-line anchor through nested Make
@@ -98,8 +87,28 @@ require((p1905 / "src/crypto_openssl.c").is_file(),
         "P1905 OpenSSL crypto backend is missing")
 require((p1905 / "src/dpp.c").is_file(),
         "P1905 DPP/OpenSSL source is missing")
-print(f"PASS: OpenSSL 3 opaque-object audit; {len(openssl_files)} source/header files contain OpenSSL API references.")
-print("OpenSSL deprecated-API compatibility remains gated by target compiler diagnostics.")
+# Full OpenSSL API inventory and provider runtime checks are explicit,
+# independent gates. Do not turn a file-count heuristic into a migration verdict.
+openssl_pkg = repo / "package/libs/openssl/Makefile"
+inventory_test = repo / "package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py"
+inventory_selftest = repo / "package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py"
+provider_test = repo / "package/mtk/applications/easymesh-n60/tests/test-openssl-provider-runtime.c"
+provider_runner = repo / "package/mtk/applications/easymesh-n60/scripts/run-openssl-provider-runtime.sh"
+api_policy = repo / "package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json"
+for label, path in (("OpenSSL API inventory", inventory_test),
+                    ("OpenSSL API parser self-test", inventory_selftest),
+                    ("OpenSSL Provider runtime test", provider_test),
+                    ("OpenSSL Provider runtime runner", provider_runner),
+                    ("OpenSSL API policy", api_policy)):
+    require(path.is_file(), f"{label} is missing: {path}")
+openssl_package_text = openssl_pkg.read_text(encoding="utf-8")
+require(re.findall(r"(?m)^PKG_VERSION:=([^\\s]+)\\s*$", openssl_package_text) == ["3.5.9"],
+        "OpenSSL migration audit must pin exactly OpenSSL 3.5.9")
+require("test-openssl-api-inventory.py" in package_makefile and
+        "openssl-api-policy.json" in package_makefile and
+        "test-openssl-api-inventory-selftest.py" in package_makefile,
+        "full OpenSSL API inventory, policy and parser self-test are not wired into Package Build/Prepare")
+print("PASS: OpenSSL 3.5.9 source/API inventory, policy and Provider runtime test files are present and wired.")
 
 # Runtime MAC contract: AL MAC comes from the selected live interface;
 # WAPP obtains BSSID from the driver's BSS-info response. FF:FF... in WTS
