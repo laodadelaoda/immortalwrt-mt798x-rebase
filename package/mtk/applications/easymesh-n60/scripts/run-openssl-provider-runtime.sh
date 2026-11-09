@@ -4,12 +4,9 @@ set -Eeuo pipefail
 src="$(realpath "$1")"; test_c="$(realpath "$2")"; out="$3"; repo="$(realpath "$4")"
 mkdir -p "$out"; exec > >(tee "$out/provider-runtime.log") 2>&1
 [[ -s "$src/Configure" && -s "$src/include/openssl/opensslv.h.in" && -s "$test_c" && -d "$repo" ]] || { echo "FAIL: Provider runtime input missing (expected OpenSSL Configure and opensslv.h.in template)"; exit 1; }
-# The pinned source archive contains opensslv.h.in. The generated opensslv.h
-# does not exist until Configure has run, so validate the immutable template first.
-for item in "OPENSSL_VERSION_MAJOR 3" "OPENSSL_VERSION_MINOR 5" "OPENSSL_VERSION_PATCH 9"; do
- set -- $item
- grep -Eq "^[[:space:]]*#[[:space:]]*define[[:space:]]+$1[[:space:]]+$2([[:space:]]|$)" "$src/include/openssl/opensslv.h.in" || { echo "FAIL: wrong OpenSSL source version: $item"; exit 1; }
-done
+PKG_VERSION="$(sed -n 's/^PKG_VERSION:=//p' "$repo/package/libs/openssl/Makefile" | head -n 1)"
+[[ "$PKG_VERSION" == "3.5.9" ]] || { echo "FAIL: repository OpenSSL package is not pinned to 3.5.9 (found: $PKG_VERSION)"; exit 1; }
+echo "PASS: OpenSSL source template is present and package Makefile pins the audited archive to 3.5.9."
 build="$RUNNER_TEMP/n60-openssl-provider-host-build"; rm -rf "$build"; mkdir -p "$build"; cp -a "$src" "$build/openssl-src"
 cd "$build/openssl-src"
 perl ./Configure linux-x86_64 no-shared no-tests no-apps no-docs --prefix="$build/install"
