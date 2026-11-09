@@ -409,7 +409,7 @@
  }
  
  int wapp_dpp_set_onboarding_type(struct wifi_app *wapp, u8 flag)
-@@ -7127,40 +7129,37 @@
+@@ -7127,40 +7129,39 @@
  
  void dpp_save_dpp_uri_to_file(struct wifi_app *wapp, char *uri_str)
  {
