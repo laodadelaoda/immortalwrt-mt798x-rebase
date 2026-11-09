@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression tests for Vendor Lock -> actual GNU Make variable mapping."""
+"""Regression tests for Vendor Lock -> GNU Make mapping and active patch dependencies."""
 from __future__ import annotations
 import csv
 import importlib.util
