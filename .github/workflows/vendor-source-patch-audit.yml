@@ -3,6 +3,10 @@ name: N60 Pro fixed-vendor-source patch audit
 on:
   workflow_call:
   workflow_dispatch:
+  push:
+    branches: ["n60pro-mtk-closed-driver"]
+    paths:
+      - "docs/vendor-patch-audit-trigger.txt"
 
 permissions:
   contents: read

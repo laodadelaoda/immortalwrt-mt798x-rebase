@@ -9,7 +9,7 @@ def load(p):
  if not isinstance(x,dict): bad(f"invalid YAML mapping: {p}")
  return x
 D={p.name:load(p) for p in W.glob("*.yml")}; act=load(A)
-need={"build-package.yml","main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml","vendor-patch-audit-only.yml","wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-template-audit.yml","copilot-ai-audit.yml","workflow-governance-audit.yml"}
+need={"build-package.yml","main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml","wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-template-audit.yml","copilot-ai-audit.yml","workflow-governance-audit.yml"}
 if need-D.keys(): bad("missing workflow "+str(sorted(need-D.keys())))
 def tr(n): return D[n].get("on",{})
 def steps(d):
@@ -70,8 +70,10 @@ if (set(prepare_only)!={"push","workflow_dispatch"} or
     prepare_only["push"].get("paths")!=prepare_only_paths):
  bad("standalone Quick Prepare trigger mismatch")
 if set(tr("quick-prepare-audit.yml"))!={"workflow_call"}: bad("Prepare must be reusable-only")
-v=tr("vendor-patch-audit-only.yml")
-if set(v)!={"workflow_dispatch","push"} or v["push"].get("paths")!=["docs/vendor-patch-audit-trigger.txt"]: bad("standalone patch audit trigger mismatch")
+if set(vendor)!={"workflow_call","workflow_dispatch","push"}:
+ bad("vendor audit must be reusable, manually dispatchable and docs-triggerable")
+if vendor["push"].get("branches")!=["n60pro-mtk-closed-driver"] or vendor["push"].get("paths")!=["docs/vendor-patch-audit-trigger.txt"]:
+ bad("standalone vendor audit docs trigger mismatch")
 for n in ("wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-template-audit.yml"):
  t=tr(n)
  if set(t)!={"push","workflow_dispatch"} or not t["push"].get("branches") or not t["push"].get("paths"): bad(n+" must remain path-filtered")
