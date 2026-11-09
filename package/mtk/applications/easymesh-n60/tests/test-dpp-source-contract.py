@@ -596,4 +596,17 @@ for raw in ("", "0", "0g", "ab" * 513, " 0"):
             f"DPP hex restore accepted invalid/oversized input: {raw[:16]!r}")
 
 
+# Keep the active DPP translation unit warning-clean under -Werror.
+# These were dead vendor locals, not required state: the request length is
+# derived directly by dpp_alloc_msg(), and the auth-pointer overload returns
+# auth rather than exposing the legacy status variable.
+reconfig_req_fn = extract_c_function(src["dpp"], "struct wpabuf * dpp_build_reconfig_auth_req(")
+require(re.search(r"\\blenmsg\\b", reconfig_req_fn) is None,
+        "DPP reconfiguration request retains the unused lenmsg local")
+reconfig_connector_fn = extract_c_function(
+    src["dpp"],
+    "struct dpp_authentication * dpp_check_valid_connector(struct wifi_app *wapp, struct wapp_dev *wdev,")
+require(re.search(r"\\bret\\b", reconfig_connector_fn) is None,
+        "DPP auth-pointer connector validator retains the unused status local")
+
 print("PASS: DPP saved-config bounds, fail-closed rollback, auth cleanup and log redaction")
