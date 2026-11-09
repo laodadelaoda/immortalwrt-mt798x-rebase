@@ -1,6 +1,6 @@
 --- a/wappd/common/main.c
 +++ b/wappd/common/main.c
-@@ -811,9 +811,8 @@
+@@ -826,9 +826,8 @@
  	struct dpp_sec_cred *cred = NULL;
  	struct dpp_authentication auth;
  	//struct dpp_bss_cred *bss_cred = NULL;
@@ -11,7 +11,7 @@
  	os_memset(&auth, 0, sizeof(auth));
  	//char all_zero_mac[MAC_ADDR_LEN]={0};
  #endif
-@@ -825,6 +824,9 @@
+@@ -840,6 +839,9 @@
  		return WAPP_INVALID_ARG;
  	}
  
@@ -21,7 +21,7 @@
  	os_memset(config, 0, 3 * sizeof(struct dpp_config));
  	ret = os_snprintf(param, sizeof(param), "_valid");
  	if (os_snprintf_error(sizeof(param), ret)) {
-@@ -1042,7 +1044,6 @@
+@@ -1057,7 +1059,6 @@
  			DBGPRINT(RT_DEBUG_ERROR, "[%s] wapp_dpp_save_dpp_cred fail\n", __func__);
  			goto error;
  		}

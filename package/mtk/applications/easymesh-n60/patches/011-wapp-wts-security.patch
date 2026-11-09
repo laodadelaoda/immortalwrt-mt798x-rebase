@@ -354,7 +354,7 @@
  	dl_list_init(&wapp->map_devices);
 --- a/wappd/common/wdev.c
 +++ b/wappd/common/wdev.c
-@@ -4276,8 +4276,8 @@
+@@ -4282,8 +4282,8 @@
  	DBGPRINT_RAW(RT_DEBUG_OFF,
  		"set psk:\n"
  		"\t ifname = %s\n"
