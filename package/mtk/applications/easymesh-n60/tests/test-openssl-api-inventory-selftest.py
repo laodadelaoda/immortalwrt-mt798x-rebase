@@ -14,5 +14,5 @@ with tempfile.TemporaryDirectory() as d:
  root=Path(d)
  for c in m.COMP: (root/c).mkdir()
  (root/"wappd/x.c").write_text("EC_KEY *bad=EVP_PKEY_get0_EC_KEY(p);\nconst EC_KEY *ok=EVP_PKEY_get0_EC_KEY(p);\n")
- assert len(m.const_audit(root))==3
+ assert len(m.const_audit(root))==1
 print("PASS: inventory parser masks comments/literals, preserves call-site lines and detects deprecated declarations/const loss.")
