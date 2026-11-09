@@ -34,12 +34,12 @@ off_scan_src = off_scan_c.read_text(encoding="utf-8")
 # correctly rejects every address-taking operation under -Werror.
 for struct_name in ("off_ch_scan_report", "off_ch_scan_result_tlv"):
     need(not re.search(
-        rf"struct\\s+GNU_PACKED\\s+{struct_name}\\s*\\{{",
+        rf"struct\s+GNU_PACKED\s+{struct_name}\s*\{{",
         off_scan_hdr),
         f"{struct_name} must not be packed because it owns a dl_list")
 need("struct dl_list scan_result_list;" in off_scan_hdr,
      "off-channel report lost its runtime list head")
-need(re.search(r"struct off_ch_scan_result_tlv\\s*\\{\\s*struct dl_list list;",
+need(re.search(r"struct off_ch_scan_result_tlv\s*\{\s*struct dl_list list;",
                off_scan_hdr) is not None,
      "off-channel result node must keep dl_list as its first runtime member")
 # Protocol-facing event records remain packed; changing their wire layout is forbidden.
@@ -48,9 +48,36 @@ for wire_struct in ("off_ch_scan_report_event", "off_ch_scan_result_event"):
          f"wire ABI record {wire_struct} must remain packed")
 need("os_memcpy(scan_result_evt->radio_id, scan_result->radio_id, MAC_ADDR_LEN)" in off_scan_src,
      "off-channel result serializer no longer copies fields explicitly")
-need("sizeof(struct off_ch_scan_result_tlv)" not in off_scan_src or
-     off_scan_src.count("sizeof(struct off_ch_scan_result_tlv)") == 3,
-     "unexpected whole-record sizing/copy path for runtime off-channel list nodes")
+need("os_memcpy(scan_result_evt->radio_id, scan_result->radio_id, MAC_ADDR_LEN)" in off_scan_src,
+     "off-channel result serializer no longer copies fields explicitly")
+need("os_memcpy(.*scan_result.*sizeof(struct off_ch_scan_result_tlv)" not in off_scan_src,
+     "runtime off-channel list node must not be serialized as a packed wire blob")
+
+offchannel_layout_probe = r"""
+#include <stddef.h>
+struct wifi_app;
+typedef void wapp_event_data;
+#define MAX_NUM_OF_WAPP_CHANNELS 256
+#include "off_ch_scan.h"
+_Static_assert(offsetof(struct off_ch_scan_report, scan_result_list) %
+               _Alignof(struct dl_list) == 0, "report list head alignment");
+_Static_assert(offsetof(struct off_ch_scan_result_tlv, list) %
+               _Alignof(struct dl_list) == 0, "result list node alignment");
+_Static_assert(offsetof(struct off_ch_scan_report_event, scan_result) ==
+               sizeof(struct off_ch_scan_report_event), "report wire tail");
+_Static_assert(offsetof(struct off_ch_scan_result_event, neighbor_num) == 9,
+               "off-channel result wire field offset");
+_Static_assert(sizeof(struct off_ch_scan_result_event) == 11,
+               "off-channel result wire record size");
+int main(void) { return 0; }
+"""
+offchannel_probe = subprocess.run(
+    [cc, "-std=gnu11", "-Wall", "-Werror", "-I", str(root / "include"),
+     "-x", "c", "-fsyntax-only", "-"],
+    input=offchannel_layout_probe, text=True, capture_output=True)
+need(offchannel_probe.returncode == 0,
+     "off-channel list alignment / wire ABI compile-time assertions failed: " +
+     offchannel_probe.stderr)
 
 
 # Structure layout: all four variable-tail records must remain zero-length tails,
