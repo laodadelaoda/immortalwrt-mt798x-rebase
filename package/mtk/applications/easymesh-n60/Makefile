@@ -71,6 +71,7 @@ define Build/Prepare
 	python3 ./tests/test-dpp-source-contract.py $(PKG_BUILD_DIR); \
 	python3 ./tests/test-easymesh-static-contract.py $(PKG_BUILD_DIR) $(TOPDIR); \
 	python3 ./tests/test-wapp-map-buffer-contract.py $(PKG_BUILD_DIR); \
+	python3 ./tests/test-wapp-wireless-mode-contract.py $(PKG_BUILD_DIR) $(TOPDIR); \
 	python3 ./tests/test-vendor-artifact-inventory.py $(PKG_BUILD_DIR) $(TOPDIR)
 endef
 

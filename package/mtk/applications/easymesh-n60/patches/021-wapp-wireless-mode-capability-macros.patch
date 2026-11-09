@@ -1,0 +1,13 @@
+--- a/wappd/include/wdev.h
++++ b/wappd/include/wdev.h
+@@ -60,9 +60,10 @@
+ 
+ #ifdef MAP_6E_SUPPORT
+ #define WMODE_CAP_6G(_x)        (((_x) & (WMODE_AX_6G)) != 0)
++#endif
++/* 2.4/5 GHz capability checks are independent of 6 GHz MAP support. */
+ #define WMODE_CAP_5G(_x)        (((_x) & (WMODE_A | WMODE_AN | WMODE_AC | WMODE_AX_5G)) != 0)
+ #define WMODE_CAP_2G(_x)        (((_x) & (WMODE_B | WMODE_G | WMODE_GN | WMODE_AX_24G)) != 0)
+-#endif
+ 
+ struct wifi_app;
