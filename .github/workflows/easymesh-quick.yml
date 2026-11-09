@@ -4,7 +4,8 @@ on:
   push:
     branches: ["n60pro-mtk-closed-driver"]
     paths:
-      - "docs/easymesh-quick-trigger.txt"
+      - ".github/actions/easymesh-quick/action.yml"
+      - ".github/workflows/easymesh-quick.yml"
   workflow_dispatch:
     inputs:
       device:
