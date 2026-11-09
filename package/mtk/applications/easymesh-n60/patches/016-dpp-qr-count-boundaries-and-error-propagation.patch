@@ -293,9 +293,9 @@
 +	for (uri_num = found + 1; uri_num <= uri_cnt; uri_num++) {
 +		ret = os_snprintf(qr_param, sizeof(qr_param), "agt_qr_code_%u", uri_num - 1);
 +		if (os_snprintf_error(sizeof(qr_param), ret))
-+			goto out;
++			goto rollback;
 +		if (dpp_save_config(wapp, qr_param, uri_values[uri_num - 1], NULL) < 0)
-+			goto out;
++			goto rollback;
 +	}
  
 -         //updating the QR count
@@ -317,13 +317,26 @@
 +	if (os_snprintf_error(sizeof(qr_param), ret))
 +		goto out;
 +	if (dpp_delete_parameter_from_file(wapp, qr_param) < 0)
-+		goto out;
++		goto rollback;
 +	ret = os_snprintf(count_buf, sizeof(count_buf), "%u", uri_cnt - 1);
 +	if (os_snprintf_error(sizeof(count_buf), ret))
-+		goto out;
++		goto rollback;
 +	if (dpp_save_config(wapp, "qr_count", count_buf, NULL) < 0)
-+		goto out;
++		goto rollback;
 +	wapp->dpp->qr_code_num = (u8)(uri_cnt - 1);
++	goto out;
++rollback:
++	/* Restore the original list if any write in the compaction fails. */
++	for (uri_num = found; uri_num <= uri_cnt; uri_num++) {
++		ret = os_snprintf(qr_param, sizeof(qr_param), "agt_qr_code_%u", uri_num);
++		if (os_snprintf_error(sizeof(qr_param), ret) ||
++		    dpp_save_config(wapp, qr_param, uri_values[uri_num - 1], NULL) < 0)
++			DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"failed to roll back QR entry %u\\n", uri_num);
++	}
++	ret = os_snprintf(count_buf, sizeof(count_buf), "%u", uri_cnt);
++	if (os_snprintf_error(sizeof(count_buf), ret) ||
++	    dpp_save_config(wapp, "qr_count", count_buf, NULL) < 0)
++		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"failed to roll back QR count\\n");
 +out:
 +	os_free(uri_values);
 +#else
