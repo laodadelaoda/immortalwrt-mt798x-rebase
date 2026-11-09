@@ -142,6 +142,7 @@ jobs:
             mkdir -p "$dir"
             printf 'archive=%s\nrequest_url=%s\nlock_sha256=%s\n' "$name" "$url" "$sha" | tee "$dir/summary.txt" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
             release_asset_preflight "$name" "$url" "$sha" || return 1
+            # One request per archive: preserve the first failure instead of masking it with blind retries.
             for n in 1; do
               tmp="$INPUT/$name.part"; hdr="$dir/attempt-$n.headers"; rm -f "$tmp"; : > "$hdr"
               if metrics="$(curl --silent --show-error --location --connect-timeout 30 --max-time 300 \
@@ -161,6 +162,7 @@ jobs:
               elif [ "$status" = 404 ]; then cls=HTTP_404_ASSET_OR_PATH
               elif [ "$status" = 403 ]; then cls=HTTP_403_ACCESS_OR_POLICY
               elif [ "$status" = 429 ]; then cls=HTTP_429_RATE_LIMIT
+              elif [ "$rc" -eq 0 ] && [ "$status" -ge 200 ] && [ "$status" -lt 300 ] && [ ! -s "$tmp" ]; then cls=HTTP_EMPTY_BODY
               elif [ "$rc" -eq 0 ] && [ "$status" -ge 200 ] && [ "$status" -lt 300 ]; then cls=HTTP_OK_PENDING_LOCK_SHA256
               else cls=HTTP_OR_CURL_FAILURE; fi
               {
