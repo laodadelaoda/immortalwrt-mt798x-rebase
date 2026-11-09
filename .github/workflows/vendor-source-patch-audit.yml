@@ -19,6 +19,8 @@ jobs:
           fetch-depth: 1
 
       - name: Verify archives and audit all active patch stacks
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -29,7 +31,7 @@ jobs:
           INPUT="$ROOT/input"
           SRC="$ROOT/source"
           OUT="$ROOT/report"
-          mkdir -p "$INPUT" "$SRC" "$OUT"
+          mkdir -p "$INPUT" "$SRC" "$OUT" "$OUT/downloads"
           : > "$OUT/PATCH-APPLICATION-REPORT.txt"
           trap 'status=$?; if [ -f "$OUT/PATCH-APPLICATION-REPORT.txt" ]; then cp "$OUT/PATCH-APPLICATION-REPORT.txt" PATCH-APPLICATION-REPORT.txt; fi; exit "$status"' EXIT
 
@@ -87,11 +89,105 @@ jobs:
             } > "$ctx_out/CONTEXT-MANIFEST.txt"
             echo "FAILURE CONTEXT SAVED: $patch_name phase=$phase" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
           }
-          fetch_archive() {
-            name="$1"; url="$2"; sha="$3"
-            curl --fail --location --retry 3 --retry-delay 2 "$url" -o "$INPUT/$name"
-            printf '%s  %s\n' "$sha" "$INPUT/$name" | sha256sum --check -
+          # Release Asset metadata is a preflight only; downloaded bytes are always
+          # checked independently against the immutable Lock SHA256.
+          release_asset_preflight() {
+            local name="$1" url="$2" sha="$3" parsed owner repo tag asset cache api tmp metrics rc status effective ip redirects elapsed
+            parsed="$(python3 - "$url" <<'PY'
+          import sys
+          from urllib.parse import urlparse, unquote
+          u=urlparse(sys.argv[1]); p=[unquote(x) for x in u.path.split("/") if x]
+          if u.hostname != "github.com" or len(p)<6 or p[2:4] != ["releases","download"]: print("NOT_RELEASE")
+          else: print("\\t".join((p[0],p[1],p[4],"/".join(p[5:]))))
+          PY
+          )"
+            [ "$parsed" != "NOT_RELEASE" ] || return 0
+            IFS="$(printf '\\t')" read -r owner repo tag asset <<< "$parsed"
+            [ "$asset" = "$name" ] || { echo "FAIL: release URL asset=$asset differs from Lock archive=$name"; return 1; }
+            cache="$ROOT/release-api-$owner-$repo-$tag.json"
+            api="https://api.github.com/repos/$owner/$repo/releases/tags/$tag"
+            if [ ! -s "$cache" ]; then
+              tmp="$cache.tmp"
+              if metrics="$(curl --silent --show-error --location --connect-timeout 20 --max-time 60 \
+                -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' \
+                -H "Authorization: Bearer $GITHUB_TOKEN" -o "$tmp" \
+                -w '%{http_code}\\t%{url_effective}\\t%{remote_ip}\\t%{num_redirects}\\t%{time_total}' "$api" \
+                2>"$OUT/downloads/release-api-$owner-$repo-$tag.stderr")"; then rc=0; else rc=$?; fi
+              IFS="$(printf '\\t')" read -r status effective ip redirects elapsed <<< "$metrics"
+              printf 'API request=%s status=%s effective_url=%s remote_ip=%s redirects=%s total_seconds=%s curl_exit=%s\\n' \
+                "$api" "\${status:-000}" "\${effective:-}" "\${ip:-}" "\${redirects:-0}" "\${elapsed:-}" "$rc" \
+                | tee "$OUT/downloads/release-api-$owner-$repo-$tag.log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+              if [ "$rc" -ne 0 ] || [ "\${status:-000}" != 200 ] || [ ! -s "$tmp" ]; then
+                rm -f "$tmp"; echo "FAIL: RELEASE_API_UNAVAILABLE archive=$name"; return 1
+              fi
+              mv "$tmp" "$cache"
+            fi
+            python3 - "$cache" "$tag" "$name" "$url" "$sha" <<'PY'
+          import json,sys
+          path,tag,name,url,sha=sys.argv[1:]
+          d=json.load(open(path,encoding="utf-8"))
+          assert d.get("tag_name")==tag, f"Release tag mismatch: {d.get('tag_name')}"
+          a=[x for x in d.get("assets",[]) if x.get("name")==name]
+          assert len(a)==1, f"Release asset missing/ambiguous: {name} count={len(a)}"
+          x=a[0]
+          assert x.get("digest")==("sha256:"+sha), f"Release API digest mismatch: {name} api={x.get('digest')} lock=sha256:{sha}"
+          assert x.get("browser_download_url")==url, f"Release asset URL mismatch: {name}"
+          print(f"PASS: RELEASE_API asset={name} id={x.get('id')} size={x.get('size')} digest={x.get('digest')}")
+          PY
           }
+
+          fetch_archive() {
+            local name="$1" url="$2" sha="$3" dir="$OUT/downloads/$1"
+            local n tmp hdr metrics rc status final ip redirects dns tcp tls ttfb total cls host
+            mkdir -p "$dir"
+            printf 'archive=%s\\nrequest_url=%s\\nlock_sha256=%s\\n' "$name" "$url" "$sha" | tee "$dir/summary.txt" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+            release_asset_preflight "$name" "$url" "$sha" || return 1
+            for n in 1 2 3 4; do
+              tmp="$INPUT/$name.part"; hdr="$dir/attempt-$n.headers"; rm -f "$tmp"; : > "$hdr"
+              if metrics="$(curl --silent --show-error --location --connect-timeout 30 --max-time 300 \
+                --dump-header "$hdr" --output "$tmp" \
+                --write-out '%{http_code}\\t%{url_effective}\\t%{remote_ip}\\t%{num_redirects}\\t%{time_namelookup}\\t%{time_connect}\\t%{time_appconnect}\\t%{time_starttransfer}\\t%{time_total}' \
+                "$url" 2>"$dir/attempt-$n.stderr")"; then rc=0; else rc=$?; fi
+              IFS="$(printf '\\t')" read -r status final ip redirects dns tcp tls ttfb total <<< "$metrics"
+              status="\${status:-000}"; final="\${final:-unknown}"; ip="\${ip:-unknown}"; redirects="\${redirects:-0}"
+              if [ "$rc" -ne 0 ] && [ "$status" = 000 ]; then cls=NETWORK_DNS_TCP_TLS_OR_TRANSFER
+              elif [ "$status" -ge 500 ] 2>/dev/null; then
+                host="$(python3 -c 'import sys; from urllib.parse import urlparse; print(urlparse(sys.argv[1]).hostname or "")' "$final")"
+                if [ "$host" = github.com ]; then cls=GITHUB_DOWNLOAD_ENTRY_5XX; else cls=REDIRECT_TARGET_CDN_OR_UPSTREAM_5XX; fi
+              elif [ "$status" = 404 ]; then cls=HTTP_404_ASSET_OR_PATH
+              elif [ "$status" = 403 ]; then cls=HTTP_403_ACCESS_OR_POLICY
+              elif [ "$status" = 429 ]; then cls=HTTP_429_RATE_LIMIT
+              elif [ "$rc" -eq 0 ] && [ "$status" -ge 200 ] && [ "$status" -lt 300 ]; then cls=HTTP_OK_PENDING_LOCK_SHA256
+              else cls=HTTP_OR_CURL_FAILURE; fi
+              {
+                printf 'attempt=%s\\nrequest_url=%s\\nfinal_url=%s\\nhttp_status=%s\\nremote_ip=%s\\nredirect_count=%s\\ndns_seconds=%s\\ntcp_connect_seconds=%s\\ntls_seconds=%s\\ntime_to_first_byte_seconds=%s\\ntotal_seconds=%s\\ncurl_exit=%s\\nclassification=%s\\n' \
+                  "$n" "$url" "$final" "$status" "$ip" "$redirects" "\${dns:-}" "\${tcp:-}" "\${tls:-}" "\${ttfb:-}" "\${total:-}" "$rc" "$cls"
+                echo "redirect_chain:"
+                python3 - "$hdr" <<'PY'
+          import sys
+          for s in open(sys.argv[1],errors="replace"):
+              s=s.rstrip("\\r\\n")
+              if s.startswith("HTTP/") or s.lower().startswith("location:"): print(s)
+          PY
+              } | tee "$dir/attempt-$n.log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+              if [ "$cls" = HTTP_OK_PENDING_LOCK_SHA256 ] && [ -s "$tmp" ]; then
+                if printf '%s  %s\\n' "$sha" "$tmp" | sha256sum --check - >"$dir/lock-sha256.log" 2>&1; then
+                  mv "$tmp" "$INPUT/$name"
+                  echo "PASS: local archive bytes match Lock SHA256: $name" | tee -a "$dir/summary.txt" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+                  return 0
+                fi
+                cat "$dir/lock-sha256.log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+                echo "FAIL: LOCAL_LOCK_SHA256_MISMATCH archive=$name" | tee -a "$dir/summary.txt"; rm -f "$tmp"; return 1
+              fi
+              rm -f "$tmp"
+              if [ "$n" -lt 4 ] && { [ "$cls" = NETWORK_DNS_TCP_TLS_OR_TRANSFER ] || [ "$cls" = GITHUB_DOWNLOAD_ENTRY_5XX ] || [ "$cls" = REDIRECT_TARGET_CDN_OR_UPSTREAM_5XX ] || [ "$cls" = HTTP_429_RATE_LIMIT ]; }; then
+                sleep $((n * 2)); continue
+              fi
+              echo "FAIL: DOWNLOAD_FAILED archive=$name class=$cls attempts=$n" | tee -a "$dir/summary.txt" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+              return 1
+            done
+          }
+
           apply_one() {
             patch_file="$1"; patch_root="$2"
             CHECKED=$((CHECKED + 1))
@@ -482,6 +578,15 @@ jobs:
           path: vendor-audit-attestation.json
           if-no-files-found: error
           retention-days: 14
+
+      - name: Upload per-archive download diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-vendor-download-diagnostics
+          path: ${{ runner.temp }}/n60-vendor-patch-audit/report/downloads/
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Upload complete patch audit report
         if: always()
