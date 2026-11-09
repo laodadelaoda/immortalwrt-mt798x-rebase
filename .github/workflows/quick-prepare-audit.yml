@@ -455,8 +455,25 @@ jobs:
         with:
           name: n60-mtwifi-026-quick-prepare-evidence
           path: ${{ runner.temp }}/mtwifi-026-quick-prepare/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14
+
+      - name: Preflight OpenSSL audit implementation inputs after MT Wi-Fi 026
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for input in \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py \
+            package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-provider-runtime.c \
+            package/mtk/applications/easymesh-n60/scripts/run-openssl-provider-runtime.sh; do
+            test -s "$input" || {
+              echo "::error::Required OpenSSL audit input is missing or empty: $input"
+              exit 1
+            }
+          done
+          echo "PASS: all existing OpenSSL audit-chain inputs are present after native Prepare and MT Wi-Fi 026 evidence."
 
       - name: Run Provider-native OpenSSL 3.5.9 runtime regression tests
         id: openssl_provider_runtime
@@ -464,11 +481,13 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          OPENSSL_CONFIGURE="$(find build_dir -type f -path '*/openssl-3.5.9/Configure' -print -quit)"
-          test -n "$OPENSSL_CONFIGURE" || {
-            echo "::error::Native OpenSSL 3.5.9 Package Prepare source tree is missing."; exit 1;
+          mapfile -t OPENSSL_CONFIGURES < <(find "$GITHUB_WORKSPACE/build_dir" -type f -path '*/openssl-3.5.9/Configure' -print | sort)
+          [[ "${#OPENSSL_CONFIGURES[@]}" -eq 1 ]] || {
+            echo "::error::Expected exactly one native OpenSSL 3.5.9 source tree; found ${#OPENSSL_CONFIGURES[@]}."
+            printf '%s\n' "${OPENSSL_CONFIGURES[@]}"
+            exit 1
           }
-          OPENSSL_SOURCE="$(dirname "$OPENSSL_CONFIGURE")"
+          OPENSSL_SOURCE="$(dirname "${OPENSSL_CONFIGURES[0]}")"
           bash package/mtk/applications/easymesh-n60/scripts/run-openssl-provider-runtime.sh \
             "$OPENSSL_SOURCE" \
             package/mtk/applications/easymesh-n60/tests/test-openssl-provider-runtime.c \
@@ -479,14 +498,28 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          BUILD_DIR="$GITHUB_WORKSPACE/build_dir/target-aarch64_cortex-a53_musl/easymesh-n60-7.6.7.3"
-          OPENSSL_CONFIGURE="$(find build_dir -type f -path '*/openssl-3.5.9/Configure' -print -quit)"
-          test -n "$OPENSSL_CONFIGURE" || {
-            echo "::error::Native OpenSSL 3.5.9 Package Prepare source tree is missing."; exit 1;
+          mapfile -t BUILD_DIRS < <(find "$GITHUB_WORKSPACE/build_dir" -mindepth 2 -maxdepth 2 -type d -name 'easymesh-n60-7.6.7.3' -print | sort)
+          [[ "${#BUILD_DIRS[@]}" -eq 1 ]] || {
+            echo "::error::Expected exactly one native EasyMesh Prepare tree; found ${#BUILD_DIRS[@]}."
+            printf '%s\n' "${BUILD_DIRS[@]}"
+            exit 1
           }
-          test -d "$BUILD_DIR" || {
-            echo "::error::Native EasyMesh Prepare source tree is missing: $BUILD_DIR"; exit 1;
+          BUILD_DIR="${BUILD_DIRS[0]}"
+          for component in wappd mapd 1905daemon libmapd; do
+            test -d "$BUILD_DIR/$component" || {
+              echo "::error::Prepared EasyMesh component is missing: $BUILD_DIR/$component"; exit 1;
+            }
+            test -d "${BUILD_DIR}-openssl-pristine/$component" || {
+              echo "::error::Pristine OpenSSL audit input is missing: ${BUILD_DIR}-openssl-pristine/$component"; exit 1;
+            }
+          done
+          mapfile -t OPENSSL_CONFIGURES < <(find "$GITHUB_WORKSPACE/build_dir" -type f -path '*/openssl-3.5.9/Configure' -print | sort)
+          [[ "${#OPENSSL_CONFIGURES[@]}" -eq 1 ]] || {
+            echo "::error::Expected exactly one native OpenSSL 3.5.9 source tree; found ${#OPENSSL_CONFIGURES[@]}."
+            printf '%s\n' "${OPENSSL_CONFIGURES[@]}"
+            exit 1
           }
+          OPENSSL_CONFIGURE="${OPENSSL_CONFIGURES[0]}"
           python3 package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py
           python3 package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py \
             --repo-root "$GITHUB_WORKSPACE" \
@@ -505,7 +538,7 @@ jobs:
           path: |
             artifacts/easymesh-openssl-api-audit/
             ${{ runner.temp }}/n60-openssl-provider-runtime/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
 
       - name: Enforce Provider runtime regression result
