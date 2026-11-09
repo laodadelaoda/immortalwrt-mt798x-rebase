@@ -48,13 +48,19 @@ class EasyMeshPatchDependencyManifestTests(unittest.TestCase):
                                          len(self.patch_set.get("application_order", [])) + 1):
                 expected[name] = (phase, order)
 
-        self.assertEqual(len(expected), 22, "canonical EasyMesh Lock must contain 22 active patches")
-        self.assertEqual(len(self.rows), 22, "dependency manifest must contain exactly 22 rows")
+        # The Lock is authoritative: adding a reviewed patch must not require
+        # changing a second hard-coded patch count in this regression test.
         ids = [row["patch_id"] for row in self.rows]
         files = [row["patch_file"] for row in self.rows]
-        self.assertEqual(sorted(ids), [f"{n:03d}" for n in range(1, 23)])
-        self.assertEqual(len(set(ids)), 22, "dependency manifest contains duplicate patch IDs")
-        self.assertEqual(len(set(files)), 22, "dependency manifest contains duplicate patch files")
+        expected_ids = {name[:3] for name in expected}
+        self.assertEqual(len(self.rows), len(expected),
+                         "dependency manifest row count must match canonical Lock")
+        self.assertEqual(set(ids), expected_ids,
+                         "dependency manifest patch IDs must match canonical Lock")
+        self.assertEqual(len(set(ids)), len(ids),
+                         "dependency manifest contains duplicate patch IDs")
+        self.assertEqual(len(set(files)), len(files),
+                         "dependency manifest contains duplicate patch files")
 
         by_id = {row["patch_id"]: row for row in self.rows}
         for row in self.rows:
