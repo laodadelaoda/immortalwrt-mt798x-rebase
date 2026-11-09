@@ -81,6 +81,10 @@ jobs:
             if [ "$name" = "023-dpp-unused-set-variables-werror.patch" ]; then
               echo "===== DPP UNUSED-SET SOURCE CONTEXT BEFORE PATCH 023 ====="
               grep -n -C 4 -E 'lenmsg|enum dpp_status_error ret' dpp-patch-root/wappd/dpp/dpp.c || true
+              echo "===== DPP SOURCE EXACT LINES 14640-14660 ====="
+              sed -n '14640,14660l' dpp-patch-root/wappd/dpp/dpp.c
+              echo "===== DPP SOURCE EXACT LINES 14865-14880 ====="
+              sed -n '14865,14880l' dpp-patch-root/wappd/dpp/dpp.c
             fi
             if [ "$name" = "008-dpp-parser-bounds-and-secret-redaction.patch" ]; then
               context_dir="$RUNNER_TEMP/wapp-audit/failed-patch-context/008"
