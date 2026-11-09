@@ -122,7 +122,7 @@ jobs:
               fi
               mv "$tmp" "$cache"
             fi
-            python3 - "$cache" "$tag" "$name" "$url" "$sha" <<'PY'
+            python3 - "$cache" "$tag" "$name" "$url" "$sha" <<'PY' 2>&1 | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt" "$OUT/downloads/release-api-$owner-$repo-$tag.assets.log"
           import json,sys
           path,tag,name,url,sha=sys.argv[1:]
           d=json.load(open(path,encoding="utf-8"))
