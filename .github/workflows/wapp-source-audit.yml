@@ -78,8 +78,39 @@ jobs:
               cp dpp-patch-root/wappd/dpp/dpp.h pre017-snapshot/dpp/dpp.h
             fi
             patch_file="$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/$name"
-            patch --dry-run --batch --forward --fuzz=0 -p1 -d dpp-patch-root < "$patch_file"
-            patch --batch --forward --fuzz=0 -p1 -d dpp-patch-root < "$patch_file"
+            if [ "$name" = "008-dpp-parser-bounds-and-secret-redaction.patch" ]; then
+              context_dir="$RUNNER_TEMP/wapp-audit/failed-patch-context/008"
+              mkdir -p "$context_dir/source/wappd/common" "$context_dir/source/wappd/dpp" "$context_dir/patches"
+              cp dpp-patch-root/wappd/common/main.c "$context_dir/source/wappd/common/main.c.before-008"
+              cp dpp-patch-root/wappd/dpp/dpp.c "$context_dir/source/wappd/dpp/dpp.c.before-008"
+              cp dpp-patch-root/wappd/dpp/dpp.h "$context_dir/source/wappd/dpp/dpp.h.before-008"
+              cp dpp-patch-root/wappd/dpp/dpp_wdev.c "$context_dir/source/wappd/dpp/dpp_wdev.c.before-008"
+              cp dpp-patch-root/wappd/common/wdev.c "$context_dir/source/wappd/common/wdev.c.before-008"
+              for prior in 002-dpp-parser-safety.patch 007-openssl3-use-native-evp-pkey-get0-ec-key.patch; do
+                cp "$GITHUB_WORKSPACE/package/mtk/applications/easymesh-n60/patches/$prior" "$context_dir/patches/"
+              done
+              cp "$patch_file" "$context_dir/patches/"
+              {
+                echo "repository_sha=$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)"
+                echo "lock_sha256=$(sha256sum "$GITHUB_WORKSPACE/package/mtk/vendor-sources.lock.json" | awk '{print $1}')"
+                echo "patch_002_sha256=$(sha256sum "$context_dir/patches/002-dpp-parser-safety.patch" | awk '{print $1}')"
+                echo "patch_007_sha256=$(sha256sum "$context_dir/patches/007-openssl3-use-native-evp-pkey-get0-ec-key.patch" | awk '{print $1}')"
+                echo "patch_008_sha256=$(sha256sum "$context_dir/patches/008-dpp-parser-bounds-and-secret-redaction.patch" | awk '{print $1}')"
+              } > "$context_dir/CONTEXT-MANIFEST.txt"
+              if ! patch --verbose --dry-run --batch --forward --fuzz=0 -p1 -d dpp-patch-root < "$patch_file" > "$context_dir/008-dry-run.log" 2>&1; then
+                cat "$context_dir/008-dry-run.log"
+                exit 1
+              fi
+              cat "$context_dir/008-dry-run.log"
+              if ! patch --verbose --batch --forward --fuzz=0 -p1 -d dpp-patch-root < "$patch_file" > "$context_dir/008-apply.log" 2>&1; then
+                cat "$context_dir/008-apply.log"
+                exit 1
+              fi
+              cat "$context_dir/008-apply.log"
+            else
+              patch --dry-run --batch --forward --fuzz=0 -p1 -d dpp-patch-root < "$patch_file"
+              patch --batch --forward --fuzz=0 -p1 -d dpp-patch-root < "$patch_file"
+            fi
           done
           python3 "$TRANSFORM_HELPER" normalize "$RUNNER_TEMP/wapp-audit/dpp-patch-root"
           post_names="$(python3 "$LOCK_HELPER" patch-order --repo "$GITHUB_WORKSPACE" --set easymesh --phase post_normalize)"
@@ -144,6 +175,15 @@ jobs:
             ${{ runner.temp }}/wapp-audit/pre017-snapshot/dpp/dpp.h
           if-no-files-found: error
           retention-days: 7
+
+      - name: Upload exact pre-008 DPP failure context
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wapp-dpp-008-failure-context
+          path: ${{ runner.temp }}/wapp-audit/failed-patch-context/008/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Audit WTS parser, events, interface registration and WTS writers
         shell: bash
