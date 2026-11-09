@@ -71,6 +71,6 @@ if actual != expected:
 if len(rows) != 22:
     fail(f"expected 22 EasyMesh patches, found {len(rows)}")
 
-print("PASS: EasyMesh patch maintenance index exactly matches all 21 Lock entries.")
+print("PASS: EasyMesh patch maintenance index exactly matches all 22 Lock entries.")
 print("PASS: application/post-normalize phase boundaries and order are preserved.")
 print("PASS: every indexed patch exists and has a non-empty maintenance classification.")
