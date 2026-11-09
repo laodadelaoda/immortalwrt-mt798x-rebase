@@ -1,5 +1,6 @@
 name: N60 Pro EasyMesh compatibility and source-build gate
 description: Validate Linux 6.12, ImmortalWrt 25.12, OpenSSL 3.x and build the N60 EasyMesh userspace stack. Full firmware must depend on this gate.
+# Source-build regression revision: QoS intrusive-list alignment patch 022.
 inputs:
   device:
     description: Target router profile
