@@ -52,6 +52,9 @@ need(re.search(r"os_memcpy\([^;]*sizeof\(struct off_ch_scan_result_tlv\)",
                off_scan_src, re.S) is None,
      "runtime off-channel list node must not be serialized as a packed wire blob")
 
+cc = shutil.which("cc")
+need(cc is not None, "host C compiler is required for WAPP structure-layout assertions")
+
 offchannel_layout_probe = r"""
 #include <stddef.h>
 struct wifi_app;
@@ -92,8 +95,6 @@ for token in (
 need("struct assoc_notification_tlv status[0]" not in hdr,
      "association status tail unexpectedly changed")
 
-cc = shutil.which("cc")
-need(cc is not None, "host C compiler is required for MAP structure-layout assertions")
 layout_probe = r"""
 #define GNU_PACKED __attribute__((packed))
 #include <stddef.h>
