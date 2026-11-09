@@ -22,6 +22,36 @@ for path in (map_c, map_h, map_api):
 src = map_c.read_text(encoding="utf-8")
 hdr = map_h.read_text(encoding="utf-8")
 api = map_api.read_text(encoding="utf-8")
+off_scan_h = root / "include/off_ch_scan.h"
+off_scan_c = root / "off_ch_scan/off_ch_scan.c"
+need(off_scan_h.is_file() and off_scan_c.is_file(),
+     "required WAPP off-channel scan source missing")
+off_scan_hdr = off_scan_h.read_text(encoding="utf-8")
+off_scan_src = off_scan_c.read_text(encoding="utf-8")
+
+# These two structures are runtime-only linked-list containers, not wire
+# records. GNU_PACKED misaligns their dl_list pointers on AArch64 and GCC 14
+# correctly rejects every address-taking operation under -Werror.
+for struct_name in ("off_ch_scan_report", "off_ch_scan_result_tlv"):
+    need(not re.search(
+        rf"struct\\s+GNU_PACKED\\s+{struct_name}\\s*\\{{",
+        off_scan_hdr),
+        f"{struct_name} must not be packed because it owns a dl_list")
+need("struct dl_list scan_result_list;" in off_scan_hdr,
+     "off-channel report lost its runtime list head")
+need(re.search(r"struct off_ch_scan_result_tlv\\s*\\{\\s*struct dl_list list;",
+               off_scan_hdr) is not None,
+     "off-channel result node must keep dl_list as its first runtime member")
+# Protocol-facing event records remain packed; changing their wire layout is forbidden.
+for wire_struct in ("off_ch_scan_report_event", "off_ch_scan_result_event"):
+    need(f"struct GNU_PACKED {wire_struct}" in off_scan_hdr,
+         f"wire ABI record {wire_struct} must remain packed")
+need("os_memcpy(scan_result_evt->radio_id, scan_result->radio_id, MAC_ADDR_LEN)" in off_scan_src,
+     "off-channel result serializer no longer copies fields explicitly")
+need("sizeof(struct off_ch_scan_result_tlv)" not in off_scan_src or
+     off_scan_src.count("sizeof(struct off_ch_scan_result_tlv)") == 3,
+     "unexpected whole-record sizing/copy path for runtime off-channel list nodes")
+
 
 # Structure layout: all four variable-tail records must remain zero-length tails,
 # with packed CAC wire records retaining their exact field order.
