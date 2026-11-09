@@ -178,7 +178,7 @@
  
  		strncat(ifparam, param, os_strlen(param));
  		dat_ctx = dat_load(MAPD_USER_CFG_FILE);
-@@ -10533,98 +10608,71 @@
+@@ -10533,98 +10608,69 @@
  #endif /*MAP R3 */
  void  dpp_remove_uri_from_file(struct wifi_app *wapp, unsigned int id , const char *uri_temp)
  {
