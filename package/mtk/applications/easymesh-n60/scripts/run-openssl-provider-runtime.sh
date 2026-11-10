@@ -19,7 +19,7 @@ for item in "OPENSSL_VERSION_MAJOR 3" "OPENSSL_VERSION_MINOR 5" "OPENSSL_VERSION
  set -- $item
  grep -Eq "^[[:space:]]*#[[:space:]]*define[[:space:]]+$1[[:space:]]+$2([[:space:]]|$)" include/openssl/opensslv.h || { echo "FAIL: generated OpenSSL header version mismatch: $item"; exit 1; }
 done
-cc -std=c11 -Wall -Wextra -Werror -I"$build/openssl-src/include" "$test_c" "$build/openssl-src/libcrypto.a" -ldl -pthread -o "$out/provider-runtime-test"
+cc -std=c11 -Wall -Wextra -Werror -I"$build/openssl-src/include" "$test_c" "$build/openssl-src/libssl.a" "$build/openssl-src/libcrypto.a" -ldl -pthread -lresolv -o "$out/provider-runtime-test"
 OPENSSL_CONF=/dev/null "$out/provider-runtime-test"
 sha256sum "$test_c" "$out/provider-runtime-test" > "$out/SHA256SUMS"
 printf '{"openssl_version":"3.5.9","provider":"default","result":"PASS"}\n' > "$out/provider-runtime-result.json"
