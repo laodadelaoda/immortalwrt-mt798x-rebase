@@ -73,8 +73,10 @@ with tempfile.TemporaryDirectory() as d:
  (h/"opensslv.h").write_text("# define OPENSSL_VERSION_MAJOR 3\n# define OPENSSL_VERSION_MINOR 5\n# define OPENSSL_VERSION_PATCH 9\n")
  assert m.validate_openssl_source(Path(d),repo)=="3.5.9"
  (h/"evp.h").write_text("int EVP_sha256(void);\nint (*openssl_callback)(void);\nOSSL_DEPRECATEDIN_3_0 const EC_KEY *EVP_PKEY_get0_EC_KEY(const EVP_PKEY *pkey);\n")
+ (h/"ssl.h.in").write_text("OSSL_DEPRECATEDIN_3_0 int SSL_use_RSAPrivateKey(SSL *ssl, RSA *rsa);\n")
  names,depr=m.catalog(Path(d))
  assert "EVP_sha256" in names and depr.get("EVP_PKEY_get0_EC_KEY")=="OSSL_DEPRECATEDIN_3_0"
+ assert "SSL_use_RSAPrivateKey" in names and depr.get("SSL_use_RSAPrivateKey")=="OSSL_DEPRECATEDIN_3_0"
  assert "int" not in names, names
 with tempfile.TemporaryDirectory() as d:
  root=Path(d)
