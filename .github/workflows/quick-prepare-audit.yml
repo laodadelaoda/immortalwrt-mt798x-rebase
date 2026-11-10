@@ -482,18 +482,40 @@ jobs:
           # Install the cross-toolchain only. No firmware or EasyMesh binary target is built.
           make toolchain/install -j"$(nproc)" V=s
 
-          # OpenSSL Configure generates the actual target configuration headers; it does not compile OpenSSL.
+          # OpenSSL Configure generates target headers but does not compile OpenSSL.
           make -C package/libs/openssl TOPDIR="$GITHUB_WORKSPACE" configure V=s
-          OPENSSL_CONFIGURE_LIST="$(find "$GITHUB_WORKSPACE/build_dir" -type f -path '*/openssl-3.5.9/Configure' -print | sort)"
-          OPENSSL_CONFIGURE_COUNT="$(printf '%s\n' "$OPENSSL_CONFIGURE_LIST" | grep -c . || true)"
-          [[ "$OPENSSL_CONFIGURE_COUNT" -eq 1 ]] || {
-            echo "::error::Expected exactly one OpenSSL 3.5.9 source tree; found $OPENSSL_CONFIGURE_COUNT."
-            printf '%s\n' "$OPENSSL_CONFIGURE_LIST"
+          OPENSSL_VARS_OUTPUT="$(make -s -C package/libs/openssl TOPDIR="$GITHUB_WORKSPACE" \
+            --eval='dump-openssl-target-vars:; @printf "%s\\n" "__PKG_SOURCE__$(PKG_SOURCE)" "__PKG_SOURCE_URL__$(PKG_SOURCE_URL)" "__PKG_HASH__$(PKG_HASH)" "__PKG_BUILD_DIR__$(PKG_BUILD_DIR)" "__PATCH_DIR__$(PATCH_DIR)" "__OPENSSL_OPTIONS__$(OPENSSL_OPTIONS)"' \
+            dump-openssl-target-vars)"
+          while IFS= read -r line; do
+            case "$line" in
+              __PKG_SOURCE__*) PKG_SOURCE="${line#__PKG_SOURCE__}" ;;
+              __PKG_SOURCE_URL__*) PKG_SOURCE_URL="${line#__PKG_SOURCE_URL__}" ;;
+              __PKG_HASH__*) PKG_HASH="${line#__PKG_HASH__}" ;;
+              __PKG_BUILD_DIR__*) PKG_BUILD_DIR="${line#__PKG_BUILD_DIR__}" ;;
+              __PATCH_DIR__*) PATCH_DIR="${line#__PATCH_DIR__}" ;;
+              __OPENSSL_OPTIONS__*) OPENSSL_OPTIONS="${line#__OPENSSL_OPTIONS__}" ;;
+            esac
+          done <<< "$OPENSSL_VARS_OUTPUT"
+          [[ -n "$PKG_SOURCE" && -n "$PKG_SOURCE_URL" && "$PKG_HASH" =~ ^[0-9a-f]{64}$ && -n "$PKG_BUILD_DIR" && -n "$PATCH_DIR" && -n "$OPENSSL_OPTIONS" ]] || {
+            echo "::error::OpenSSL package Make-expanded source/lock/patch/options variables are incomplete."
+            printf '%s\\n' "$OPENSSL_VARS_OUTPUT"
             exit 1
           }
-          OPENSSL_SOURCE="$(dirname "$OPENSSL_CONFIGURE_LIST")"
+          OPENSSL_SOURCE="$(realpath "$PKG_BUILD_DIR")"
+          if [[ "$PATCH_DIR" = /* ]]; then OPENSSL_PATCH_DIR="$(realpath "$PATCH_DIR")"; else OPENSSL_PATCH_DIR="$(realpath "package/libs/openssl/$PATCH_DIR")"; fi
+          test -f "$OPENSSL_SOURCE/Configure"
+          test -f "$OPENSSL_PATCH_DIR"
+          PATCH_COUNT="$(find "$OPENSSL_PATCH_DIR" -type f -name '*.patch' | wc -l)"
+          [[ "$PATCH_COUNT" -gt 0 ]] || { echo "::error::Expanded OpenSSL PATCH_DIR has no patch files."; exit 1; }
+          {
+            printf 'PKG_SOURCE=%s\\nPKG_SOURCE_URL=%s\\nPKG_HASH=%s\\nPKG_BUILD_DIR=%s\\nPATCH_DIR=%s\\nOPENSSL_OPTIONS=%s\\n' \
+              "$PKG_SOURCE" "$PKG_SOURCE_URL" "$PKG_HASH" "$OPENSSL_SOURCE" "$OPENSSL_PATCH_DIR" "$OPENSSL_OPTIONS"
+            echo "patch_count=$PATCH_COUNT"
+            find "$OPENSSL_PATCH_DIR" -type f -name '*.patch' -print0 | sort -z | xargs -0 sha256sum
+          } | tee "$OUT/openssl-target-make-vars-and-patches.txt"
           # build_generated creates generated public headers (including opensslv.h);
-          # it is a source-generation target, not a C compilation target.
+          # it is source generation, not a C compilation target.
           make -C "$OPENSSL_SOURCE" build_generated V=s 2>&1 | tee "$OUT/openssl-build-generated.log"
           (cd "$OPENSSL_SOURCE" && perl configdata.pm --dump) > "$OUT/openssl-configdata-dump.txt"
 
@@ -578,7 +600,11 @@ test -n "$(find "$TARGET_STAGING/usr/include/libnl-tiny" -type f -print -quit)"
             --repo-dir "$GITHUB_WORKSPACE" --build-dir "$BUILD_DIR" \
             --cc "$TARGET_CC" --ar "$TARGET_AR" --ranlib "$TARGET_RANLIB" \
             --cppflags "$TARGET_CPPFLAGS" --cflags "$TARGET_CFLAGS" --ldflags "$TARGET_LDFLAGS" \
-            --staging-dir "$TARGET_STAGING" --linux-dir "$LINUX_DIR" --output-dir "$OUT"
+            --staging-dir "$TARGET_STAGING" --linux-dir "$LINUX_DIR" --output-dir "$OUT" \\
+            --openssl-source-dir "$OPENSSL_SOURCE" --openssl-patch-dir "$OPENSSL_PATCH_DIR" \\
+            --openssl-pkg-source "$PKG_SOURCE" --openssl-pkg-source-url "$PKG_SOURCE_URL" \\
+            --openssl-pkg-hash "$PKG_HASH" --openssl-options "$OPENSSL_OPTIONS" \\
+            --target-config "$GITHUB_WORKSPACE/.config"
 
       - name: Preflight OpenSSL audit implementation inputs after MT Wi-Fi 026
         shell: bash
