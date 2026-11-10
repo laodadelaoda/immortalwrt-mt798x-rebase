@@ -503,7 +503,7 @@ jobs:
             exit 1
           }
           OPENSSL_SOURCE="$(realpath "$PKG_BUILD_DIR")"
-          if [[ "$PATCH_DIR" = /* ]]; then OPENSSL_PATCH_DIR="$(realpath "$PATCH_DIR")"; else OPENSSL_PATCH_DIR="$(realpath "package/libs/openssl/$PATCH_DIR")"; fi
+          if [[ "$PATCH_DIR" = /* ]]; then OPENSSL_PATCH_DIR="$(realpath "$PATCH_DIR")"; elif [[ -d "$PATCH_DIR" ]]; then OPENSSL_PATCH_DIR="$(realpath "$PATCH_DIR")"; else OPENSSL_PATCH_DIR="$(realpath "package/libs/openssl/$PATCH_DIR")"; fi
           test -f "$OPENSSL_SOURCE/Configure"
           test -d "$OPENSSL_PATCH_DIR"
           PATCH_COUNT="$(find "$OPENSSL_PATCH_DIR" -type f -name '*.patch' | wc -l)"
@@ -600,10 +600,10 @@ test -n "$(find "$TARGET_STAGING/usr/include/libnl-tiny" -type f -print -quit)"
             --repo-dir "$GITHUB_WORKSPACE" --build-dir "$BUILD_DIR" \
             --cc "$TARGET_CC" --ar "$TARGET_AR" --ranlib "$TARGET_RANLIB" \
             --cppflags "$TARGET_CPPFLAGS" --cflags "$TARGET_CFLAGS" --ldflags "$TARGET_LDFLAGS" \
-            --staging-dir "$TARGET_STAGING" --linux-dir "$LINUX_DIR" --output-dir "$OUT" \\
-            --openssl-source-dir "$OPENSSL_SOURCE" --openssl-patch-dir "$OPENSSL_PATCH_DIR" \\
-            --openssl-pkg-source "$PKG_SOURCE" --openssl-pkg-source-url "$PKG_SOURCE_URL" \\
-            --openssl-pkg-hash "$PKG_HASH" --openssl-options "$OPENSSL_OPTIONS" \\
+            --staging-dir "$TARGET_STAGING" --linux-dir "$LINUX_DIR" --output-dir "$OUT" \
+            --openssl-source-dir "$OPENSSL_SOURCE" --openssl-patch-dir "$OPENSSL_PATCH_DIR" \
+            --openssl-pkg-source "$PKG_SOURCE" --openssl-pkg-source-url "$PKG_SOURCE_URL" \
+            --openssl-pkg-hash "$PKG_HASH" --openssl-options "$OPENSSL_OPTIONS" \
             --target-config "$GITHUB_WORKSPACE/.config"
 
       - name: Preflight OpenSSL audit implementation inputs after MT Wi-Fi 026
