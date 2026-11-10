@@ -1,0 +1,47 @@
+name: OpenSSL target preprocessor audit regressions
+
+on:
+  push:
+    branches:
+      - audit/openssl-target-preprocessor-failclosed
+    paths:
+      - ".github/workflows/openssl-target-preprocessor-regression.yml"
+      - "package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py"
+      - "package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py"
+  pull_request:
+    paths:
+      - ".github/workflows/openssl-target-preprocessor-regression.yml"
+      - "package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py"
+      - "package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-and-binary-regressions:
+    name: Fail-closed source mapping and binary audit regressions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout audit branch
+        uses: actions/checkout@v5
+        with:
+          ref: \${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Compile audit scripts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python -m py_compile \
+            package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py
+      - name: Run positive and negative regression cases
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py
