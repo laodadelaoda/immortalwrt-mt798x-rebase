@@ -243,4 +243,14 @@ with tempfile.TemporaryDirectory() as td:
  status,reason=m.classify_macro_reference(wrap,True,{"EVP_PKEY_cmp"})
  assert status=="UNKNOWN_FAIL_CLOSED",(status,reason)
 
-print("PASS: conditional branches, source mapping, preprocess-only argv, exact component flags, token-paste macro fail-closed classification and safe 1905 sub-build enumeration.")
+
+# Source-reference classification must receive the inventory lexer explicitly;
+# exercise both direct source and target-preprocessed callsite paths.
+inventory=m.inventory_module(Path(__file__).resolve().parents[5])
+with tempfile.TemporaryDirectory() as td:
+ root=Path(td)
+ (root/"wappd").mkdir()
+ (root/"wappd"/"call.c").write_text("void f(void) { EVP_PKEY_cmp(a,b); }\\n",encoding="utf-8")
+ row={"path":"wappd/call.c","line":1,"api":"EVP_PKEY_cmp"}
+ assert m.classify_source_reference(root,row,inventory)=="CALL_EXPRESSION"
+\nprint("PASS: conditional branches, source mapping, preprocess-only argv, exact component flags, source classifier module wiring, token-paste macro fail-closed classification and safe 1905 sub-build enumeration.")
