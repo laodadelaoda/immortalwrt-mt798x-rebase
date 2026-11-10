@@ -161,6 +161,16 @@ unknown_removed=m.build_easymesh_api_subset([],[],[],[],
  {"EVP_MD_CTX_md":{"observed_lexical_occurrences":"2","observed_components":"wappd","migration_status":"UNREVIEWED","approval":"false"}},[])
 assert unknown_removed[0]["scope_status"]=="UNKNOWN_FAIL_CLOSED"
 
+
+# A source-removal delta is not silently treated as a completed migration.
+removed_row={"api":"EVP_MD_CTX_md","requires_patch_semantic_review":True}
+unreviewed_removed={"EVP_MD_CTX_md":{"migration_status":"UNREVIEWED","approval":"false"}}
+assert m.validate_removed_api_reviews([removed_row],unreviewed_removed,{})
+approved_removed={"EVP_MD_CTX_md":{"migration_status":"APPROVED","approval":"true"}}
+assert m.validate_removed_api_reviews([removed_row],approved_removed,{}) 
+assert not m.validate_removed_api_reviews([removed_row],approved_removed,
+ {"api_rules":{"EVP_MD_CTX_md":{"status":"SEMANTIC_ADAPTATION","approved":True,"reason":"The removed call is replaced with a semantically equivalent EVP accessor."}}})
+
 scope={"schema_version":1,"scope_id":"n60-easymesh-openssl-3.5.9","openssl_version":"3.5.9",
  "primary_components":["wappd","mapd","1905daemon","libmapd"],
  "supporting_dependencies":[{"name":"datconf"},{"name":"libnl-tiny"}],

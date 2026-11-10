@@ -110,6 +110,21 @@ def build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migra
   out.append(x)
  return out
 
+
+def validate_removed_api_reviews(subset,migration_map,policy):
+ failures=[]
+ for row in subset:
+  if not row.get("requires_patch_semantic_review"): continue
+  api=row["api"]; mr=migration_map.get(api,{})
+  if mr.get("migration_status")!="APPROVED" or str(mr.get("approval","")).lower()!="true":
+   failures.append("deprecated API removed from prepared source lacks semantic review/approval: "+api)
+   continue
+  rule=policy.get("api_rules",{}).get(api)
+  if (not isinstance(rule,dict) or rule.get("status") not in {"DIRECT_REPLACEMENT","SEMANTIC_ADAPTATION"}
+      or rule.get("approved") is not True or not str(rule.get("reason","")).strip()):
+   failures.append("removed deprecated API lacks an approved semantic replacement/removal policy: "+api)
+ return failures
+
 def validate_scope_manifest(scope,summary,migration_map):
  failures=[]
  if scope.get("schema_version")!=1 or scope.get("scope_id")!="n60-easymesh-openssl-3.5.9":
@@ -120,6 +135,7 @@ def validate_scope_manifest(scope,summary,migration_map):
  if set(summary.get("components",{}))!=REQUIRED_EASYMESH_COMPONENTS:
   failures.append("target preprocessor component set does not cover the complete EasyMesh OpenSSL scope")
  baseline=scope.get("global_baseline",{})
+ if baseline.get("path")!="package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv": failures.append("EasyMesh scope manifest points to an unexpected 68-row baseline path")
  if baseline.get("expected_rows")!=68 or len(migration_map)!=68 or baseline.get("role")!="TRACEABILITY_ONLY" or baseline.get("is_migration_approval") is not False:
   failures.append("68-row global reference baseline was changed, mis-scoped or treated as migration approval")
  supporting={x.get("name") for x in scope.get("supporting_dependencies",[]) if isinstance(x,dict)}
@@ -264,6 +280,7 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
  counts=Counter(x["api"] for x in active)
  subset=build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migration_map,delta_rows)
  active_subset=[x["api"] for x in subset if x["needs_migration_review"]]
+ failures.extend(validate_removed_api_reviews(subset,migration_map,policy))
  return {
   "schema_version":2,"git_sha":expected_git_sha,"firmware_compile_invoked":False,
   "inventory_deprecated_references":len(inventory),"target_active_call_sites":len(active),
@@ -313,9 +330,10 @@ def main():
   "removed_by_patch_requiring_semantic_review":report["easymesh_api_removed_by_patch"],
   "apis":report["easymesh_api_subset"],"dependency_boundary_policy":scope.get("supporting_dependencies")}
  (a.output.parent/"easymesh-openssl-api-subset.json").write_text(json.dumps(subset,indent=2)+"\n",encoding="utf-8")
- fields=["api","components","source_reference_count","active_call_sites","excluded_call_sites","unknown_call_sites",
-  "declaration_references","other_non_call_references","macro_references","macro_active","macro_excluded",
-  "macro_unknown","scope_status","needs_migration_review","migration_status","approval","global_baseline_candidate"]
+ fields=["api","components","baseline_lexical_occurrences","pristine_call_count","prepared_call_count","source_reference_count",
+  "active_call_sites","excluded_call_sites","unknown_call_sites","declaration_references","other_non_call_references",
+  "macro_references","macro_active","macro_excluded","macro_unknown","scope_status","needs_migration_review",
+  "requires_patch_semantic_review","migration_status","approval","global_baseline_candidate"]
  with (a.output.parent/"easymesh-openssl-api-subset.csv").open("w",encoding="utf-8",newline="") as f:
   writer=csv.DictWriter(f,fieldnames=fields); writer.writeheader()
   for row in report["easymesh_api_subset"]:
