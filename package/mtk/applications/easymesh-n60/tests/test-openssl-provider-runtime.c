@@ -27,7 +27,7 @@ static int test_rsa_asn1_mapping(void)
     SSL *bad_generic_ssl = NULL, *bad_legacy_ssl = NULL;
     OSSL_LIB_CTX *legacy_libctx = NULL;
     OSSL_PROVIDER *null_provider = NULL;
-    const EVP_PKEY *generic_key, *legacy_key;
+    EVP_PKEY *generic_key, *legacy_key;
     int old_ret, new_bad, old_bad, ok = 0;
     unsigned long new_error, old_error;
 
@@ -59,8 +59,8 @@ static int test_rsa_asn1_mapping(void)
     old_ret = SSL_use_RSAPrivateKey_ASN1(legacy_ssl, der, (long)der_len);
 #pragma GCC diagnostic pop
     C(old_ret == 1);
-    generic_key = SSL_get0_privatekey(generic_ssl);
-    legacy_key = SSL_get0_privatekey(legacy_ssl);
+    generic_key = SSL_get_privatekey(generic_ssl);
+    legacy_key = SSL_get_privatekey(legacy_ssl);
     C(generic_key != NULL && legacy_key != NULL);
     C(EVP_PKEY_eq(generic_key, legacy_key) == 1);
     C(EVP_PKEY_get_bits(generic_key) == 2048 &&
@@ -84,8 +84,8 @@ static int test_rsa_asn1_mapping(void)
     old_ret = SSL_use_RSAPrivateKey_ASN1(bad_legacy_ssl, der, (long)der_len);
 #pragma GCC diagnostic pop
     C(old_ret == 1);
-    generic_key = SSL_get0_privatekey(bad_generic_ssl);
-    legacy_key = SSL_get0_privatekey(bad_legacy_ssl);
+    generic_key = SSL_get_privatekey(bad_generic_ssl);
+    legacy_key = SSL_get_privatekey(bad_legacy_ssl);
     C(generic_key != NULL && legacy_key != NULL);
     C(EVP_PKEY_eq(generic_key, legacy_key) == 1);
 
