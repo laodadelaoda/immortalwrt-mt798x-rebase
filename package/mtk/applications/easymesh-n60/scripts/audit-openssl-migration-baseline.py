@@ -87,8 +87,8 @@ def main():
     files1111=header_files(a.openssl_1111_source); files359=header_files(a.openssl_359_source)
     with map_path.open(encoding="utf-8",newline="") as f:
         mapping=list(csv.DictReader(f))
-    if len(mapping)!=64 or len({r["api"] for r in mapping})!=64:
-        raise SystemExit("migration map must contain exactly 64 unique API rows; found "+str(len(mapping)))
+    if len(mapping)!=68 or len({r["api"] for r in mapping})!=68:
+        raise SystemExit("migration map must contain exactly 68 unique API rows; found "+str(len(mapping)))
 
     rows=[]; failures=[]
     for item in mapping:
@@ -97,6 +97,8 @@ def main():
         present359=token_present(files359,api)
         deprecated359=api in depr359
         deprecated1111=deprecation_annotation(files1111,api)
+        if not present1111:
+            failures.append("API not found in OpenSSL 1.1.1w headers: "+api)
         if not present359 or not deprecated359:
             failures.append("API not found as deprecated in OpenSSL 3.5.9 headers: "+api)
         rows.append({
@@ -124,6 +126,7 @@ def main():
     with (a.output_dir/"openssl-1111-to-359-header-delta.csv").open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=fields); w.writeheader(); w.writerows(rows)
     summary={
+        "schema_version":2,
         "baseline_id":lock["baseline_id"],
         "git_sha":a.git_sha,
         "run_id":int(a.run_id),
@@ -145,6 +148,9 @@ def main():
         "header_api_names":{"1.1.1w":len(names1111),"3.5.9":len(names359)},
         "deprecated_api_declarations":{"3.5.9":len(depr359)},
         "migration_map_rows":len(mapping),
+        "migration_map_apis_present_in_1_1_1w":sum(1 for r in rows if r["present_in_1_1_1w_headers"]=="true"),
+        "migration_map_apis_deprecated_in_3_5_9":sum(1 for r in rows if r["present_in_3_5_9_headers"]=="true" and r["deprecated_in_3_5_9_headers"]=="true"),
+        "migration_map_apis_present_and_deprecated_in_3_5_9":sum(1 for r in rows if r["present_in_3_5_9_headers"]=="true" and r["deprecated_in_3_5_9_headers"]=="true"),
         "migration_map_apis_with_1_1_1w_deprecation_annotation":sum(1 for r in rows if r["deprecation_annotation_1_1_1w"]),
         "migration_map_apis_present_and_deprecated_in_3_5_9":sum(1 for r in rows if r["present_in_3_5_9_headers"]=="true" and r["deprecated_in_3_5_9_headers"]=="true"),
         "api_presence_in_1_1_1w":sum(1 for r in rows if r["present_in_1_1_1w_headers"]=="true"),
