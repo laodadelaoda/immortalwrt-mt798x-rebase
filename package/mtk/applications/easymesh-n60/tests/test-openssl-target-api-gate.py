@@ -26,6 +26,7 @@ with tempfile.TemporaryDirectory() as d:
  assert not report["complete"] and any("negative target-preprocessor proof" in x for x in report["failures"])
  tu={"source":str(src.resolve()),"returncode":0,"preprocessed_sha256":"1"*64}
  summary["components"]={"wappd":{"source_reachability_complete":True,"translation_units":[tu]}}
+ call[0]["conditional_branch_path"]=[]
  call[0]["preprocessor_negative_evidence"]={
   "source_translation_unit":True,"component_complete":True,"api_hit_absent":True,
   "source_line_absent":True,"preprocessed_sha256":["1"*64],
@@ -34,6 +35,11 @@ with tempfile.TemporaryDirectory() as d:
  summary["target_compiler_sha256"]="2"*64; summary["target_config_sha256"]="3"*64
  report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
  assert report["complete"] and report["excluded_with_evidence"]==1,report["failures"]
+ # A mismatched conditional path must revoke the exclusion proof.
+ call[0]["preprocessor_negative_evidence"]["conditional_branch_path"]=["#if 0"]
+ report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
+ assert not report["complete"] and any("negative target-preprocessor proof" in x for x in report["failures"])
+ call[0]["preprocessor_negative_evidence"]["conditional_branch_path"]=[]
  # Falsifying any one observation must revoke exclusion.
  call[0]["preprocessor_negative_evidence"]["api_hit_absent"]=False
  report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
