@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "scope_id": "n60-easymesh-openssl-3.5.9",
+  "openssl_version": "3.5.9",
+  "primary_components": [
+    "wappd",
+    "mapd",
+    "1905daemon",
+    "libmapd"
+  ],
+  "component_roles": {
+    "wappd": "WAPP control plane and DPP implementation",
+    "mapd": "MAPD controller/agent source",
+    "1905daemon": "IEEE 1905 / EasyMesh daemon and crypto wrapper",
+    "libmapd": "MAPD support library"
+  },
+  "supporting_dependencies": [
+    {
+      "name": "datconf",
+      "includes": [
+        "libkvcutil"
+      ],
+      "role": "supporting dependency; boundary-only review, not presumed to require migration"
+    },
+    {
+      "name": "libnl-tiny",
+      "includes": [],
+      "role": "supporting dependency; boundary-only review, not presumed to require migration"
+    }
+  ],
+  "dependency_boundary_policy": "Audit actual source, build/link rules and staged library symbols/NEEDED edges. Exclude a supporting dependency from OpenSSL migration only with evidence that it has no reachable OpenSSL API use and no libssl/libcrypto linkage. If positive or unknown, extend the audited dependency closure; do not edit unrelated components.",
+  "global_baseline": {
+    "path": "package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv",
+    "expected_rows": 68,
+    "role": "TRACEABILITY_ONLY",
+    "is_migration_approval": false,
+    "description": "Retain all 68 original API candidates for traceability. Only target-preprocessed ACTIVE EasyMesh call sites require migration review; EXCLUDED_WITH_EVIDENCE items remain as evidence and do not trigger source changes."
+  }
+}

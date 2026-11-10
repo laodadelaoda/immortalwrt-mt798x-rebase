@@ -675,6 +675,7 @@ jobs:
             package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py \
             package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json \
             package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv \
+            package/mtk/applications/easymesh-n60/tests/openssl-easymesh-scope.json \
             package/mtk/applications/easymesh-n60/tests/openssl-migration-baseline.lock.json \
             package/mtk/applications/easymesh-n60/tests/test-openssl-provider-runtime.c \
             package/mtk/applications/easymesh-n60/scripts/run-openssl-provider-runtime.sh; do
@@ -748,6 +749,7 @@ jobs:
             --summary artifacts/easymesh-openssl-preprocessor-audit/openssl-target-preprocessor-summary.json \
             --macros artifacts/easymesh-openssl-preprocessor-audit/macro-reference-reachability.json \
             --migration-map package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv \
+            --scope-manifest package/mtk/applications/easymesh-n60/tests/openssl-easymesh-scope.json \
             --policy package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json \
             --source-root "$BUILD_DIR" --repo-root "$GITHUB_WORKSPACE" \
             --output artifacts/easymesh-openssl-api-audit/openssl-target-api-gate.json

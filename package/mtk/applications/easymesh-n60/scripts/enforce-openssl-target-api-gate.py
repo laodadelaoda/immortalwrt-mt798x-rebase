@@ -34,6 +34,77 @@ def observe_preprocessed_output(path,source_path,line_number,api):
   if current: lineno+=1
  return emitted,hit
 
+
+REQUIRED_EASYMESH_COMPONENTS={"wappd","mapd","1905daemon","libmapd"}
+
+def build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migration_map):
+ """Derive the real EasyMesh deprecated-API subset without changing the 68-row reference baseline."""
+ rows={}
+ def item(api):
+  return rows.setdefault(api,{"api":api,"components":set(),"source_reference_count":0,
+   "active_call_sites":0,"excluded_call_sites":0,"unknown_call_sites":0,
+   "declaration_references":0,"other_non_call_references":0,
+   "macro_references":0,"macro_active":0,"macro_excluded":0,"macro_unknown":0,
+   "source_locations":[]})
+ for r in inventory_rows:
+  if not r.get("deprecated_macro"): continue
+  x=item(r["api"]); x["components"].add(r["component"]); x["source_reference_count"]+=1
+  x["source_locations"].append({"component":r["component"],"path":r["path"],"line":int(r["line"]),"kind":"LEXICAL_REFERENCE"})
+ for r in callsites:
+  x=item(r["api"]); x["components"].add(r["component"]); status=r.get("reachability_status")
+  if status=="ACTIVE": x["active_call_sites"]+=1
+  elif status=="EXCLUDED_WITH_EVIDENCE": x["excluded_call_sites"]+=1
+  else: x["unknown_call_sites"]+=1
+  x["source_locations"].append({"component":r["component"],"path":r["path"],"line":int(r["line"]),
+   "kind":"CALL_SITE","reachability_status":status,"reference_kind":r.get("reference_kind")})
+ for r in noncalls:
+  x=item(r["api"]); x["components"].add(r["component"])
+  if r.get("reference_kind")=="DECLARATION_OR_DEFINITION": x["declaration_references"]+=1
+  else: x["other_non_call_references"]+=1
+  x["source_locations"].append({"component":r["component"],"path":r["path"],"line":int(r["line"]),
+   "kind":"NON_CALL_REFERENCE","reachability_status":r.get("reachability_status"),
+   "reference_kind":r.get("reference_kind")})
+ for r in macro_rows:
+  x=item(r["api"]); x["components"].add(r["component"]); x["macro_references"]+=1
+  status=r.get("reachability_status")
+  if status=="ACTIVE": x["macro_active"]+=1
+  elif status=="EXCLUDED_WITH_EVIDENCE": x["macro_excluded"]+=1
+  else: x["macro_unknown"]+=1
+  x["source_locations"].append({"component":r["component"],"path":r["path"],"line":int(r["line"]),
+   "kind":"MACRO_REFERENCE","macro":r.get("macro"),"reachability_status":status})
+ out=[]
+ for api,x in sorted(rows.items()):
+  mr=migration_map.get(api,{})
+  if x["unknown_call_sites"] or x["macro_unknown"]: status="UNKNOWN_FAIL_CLOSED"
+  elif x["active_call_sites"] or x["macro_active"]: status="ACTIVE"
+  elif x["excluded_call_sites"] or x["macro_excluded"] or x["declaration_references"] or x["other_non_call_references"]:
+   status="EXCLUDED_WITH_EVIDENCE"
+  else: status="UNKNOWN_FAIL_CLOSED"
+  x.update({"components":sorted(x["components"]),"scope_status":status,
+   "needs_migration_review":x["active_call_sites"]>0,
+   "migration_status":mr.get("migration_status","MISSING_FROM_GLOBAL_BASELINE"),
+   "approval":mr.get("approval","false"),"global_baseline_candidate":api in migration_map,
+   "source_locations":sorted(x["source_locations"],key=lambda z:(z["component"],z["path"],z["line"],z["kind"]))})
+  out.append(x)
+ return out
+
+def validate_scope_manifest(scope,summary,migration_map):
+ failures=[]
+ if scope.get("schema_version")!=1 or scope.get("scope_id")!="n60-easymesh-openssl-3.5.9":
+  failures.append("invalid EasyMesh OpenSSL scope manifest identity/schema")
+ if scope.get("openssl_version")!="3.5.9": failures.append("EasyMesh OpenSSL scope manifest version is not 3.5.9")
+ if set(scope.get("primary_components",[]))!=REQUIRED_EASYMESH_COMPONENTS:
+  failures.append("EasyMesh scope manifest primary component set differs from the audited DPP/WAPP/MAPD/1905 source set")
+ if set(summary.get("components",{}))!=REQUIRED_EASYMESH_COMPONENTS:
+  failures.append("target preprocessor component set does not cover the complete EasyMesh OpenSSL scope")
+ baseline=scope.get("global_baseline",{})
+ if baseline.get("expected_rows")!=68 or len(migration_map)!=68 or baseline.get("role")!="TRACEABILITY_ONLY" or baseline.get("is_migration_approval") is not False:
+  failures.append("68-row global reference baseline was changed, mis-scoped or treated as migration approval")
+ supporting={x.get("name") for x in scope.get("supporting_dependencies",[]) if isinstance(x,dict)}
+ if supporting!={"datconf","libnl-tiny"}:
+  failures.append("EasyMesh supporting dependency boundary list must explicitly retain datconf/libkvcutil and libnl-tiny")
+ return failures
+
 def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,policy,source_root,expected_git_sha):
  failures=[]
  if summary.get("git_sha")!=expected_git_sha: failures.append("target preprocessor evidence Git SHA mismatch")
@@ -169,20 +240,25 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
    failures.append("legacy-retained API lacks a concrete compatibility/interoperability justification: "+api)
 
  counts=Counter(x["api"] for x in active)
+ subset=build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migration_map)
+ active_subset=[x["api"] for x in subset if x["needs_migration_review"]]
  return {
-  "schema_version":1,"git_sha":expected_git_sha,"firmware_compile_invoked":False,
+  "schema_version":2,"git_sha":expected_git_sha,"firmware_compile_invoked":False,
   "inventory_deprecated_references":len(inventory),"target_active_call_sites":len(active),
   "target_active_apis":active_apis,"target_active_api_counts":dict(sorted(counts.items())),
   "excluded_with_evidence":excluded,"declarations_or_definitions":declarations,
   "unknown_fail_closed":unknown,"macro_reference_count":len(macro_rows),
   "migration_map_rows":len(migration_map),
+  "easymesh_api_candidate_count":len(subset),
+  "easymesh_api_migration_required_count":len(active_subset),
+  "easymesh_api_migration_required":active_subset,"easymesh_api_subset":subset,
   "active_apis_unreviewed":[api for api in active_apis if api not in migration_map or migration_map[api].get("migration_status")!="APPROVED" or str(migration_map[api].get("approval","")).lower()!="true"],
   "failures":failures,"complete":not failures
  }
 
 def main():
  ap=argparse.ArgumentParser()
- for name in ("inventory","callsites","noncalls","summary","macros","migration-map","policy","source-root","repo-root","output"):
+ for name in ("inventory","callsites","noncalls","summary","macros","migration-map","policy","source-root","repo-root","output","scope-manifest"):
   ap.add_argument("--"+name,type=Path,required=True)
  a=ap.parse_args()
  repo=a.repo_root.resolve()
@@ -191,11 +267,34 @@ def main():
  with a.inventory.open(encoding="utf-8",newline="") as f: inventory=list(csv.DictReader(f))
  with a.migration_map.open(encoding="utf-8",newline="") as f: migration_rows=list(csv.DictReader(f))
  migration_map={x["api"]:x for x in migration_rows}
- report=evaluate(inventory,load_json(a.callsites),load_json(a.noncalls),load_json(a.summary),
+ summary=load_json(a.summary)
+ scope=load_json(a.scope_manifest)
+ report=evaluate(inventory,load_json(a.callsites),load_json(a.noncalls),summary,
                  load_json(a.macros),migration_map,load_json(a.policy),a.source_root,git.stdout.strip())
+ report["failures"].extend(validate_scope_manifest(scope,summary,migration_map))
+ report["scope"]={"scope_id":scope.get("scope_id"),"openssl_version":scope.get("openssl_version"),
+  "primary_components":scope.get("primary_components"),"supporting_dependencies":scope.get("supporting_dependencies"),
+  "global_baseline":{"path":scope.get("global_baseline",{}).get("path"),"rows":len(migration_rows),
+   "sha256":sha256_file(a.migration_map),"role":"TRACEABILITY_ONLY"}}
+ report["complete"]=not report["failures"]
  a.output.parent.mkdir(parents=True,exist_ok=True)
  a.output.write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
- print(json.dumps({k:report[k] for k in ("target_active_call_sites","target_active_apis","excluded_with_evidence","declarations_or_definitions","unknown_fail_closed","complete","failures")},indent=2))
+ subset={"schema_version":1,"scope_id":scope.get("scope_id"),"openssl_version":scope.get("openssl_version"),
+  "git_sha":git.stdout.strip(),"scope_components":scope.get("primary_components"),
+  "global_baseline":report["scope"]["global_baseline"],
+  "candidate_api_count":report["easymesh_api_candidate_count"],
+  "migration_required_api_count":report["easymesh_api_migration_required_count"],
+  "migration_required_apis":report["easymesh_api_migration_required"],
+  "apis":report["easymesh_api_subset"],"dependency_boundary_policy":scope.get("supporting_dependencies")}
+ (a.output.parent/"easymesh-openssl-api-subset.json").write_text(json.dumps(subset,indent=2)+"\n",encoding="utf-8")
+ fields=["api","components","source_reference_count","active_call_sites","excluded_call_sites","unknown_call_sites",
+  "declaration_references","other_non_call_references","macro_references","macro_active","macro_excluded",
+  "macro_unknown","scope_status","needs_migration_review","migration_status","approval","global_baseline_candidate"]
+ with (a.output.parent/"easymesh-openssl-api-subset.csv").open("w",encoding="utf-8",newline="") as f:
+  writer=csv.DictWriter(f,fieldnames=fields); writer.writeheader()
+  for row in report["easymesh_api_subset"]:
+   writer.writerow({k:(";".join(row[k]) if k=="components" else row[k]) for k in fields})
+ print(json.dumps({k:report[k] for k in ("target_active_call_sites","target_active_apis","easymesh_api_candidate_count","easymesh_api_migration_required","excluded_with_evidence","declarations_or_definitions","unknown_fail_closed","complete","failures")},indent=2))
  return 0 if report["complete"] else 1
 
 if __name__=="__main__": raise SystemExit(main())

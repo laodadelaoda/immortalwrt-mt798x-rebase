@@ -11,6 +11,10 @@ on:
       - "package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py"
       - "package/mtk/applications/easymesh-n60/scripts/enforce-openssl-target-api-gate.py"
       - "package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py"
+      - "package/mtk/applications/easymesh-n60/tests/openssl-easymesh-scope.json"
+      - "package/mtk/applications/easymesh-n60/scripts/enforce-openssl-target-api-gate.py"
+      - "package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py"
+      - "package/mtk/applications/easymesh-n60/tests/openssl-easymesh-scope.json"
   pull_request:
     paths:
       - ".github/workflows/openssl-target-preprocessor-regression.yml"

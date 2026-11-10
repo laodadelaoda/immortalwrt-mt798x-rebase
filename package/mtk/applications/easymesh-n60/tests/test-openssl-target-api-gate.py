@@ -134,4 +134,31 @@ macro_summary={"git_sha":git,"firmware_compile_invoked":False,"complete":True,
 report=m.evaluate(active_inventory,[active_call],[],macro_summary,[forged_macro],{},{"api_rules":{}},root,git)
 assert not report["complete"] and any("macro exclusion contradicts an active target-preprocessor API hit" in x for x in report["failures"]),report["failures"]
 
+
+# Preserve the 68-row global candidate map while deriving only target-ACTIVE
+# EasyMesh API calls as the migration-required subset.
+subset=m.build_easymesh_api_subset(
+ [{"component":"wappd","path":"wappd/a.c","line":10,"api":"EVP_PKEY_cmp","deprecated_macro":"OSSL_DEPRECATEDIN_3_0"},
+  {"component":"1905daemon","path":"1905daemon/b.c","line":20,"api":"EC_KEY_new","deprecated_macro":"OSSL_DEPRECATEDIN_3_0"},
+  {"component":"wappd","path":"wappd/c.c","line":30,"api":"ENGINE_by_id","deprecated_macro":"OSSL_DEPRECATEDIN_3_0"}],
+ [{"component":"wappd","path":"wappd/a.c","line":10,"api":"EVP_PKEY_cmp","reference_kind":"CALL_EXPRESSION","reachability_status":"ACTIVE"},
+  {"component":"1905daemon","path":"1905daemon/b.c","line":20,"api":"EC_KEY_new","reference_kind":"CALL_EXPRESSION","reachability_status":"EXCLUDED_WITH_EVIDENCE"},
+  {"component":"wappd","path":"wappd/c.c","line":30,"api":"ENGINE_by_id","reference_kind":"CALL_EXPRESSION","reachability_status":"EXCLUDED_WITH_EVIDENCE"}],
+ [],[],{"EVP_PKEY_cmp":{"migration_status":"UNREVIEWED","approval":"false"},
+         "EC_KEY_new":{"migration_status":"UNREVIEWED","approval":"false"},
+         "ENGINE_by_id":{"migration_status":"UNREVIEWED","approval":"false"}})
+assert len(subset)==3
+assert [x["api"] for x in subset if x["needs_migration_review"]]==["EVP_PKEY_cmp"]
+assert next(x for x in subset if x["api"]=="ENGINE_by_id")["scope_status"]=="EXCLUDED_WITH_EVIDENCE"
+assert next(x for x in subset if x["api"]=="EC_KEY_new")["needs_migration_review"] is False
+scope={"schema_version":1,"scope_id":"n60-easymesh-openssl-3.5.9","openssl_version":"3.5.9",
+ "primary_components":["wappd","mapd","1905daemon","libmapd"],
+ "supporting_dependencies":[{"name":"datconf"},{"name":"libnl-tiny"}],
+ "global_baseline":{"expected_rows":68,"role":"TRACEABILITY_ONLY","is_migration_approval":False}}
+scope_summary={"components":{x:{} for x in scope["primary_components"]}}
+scope_map={f"api{i}":{} for i in range(68)}
+assert m.validate_scope_manifest(scope,scope_summary,scope_map)==[]
+assert m.validate_scope_manifest({**scope,"primary_components":["wappd"]},scope_summary,scope_map)
+assert m.validate_scope_manifest({**scope,"global_baseline":{"expected_rows":68,"role":"MIGRATION_APPROVAL","is_migration_approval":True}},scope_summary,scope_map)
+
 print("PASS: exact target reachability excludes inactive APIs and declarations; active, unknown, missing, stale, unapproved and token-paste macro exclusions are handled fail-closed.")
