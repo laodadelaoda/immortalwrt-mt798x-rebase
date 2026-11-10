@@ -24,6 +24,40 @@ jobs:
           name: n60-vendor-audit-attestation
           path: .audit-attestation
 
+      - name: Retrieve exact-SHA OpenSSL baseline credential
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          BASELINE_RUN_ID=""
+          for attempt in $(seq 1 90); do
+            BASELINE_RUN_ID="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow openssl-migration-baseline-audit.yml --commit "$GITHUB_SHA" --json databaseId,status,conclusion --jq '[.[] | select(.status == "completed" and .conclusion == "success")][0].databaseId // empty')"
+            if [[ -n "$BASELINE_RUN_ID" ]]; then break; fi
+            sleep 20
+          done
+          [[ -n "$BASELINE_RUN_ID" ]] || { echo "::error::No successful OpenSSL baseline audit exists for exact SHA $GITHUB_SHA."; exit 1; }
+          mkdir -p .openssl-baseline/evidence .openssl-baseline/attestation
+          gh run download "$BASELINE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name n60-openssl-1111w-to-359-header-baseline --dir .openssl-baseline/evidence
+          gh run download "$BASELINE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name n60-openssl-baseline-attestation --dir .openssl-baseline/attestation
+          python3 - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          p=Path(".openssl-baseline/attestation/openssl-migration-baseline.attestation.json")
+          a=json.loads(p.read_text())
+          if a.get("run",{}).get("git_sha") != os.environ["GITHUB_SHA"]:
+              raise SystemExit("baseline credential Git SHA does not match this Quick Prepare revision")
+          if a.get("run",{}).get("id") <= 0 or a.get("run",{}).get("attempt") <= 0:
+              raise SystemExit("baseline credential run/attempt identity is invalid")
+          artifact=a.get("artifact",{})
+          if not str(artifact.get("id","")).isdigit() or len(artifact.get("sha256","")) != 64:
+              raise SystemExit("baseline credential artifact identity is invalid")
+          remote=subprocess.run(["gh","api",f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/artifacts/{artifact['id']}","--jq",".digest"],text=True,capture_output=True,check=True).stdout.strip().removeprefix("sha256:")
+          if remote != artifact["sha256"]:
+              raise SystemExit("baseline GitHub artifact digest differs from signed-off credential")
+          print("PASS: exact-SHA baseline artifact ID, digest, run and attempt verified.")
+          PY
+
       - name: Enforce exact audited source revision and Lock
         shell: bash
         run: |
@@ -609,6 +643,7 @@ jobs:
             exit 1
           }
           BUILD_DIR="$BUILD_DIR_LIST"
+          test -s .openssl-baseline/attestation/openssl-migration-baseline.attestation.json
           python3 package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py
           python3 package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py
           python3 package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py \

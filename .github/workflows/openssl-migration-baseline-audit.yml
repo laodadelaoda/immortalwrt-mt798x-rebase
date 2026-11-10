@@ -88,10 +88,60 @@ jobs:
             --output-dir "$GITHUB_WORKSPACE/artifacts/openssl-migration-baseline"
 
       - name: Upload immutable OpenSSL migration baseline evidence
+        id: baseline_evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: n60-openssl-1111w-to-359-header-baseline
           path: artifacts/openssl-migration-baseline/
           if-no-files-found: warn
+          retention-days: 90
+
+      - name: Generate run-bound OpenSSL baseline attestation
+        if: steps.baseline_evidence.outcome == 'success'
+        shell: bash
+        env:
+          BASELINE_ARTIFACT_ID: ${{ steps.baseline_evidence.outputs.artifact-id }}
+          BASELINE_ARTIFACT_DIGEST: ${{ steps.baseline_evidence.outputs.artifact-digest }}
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          root=Path("artifacts/openssl-migration-baseline")
+          summary=json.loads((root/"openssl-migration-baseline.json").read_text())
+          artifact_id=os.environ["BASELINE_ARTIFACT_ID"]
+          digest=os.environ["BASELINE_ARTIFACT_DIGEST"].removeprefix("sha256:")
+          if not artifact_id.isdigit() or not re.fullmatch(r"[0-9a-f]{64}",digest):
+              raise SystemExit("GitHub baseline artifact ID/digest is missing or malformed")
+          if summary.get("failures") or summary.get("migration_map_rows")!=68 or summary.get("migration_map_apis_present_in_1_1_1w")!=68 or summary.get("migration_map_apis_deprecated_in_3_5_9")!=68:
+              raise SystemExit("baseline summary is not a complete 68/68 success")
+          att={
+            "schema_version":2,"status":"VERIFIED","baseline_id":summary["baseline_id"],
+            "run":{"id":int(os.environ["GITHUB_RUN_ID"]),"attempt":int(os.environ["GITHUB_RUN_ATTEMPT"]),
+                   "git_sha":os.environ["GITHUB_SHA"],"url":os.environ["GITHUB_SERVER_URL"]+"/"+os.environ["GITHUB_REPOSITORY"]+"/actions/runs/"+os.environ["GITHUB_RUN_ID"]},
+            "artifact":{"id":int(artifact_id),"name":"n60-openssl-1111w-to-359-header-baseline","sha256":digest},
+            "input_sha256":summary["input_sha256"],
+            "source":{"from_version":summary["from_version"],"to_version":summary["to_version"],
+                      "archive_sha256":summary["archive_sha256"],"header_tree_sha256":summary["header_tree_sha256"]},
+            "results":{"header_api_names":summary["header_api_names"],
+                       "deprecated_api_declarations_3_5_9":summary["deprecated_api_declarations"]["3.5.9"],
+                       "migration_map_rows":summary["migration_map_rows"],
+                       "migration_map_apis_present_in_1_1_1w":summary["migration_map_apis_present_in_1_1_1w"],
+                       "migration_map_apis_deprecated_in_3_5_9":summary["migration_map_apis_deprecated_in_3_5_9"],
+                       "failures":summary["failures"]},
+            "limitations":summary["limitations"]
+          }
+          out=Path("artifacts/openssl-migration-baseline-attestation")
+          out.mkdir(parents=True,exist_ok=True)
+          (out/"openssl-migration-baseline.attestation.json").write_text(json.dumps(att,indent=2)+"\\n")
+          print(json.dumps({"run":att["run"],"artifact":att["artifact"],"results":att["results"]},indent=2))
+          PY
+
+      - name: Upload run-bound OpenSSL baseline attestation
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-openssl-baseline-attestation
+          path: artifacts/openssl-migration-baseline-attestation/openssl-migration-baseline.attestation.json
+          if-no-files-found: error
           retention-days: 90

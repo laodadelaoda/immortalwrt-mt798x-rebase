@@ -56,7 +56,18 @@ with tempfile.TemporaryDirectory() as d:
   "input_sha256":{key:m.sha256_file(path) for key,path in input_paths.items()}
  }
  (tests/"openssl-migration-baseline.attestation.json").write_text(__import__("json").dumps(att))
- assert m.validate_openssl_source(Path(d),repo)=="3.5.9"
+ att_path=tests/"openssl-migration-baseline.attestation.json"
+ expected_sha="c"*40
+ assert m.validate_openssl_source(Path(d),repo,att_path,expected_sha)=="3.5.9"
+ # A credential from another Git revision is stale even when every input hash matches.
+ stale=dict(att); stale["run"]=dict(att["run"]); stale["run"]["git_sha"]="e"*40
+ att_path.write_text(__import__("json").dumps(stale))
+ try:
+  m.validate_openssl_source(Path(d),repo,att_path,expected_sha)
+  raise AssertionError("a baseline credential from a different Git SHA must fail")
+ except ValueError as exc:
+  assert "stale" in str(exc)
+ att_path.write_text(__import__("json").dumps(att))
  # A stale or incorrect input digest must invalidate the baseline credential.
  att_path=tests/"openssl-migration-baseline.attestation.json"
  saved_att=__import__("json").loads(att_path.read_text())
@@ -64,7 +75,7 @@ with tempfile.TemporaryDirectory() as d:
  bad_att["input_sha256"]["api_policy"]="0"*64
  att_path.write_text(__import__("json").dumps(bad_att))
  try:
-  m.validate_openssl_source(Path(d),repo)
+  m.validate_openssl_source(Path(d),repo,att_path,expected_sha)
   raise AssertionError("incorrect baseline input SHA256 must fail")
  except ValueError as exc:
   assert "input hash mismatch" in str(exc)

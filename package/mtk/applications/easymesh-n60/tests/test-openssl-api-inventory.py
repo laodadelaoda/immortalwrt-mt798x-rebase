@@ -29,15 +29,15 @@ def sha256_file(path):
  with path.open("rb") as f:
   for chunk in iter(lambda:f.read(1024*1024),b""): h.update(chunk)
  return h.hexdigest()
-def verify_baseline_attestation(repo_root,lock):
+def verify_baseline_attestation(repo_root,lock,att_path,expected_git_sha):
  tests=repo_root/"package/mtk/applications/easymesh-n60/tests"
- att_path=tests/"openssl-migration-baseline.attestation.json"
+ att_path=Path(att_path)
  att=json.loads(att_path.read_text(encoding="utf-8"))
  if att.get("schema_version")!=2 or att.get("status")!="VERIFIED" or att.get("baseline_id")!=lock.get("baseline_id"):
   raise ValueError("missing, stale or invalid OpenSSL migration baseline attestation")
  run=att.get("run",{}); artifact=att.get("artifact",{}); source=att.get("source",{}); results=att.get("results",{})
- if not re.fullmatch(r"[0-9a-f]{40}",run.get("git_sha","")) or int(run.get("id",0))<=0 or int(run.get("attempt",0))<=0:
-  raise ValueError("OpenSSL baseline attestation has no valid run identity")
+ if not re.fullmatch(r"[0-9a-f]{40}",run.get("git_sha","")) or run.get("git_sha")!=expected_git_sha or int(run.get("id",0))<=0 or int(run.get("attempt",0))<=0:
+  raise ValueError("OpenSSL baseline attestation is stale or has no matching run identity")
  if not re.fullmatch(r"[0-9a-f]{64}",artifact.get("sha256","")) or not artifact.get("id"):
   raise ValueError("OpenSSL baseline attestation has no artifact integrity identity")
  if source.get("archive_sha256",{}).get("1.1.1w")!=lock["from"]["sha256"] or source.get("archive_sha256",{}).get("3.5.9")!=lock["to"]["sha256"]:
@@ -59,7 +59,7 @@ def verify_baseline_attestation(repo_root,lock):
   if not expected or sha256_file(path)!=expected:
    raise ValueError("OpenSSL baseline attestation input hash mismatch: "+name)
  return att
-def validate_openssl_source(root,repo_root):
+def validate_openssl_source(root,repo_root,attestation_path,expected_git_sha):
  inc=root/"include/openssl"
  # The release archive contains a Perl template, not numeric version macros.
  if not (inc/"opensslv.h.in").is_file(): raise FileNotFoundError("missing OpenSSL opensslv.h.in: "+str(inc))
@@ -72,7 +72,7 @@ def validate_openssl_source(root,repo_root):
  lock=json.loads(lock_path.read_text(encoding="utf-8"))
  if lock.get("schema_version")!=1 or lock.get("from",{}).get("version")!="1.1.1w" or lock.get("to",{}).get("version")!="3.5.9": raise ValueError("invalid OpenSSL 1.1.1w-to-3.5.9 migration baseline lock")
  if lock["to"].get("sha256")!=h.group(1) or not re.fullmatch(r"[0-9a-f]{64}",lock["from"].get("sha256","")): raise ValueError("OpenSSL package hash does not match immutable migration baseline lock")
- verify_baseline_attestation(repo_root,lock)
+ verify_baseline_attestation(repo_root,lock,attestation_path,expected_git_sha)
  generated=inc/"opensslv.h"
  if generated.is_file():
   vh=generated.read_text(encoding="utf-8")
@@ -186,13 +186,14 @@ def csvout(path,rows,fields):
   w=csv.DictWriter(f,fieldnames=fields); w.writeheader(); w.writerows(rows)
 def main():
  ap=argparse.ArgumentParser()
- for x in ("repo-root","source-root","pristine-root","openssl-source","policy","output-dir"): ap.add_argument("--"+x,type=Path,required=True)
+ for x in ("repo-root","source-root","pristine-root","openssl-source","policy","output-dir","baseline-attestation"): ap.add_argument("--"+x,type=Path,required=True)
  ap.add_argument("--migration-map",type=Path,default=Path(__file__).with_name("openssl-111-to-359-migration-map.csv"))
  ap.add_argument("--strict",action="store_true"); a=ap.parse_args()
  for n,p in (("repo",a.repo_root),("source",a.source_root),("pristine",a.pristine_root),("OpenSSL",a.openssl_source)):
   if not p.is_dir(): ap.error(n+" directory missing: "+str(p))
- validate_openssl_source(a.openssl_source,a.repo_root)
- attestation_path=a.repo_root/"package/mtk/applications/easymesh-n60/tests/openssl-migration-baseline.attestation.json"
+ git=subprocess.run(["git","rev-parse","HEAD"],cwd=a.repo_root,text=True,stdout=subprocess.PIPE,check=True).stdout.strip()
+ validate_openssl_source(a.openssl_source,a.repo_root,a.baseline_attestation,git)
+ attestation_path=a.baseline_attestation
  baseline_attestation=json.loads(attestation_path.read_text(encoding="utf-8"))
  policy=json.loads(a.policy.read_text())
  if policy.get("schema_version")!=1 or policy.get("openssl_version")!="3.5.9" or not isinstance(policy.get("api_rules"),dict): ap.error("invalid OpenSSL API policy schema/version")
