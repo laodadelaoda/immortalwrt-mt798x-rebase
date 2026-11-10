@@ -25,6 +25,14 @@ def token_present(files, api):
     rx=re.compile(r"\b"+re.escape(api)+r"\b")
     return any(rx.search(p.read_text(encoding="utf-8",errors="replace")) for p in files)
 
+def deprecation_annotation(files, api):
+    rx=re.compile(r"((?:OSSL_)?DEPRECATEDIN_[A-Za-z0-9_]+)[\\s\\S]{0,700}?\\b"+re.escape(api)+r"\\s*\\(")
+    for p in files:
+        m=rx.search(p.read_text(encoding="utf-8",errors="replace"))
+        if m:
+            return m.group(1)
+    return ""
+
 def header_digest(files):
     h=hashlib.sha256()
     for p in files:
@@ -61,6 +69,12 @@ def main():
 
     spec=importlib.util.spec_from_file_location("openssl_inventory",a.repo_root/"package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py")
     mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+    v1111=(a.openssl_1111_source/"include/openssl/opensslv.h").read_text(encoding="utf-8",errors="replace")
+    if not re.search(r"OPENSSL_VERSION_TEXT[^\\n]*1\\.1\\.1w",v1111):
+        raise SystemExit("OpenSSL source tree is not the pinned 1.1.1w release")
+    v359=(a.openssl_359_source/"VERSION.dat").read_text(encoding="utf-8",errors="replace")
+    if not all(re.search(r"(?m)^"+k+r"=\\"?"+v+r"\\"?$",v359) for k,v in (("MAJOR","3"),("MINOR","5"),("PATCH","9"))):
+        raise SystemExit("OpenSSL source tree is not the pinned 3.5.9 release")
     names1111,depr1111=mod.catalog(a.openssl_1111_source)
     names359,depr359=mod.catalog(a.openssl_359_source)
     files1111=header_files(a.openssl_1111_source); files359=header_files(a.openssl_359_source)
@@ -75,7 +89,7 @@ def main():
         present1111=token_present(files1111,api)
         present359=token_present(files359,api)
         deprecated359=api in depr359
-        deprecated1111=api in depr1111
+        deprecated1111=deprecation_annotation(files1111,api)
         if not present359 or not deprecated359:
             failures.append("API not found as deprecated in OpenSSL 3.5.9 headers: "+api)
         rows.append({
@@ -83,7 +97,7 @@ def main():
             "observed_calls_run_42724660705":item["observed_calls_run_42724660705"],
             "observed_components":item["observed_components"],
             "present_in_1_1_1w_headers":str(present1111).lower(),
-            "deprecated_in_1_1_1w_headers":str(deprecated1111).lower(),
+            "deprecation_annotation_1_1_1w":deprecated1111,
             "present_in_3_5_9_headers":str(present359).lower(),
             "deprecated_in_3_5_9_headers":str(deprecated359).lower(),
             "deprecation_macro_3_5_9":depr359.get(api,""),
