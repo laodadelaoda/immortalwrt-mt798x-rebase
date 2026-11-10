@@ -342,9 +342,10 @@ def main():
   uncompiled_source_artifacts=[]
   for artifact in preexisting:
    if artifact.suffix.lower() in (".o",".lo"):
-    candidate=artifact.with_suffix(".c")
-    if candidate.is_file() and candidate.resolve() not in compiled_sources:
-     uncompiled_source_artifacts.append(str(candidate))
+    candidates=[artifact.with_suffix(ext) for ext in (".c",".cc",".cpp",".cxx")]
+    for candidate in candidates:
+     if candidate.is_file() and candidate.resolve() not in compiled_sources:
+      uncompiled_source_artifacts.append(str(candidate))
   for i,cmd in enumerate(compile_commands):
    key=hashlib.sha256((comp+cmd["source"]+str(i)).encode()).hexdigest()[:16]
    dest=out/"preprocessed"/f"{comp}-{key}.i"; pargv=cpp_argv(cmd,dest)
