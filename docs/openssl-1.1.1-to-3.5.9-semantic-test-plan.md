@@ -118,6 +118,12 @@ The reference and target harnesses must use the exact archive hashes from the mi
 
 The test harness must not silently normalize away differences in key encoding, point format, padding, output length, error behavior or provider selection.
 
+## OpenWrt OpenSSL package overlay gap
+
+The current `package/libs/openssl/patches` directory contains nine patches. Patch `140-allow-prefer-chacha20.patch` changes `include/openssl/ssl.h.in` by conditionally changing the `TLS_DEFAULT_CIPHERSUITES` macro order; it does not change a function prototype, but it does mean the prepared header tree is not byte-identical to the pristine 3.5.9 archive. Other patches modify Configure/build files, provider cipher implementation, openssl.cnf and devcrypto engine sources.
+
+The current baseline attestation binds the OpenSSL package Makefile but does not yet bind the nine patch-file SHA256 values, the actual Make-expanded `PATCH_DIR`, the N60 target config, or the prepared (post-patch) header-tree digest. This is a material reproducibility gap. Close it by recording the actual `PKG_SOURCE`, `PKG_SOURCE_URL`, `PKG_HASH`, `PKG_BUILD_DIR`, `PATCH_DIR` and `OPENSSL_OPTIONS` from GNU Make; hashing every patch in that expanded `PATCH_DIR`; and comparing the prepared header tree against the pristine baseline with the expected patch delta documented. Do not treat the pristine archive header hash alone as proof of the target package's patched header surface.
+
 ## N60 ENGINE configuration evidence
 
 The current `config/n60pro-1001.config` does not set `CONFIG_OPENSSL_ENGINE`. The OpenWrt OpenSSL package Makefile therefore selects `no-engine` for this target. This is strong configuration evidence that the ENGINE family should be excluded from the N60 build, but the generated OpenSSL configuration header and target preprocessor output have not yet been captured by the migration audit. Until that proof is attached, the 20 ENGINE-family source occurrences remain unclassified; do not delete or rewrite the guarded code.
