@@ -97,8 +97,12 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
   status=rule.get("status"); reason=rule.get("reason","")
   if status not in ALLOWED or not isinstance(reason,str) or not reason.strip() or rule.get("approved") is not True:
    failures.append("active API policy is incomplete or unapproved: "+api)
+  elif status in {"DIRECT_REPLACEMENT","SEMANTIC_ADAPTATION"}:
+   failures.append("migration mapping exists but deprecated API calls are still active in target source: "+api)
   elif status in {"REQUIRES_REDESIGN","BLOCKED"}:
    failures.append("active deprecated API remains blocked pending redesign: "+api)
+  elif status=="LEGACY_RETAINED" and not any(token in reason.lower() for token in ("compatibility","interoperability","hardware","provider limitation","upstream")):
+   failures.append("legacy-retained API lacks a concrete compatibility/interoperability justification: "+api)
 
  counts=Counter(x["api"] for x in active)
  return {
