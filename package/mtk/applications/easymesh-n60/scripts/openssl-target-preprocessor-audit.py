@@ -83,8 +83,12 @@ def validate_compile_recipe(path,repo,build,a):
   f"-C {build}/wappd",f'UAPD_INCLUDE_PATH="{a.linux}/include/uapi/linux/wapp -I{staging}/usr/include"',
   f'EXTRA_CFLAGS="{a.cppflags} {a.cflags} -Wno-error=deprecated-declarations -I{a.linux}/include/uapi/linux/wapp"',
   f"-C {build}/1905daemon",f'LINUXDIR="{linux_rel}"',f'STAGING_DIR="{staging}"',
-  f"-C {build}/mapd",'EXTRA_CFLAGS="$$OPENWRT_EASYMESH_CFLAGS"',
-  'OPENWRT_EASYMESH_CFLAGS="$$TARGET_EASYMESH_CFLAGS -DCONFIG_SUPPORT_OPENWRT"',
+  f"-C {build}/mapd",'EXTRA_CFLAGS="$OPENWRT_EASYMESH_CFLAGS"',
+  'OPENWRT_EASYMESH_CFLAGS="$TARGET_EASYMESH_CFLAGS -DCONFIG_SUPPORT_OPENWRT"',
+  f'LDFLAGS="{a.ldflags}"',
+  f'LDFLAGS="{a.ldflags} -L{staging}/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto"',
+  f'LDFLAGS="{a.ldflags} -L{staging}/usr/lib -Wl,--no-as-needed -lpthread -lnl-tiny -lssl -lcrypto"',
+  f'LDFLAGS="{a.ldflags} -L{staging}/usr/lib"',
   "CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y","MAP_R3_SUPPORT=y","SWTICH_DSA_ARCH=y","version mapd"
  ]
  missing=[x for x in expected if x not in recipe]
@@ -241,6 +245,7 @@ def main():
   if str(p) not in branches: branches[str(p)]=branch_path(p)
   r["branch_path"]=branches[str(p)][r["line"]-1]
  recipe_sha=validate_compile_recipe(a.package_compile_recipe,repo,build,a)
+ (build/"1905daemon"/"obj").mkdir(parents=True,exist_ok=True)
  specs=make_specs(repo,build,a); results={}; hits=set(); filehits=set(); api_hits_by_component={x:set() for x in COMP}
  for comp in COMP:
   spec=specs[comp]; env=os.environ.copy(); env.update(spec["env"])
