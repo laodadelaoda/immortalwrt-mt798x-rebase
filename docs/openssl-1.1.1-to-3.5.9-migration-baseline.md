@@ -66,6 +66,10 @@ This is header/API provenance evidence only. It does not prove call-site reachab
 
 The 68-row map is a coverage baseline, not a decision record. These four rows must remain unapproved until exact target call-site reachability and semantics are reviewed.
 
+### Header baseline parser correction
+
+The first 68-row header audit (Run `42829736916`) downloaded and SHA-verified both pinned archives but failed to find the four newly added APIs in the 3.5.9 raw source headers. Root cause: both the baseline header enumerator and API catalog searched only `*.h`, while OpenSSL's source archive stores some public declarations in `*.h.in` templates. The source-tree Quick inventory had seen configured/generated headers and therefore disagreed with the raw-archive baseline. Both scanners now include `*.h` and `*.h.in`, and regression tests assert template discovery. A new 68-row baseline run is required; the failed run is not a credential and must not be reused.
+
 ## Source reachability correction
 
 The original 429-call lexical report included five references to `EVP_CIPHER_CTX_iv_noconst` inside WAPP's local `crypto/evp.h` macro definitions. The header is included by `dpp/dpp.c`, but the top-level macros `IMPLEMENT_BLOCK_CIPHER` and `IMPLEMENT_CFBR` are not invoked in the fixed source tree. These five references are therefore recorded as `UNREFERENCED_MACRO_DEFINITION`, not active call sites. The scanner now separates macro-body references from function-call inventory and fails closed if a deprecated API is found in an active macro expansion.
