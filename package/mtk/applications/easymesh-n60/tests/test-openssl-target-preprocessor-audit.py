@@ -84,6 +84,20 @@ with tempfile.TemporaryDirectory() as d:
  recipe=root/"Build-Compile.expanded.txt"; recipe.write_text("\n".join(recipe_lines),encoding="utf-8")
  assert m.validate_compile_recipe(recipe,root,build,args)==m.sha(recipe)
 
+ # Target preprocessing must use the actual deprecated API set from
+ # the pinned OpenSSL 3.5.9 headers, not mark every public API deprecated.
+ inv_path=Path(__file__).with_name("test-openssl-api-inventory.py")
+ inv_spec=importlib.util.spec_from_file_location("inventory_catalog_test",inv_path)
+ inv=importlib.util.module_from_spec(inv_spec); inv_spec.loader.exec_module(inv)
+ with tempfile.TemporaryDirectory() as td:
+  hroot=Path(td)/"openssl"; inc=hroot/"include/openssl"; inc.mkdir(parents=True)
+  (inc/"evp.h").write_text(
+   "OSSL_DEPRECATEDIN_3_0 int legacy_api(void);\n"
+   "int current_api(void);\n",encoding="utf-8")
+  names,depr=inv.catalog(hroot)
+  assert "legacy_api" in names and depr.get("legacy_api")=="OSSL_DEPRECATEDIN_3_0"
+  assert "current_api" in names and "current_api" not in depr
+
  # MAPD's Makefile includes $(TOPDIR)/.config. The audit's isolated
  # metadata target must receive the same repository TOPDIR as production.
  from unittest.mock import patch
