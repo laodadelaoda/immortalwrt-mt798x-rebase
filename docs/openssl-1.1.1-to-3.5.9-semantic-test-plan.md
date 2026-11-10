@@ -222,7 +222,7 @@ The workflow runs the OpenSSL package Configure step and its `build_generated` h
 
 The audit does install the N60 cross-toolchain and stage the target development headers for datconf/libkvcutil and libnl-tiny. These are prerequisite toolchain/dependency operations, not a firmware image build and not an EasyMesh component build. OpenSSL Configure/header generation does not compile OpenSSL.
 
-For each of WAPP, MAPD, P1905 and libmapd, the script invokes the component's real Make target in `-B -n -w` mode to enumerate compile commands, then replays each captured target compiler command as preprocessing only (`-E -dD`) and macro snapshot only (`-E -dM`). It does not invoke `-c`, link, package, or firmware targets. MAPD's `version` metadata target is run only after a dry-run check proves that its recipe contains no compiler invocation.
+The script invokes the native OpenWrt `package/mtk/applications/easymesh-n60/compile` target in `-n -w V=s` mode. GNU Make expands the real `Build/Compile` recipe and its recursive component Makefiles; the audit extracts the compiler commands whose source paths belong to WAPP, MAPD, P1905 or libmapd. This avoids reconstructing component flags in a parallel build path. Each captured command is replayed as preprocessing only (`-E -dD`) and macro snapshot only (`-E -dM`). The dry-run does not invoke `-c`, link, package or firmware targets. MAPD's `version` metadata target is executed only after its own dry-run is checked and found to contain no compiler invocation. MAPD's `version` metadata target is run only after a dry-run check proves that its recipe contains no compiler invocation.
 
 ### Per-translation-unit and per-callsite evidence
 
