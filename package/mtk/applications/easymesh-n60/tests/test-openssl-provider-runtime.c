@@ -11,6 +11,13 @@
 #include <openssl/provider.h>
 #include <openssl/ssl.h>
 
+/* Test-only symbol alias: exercise the deprecated reference implementation
+ * without suppressing compiler diagnostics for deprecated declarations. */
+extern int test_only_SSL_use_RSAPrivateKey_ASN1(SSL *ssl,
+                                                const unsigned char *d,
+                                                long len)
+    __asm__("SSL_use_RSAPrivateKey_ASN1");
+
 #define C(x) do { if (!(x)) { fprintf(stderr, "FAIL: %s\\n", #x); goto out; } } while (0)
 
 static int test_rsa_asn1_mapping(void)
@@ -54,10 +61,7 @@ static int test_rsa_asn1_mapping(void)
     C(generic_ssl != NULL && legacy_ssl != NULL);
     C(SSL_use_PrivateKey_ASN1(EVP_PKEY_RSA, generic_ssl, der,
                               (long)der_len) == 1);
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    old_ret = SSL_use_RSAPrivateKey_ASN1(legacy_ssl, der, (long)der_len);
-#pragma GCC diagnostic pop
+old_ret = test_only_SSL_use_RSAPrivateKey_ASN1(legacy_ssl, der, (long)der_len);
     C(old_ret == 1);
     generic_key = SSL_get_privatekey(generic_ssl);
     legacy_key = SSL_get_privatekey(legacy_ssl);
@@ -90,11 +94,8 @@ static int test_rsa_asn1_mapping(void)
                                       (long)der_len - 1);
     new_error = ERR_peek_last_error();
     ERR_clear_error();
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    old_bad = SSL_use_RSAPrivateKey_ASN1(legacy_ssl, der,
-                                         (long)der_len - 1);
-#pragma GCC diagnostic pop
+old_bad = test_only_SSL_use_RSAPrivateKey_ASN1(legacy_ssl, der,
+                                                   (long)der_len - 1);
     old_error = ERR_peek_last_error();
     C(new_bad == 0 && old_bad == 0 && new_error != 0 && old_error != 0);
     puts("PASS: RSA PKCS#1 DER provider decode, legacy decoder fallback, key installation, and truncated-input failure.");
