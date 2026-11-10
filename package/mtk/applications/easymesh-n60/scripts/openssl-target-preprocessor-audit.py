@@ -208,12 +208,12 @@ def main():
  macro_refs=inv.scan_macro_references(build,names,{x:"OSSL_DEPRECATED" for x in names})
  macro_rows=[]; macro_counts={"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
  for item in macro_refs:
-  if item["reachability"]=="UNREFERENCED_MACRO_DEFINITION" and item["component"] in complete and item["api"] not in api_hits_by_component[item["component"]]:
+  if item["component"] in complete and item["api"] not in api_hits_by_component[item["component"]]:
    state="EXCLUDED_WITH_EVIDENCE"
   else: state="UNKNOWN_FAIL_CLOSED"
   macro_counts[state]+=1
   macro_rows.append({**item,"reachability_status":state,
-    "reason":"unreferenced macro plus complete component preprocessor evidence" if state=="EXCLUDED_WITH_EVIDENCE" else "macro expansion cannot be attributed conclusively; fail closed"})
+    "reason":"complete target preprocessing contains no active expression for this API in the component" if state=="EXCLUDED_WITH_EVIDENCE" else "API is present in preprocessed component output; macro expansion cannot be attributed conclusively; fail closed"})
  callsites=[]; counts={"ACTIVE":0,"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
  for r in rows:
   src=canon(build/r["path"],repo); key=(src,r["line"],r["api"])
