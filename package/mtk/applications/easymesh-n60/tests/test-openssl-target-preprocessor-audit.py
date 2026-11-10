@@ -46,6 +46,10 @@ with tempfile.TemporaryDirectory() as d:
  from types import SimpleNamespace
  args=SimpleNamespace(cppflags="-Itarget",cflags="-O2",ldflags="-Wl,-z,now",
   staging=root/"staging",linux=root/"linux",cc="aarch64-test-gcc",ar="aarch64-test-ar",ranlib="aarch64-test-ranlib")
+ assert m.classify_reference_text("static HMAC_CTX *HMAC_CTX_new(void)\\n{\\n}", "HMAC_CTX_new",1)=="DECLARATION_OR_DEFINITION"
+ assert m.classify_reference_text("static void HMAC_CTX_free(HMAC_CTX *ctx)\\n{\\n}", "HMAC_CTX_free",1)=="DECLARATION_OR_DEFINITION"
+ assert m.classify_reference_text("ctx = HMAC_CTX_new();\\n", "HMAC_CTX_new",1)=="CALL_EXPRESSION"
+ assert m.classify_reference_text("if (ENGINE_by_id(name)) return 1;\\n", "ENGINE_by_id",1)=="CALL_EXPRESSION"
  specs=m.make_specs(root,root/"build",args)
  assert len(specs["1905daemon"])==3
  main_1905=specs["1905daemon"][0]["argv"]
