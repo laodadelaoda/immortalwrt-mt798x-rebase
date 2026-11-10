@@ -1,0 +1,84 @@
+name: OpenSSL 1.1.1w to 3.5.9 migration baseline audit
+
+on:
+  push:
+    branches: ["n60pro-mtk-closed-driver"]
+    paths:
+      - ".github/workflows/openssl-migration-baseline-audit.yml"
+      - "docs/openssl-1.1.1-to-3.5.9-migration-baseline.md"
+      - "package/libs/openssl/Makefile"
+      - "package/mtk/applications/easymesh-n60/tests/openssl-*"
+      - "package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py"
+      - "package/mtk/applications/easymesh-n60/scripts/audit-openssl-migration-baseline.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: n60-openssl-migration-baseline-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  header-baseline:
+    name: Verify immutable 1.1.1w and 3.5.9 source/header baselines
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout audited revision
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Download immutable OpenSSL 1.1.1w reference archive
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$RUNNER_TEMP/openssl-migration"
+          archive="$RUNNER_TEMP/openssl-migration/openssl-1.1.1w.tar.gz"
+          if ! curl -fL --retry 3 --retry-all-errors --connect-timeout 20 --max-time 600 \
+            https://www.openssl.org/source/old/1.1.1/openssl-1.1.1w.tar.gz -o "$archive"; then
+            echo "::warning::Primary OpenSSL 1.1.1w archive endpoint failed; retrying the official mirror."
+            curl -fL --retry 3 --retry-all-errors --connect-timeout 20 --max-time 600 \
+              https://mirror.openssl-library.org/source/old/1.1.1/openssl-1.1.1w.tar.gz -o "$archive"
+          fi
+          echo "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8  $archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/openssl-migration/1.1.1w"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/openssl-migration/1.1.1w" --strip-components=1
+
+      - name: Download exact OpenSSL 3.5.9 target archive
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          archive="$RUNNER_TEMP/openssl-migration/openssl-3.5.9.tar.gz"
+          if ! curl -fL --retry 3 --retry-all-errors --connect-timeout 20 --max-time 900 \
+            https://www.openssl.org/source/openssl-3.5.9.tar.gz -o "$archive"; then
+            echo "::warning::Primary OpenSSL 3.5.9 archive endpoint failed; retrying the official GitHub release asset."
+            curl -fL --retry 3 --retry-all-errors --connect-timeout 20 --max-time 900 \
+              https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz -o "$archive"
+          fi
+          echo "603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a  $archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/openssl-migration/3.5.9"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/openssl-migration/3.5.9" --strip-components=1
+
+      - name: Compare 1.1.1w and 3.5.9 public API headers against the 64-API baseline
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 package/mtk/applications/easymesh-n60/scripts/audit-openssl-migration-baseline.py \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --openssl-1111-source "$RUNNER_TEMP/openssl-migration/1.1.1w" \
+            --openssl-359-source "$RUNNER_TEMP/openssl-migration/3.5.9" \
+            --archive-1111 "$RUNNER_TEMP/openssl-migration/openssl-1.1.1w.tar.gz" \
+            --archive-359 "$RUNNER_TEMP/openssl-migration/openssl-3.5.9.tar.gz" \
+            --output-dir "$GITHUB_WORKSPACE/artifacts/openssl-migration-baseline"
+
+      - name: Upload immutable OpenSSL migration baseline evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-openssl-1111w-to-359-header-baseline
+          path: artifacts/openssl-migration-baseline/
+          if-no-files-found: warn
+          retention-days: 90
