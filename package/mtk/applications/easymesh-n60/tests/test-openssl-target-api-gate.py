@@ -29,6 +29,7 @@ with tempfile.TemporaryDirectory() as d:
  pp_digest=m.sha256(ppout)
  tu={"source":str(src.resolve()),"returncode":0,"preprocessed_sha256":pp_digest,"preprocessed_output":str(ppout.resolve())}
  summary["components"]={"wappd":{"source_reachability_complete":True,"translation_units":[tu]}}
+ summary["evidence_output_dir"]=str(root)
  call[0]["conditional_branch_path"]=[]
  call[0]["preprocessor_negative_evidence"]={
   "source_translation_unit":True,"component_complete":True,"api_hit_absent":True,
@@ -48,6 +49,18 @@ with tempfile.TemporaryDirectory() as d:
  report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
  assert not report["complete"] and any("negative target-preprocessor proof" in x for x in report["failures"])
  call[0]["preprocessor_negative_evidence"]["api_hit_absent"]=True
+ # A self-consistent forged proof cannot hide an API call present in the actual .i file.
+ ppout.write_text(f'# 1 "{src.resolve()}"\nEVP_PKEY_cmp(a,b);\n')
+ forged_digest=m.sha256(ppout)
+ tu["preprocessed_sha256"]=forged_digest
+ call[0]["preprocessor_negative_evidence"]["preprocessed_sha256"]=[forged_digest]
+ report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
+ assert not report["complete"] and any("negative target-preprocessor proof" in x for x in report["failures"])
+ ppout.write_text(f'# 2 "{src.resolve()}"\nint f(void) {{ return 0; }}\n')
+ restored_digest=m.sha256(ppout)
+ tu["preprocessed_sha256"]=restored_digest
+ call[0]["preprocessor_negative_evidence"]["preprocessed_sha256"]=[restored_digest]
+
  # A declaration/definition is inventoried but is not treated as an API invocation.
  call[0]["reference_kind"]="DECLARATION_OR_DEFINITION"
  call[0]["reachability_status"]="ACTIVE"
