@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Fail-closed source-call inventory against the pinned OpenSSL 3.5.9 headers."""
-import argparse,csv,json,re
+import argparse,csv,hashlib,json,re
 from collections import Counter
 from pathlib import Path
 COMP=("wappd","mapd","1905daemon","libmapd")
