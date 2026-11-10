@@ -597,7 +597,7 @@ jobs:
           test -s "$TARGET_STAGING/usr/include/libdatconf.h"
           test -s "$TARGET_STAGING/usr/include/libkvcutil.h"
           test -d "$TARGET_STAGING/usr/include/libnl-tiny"
-test -n "$(find "$TARGET_STAGING/usr/include/libnl-tiny" -type f -print -quit)"
+          test -n "$(find "$TARGET_STAGING/usr/include/libnl-tiny" -type f -print -quit)"
           test -s "$LINUX_DIR/include/uapi/linux/wapp/wapp_cmm_type.h"
           test -s "$LINUX_DIR/include/uapi/linux/wapp/mt_wlan_cmm_oid.h"
 
