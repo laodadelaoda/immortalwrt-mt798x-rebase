@@ -48,6 +48,8 @@ vendor_paths=[
  ".github/workflows/quick-prepare-audit.yml",
  ".github/scripts/**",
  "config/n60pro-1001.config",
+ "docs/audit/easymesh-patch-dependencies.csv",
+ "docs/easymesh-patch-maintenance-groups.csv",
  "feeds.conf.default",
  "include/**",
  "Makefile",
