@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/vendor-source-patch-audit.yml"
       - ".github/workflows/quick-prepare-audit.yml"
+      - ".github/workflows/openssl-migration-baseline-audit.yml"
       - ".github/scripts/**"
       - "config/n60pro-1001.config"
       - "docs/audit/easymesh-patch-dependencies.csv"
