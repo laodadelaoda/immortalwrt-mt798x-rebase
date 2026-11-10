@@ -184,7 +184,7 @@ def map_preexisting_objects(preexisting,compile_commands):
   for output in outputs or []:
    if output not in by_output: missing_outputs.append(output)
    else: matched.extend(by_output[output])
-  if missing_outputs:
+  if missing_outputs and suffix==".lo":
    unmapped.append({"artifact":artifact_path,"unmatched_libtool_objects":missing_outputs})
    continue
   if matched and len(set(matched))==1:
