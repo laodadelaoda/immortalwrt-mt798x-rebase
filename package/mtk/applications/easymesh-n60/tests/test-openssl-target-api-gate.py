@@ -29,6 +29,8 @@ with tempfile.TemporaryDirectory() as d:
  summary["callsite_counts"]["total"]=0; summary["non_call_reference_counts"]["total"]=1
  report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
  assert report["complete"] and report["declarations_or_definitions"]==1
+ non[0]["reference_kind"]="CALL_EXPRESSION"
+ non[0]["reachability_status"]="ACTIVE"
  # An active API with no migration-map row must fail closed.
  report=m.evaluate(inv,call,non,summary,macros,{},policy,root,git)
  assert not report["complete"] and any("missing from the migration map" in x for x in report["failures"])
