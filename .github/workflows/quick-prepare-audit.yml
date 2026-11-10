@@ -610,6 +610,7 @@ jobs:
           }
           BUILD_DIR="$BUILD_DIR_LIST"
           python3 package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py
+          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py
           python3 package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py \
             --repo-dir "$GITHUB_WORKSPACE" --build-dir "$BUILD_DIR" \
             --cc "$TARGET_CC" --ar "$TARGET_AR" --ranlib "$TARGET_RANLIB" \
@@ -629,6 +630,8 @@ jobs:
             package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py \
             package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py \
             package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py \
+            package/mtk/applications/easymesh-n60/scripts/enforce-openssl-target-api-gate.py \
             package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py \
             package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json \
             package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv \
@@ -696,8 +699,17 @@ jobs:
             --pristine-root "${BUILD_DIR}-openssl-pristine" \
             --openssl-source "$(dirname "$OPENSSL_CONFIGURE")" \
             --policy package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json \
-            --output-dir artifacts/easymesh-openssl-api-audit \
-            --strict
+            --output-dir artifacts/easymesh-openssl-api-audit
+          python3 package/mtk/applications/easymesh-n60/scripts/enforce-openssl-target-api-gate.py \
+            --inventory artifacts/easymesh-openssl-api-audit/openssl-api-inventory.csv \
+            --callsites artifacts/easymesh-openssl-preprocessor-audit/callsite-reachability.json \
+            --noncalls artifacts/easymesh-openssl-preprocessor-audit/openssl-non-call-reference-reachability.json \
+            --summary artifacts/easymesh-openssl-preprocessor-audit/openssl-target-preprocessor-summary.json \
+            --macros artifacts/easymesh-openssl-preprocessor-audit/macro-reference-reachability.json \
+            --migration-map package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv \
+            --policy package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json \
+            --source-root "$BUILD_DIR" --repo-root "$GITHUB_WORKSPACE" \
+            --output artifacts/easymesh-openssl-api-audit/openssl-target-api-gate.json
 
       - name: Upload OpenSSL API inventory and Provider runtime evidence
         if: always()
