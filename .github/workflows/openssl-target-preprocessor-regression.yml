@@ -27,7 +27,7 @@ jobs:
       - name: Checkout audit branch
         uses: actions/checkout@v5
         with:
-          ref: \${{ github.sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
