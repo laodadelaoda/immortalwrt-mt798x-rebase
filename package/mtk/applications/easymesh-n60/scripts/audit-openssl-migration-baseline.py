@@ -19,7 +19,7 @@ def header_files(root):
     base=root/"include/openssl"
     if not base.is_dir():
         raise SystemExit("missing OpenSSL public header directory: "+str(base))
-    return sorted(base.rglob("*.h"))
+    return sorted(p for p in base.rglob("*") if p.is_file() and (p.name.endswith(".h") or p.name.endswith(".h.in")))
 
 def token_present(files, api):
     rx=re.compile(r"\b"+re.escape(api)+r"\b")
