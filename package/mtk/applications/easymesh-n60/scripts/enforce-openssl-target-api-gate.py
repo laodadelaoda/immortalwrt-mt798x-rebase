@@ -43,8 +43,11 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
     failures.append("empty or duplicate target reference key: "+repr(k)); continue
    status=row.get("reachability_status")
    if status not in REACH: failures.append("invalid target reachability status: "+repr(k))
-   source=Path(source_root)/str(row.get("path",""))
-   if not source.is_file() or sha256(source)!=row.get("source_sha256"):
+   root=Path(source_root).resolve()
+   source=(root/str(row.get("path",""))).resolve()
+   if not source.is_relative_to(root):
+    failures.append("target source path escapes the prepared component tree: "+repr(k))
+   elif not source.is_file() or sha256(source)!=row.get("source_sha256"):
     failures.append("target source SHA256 mismatch: "+repr(k))
    evidence[k]=row
 
@@ -87,6 +90,8 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
   if mr is None:
    failures.append("active deprecated API is missing from the migration map: "+api)
    continue
+  if mr.get("source_reachability_status") in {"UNREFERENCED_MACRO_DEFINITION","OPENSSL_NO_ENGINE_GUARD_REQUIRES_PREPROCESSOR"}:
+   failures.append("target preprocessor contradicts the migration map's exclusion claim: "+api)
   if mr.get("migration_status")!="APPROVED" or str(mr.get("approval","")).lower()!="true":
    failures.append("active deprecated API has no completed semantic review/approval: "+api)
    continue
