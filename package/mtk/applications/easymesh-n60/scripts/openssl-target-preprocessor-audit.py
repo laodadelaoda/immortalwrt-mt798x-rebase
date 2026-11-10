@@ -428,7 +428,7 @@ def main():
  if len(mapping)!=64 or len(mapped_api_names)!=64: raise SystemExit("migration map must contain 64 unique APIs")
  # Target evidence must cover every API deprecated by the exact pinned 3.5.9
  # public headers, not merely the 64 APIs in the 1.1.1w baseline map.
- names,depr=inv.catalog(a.openssl_source)
+ names,depr=inv.catalog(a.openssl_source_dir)
  rows=[r for r in inv.scan(build,names,depr) if r.get("deprecated_macro")]
  for row in rows: row["reference_kind"]=classify_source_reference(build,row)
  call_rows=[row for row in rows if row["reference_kind"] in ("CALL_EXPRESSION","UNKNOWN_REFERENCE_KIND")]
