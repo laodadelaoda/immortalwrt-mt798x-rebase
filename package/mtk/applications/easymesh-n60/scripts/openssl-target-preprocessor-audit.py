@@ -316,9 +316,33 @@ def audit_binary_inputs(build,out):
  rows=[]; nm_available=shutil.which("nm"); file_available=shutil.which("file"); strings_available=shutil.which("strings")
  nm_dir=out/"opaque-binary-nm"; nm_dir.mkdir(parents=True,exist_ok=True)
  for comp in COMP:
-  for p in sorted((build/comp).rglob("*")):
-   if not p.is_file() or p.suffix.lower() not in (".o",".lo",".a",".so"): continue
-   item={"component":comp,"path":str(p.relative_to(build/comp)),"sha256":sha(p)}
+  component_root=build/comp
+  candidates={}
+  for p in sorted(component_root.rglob("*")):
+   if p.is_file() and p.suffix.lower() in (".o",".lo",".a",".so"):
+    candidates[str(p.resolve())]=p
+  for lo in sorted(component_root.rglob("*.lo")):
+   for object_path in parse_libtool_objects(lo) or []:
+    obj=Path(object_path)
+    if obj.is_file() and obj.suffix.lower()==".o":
+     candidates[str(obj.resolve())]=obj
+  for _,p in sorted(candidates.items()):
+   suffix=p.suffix.lower()
+   display_path=str(p.relative_to(component_root)) if p.is_relative_to(component_root) else str(p)
+   item={"component":comp,"path":display_path,"sha256":sha(p)}
+   if suffix==".lo":
+    objects=parse_libtool_objects(p)
+    metadata_ok=bool(objects) and all(Path(x).is_file() for x in objects)
+    item["file_type"]="libtool object metadata"
+    item["file_returncode"]=0 if metadata_ok else 1
+    item["libtool_object_paths"]=objects or []
+    item["nm_returncode"]=0 if metadata_ok else 1
+    item["nm_output"]=None
+    item["openssl_undefined_symbols"]=[]
+    item["strings_returncode"]=0 if metadata_ok else 1
+    item["openssl_string_hits"]=[]
+    rows.append(item)
+    continue
    if file_available:
     f=subprocess.run([file_available,"-b",str(p)],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     item["file_type"]=f.stdout.strip(); item["file_returncode"]=f.returncode
@@ -336,9 +360,9 @@ def audit_binary_inputs(build,out):
     item["openssl_undefined_symbols"]=sorted(set(symbols))
    else: item["nm_returncode"]=127; item["openssl_undefined_symbols"]=[]
    if strings_available:
-    s=subprocess.run([strings_available,str(p)],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    hits=[line for line in s.stdout.splitlines() if re.search(r"libcrypto(\.so)?|libssl(\.so)?|OPENSSL_|EVP_|EC_KEY|ENGINE_|HMAC_|CMAC_|AES_|DES_|RSA_|DH_",line)]
-    item["strings_returncode"]=s.returncode; item["openssl_string_hits"]=hits[:100]
+    st=subprocess.run([strings_available,str(p)],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    hits=[line for line in st.stdout.splitlines() if re.search(r"libcrypto(\.so)?|libssl(\.so)?|OPENSSL_|EVP_|EC_KEY|ENGINE_|HMAC_|CMAC_|AES_|DES_|RSA_|DH_",line)]
+    item["strings_returncode"]=st.returncode; item["openssl_string_hits"]=hits[:100]
    else: item["strings_returncode"]=127; item["openssl_string_hits"]=[]
    rows.append(item)
  complete=all(x.get("nm_returncode")==0 and x.get("file_returncode")==0 and x.get("strings_returncode")==0 for x in rows) if rows else True
