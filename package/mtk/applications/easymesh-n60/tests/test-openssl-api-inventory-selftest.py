@@ -29,11 +29,35 @@ with tempfile.TemporaryDirectory() as d:
  (h/"opensslv.h.in").write_text("/* OpenSSL version template */\n")
  repo=Path(d)/"repo"; (repo/"package/libs/openssl").mkdir(parents=True)
  tests=repo/"package/mtk/applications/easymesh-n60/tests"; tests.mkdir(parents=True)
+ scripts=repo/"package/mtk/applications/easymesh-n60/scripts"; scripts.mkdir(parents=True)
  from_hash="a"*64; to_hash="b"*64
  (repo/"package/libs/openssl/Makefile").write_text("PKG_VERSION:=3.5.9\nPKG_HASH:="+to_hash+"\n")
- lock={"schema_version":1,"from":{"version":"1.1.1w","sha256":from_hash},"to":{"version":"3.5.9","sha256":to_hash}}
- (tests/"openssl-migration-baseline.lock.json").write_text(__import__("json").dumps(lock))
+ lock={"schema_version":1,"baseline_id":"openssl-1.1.1w-to-3.5.9","from":{"version":"1.1.1w","sha256":from_hash},"to":{"version":"3.5.9","sha256":to_hash}}
+ lock_path=tests/"openssl-migration-baseline.lock.json"
+ lock_path.write_text(__import__("json").dumps(lock))
+ input_paths={
+  "migration_lock":lock_path,
+  "migration_map":tests/"openssl-111-to-359-migration-map.csv",
+  "openssl_package_makefile":repo/"package/libs/openssl/Makefile",
+  "api_inventory_script":tests/"test-openssl-api-inventory.py",
+  "api_inventory_selftest":tests/"test-openssl-api-inventory-selftest.py",
+  "baseline_auditor_script":scripts/"audit-openssl-migration-baseline.py",
+  "baseline_auditor_selftest":tests/"test-openssl-migration-baseline-selftest.py",
+  "api_policy":tests/"openssl-api-policy.json"
+ }
+ for key,path in input_paths.items():
+  if key not in {"migration_lock","openssl_package_makefile"}: path.write_text("fixture:"+key+"\n")
+ att={
+  "schema_version":1,"status":"VERIFIED","baseline_id":lock["baseline_id"],
+  "run":{"id":1,"attempt":1,"git_sha":"c"*40},
+  "artifact":{"id":1,"sha256":"d"*64},
+  "source":{"archive_sha256":{"1.1.1w":from_hash,"3.5.9":to_hash}},
+  "results":{"failures":[],"migration_map_rows":64,"migration_map_apis_present_in_1_1_1w":64,"migration_map_apis_deprecated_in_3_5_9":64},
+  "input_sha256":{key:m.sha256_file(path) for key,path in input_paths.items()}
+ }
+ (tests/"openssl-migration-baseline.attestation.json").write_text(__import__("json").dumps(att))
  assert m.validate_openssl_source(Path(d),repo)=="3.5.9"
+
  (h/"opensslv.h").write_text("# define OPENSSL_VERSION_MAJOR 3\n# define OPENSSL_VERSION_MINOR 5\n# define OPENSSL_VERSION_PATCH 9\n")
  assert m.validate_openssl_source(Path(d),repo)=="3.5.9"
  (h/"evp.h").write_text("int EVP_sha256(void);\nint (*openssl_callback)(void);\nOSSL_DEPRECATEDIN_3_0 const EC_KEY *EVP_PKEY_get0_EC_KEY(const EVP_PKEY *pkey);\n")
