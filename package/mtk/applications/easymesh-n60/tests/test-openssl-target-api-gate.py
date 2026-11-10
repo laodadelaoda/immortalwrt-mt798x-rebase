@@ -47,5 +47,8 @@ with tempfile.TemporaryDirectory() as d:
  migration={"EVP_PKEY_cmp":{"migration_status":"APPROVED","approval":"true"}}
  policy={"api_rules":{"EVP_PKEY_cmp":{"status":"DIRECT_REPLACEMENT","reason":"Use EVP_PKEY_eq after confirming public-key equality semantics.","approved":True}}}
  report=m.evaluate(inv,call,non,summary,macros,migration,policy,root,git)
+ assert not report["complete"] and any("still active" in x for x in report["failures"])
+ policy={"api_rules":{"EVP_PKEY_cmp":{"status":"LEGACY_RETAINED","reason":"Retained temporarily for interoperability with the existing vendor protocol implementation; replacement requires end-to-end key equality regression evidence.","approved":True}}}
+ report=m.evaluate(inv,call,non,summary,macros,migration,policy,root,git)
  assert report["complete"],report["failures"]
 print("PASS: exact target reachability excludes inactive APIs and declarations; active, unknown, missing, stale and unapproved cases are handled fail-closed.")
