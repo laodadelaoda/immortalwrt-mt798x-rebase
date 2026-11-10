@@ -13,6 +13,17 @@ MASK=re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'',re.
 DECL=re.compile(r"\b([A-Za-z_]\w*)\s*\([^;{}]*\)\s*;",re.S)
 DEPR=re.compile(r"(OSSL_DEPRECATEDIN_[A-Za-z0-9_]+)[\s\S]{0,700}?;",re.S)
 def clean(s): return MASK.sub(lambda m:"".join("\n" if c=="\n" else " " for c in m.group()),s)
+def mask_define_directives(s):
+ lines=s.splitlines(keepends=True); out=[]; i=0
+ while i<len(lines):
+  if re.match(r"^[ \\t]*#[ \\t]*define\\b",lines[i]):
+   cont=True
+   while cont and i<len(lines):
+    line=lines[i]; out.append(re.sub(r"[^\\n]"," ",line))
+    cont=line.rstrip("\\r\\n").endswith("\\\\"); i+=1
+  else:
+   out.append(lines[i]); i+=1
+ return "".join(out)
 def validate_openssl_source(root,repo_root):
  inc=root/"include/openssl"
  # The release archive contains a Perl template, not numeric version macros.
@@ -40,7 +51,7 @@ def catalog(root):
  if not names: raise ValueError("no public API declarations parsed")
  return names,deprecated
 def scan_text(text,names,depr,component,path):
- s=clean(text); alt="|".join(re.escape(x) for x in sorted(names,key=lambda x:(-len(x),x)))
+ s=mask_define_directives(clean(text)); alt="|".join(re.escape(x) for x in sorted(names,key=lambda x:(-len(x),x)))
  rx=re.compile(r"\b("+alt+r")\s*\("); rows=[]
  for m in rx.finditer(s):
   api=m.group(1); rows.append({"component":component,"path":path,"line":s.count("\n",0,m.start())+1,
@@ -54,6 +65,51 @@ def scan(root,names,depr):
   for p in sorted(x for x in base.rglob("*") if x.is_file() and x.suffix in EXT):
    rows.extend(scan_text(p.read_text(encoding="utf-8",errors="replace"),names,depr,comp,p.relative_to(root).as_posix()))
  return rows
+def scan_macro_references(root,names,depr):
+ defs={}; code_parts=[]
+ for comp in COMP:
+  base=root/comp
+  for p in sorted(x for x in base.rglob("*") if x.is_file() and x.suffix in EXT):
+   text=clean(p.read_text(encoding="utf-8",errors="replace"))
+   lines=text.splitlines(keepends=True); code=[]; i=0
+   while i<len(lines):
+    line=lines[i]; m=re.match(r"^[ \\t]*#[ \\t]*define[ \\t]+([A-Za-z_]\\w*)",line)
+    if not m:
+     code.append(line); i+=1; continue
+    name=m.group(1); rest=line[m.end():]; function_like=rest.startswith("(")
+    body=rest; start=i+1; cont=line.rstrip("\\r\\n").endswith("\\\\")
+    code.append(re.sub(r"[^\\n]"," ",line))
+    i+=1
+    while cont and i<len(lines):
+     part=lines[i]; body+=part; cont=part.rstrip("\\r\\n").endswith("\\\\")
+     code.append(re.sub(r"[^\\n]"," ",part)); i+=1
+    defs.setdefault(name,[]).append({"component":comp,"path":p.relative_to(root).as_posix(),"line":start,"body":body,"function_like":function_like})
+   code_parts.append("".join(code))
+ macro_names=set(defs); edges={name:set() for name in macro_names}; roots=set()
+ code_text="\\n".join(code_parts)
+ for name,items in defs.items():
+  if any(x["function_like"] for x in items):
+   if re.search(r"\\b"+re.escape(name)+r"\\s*\\(",code_text): roots.add(name)
+  elif re.search(r"\\b"+re.escape(name)+r"\\b",code_text):
+   roots.add(name)
+  body="\\n".join(x["body"] for x in items)
+  for other in macro_names:
+   if other!=name and re.search(r"\\b"+re.escape(other)+r"\\s*(?:\\(|\\b)",body):
+    edges[name].add(other)
+ reachable=set(); todo=list(roots)
+ while todo:
+  name=todo.pop()
+  if name in reachable: continue
+  reachable.add(name); todo.extend(edges.get(name,()))
+ out=[]
+ for name,items in defs.items():
+  for item in items:
+   body=item["body"]
+   for api in names:
+    if api not in depr or not re.search(r"\\b"+re.escape(api)+r"\\b",body): continue
+    state="ACTIVE_MACRO_EXPANSION_REQUIRES_CPP" if name in reachable else "UNREFERENCED_MACRO_DEFINITION"
+    out.append({"component":item["component"],"path":item["path"],"line":item["line"],"macro":name,"api":api,"reachability":state})
+ return out
 def const_audit(root):
  out=[]
  mutable=re.compile(r"(?m)^[ \t]*(?!const\b)(?:static[ \t]+)?EC_KEY\s*\*\s*(\w+)\s*=\s*(?:\(\s*EC_KEY\s*\*\s*\)\s*)?EVP_PKEY_get0_EC_KEY\s*\(")
@@ -93,8 +149,10 @@ def main():
    if not mr["proposed_replacement"].strip() or not mr["semantic_review_requirements"].strip(): ap.error("incomplete migration research fields for "+api)
    if mr["approval"].lower() not in {"true","false"}: ap.error("invalid approval value for "+api)
    migration_map[api]=mr
- names,depr=catalog(a.openssl_source); rows=scan(a.source_root,names,depr); before=scan(a.pristine_root,names,depr); const=const_audit(a.source_root)
+ names,depr=catalog(a.openssl_source); rows=scan(a.source_root,names,depr); before=scan(a.pristine_root,names,depr); macro_refs=scan_macro_references(a.source_root,names,depr); const=const_audit(a.source_root)
  failures=[]; inventory=[]
+ for mr in macro_refs:
+  if mr["reachability"]=="ACTIVE_MACRO_EXPANSION_REQUIRES_CPP": failures.append("deprecated API is referenced by an active macro expansion; require preprocessor evidence: "+mr["api"]+" via "+mr["macro"]+" at "+mr["path"]+":"+str(mr["line"]))
  for api,mr in migration_map.items():
   if api not in depr: failures.append("migration map API is not deprecated in pinned OpenSSL 3.5.9 headers: "+api)
   if mr["migration_status"]=="APPROVED" and mr["approval"].lower()!="true": failures.append("migration map approval/status mismatch: "+api)
@@ -125,7 +183,8 @@ def main():
  csvout(a.output_dir/"openssl-api-inventory.csv",inventory,["component","path","line","api","deprecated_macro","classification","policy_reason"])
  csvout(a.output_dir/"openssl-api-delta.csv",delta,["api","pristine_calls","prepared_calls","delta","deprecated"])
  csvout(a.output_dir/"openssl-const-correctness.csv",const,["component","path","line","kind"])
- summary={"openssl_version":"3.5.9","components":COMP,"prepared_calls":len(rows),"pristine_calls":len(before),"header_apis":len(names),"deprecated_apis":len(depr),"migration_map_rows":len(migration_map),"migration_map_unreviewed":sum(1 for x in migration_map.values() if x["migration_status"]!="APPROVED" or x["approval"].lower()!="true"),"const_findings":const,"failures":failures,"limitations":["lexical inventory, not Clang AST/type analysis","macro-generated and indirect function-pointer calls require compiler evidence"]}
+ csvout(a.output_dir/"openssl-api-macro-references.csv",macro_refs,["component","path","line","macro","api","reachability"])
+ summary={"openssl_version":"3.5.9","components":COMP,"prepared_calls":len(rows),"pristine_calls":len(before),"header_apis":len(names),"deprecated_apis":len(depr),"migration_map_rows":len(migration_map),"migration_map_unreviewed":sum(1 for x in migration_map.values() if x["migration_status"]!="APPROVED" or x["approval"].lower()!="true"),"macro_definition_references":len(macro_refs),"macro_definition_unreferenced":sum(1 for x in macro_refs if x["reachability"]=="UNREFERENCED_MACRO_DEFINITION"),"macro_definition_active":sum(1 for x in macro_refs if x["reachability"]=="ACTIVE_MACRO_EXPANSION_REQUIRES_CPP"),"const_findings":const,"failures":failures,"limitations":["lexical inventory, not Clang AST/type analysis","macro reachability is a conservative lexical graph; active macro expansions require target preprocessor evidence","indirect function-pointer calls require compiler evidence"]}
  (a.output_dir/"openssl-api-audit.json").write_text(json.dumps(summary,indent=2)+"\n")
  (a.output_dir/"openssl-api-audit.txt").write_text("\n".join([f"prepared calls: {len(rows)}",f"pristine calls: {len(before)}",f"strict failures: {len(failures)}"]+["FAIL: "+x for x in failures])+"\n")
  print("OpenSSL API inventory: prepared=%d pristine=%d failures=%d"%(len(rows),len(before),len(failures)))
