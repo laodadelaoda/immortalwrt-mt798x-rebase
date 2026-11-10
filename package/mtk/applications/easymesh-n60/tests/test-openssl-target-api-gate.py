@@ -8,7 +8,7 @@ with tempfile.TemporaryDirectory() as d:
  root=Path(d); src=root/"wappd"/"x.c"; src.parent.mkdir(); src.write_text("EVP_PKEY_cmp(a,b);\n")
  digest=m.sha256(src); git="a"*40
  inv=[{"component":"wappd","path":"wappd/x.c","line":"1","api":"EVP_PKEY_cmp","deprecated_macro":"OSSL_DEPRECATEDIN_3_0"}]
- call=[{"component":"wappd","path":"wappd/x.c","line":1,"api":"EVP_PKEY_cmp","reference_kind":"CALL_EXPRESSION","reachability_status":"ACTIVE","source_sha256":digest}]
+ call=[{"component":"wappd","path":"wappd/x.c","line":1,"api":"EVP_PKEY_cmp","reference_kind":"CALL_EXPRESSION","reachability_status":"ACTIVE","source_sha256":digest,"conditional_branch_path":[]}]
  non=[]; macros=[]
  summary={"git_sha":git,"firmware_compile_invoked":False,"complete":True,"source_reachability_complete":True,
   "callsite_counts":{"total":1,"UNKNOWN_FAIL_CLOSED":0},
