@@ -108,6 +108,8 @@ def main():
             "migration_status":item["migration_status"],
             "approval":item["approval"],
             "candidate_replacement":item["proposed_replacement"],
+            "official_mapping_kind":item["official_mapping_kind"],
+            "official_mapping_section":item["official_mapping_section"],
             "official_target_manual_url":item["official_target_manual_url"],
             "semantic_review_requirements":item["semantic_review_requirements"]
         })
