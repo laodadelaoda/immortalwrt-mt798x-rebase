@@ -55,4 +55,22 @@ with tempfile.TemporaryDirectory() as d:
  assert specs["1905daemon"][1]["env"]["EXTRA_CFLAGS"].endswith("-DCONFIG_SUPPORT_OPENWRT")
  assert specs["mapd"][0]["env"]["EXTRA_CFLAGS"].endswith("-DCONFIG_SUPPORT_OPENWRT")
  assert not any(x.startswith("EXTRA_CFLAGS=") for x in specs["mapd"][0]["argv"])
+ build=root/"build"
+ linux_rel=m.os.path.relpath(args.linux,root); staging=str(args.staging)
+ recipe_lines=[
+  f"-C {build}/libmapd",f'CFLAGS="{args.cppflags} {args.cflags} -Werror -g"',
+  f'LDFLAGS="{args.ldflags}"',f"-C {build}/wappd",
+  f'UAPD_INCLUDE_PATH="{args.linux}/include/uapi/linux/wapp -I{staging}/usr/include"',
+  f'EXTRA_CFLAGS="{args.cppflags} {args.cflags} -Wno-error=deprecated-declarations -I{args.linux}/include/uapi/linux/wapp"',
+  f'LDFLAGS="{args.ldflags} -L{staging}/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto"',
+  f"-C {build}/1905daemon",f'LINUXDIR="{linux_rel}"',f'STAGING_DIR="{staging}"',
+  f'LDFLAGS="{args.ldflags} -L{staging}/usr/lib -Wl,--no-as-needed -lpthread -lnl-tiny -lssl -lcrypto"',
+  f"-C {build}/mapd",'EXTRA_CFLAGS="$OPENWRT_EASYMESH_CFLAGS"',
+  'OPENWRT_EASYMESH_CFLAGS="$TARGET_EASYMESH_CFLAGS -DCONFIG_SUPPORT_OPENWRT"',
+  f'LDFLAGS="{args.ldflags} -L{staging}/usr/lib"',
+  "CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y","MAP_R3_SUPPORT=y","SWTICH_DSA_ARCH=y","version mapd",
+  *(f'CC="{args.cc}"' for _ in range(4)),f'AR="{args.ar}"',f'RANLIB="{args.ranlib}"'
+ ]
+ recipe=root/"Build-Compile.expanded.txt"; recipe.write_text("\\n".join(recipe_lines),encoding="utf-8")
+ assert m.validate_compile_recipe(recipe,root,build,args)==m.sha(recipe)
 print("PASS: conditional branches, source mapping, preprocess-only argv, exact component flags and safe 1905 sub-build enumeration.")
