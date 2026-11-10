@@ -50,6 +50,11 @@ with tempfile.TemporaryDirectory() as d:
  assert m.classify_reference_text("static void HMAC_CTX_free(HMAC_CTX *ctx)\\n{\\n}", "HMAC_CTX_free",1)=="DECLARATION_OR_DEFINITION"
  assert m.classify_reference_text("ctx = HMAC_CTX_new();\\n", "HMAC_CTX_new",1)=="CALL_EXPRESSION"
  assert m.classify_reference_text("if (ENGINE_by_id(name)) return 1;\\n", "ENGINE_by_id",1)=="CALL_EXPRESSION"
+ source=root/"active.c"; source.write_text("line1\\nEVP_PKEY_eq(a,b);\\n#if 0\\nENGINE_by_id(name);\\n#endif\\n",encoding="utf-8")
+ preprocessed=root/"active.i"; preprocessed.write_text(f'# 2 "{source}"\\nEVP_PKEY_eq(a,b);\\n',encoding="utf-8")
+ phits,pemitted=m.pp_hits(preprocessed,root,{"EVP_PKEY_eq","ENGINE_by_id"})
+ assert (str(source.resolve()),2,"EVP_PKEY_eq") in phits
+ assert (str(source.resolve()),2) in pemitted and (str(source.resolve()),4) not in pemitted
  specs=m.make_specs(root,root/"build",args)
  assert len(specs["1905daemon"])==3
  main_1905=specs["1905daemon"][0]["argv"]
