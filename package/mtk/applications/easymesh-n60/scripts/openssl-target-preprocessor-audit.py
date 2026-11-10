@@ -77,7 +77,7 @@ def parse_commands(log,base,compiler):
   if "cd" in ts and "&&" in ts:
    i=ts.index("cd")
    if i+2<len(ts):
-    cwd=Path(ts[i+1]); cwd=cwd if cwd.is_absolute() else cwd/dirs[-1]
+    cwd=Path(ts[i+1]); cwd=cwd if cwd.is_absolute() else dirs[-1]/cwd
     ts=ts[i+3:]
   ci=next((i for i,t in enumerate(ts) if Path(t).name==compiler),None)
   if ci is None or "-c" not in ts[ci:]: continue
