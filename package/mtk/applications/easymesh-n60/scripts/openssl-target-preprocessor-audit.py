@@ -53,6 +53,34 @@ def inventory_module(repo):
  s=importlib.util.spec_from_file_location("openssl_inventory",p)
  m=importlib.util.module_from_spec(s); s.loader.exec_module(m); return m
 
+def classify_reference_text(text,api,line_number):
+ lines=text.splitlines(keepends=True)
+ if line_number<1 or line_number>len(lines): return "UNKNOWN_REFERENCE_KIND"
+ line=lines[line_number-1]; pos=line.find(api)
+ if pos<0: return "UNKNOWN_REFERENCE_KIND"
+ start=sum(len(x) for x in lines[:line_number-1])+pos
+ boundary=max(text.rfind(";",0,start),text.rfind("{",0,start),text.rfind("}",0,start))
+ prefix=text[boundary+1:start]
+ prefix=re.sub(r"(?m)^\s*#.*$"," ",prefix)
+ if not prefix.strip(): return "CALL_EXPRESSION"
+ if re.search(r"[=(),?:.]|->|&&|\|\||\b(return|if|while|for|switch|case|goto|sizeof)\b",prefix):
+  return "CALL_EXPRESSION"
+ if not re.fullmatch(r"[\w\s*&]+",prefix): return "CALL_EXPRESSION"
+ tokens=re.findall(r"[A-Za-z_]\w*|\*|&",prefix)
+ type_words={"void","int","char","short","long","signed","unsigned","float","double","size_t","ssize_t","bool",
+  "BIGNUM","EC_KEY","DH","RSA","DSA","EVP_PKEY","EVP_MD_CTX","EVP_CIPHER_CTX","HMAC_CTX","CMAC_CTX",
+  "ENGINE","BIO","SSL","X509","OSSL_PARAM","const","volatile","struct","enum"}
+ if tokens and (tokens[-1] in ("*","&") or tokens[-1] in type_words or
+    any(x in ("static","extern","inline","OSSL_DEPRECATEDIN_3_0","OSSL_DEPRECATEDIN_1_1_0") for x in tokens)):
+  return "DECLARATION_OR_DEFINITION"
+ return "CALL_EXPRESSION"
+
+def classify_source_reference(build,row):
+ path=build/row["path"]
+ try: source=inv.mask_define_directives(inv.clean(path.read_text(encoding="utf-8",errors="replace")))
+ except OSError: return "UNKNOWN_REFERENCE_KIND"
+ return classify_reference_text(source,row["api"],row["line"])
+
 def make_specs(repo,build,a):
  cpp,cflags,ld=a.cppflags,a.cflags,a.ldflags
  easy=f"{cpp} {cflags} -Wno-error=deprecated-declarations -DCONFIG_SUPPORT_OPENWRT"
@@ -286,6 +314,9 @@ def main():
  names={x["api"] for x in mapping}
  if len(mapping)!=64 or len(names)!=64: raise SystemExit("migration map must contain 64 unique APIs")
  rows=[r for r in inv.scan(build,names,{x:"OSSL_DEPRECATED" for x in names}) if r.get("deprecated_macro")]
+ for row in rows: row["reference_kind"]=classify_source_reference(build,row)
+ call_rows=[row for row in rows if row["reference_kind"] in ("CALL_EXPRESSION","UNKNOWN_REFERENCE_KIND")]
+ non_call_rows=[row for row in rows if row["reference_kind"]=="DECLARATION_OR_DEFINITION"]
  branches={}
  for r in rows:
   p=build/r["path"]
@@ -295,7 +326,7 @@ def main():
  (build/"1905daemon"/"obj").mkdir(parents=True,exist_ok=True)
  specs=make_specs(repo,build,a); results={}; hits=set(); filehits=set(); api_hits_by_component={x:set() for x in COMP}
  macro_refs=inv.scan_macro_references(build,names,{x:"OSSL_DEPRECATED" for x in names})
- source_calls_by_component={x:sum(1 for row in rows if row["component"]==x) for x in COMP}
+ source_calls_by_component={x:sum(1 for row in call_rows if row["component"]==x) for x in COMP}
  macro_refs_by_component={x:sum(1 for item in macro_refs if item["component"]==x) for x in COMP}
  for comp in COMP:
   tus=[]; pp_errors=[]; parse_errors=[]; logs=[]; compile_commands=[]; run_codes=[]
@@ -328,7 +359,12 @@ def main():
    if pp.returncode==0 and dest.is_file() and mp.returncode==0 and macrofile.is_file():
     item["preprocessed_sha256"]=sha(dest); item["macro_snapshot_sha256"]=sha(macrofile)
     item["target_macro_snapshot"]=macro_snapshot(macrofile)
-    h,fh=pp_hits(dest,cmd["cwd"],names); hits.update(h); filehits.update(fh); api_hits_by_component[comp].update(x[2] for x in h)
+    h,fh=pp_hits(dest,cmd["cwd"],names); hits.update(h); filehits.update(fh)
+    source_root=(build/comp).resolve()
+    for hit in h:
+     try: Path(hit[0]).resolve().relative_to(source_root)
+     except ValueError: continue
+     api_hits_by_component[comp].add(hit[2])
    else: pp_errors.append(item)
    tus.append(item)
   make_ok=all(code==0 for code in run_codes)
@@ -352,7 +388,7 @@ def main():
   macro_rows.append({**item,"reachability_status":state,
     "reason":"complete target preprocessing contains no active expression for this API in the component" if state=="EXCLUDED_WITH_EVIDENCE" else "API is present in preprocessed component output; macro expansion cannot be attributed conclusively; fail closed"})
  callsites=[]; counts={"ACTIVE":0,"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
- for r in rows:
+ for r in call_rows:
   src=canon(build/r["path"],repo); key=(src,r["line"],r["api"])
   if key in hits: state="ACTIVE"
   elif (src,r["api"]) in filehits: state="UNKNOWN_FAIL_CLOSED"
