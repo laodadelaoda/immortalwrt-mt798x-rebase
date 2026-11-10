@@ -142,9 +142,18 @@ with tempfile.TemporaryDirectory() as d:
   binary_build=root/"binary-build"; (binary_build/"wappd").mkdir(parents=True)
   (binary_build/"wappd"/"libsample.a").write_bytes(b"archive")
   (binary_build/"wappd"/"libsample.so").write_bytes(b"shared")
+  (binary_build/"wappd"/".libs").mkdir()
+  (binary_build/"wappd"/".libs"/"libsample.o").write_bytes(b"object")
+  (binary_build/"wappd"/"libsample.lo").write_text("# libtool object file\npic_object='.libs/libsample.o'\nnon_pic_object='none'\n")
   binary_rows,binary_ok,openssl_refs=m.audit_binary_inputs(binary_build,root/"binary-audit")
   assert binary_ok and openssl_refs
-  assert {Path(x["path"]).suffix for x in binary_rows}=={".a",".so"}
+  assert {Path(x["path"]).suffix for x in binary_rows}=={".a",".so",".lo",".o"}
+  lo_row=next(x for x in binary_rows if Path(x["path"]).suffix==".lo")
+  assert lo_row["file_type"]=="libtool object metadata" and lo_row["file_returncode"]==0
+  invalid_build=root/"invalid-binary-build"; (invalid_build/"wappd").mkdir(parents=True)
+  (invalid_build/"wappd"/"broken.lo").write_text("# libtool object file\npic_object='.libs/missing.o'\nnon_pic_object='none'\n")
+  invalid_rows,invalid_ok,_=m.audit_binary_inputs(invalid_build,root/"invalid-binary-audit")
+  assert not invalid_ok and next(x for x in invalid_rows if x["path"].endswith(".lo"))["file_returncode"]!=0
  finally:
   os.environ["PATH"]=old_path
 
