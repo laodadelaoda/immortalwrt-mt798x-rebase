@@ -499,17 +499,17 @@ jobs:
           done <<< "$OPENSSL_VARS_OUTPUT"
           [[ -n "$PKG_SOURCE" && -n "$PKG_SOURCE_URL" && "$PKG_HASH" =~ ^[0-9a-f]{64}$ && -n "$PKG_BUILD_DIR" && -n "$PATCH_DIR" && -n "$OPENSSL_OPTIONS" ]] || {
             echo "::error::OpenSSL package Make-expanded source/lock/patch/options variables are incomplete."
-            printf '%s\\n' "$OPENSSL_VARS_OUTPUT"
+            printf '%s\n' "$OPENSSL_VARS_OUTPUT"
             exit 1
           }
           OPENSSL_SOURCE="$(realpath "$PKG_BUILD_DIR")"
           if [[ "$PATCH_DIR" = /* ]]; then OPENSSL_PATCH_DIR="$(realpath "$PATCH_DIR")"; else OPENSSL_PATCH_DIR="$(realpath "package/libs/openssl/$PATCH_DIR")"; fi
           test -f "$OPENSSL_SOURCE/Configure"
-          test -f "$OPENSSL_PATCH_DIR"
+          test -d "$OPENSSL_PATCH_DIR"
           PATCH_COUNT="$(find "$OPENSSL_PATCH_DIR" -type f -name '*.patch' | wc -l)"
           [[ "$PATCH_COUNT" -gt 0 ]] || { echo "::error::Expanded OpenSSL PATCH_DIR has no patch files."; exit 1; }
           {
-            printf 'PKG_SOURCE=%s\\nPKG_SOURCE_URL=%s\\nPKG_HASH=%s\\nPKG_BUILD_DIR=%s\\nPATCH_DIR=%s\\nOPENSSL_OPTIONS=%s\\n' \
+            printf 'PKG_SOURCE=%s\nPKG_SOURCE_URL=%s\nPKG_HASH=%s\nPKG_BUILD_DIR=%s\nPATCH_DIR=%s\nOPENSSL_OPTIONS=%s\n' \
               "$PKG_SOURCE" "$PKG_SOURCE_URL" "$PKG_HASH" "$OPENSSL_SOURCE" "$OPENSSL_PATCH_DIR" "$OPENSSL_OPTIONS"
             echo "patch_count=$PATCH_COUNT"
             find "$OPENSSL_PATCH_DIR" -type f -name '*.patch' -print0 | sort -z | xargs -0 sha256sum
