@@ -257,3 +257,31 @@ The first CI evidence bundle must show:
 5. ENGINE, old-version compatibility, BoringSSL, Windows, SuiteB, CMAC, ECC and FIPS states are visible in the actual per-translation-unit macro snapshots.
 
 A successful reachability audit still does **not** approve any API migration. Only after it passes will API families be reviewed against the official OpenSSL 1.1.1w/3.5.9 behavior and differential semantic tests. No supplier source has been modified by this implementation.
+
+
+## Source-reference false-positive review and safe Make enumeration
+
+The project Library `dl-release.zip` source bundle was inspected against `package/mtk/vendor-sources.lock.json`. The WAPP, MAPD, 1905daemon and libmapd archive SHA256 values match the canonical lock:
+- WAPP: `73fa8995533e701d3d5774faa92d274497f99e1a37c81ce445f25a959b4b7462`
+- MAPD: `39ab37cb347d372e352ade03181bc9c23429d4d849d32acbdff00973547d7e18`
+- 1905daemon: `82f7cc4ad5731e750f87c9a4ad19a39d2456bb8fec0cf79bf4b3f3ccb4f14795`
+- libmapd: `d325b4a8dc2bf44bd3bd639a0c300380c0a6240f407807f8f2eea80d006c8dba`
+
+A second pass over the Run 42731708257 callsite-context artifact found that five of the 424 lexical deprecated-name references are local function definitions, not API invocations:
+- WAPP `crypto/crypto_openssl.c`: local `HMAC_CTX_new` and `HMAC_CTX_free` definitions;
+- 1905daemon `src/crypto/crypto_openssl.c`: local `HMAC_CTX_new` and `HMAC_CTX_free` definitions;
+- 1905daemon `src/crypto/tls_openssl.c`: local `RSA_bits` definition.
+
+The corrected source-level split is 419 call expressions plus 5 declaration/definition references. The five non-call references remain in a separate reachability ledger; they are not silently discarded. In particular, the HMAC wrappers are old-OpenSSL compatibility definitions, while the SuiteB `RSA_bits` call is a separate source callsite whose target reachability must still be established. The target audit now classifies declarations/definitions separately and keeps ambiguous reference kinds fail-closed. The original lexical inventory remains unchanged for provenance.
+
+The vendor Makefiles were inspected before choosing dry-run targets:
+- WAPP's `all` target builds its source objects; the recursive `romfs` path is not invoked.
+- libmapd's `all` target has no clean prerequisite or recursive clean recipe.
+- 1905daemon's `eth_ops_lib` target contains a recursive `$(MAKE) clean` followed by a literal `make -C ethernet`. A naïve `make -n all` would execute the recursive clean and would not enumerate the literal child build. The audit therefore marks `eth_ops_lib` old with `-o eth_ops_lib`, then dry-runs the Ethernet and libbridge Makefiles separately with the same target variables and environment.
+- MAPD's top-level `all` target depends on `clean`; the audit does not invoke `all`. It uses the package's actual `version mapd` targets, with the version-generation step separately checked to contain no compiler command before it is run.
+
+The locked MAPD archive contains 7 prebuilt AArch64 relocatable `.o` files and 4 static `.a` archives linked by the MAPD Makefile. They have no corresponding C source files in the archive. The target audit inventories and hashes these opaque inputs and scans undefined symbols plus printable strings for OpenSSL references. This is a binary ABI check, not a source audit; absence of OpenSSL symbols does not prove absence of statically embedded code or `dlsym` use. Any OpenSSL symbol/string hit or symbol-tool failure keeps the overall audit closed.
+
+The expanded OpenWrt `Build/Compile` recipe is now exported as data through GNU Make's `file()` function (the dump target executes only `true`), then checked against the captured `TARGET_CC`, `TARGET_AR`, `TARGET_RANLIB`, CPP/C/link flags, UAPI include path, staging paths and component sub-build arguments. The audit never dry-runs the package-level compound `Build/Compile` shell recipe: because it contains recursive `$(MAKE)`, GNU Make's `-n` can execute such a whole recipe line. Component-only dry-runs are used instead, with the 1905 clean target suppressed and its literal child Makefiles enumerated separately.
+
+No EasyMesh component compiler or firmware compiler is invoked by this audit. The enclosing Prepare workflow still installs the target toolchain and builds the prerequisite development packages; that work is explicitly recorded separately from firmware/component compilation.
