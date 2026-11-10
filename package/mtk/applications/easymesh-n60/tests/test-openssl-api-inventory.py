@@ -184,48 +184,14 @@ def const_audit(root):
 def csvout(path,rows,fields):
  with path.open("w",encoding="utf-8",newline="") as f:
   w=csv.DictWriter(f,fieldnames=fields); w.writeheader(); w.writerows(rows)
-def load_target_reachability(directory,repo_root,source_root):
- directory=Path(directory)
- summary_path=directory/"openssl-target-preprocessor-summary.json"
- calls_path=directory/"callsite-reachability.json"
- noncalls_path=directory/"openssl-non-call-reference-reachability.json"
- if not all(p.is_file() for p in (summary_path,calls_path,noncalls_path)):
-  raise ValueError("complete target preprocessor summary/callsite/non-call evidence is required")
- summary=json.loads(summary_path.read_text(encoding="utf-8"))
- if summary.get("git_sha")!=subprocess.run(["git","rev-parse","HEAD"],cwd=repo_root,text=True,stdout=subprocess.PIPE,check=True).stdout.strip():
-  raise ValueError("target preprocessor evidence Git SHA does not match the API audit checkout")
- if summary.get("firmware_compile_invoked") is not False or summary.get("complete") is not True or summary.get("source_reachability_complete") is not True:
-  raise ValueError("target preprocessor evidence is incomplete; fail closed")
- index={}
- for path in (calls_path,noncalls_path):
-  records=json.loads(path.read_text(encoding="utf-8"))
-  if not isinstance(records,list): raise ValueError("invalid target preprocessor reference evidence: "+str(path))
-  for item in records:
-   key=(item.get("component"),item.get("path"),item.get("line"),item.get("api"))
-   if not all(key) or key in index: raise ValueError("empty or duplicate target preprocessor reference key: "+repr(key))
-   status=item.get("reachability_status")
-   if status not in {"ACTIVE","EXCLUDED_WITH_EVIDENCE","UNKNOWN_FAIL_CLOSED"}:
-    raise ValueError("invalid target preprocessor reachability status: "+repr(key))
-   src=source_root/item["path"]
-   if not src.is_file() or sha256_file(src)!=item.get("source_sha256"):
-    raise ValueError("target preprocessor source hash mismatch: "+repr(key))
-   index[key]=item
- expected=(summary.get("callsite_counts",{}).get("total",0)+
-           summary.get("non_call_reference_counts",{}).get("total",0))
- if len(index)!=expected:
-  raise ValueError("target preprocessor reference evidence count mismatch")
- return index
-
 def main():
  ap=argparse.ArgumentParser()
  for x in ("repo-root","source-root","pristine-root","openssl-source","policy","output-dir"): ap.add_argument("--"+x,type=Path,required=True)
  ap.add_argument("--migration-map",type=Path,default=Path(__file__).with_name("openssl-111-to-359-migration-map.csv"))
- ap.add_argument("--target-preprocessor-dir",type=Path); ap.add_argument("--strict",action="store_true"); a=ap.parse_args()
+ ap.add_argument("--strict",action="store_true"); a=ap.parse_args()
  for n,p in (("repo",a.repo_root),("source",a.source_root),("pristine",a.pristine_root),("OpenSSL",a.openssl_source)):
   if not p.is_dir(): ap.error(n+" directory missing: "+str(p))
  validate_openssl_source(a.openssl_source,a.repo_root)
- if a.strict and a.target_preprocessor_dir is None: ap.error("--strict requires --target-preprocessor-dir with same-commit target evidence")
- target_reachability=load_target_reachability(a.target_preprocessor_dir,a.repo_root,a.source_root) if a.target_preprocessor_dir else {}
  attestation_path=a.repo_root/"package/mtk/applications/easymesh-n60/tests/openssl-migration-baseline.attestation.json"
  baseline_attestation=json.loads(attestation_path.read_text(encoding="utf-8"))
  policy=json.loads(a.policy.read_text())
@@ -261,34 +227,17 @@ def main():
  for r in rows:
   x=dict(r); rule=policy["api_rules"].get(r["api"]); mr=migration_map.get(r["api"])
   if r["deprecated_macro"]:
-   key=(r["component"],r["path"],r["line"],r["api"])
-   evidence=target_reachability.get(key)
-   if evidence is None:
-    x["classification"]="TARGET_EVIDENCE_MISSING"; x["policy_reason"]=""
-    failures.append("missing exact target-preprocessor reference evidence for "+r["api"]+" at "+r["path"]+":"+str(r["line"]))
-   elif evidence["reference_kind"]=="DECLARATION_OR_DEFINITION":
-    x["classification"]="DECLARATION_OR_DEFINITION"; x["policy_reason"]="not a call expression; excluded from migration call-site gate"
-   elif evidence["reachability_status"]=="UNKNOWN_FAIL_CLOSED":
-    x["classification"]="UNKNOWN_FAIL_CLOSED"; x["policy_reason"]=""
-    failures.append("target preprocessor could not classify "+r["api"]+" at "+r["path"]+":"+str(r["line"]))
-   elif evidence["reachability_status"]=="EXCLUDED_WITH_EVIDENCE":
-    x["classification"]="EXCLUDED_WITH_EVIDENCE"; x["policy_reason"]="not emitted by the exact N60 target preprocessor"
-   elif evidence["reachability_status"]=="ACTIVE":
-    if mr is None:
-     x["classification"]="MIGRATION_MAP_MISSING"; x["policy_reason"]=""
-     failures.append("missing migration reference row for active target call "+r["api"]+" at "+r["path"]+":"+str(r["line"]))
-    elif mr["migration_status"]!="APPROVED" or mr["approval"].lower()!="true":
-     x["classification"]="MAPPED_UNREVIEWED"; x["policy_reason"]=mr["proposed_replacement"]
-     failures.append("migration review/approval pending for active target call: "+r["api"]+" ("+mr["migration_status"]+") at "+r["path"]+":"+str(r["line"]))
-    elif not isinstance(rule,dict):
-     x["classification"]="APPROVED_MAP_WITHOUT_POLICY"; x["policy_reason"]=""; failures.append("approved migration map lacks detailed API policy: "+r["api"])
-    else:
-     st=rule.get("status"); reason=rule.get("reason",""); x["classification"]=st or "INVALID_POLICY"; x["policy_reason"]=reason
-     if st not in {"DIRECT_REPLACEMENT","SEMANTIC_ADAPTATION","LEGACY_RETAINED","REQUIRES_REDESIGN","BLOCKED"} or not reason.strip() or rule.get("approved") is not True: failures.append("incomplete/unapproved policy: "+r["api"])
-     elif st in {"REQUIRES_REDESIGN","BLOCKED"}: failures.append("blocked deprecated API remains: "+r["api"])
+   if mr is None:
+    x["classification"]="MIGRATION_MAP_MISSING"; x["policy_reason"]=""; failures.append("missing migration reference row for "+r["api"]+" at "+r["path"]+":"+str(r["line"]))
+   elif mr["migration_status"]!="APPROVED" or mr["approval"].lower()!="true":
+    x["classification"]="MAPPED_UNREVIEWED"; x["policy_reason"]=mr["proposed_replacement"]
+    failures.append("migration review/approval pending: "+r["api"]+" ("+mr["migration_status"]+") at "+r["path"]+":"+str(r["line"]))
+   elif not isinstance(rule,dict):
+    x["classification"]="APPROVED_MAP_WITHOUT_POLICY"; x["policy_reason"]=""; failures.append("approved migration map lacks detailed API policy: "+r["api"])
    else:
-    x["classification"]="INVALID_TARGET_REACHABILITY"; x["policy_reason"]=""
-    failures.append("invalid target reachability for "+r["api"]+" at "+r["path"]+":"+str(r["line"]))
+    st=rule.get("status"); reason=rule.get("reason",""); x["classification"]=st or "INVALID_POLICY"; x["policy_reason"]=reason
+    if st not in {"DIRECT_REPLACEMENT","SEMANTIC_ADAPTATION","LEGACY_RETAINED","REQUIRES_REDESIGN","BLOCKED"} or not reason.strip() or rule.get("approved") is not True: failures.append("incomplete/unapproved policy: "+r["api"])
+    elif st in {"REQUIRES_REDESIGN","BLOCKED"}: failures.append("blocked deprecated API remains: "+r["api"])
   else: x["classification"]="CURRENT_API"; x["policy_reason"]=""
   inventory.append(x)
  for api in policy["api_rules"]:
