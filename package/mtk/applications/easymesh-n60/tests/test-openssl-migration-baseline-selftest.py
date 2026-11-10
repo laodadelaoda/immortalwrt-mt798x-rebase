@@ -25,8 +25,8 @@ with tempfile.TemporaryDirectory() as td:
     # OpenSSL 3.x source archives contain public header templates (*.h.in).
     template=header.parent/"ssl.h.in"
     template.write_text(
-        "OSSL_DEPRECATEDIN_3_0 int SSL_use_RSAPrivateKey(SSL *ssl, RSA *rsa);\\n"
-        "OSSL_DEPRECATEDIN_3_0 int SSL_use_RSAPrivateKey_ASN1(SSL *ssl, const unsigned char *d, long len);\\n",
+        "OSSL_DEPRECATEDIN_3_0 int SSL_use_RSAPrivateKey(SSL *ssl, RSA *rsa);\n"
+        "OSSL_DEPRECATEDIN_3_0 int SSL_use_RSAPrivateKey_ASN1(SSL *ssl, const unsigned char *d, long len);\n",
         encoding="utf-8"
     )
     public=mod.header_files(Path(td))
