@@ -106,7 +106,7 @@ define Build/Compile
 	if grep -Eq '(^|: )error:|make(\[[0-9]+\])?: \*\*\*' "$$$$WAPP_COMPILE_LOG"; then cat "$$$$WAPP_COMPILE_LOG"; echo "WAPP compiler log contains an error despite a successful make status" >&2; exit 1; fi; \
 	cat "$$$$WAPP_COMPILE_LOG"; \
 	grep -F 'common/main.c' "$$$$WAPP_COMPILE_LOG" | grep -Fq -- '-Werror' || { echo "WAPP compile command lost -Werror" >&2; exit 1; }; \
-	! grep -Fq -- '-Wno-error=deprecated-declarations' "$$$$WAPP_COMPILE_LOG" || { echo "WAPP must not demote deprecated-API diagnostics" >&2; exit 1; }; \\
+	! grep -Fq -- '-Wno-error=deprecated-declarations' "$$$$WAPP_COMPILE_LOG" || { echo "WAPP must not demote deprecated-API diagnostics" >&2; exit 1; }; \
 	! grep -Fq -- '-Wno-deprecated-declarations' "$$$$WAPP_COMPILE_LOG" || { echo "WAPP must not suppress deprecated-API diagnostics" >&2; exit 1; }; \
 	! grep -Fq 'unused-but-set-variable' "$$$$WAPP_COMPILE_LOG" || { echo "WAPP still emits an unused-but-set-variable diagnostic after the DPP source fix" >&2; exit 1; }; \
 	echo "PASS: WAPP common/main.c retains -Werror with no deprecated-API warning demotion."; \
