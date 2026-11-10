@@ -25,5 +25,5 @@
     "release_notes": "https://www.openssl-library.org/news/openssl-3.5-notes/"
   },
   "migration_policy": "No source edit is approved until each API/call-site has a cited official recommendation and predeclared semantic regression test.",
-  "status": "REFERENCE_PINS_DECLARED_HASH_VERIFICATION_PENDING"
+  "verification_policy": "The OpenSSL migration baseline workflow independently downloads and verifies both archives and emits a run-bound evidence artifact. The lock is immutable input; verification state belongs in per-run artifacts, not in this lock."
 }
