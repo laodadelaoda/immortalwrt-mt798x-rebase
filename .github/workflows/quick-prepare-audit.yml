@@ -618,8 +618,7 @@ test -n "$(find "$TARGET_STAGING/usr/include/libnl-tiny" -type f -print -quit)"
             --openssl-source-dir "$OPENSSL_SOURCE" --openssl-patch-dir "$OPENSSL_PATCH_DIR" \
             --openssl-pkg-source "$PKG_SOURCE" --openssl-pkg-source-url "$PKG_SOURCE_URL" \
             --openssl-pkg-hash "$PKG_HASH" --openssl-options "$OPENSSL_OPTIONS" \
-            --target-config "$GITHUB_WORKSPACE/.config" \\
-            --package-compile-recipe "$OUT/easymesh-Build-Compile.expanded.txt" \\
+            --target-config "$GITHUB_WORKSPACE/.config" \
             --package-compile-recipe "$OUT/easymesh-Build-Compile.expanded.txt"
 
       - name: Preflight OpenSSL audit implementation inputs after MT Wi-Fi 026
