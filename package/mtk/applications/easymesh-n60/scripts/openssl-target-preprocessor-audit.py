@@ -91,7 +91,7 @@ def make_specs(repo,build,a):
   "wappd":[{"name":"wappd","cwd":build/"wappd","env":{},"argv":["make","-n","-w","-C",str(build/"wappd"),"V=s",
     f"TOPDIR={repo}",f"UAPD_INCLUDE_PATH={a.linux}/include/uapi/linux/wapp -I{staging}/usr/include",
     "CONFIG_SUPPORT_OPENWRT=y","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y",f"CC={a.cc}",
-    f"EXTRA_CFLAGS={cpp} {cflags} -Wno-error=deprecated-declarations -I{a.linux}/include/uapi/linux/wapp",
+    f"EXTRA_CFLAGS={cpp} {cflags} -I{a.linux}/include/uapi/linux/wapp",
     f"LDFLAGS={ld} -L{staging}/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto","all"]}],
   "1905daemon":[
    {"name":"1905daemon-main","cwd":build/"1905daemon","env":{"EXTRA_CFLAGS":easy},
@@ -124,7 +124,7 @@ def validate_compile_recipe(path,repo,build,a):
  expected=[
   f"-C {build}/libmapd",f'CFLAGS="{a.cppflags} {a.cflags} -Werror -g"',
   f"-C {build}/wappd",f'UAPD_INCLUDE_PATH="{a.linux}/include/uapi/linux/wapp -I{staging}/usr/include"',
-  f'EXTRA_CFLAGS="{a.cppflags} {a.cflags} -Wno-error=deprecated-declarations -I{a.linux}/include/uapi/linux/wapp"',
+  f'EXTRA_CFLAGS="{a.cppflags} {a.cflags} -I{a.linux}/include/uapi/linux/wapp"',
   f"-C {build}/1905daemon",f'LINUXDIR="{linux_rel}"',f'STAGING_DIR="{staging}"',
   f"-C {build}/mapd",'EXTRA_CFLAGS="$$OPENWRT_EASYMESH_CFLAGS"',
   'OPENWRT_EASYMESH_CFLAGS="$$TARGET_EASYMESH_CFLAGS -DCONFIG_SUPPORT_OPENWRT"',
@@ -379,7 +379,7 @@ def prepare_mapd_version(build,repo,out,compiler,args):
  make_vars=[
   f"TOPDIR={repo}","CONFIG_SUPPORT_OPENWRT=y","CONFIG_MAP_R2_SUPPORT=y",
   "CONFIG_MAP_R3_SUPPORT=y",f"CC={args.cc}",f"LDO={args.cc}",
-  f"EXTRA_CFLAGS={args.cppflags} {args.cflags} -Wno-error=deprecated-declarations -DCONFIG_SUPPORT_OPENWRT",
+  f"EXTRA_CFLAGS={args.cppflags} {args.cflags} -DCONFIG_SUPPORT_OPENWRT",
   f"LDFLAGS={args.ldflags} -L{args.staging}/usr/lib","V=s"
  ]
  dry=subprocess.run(["make","-n","-w","-C",str(directory),*make_vars,"version"],cwd=repo,
