@@ -16,11 +16,11 @@ def clean(s): return MASK.sub(lambda m:"".join("\n" if c=="\n" else " " for c in
 def mask_define_directives(s):
  lines=s.splitlines(keepends=True); out=[]; i=0
  while i<len(lines):
-  if re.match(r"^[ \\t]*#[ \\t]*define\\b",lines[i]):
+  if re.match(r"^[ \t]*#[ \t]*define\b",lines[i]):
    cont=True
    while cont and i<len(lines):
-    line=lines[i]; out.append(re.sub(r"[^\\n]"," ",line))
-    cont=line.rstrip("\\r\\n").endswith("\\\\"); i+=1
+    line=lines[i]; out.append(re.sub(r"[^\n]"," ",line))
+    cont=line.rstrip("\r\n").endswith("\\"); i+=1
   else:
    out.append(lines[i]); i+=1
  return "".join(out)
@@ -73,28 +73,28 @@ def scan_macro_references(root,names,depr):
    text=clean(p.read_text(encoding="utf-8",errors="replace"))
    lines=text.splitlines(keepends=True); code=[]; i=0
    while i<len(lines):
-    line=lines[i]; m=re.match(r"^[ \\t]*#[ \\t]*define[ \\t]+([A-Za-z_]\\w*)",line)
+    line=lines[i]; m=re.match(r"^[ \t]*#[ \t]*define[ \t]+([A-Za-z_]\w*)",line)
     if not m:
      code.append(line); i+=1; continue
     name=m.group(1); rest=line[m.end():]; function_like=rest.startswith("(")
-    body=rest; start=i+1; cont=line.rstrip("\\r\\n").endswith("\\\\")
-    code.append(re.sub(r"[^\\n]"," ",line))
+    body=rest; start=i+1; cont=line.rstrip("\r\n").endswith("\\")
+    code.append(re.sub(r"[^\n]"," ",line))
     i+=1
     while cont and i<len(lines):
-     part=lines[i]; body+=part; cont=part.rstrip("\\r\\n").endswith("\\\\")
-     code.append(re.sub(r"[^\\n]"," ",part)); i+=1
+     part=lines[i]; body+=part; cont=part.rstrip("\r\n").endswith("\\")
+     code.append(re.sub(r"[^\n]"," ",part)); i+=1
     defs.setdefault(name,[]).append({"component":comp,"path":p.relative_to(root).as_posix(),"line":start,"body":body,"function_like":function_like})
    code_parts.append("".join(code))
  macro_names=set(defs); edges={name:set() for name in macro_names}; roots=set()
- code_text="\\n".join(code_parts)
+ code_text="\n".join(code_parts)
  for name,items in defs.items():
   if any(x["function_like"] for x in items):
-   if re.search(r"\\b"+re.escape(name)+r"\\s*\\(",code_text): roots.add(name)
-  elif re.search(r"\\b"+re.escape(name)+r"\\b",code_text):
+   if re.search(r"\b"+re.escape(name)+r"\s*\(",code_text): roots.add(name)
+  elif re.search(r"\b"+re.escape(name)+r"\b",code_text):
    roots.add(name)
-  body="\\n".join(x["body"] for x in items)
+  body="\n".join(x["body"] for x in items)
   for other in macro_names:
-   if other!=name and re.search(r"\\b"+re.escape(other)+r"\\s*(?:\\(|\\b)",body):
+   if other!=name and re.search(r"\b"+re.escape(other)+r"\s*(?:\(|\b)",body):
     edges[name].add(other)
  reachable=set(); todo=list(roots)
  while todo:
@@ -106,7 +106,7 @@ def scan_macro_references(root,names,depr):
   for item in items:
    body=item["body"]
    for api in names:
-    if api not in depr or not re.search(r"\\b"+re.escape(api)+r"\\b",body): continue
+    if api not in depr or not re.search(r"\b"+re.escape(api)+r"\b",body): continue
     state="ACTIVE_MACRO_EXPANSION_REQUIRES_CPP" if name in reachable else "UNREFERENCED_MACRO_DEFINITION"
     out.append({"component":item["component"],"path":item["path"],"line":item["line"],"macro":name,"api":api,"reachability":state})
  return out
