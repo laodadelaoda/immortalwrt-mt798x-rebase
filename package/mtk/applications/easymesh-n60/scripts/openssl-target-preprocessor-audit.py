@@ -58,21 +58,29 @@ def make_specs(repo,build,a):
  easy=f"{cpp} {cflags} -Wno-error=deprecated-declarations -DCONFIG_SUPPORT_OPENWRT"
  staging=str(a.staging); linux_rel=os.path.relpath(a.linux,repo)
  return {
-  "libmapd":{"cwd":build/"libmapd","env":{},"argv":["make","-n","-w","-C",str(build/"libmapd"),"V=s",
-    f"CC={a.cc}",f"CFLAGS={cpp} {cflags} -Werror -g",f"LDFLAGS={ld}","all"]},
-  "wappd":{"cwd":build/"wappd","env":{},"argv":["make","-n","-w","-C",str(build/"wappd"),"V=s",
+  "libmapd":[{"name":"libmapd","cwd":build/"libmapd","env":{},"argv":["make","-n","-w","-C",str(build/"libmapd"),"V=s",
+    f"CC={a.cc}",f"CFLAGS={cpp} {cflags} -Werror -g",f"LDFLAGS={ld}","all"]}],
+  "wappd":[{"name":"wappd","cwd":build/"wappd","env":{},"argv":["make","-n","-w","-C",str(build/"wappd"),"V=s",
     f"TOPDIR={repo}",f"UAPD_INCLUDE_PATH={a.linux}/include/uapi/linux/wapp -I{staging}/usr/include",
     "CONFIG_SUPPORT_OPENWRT=y","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y",f"CC={a.cc}",
     f"EXTRA_CFLAGS={cpp} {cflags} -Wno-error=deprecated-declarations -I{a.linux}/include/uapi/linux/wapp",
-    f"LDFLAGS={ld} -L{staging}/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto","all"]},
-  "1905daemon":{"cwd":build/"1905daemon","env":{"EXTRA_CFLAGS":easy},
-    "argv":["make","-n","-w","-C",str(build/"1905daemon"),"V=s",f"TOPDIR={repo}",f"ROOTDIR={repo}",
+    f"LDFLAGS={ld} -L{staging}/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto","all"]}],
+  "1905daemon":[
+   {"name":"1905daemon-main","cwd":build/"1905daemon","env":{"EXTRA_CFLAGS":easy},
+    "argv":["make","-n","-w","-o","eth_ops_lib","-C",str(build/"1905daemon"),"V=s",f"TOPDIR={repo}",f"ROOTDIR={repo}",
     f"LINUXDIR={linux_rel}",f"STAGING_DIR={staging}","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y",
     "MAP_R3_SUPPORT=y","SWTICH_DSA_ARCH=y",f"CC={a.cc}",f"AR={a.ar}",f"RANLIB={a.ranlib}",
     f"LDFLAGS={ld} -L{staging}/usr/lib -Wl,--no-as-needed -lpthread -lnl-tiny -lssl -lcrypto","all"]},
-  "mapd":{"cwd":build/"mapd","env":{},"argv":["make","-n","-w","-C",str(build/"mapd"),"V=s",f"TOPDIR={repo}",
+   {"name":"1905daemon-ethernet","cwd":build/"1905daemon"/"ethernet","env":{},
+    "argv":["make","-n","-w","-C",str(build/"1905daemon"/"ethernet"),"V=s","SWTICH_DSA_ARCH=y",
+    f"CC={a.cc}",f"AR={a.ar}",f"RANLIB={a.ranlib}","all"]},
+   {"name":"1905daemon-libbridge","cwd":build/"1905daemon"/"ethernet"/"mediatek_DSA"/"libbridge","env":{},
+    "argv":["make","-n","-w","-C",str(build/"1905daemon"/"ethernet"/"mediatek_DSA"/"libbridge"),"V=s",
+    f"CC={a.cc}",f"AR={a.ar}",f"RANLIB={a.ranlib}","all"]}
+  ],
+  "mapd":[{"name":"mapd","cwd":build/"mapd","env":{},"argv":["make","-n","-w","-C",str(build/"mapd"),"V=s",f"TOPDIR={repo}",
     "CONFIG_SUPPORT_OPENWRT=y","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y",f"CC={a.cc}",
-    f"LDO={a.cc}",f"EXTRA_CFLAGS={easy}",f"LDFLAGS={ld} -L{staging}/usr/lib","version","mapd"]}
+    f"LDO={a.cc}",f"EXTRA_CFLAGS={easy}",f"LDFLAGS={ld} -L{staging}/usr/lib","version","mapd"]}]
  }
 
 def validate_compile_recipe(path,repo,build,a):
@@ -247,15 +255,27 @@ def main():
  recipe_sha=validate_compile_recipe(a.package_compile_recipe,repo,build,a)
  (build/"1905daemon"/"obj").mkdir(parents=True,exist_ok=True)
  specs=make_specs(repo,build,a); results={}; hits=set(); filehits=set(); api_hits_by_component={x:set() for x in COMP}
+ macro_refs=inv.scan_macro_references(build,names,{x:"OSSL_DEPRECATED" for x in names})
+ source_calls_by_component={x:sum(1 for row in rows if row["component"]==x) for x in COMP}
+ macro_refs_by_component={x:sum(1 for item in macro_refs if item["component"]==x) for x in COMP}
  for comp in COMP:
-  spec=specs[comp]; env=os.environ.copy(); env.update(spec["env"])
-  run=subprocess.run(spec["argv"],cwd=repo,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-  log=out/f"make-dry-run-{comp}.log"; log.write_text(run.stdout,encoding="utf-8")
-  cmds,parse_errors=parse_commands(run.stdout,spec["cwd"],compiler,{comp:spec["cwd"].resolve()})
-  preexisting=[str(p.relative_to(spec["cwd"])) for p in spec["cwd"].rglob("*")
-               if p.is_file() and p.suffix.lower() in (".o",".lo",".a",".so")]
-  tus=[]; pp_errors=[]
-  for i,cmd in enumerate(cmds):
+  tus=[]; pp_errors=[]; parse_errors=[]; logs=[]; compile_commands=[]; run_codes=[]
+  for spec in specs[comp]:
+   env=os.environ.copy(); env.update(spec["env"])
+   run=subprocess.run(spec["argv"],cwd=repo,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+   log=out/f"make-dry-run-{spec['name']}.log"; log.write_text(run.stdout,encoding="utf-8")
+   logs.append(str(log)); run_codes.append(run.returncode)
+   cmds,perrors=parse_commands(run.stdout,spec["cwd"],compiler,{comp: (build/comp).resolve()})
+   parse_errors.extend(perrors[comp]); compile_commands.extend(cmds)
+  preexisting=[p for p in (build/comp).rglob("*") if p.is_file() and p.suffix.lower() in (".o",".lo",".a",".so")]
+  compiled_sources={Path(cmd["source"]).resolve() for cmd in compile_commands}
+  uncompiled_source_artifacts=[]
+  for artifact in preexisting:
+   if artifact.suffix.lower() in (".o",".lo"):
+    candidate=artifact.with_suffix(".c")
+    if candidate.is_file() and candidate.resolve() not in compiled_sources:
+     uncompiled_source_artifacts.append(str(candidate))
+  for i,cmd in enumerate(compile_commands):
    key=hashlib.sha256((comp+cmd["source"]+str(i)).encode()).hexdigest()[:16]
    dest=out/"preprocessed"/f"{comp}-{key}.i"; pargv=cpp_argv(cmd,dest)
    pp=subprocess.run(pargv,cwd=cmd["cwd"],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -263,20 +283,25 @@ def main():
    macrofile=out/"preprocessed"/f"{comp}-{key}.macros.txt"; margv=macro_argv(cmd,macrofile)
    mp=subprocess.run(margv,cwd=cmd["cwd"],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
    merr=out/"preprocessed"/f"{comp}-{key}.macros.stderr.txt"; merr.write_text(mp.stderr,encoding="utf-8")
-   item={"source":cmd["source"],"cwd":cmd["cwd"],"make_log_line":cmd["line"],"argv":pargv,"returncode":pp.returncode,
-         "macro_argv":margv,"macro_returncode":mp.returncode,"stderr":str(err),"macro_stderr":str(merr)}
+   item={"source":cmd["source"],"cwd":cmd["cwd"],"make_log_line":cmd["line"],"make_subtarget":cmd.get("subtarget"),
+         "argv":pargv,"returncode":pp.returncode,"macro_argv":margv,"macro_returncode":mp.returncode,
+         "stderr":str(err),"macro_stderr":str(merr)}
    if pp.returncode==0 and dest.is_file() and mp.returncode==0 and macrofile.is_file():
     item["preprocessed_sha256"]=sha(dest); item["macro_snapshot_sha256"]=sha(macrofile)
     item["target_macro_snapshot"]=macro_snapshot(macrofile)
     h,fh=pp_hits(dest,cmd["cwd"],names); hits.update(h); filehits.update(fh); api_hits_by_component[comp].update(x[2] for x in h)
    else: pp_errors.append(item)
    tus.append(item)
-  complete=run.returncode==0 and bool(cmds) and not parse_errors[comp] and not pp_errors and not preexisting
-  results[comp]={"make_returncode":run.returncode,"log":str(log),"compile_commands":len(cmds),
-    "parse_errors":parse_errors[comp],"preexisting_build_artifacts":preexisting,
-    "preprocess_failures":pp_errors,"translation_units":tus,"complete":complete}
-  (out/f"compile-commands-{comp}.json").write_text(json.dumps(cmds,indent=2)+"\\n")
- (out/"make-compile-command.txt").write_text("component Make dry-runs from the expanded package Build/Compile recipe\\n")
+  make_ok=all(code==0 for code in run_codes)
+  source_complete=make_ok and not parse_errors and not pp_errors and not uncompiled_source_artifacts
+  if not compile_commands and source_calls_by_component[comp]==0 and macro_refs_by_component[comp]==0 and make_ok and not parse_errors:
+   source_complete=True
+  results[comp]={"make_returncodes":run_codes,"logs":logs,"compile_commands":len(compile_commands),
+    "parse_errors":parse_errors,"preexisting_binary_inputs":[str(p.relative_to(build/comp)) for p in preexisting],
+    "uncompiled_source_artifacts":uncompiled_source_artifacts,"preprocess_failures":pp_errors,
+    "translation_units":tus,"source_reachability_complete":source_complete}
+  (out/f"compile-commands-{comp}.json").write_text(json.dumps(compile_commands,indent=2)+"\\n")
+ (out/"make-compile-command.txt").write_text("component-only Make -n -w dry-runs, bound to expanded Build/Compile recipe\\n")
  complete={c for c,v in results.items() if v["complete"]}
  macro_refs=inv.scan_macro_references(build,names,{x:"OSSL_DEPRECATED" for x in names})
  macro_rows=[]; macro_counts={"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
