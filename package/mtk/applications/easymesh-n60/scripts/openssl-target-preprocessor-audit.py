@@ -83,9 +83,9 @@ def make_specs(repo,build,a):
     f"CC={a.cc}",f"AR={a.ar}",f"RANLIB={a.ranlib}",
     f"LDFLAGS={ld} -L{staging}/usr/lib -Wl,--no-as-needed -lpthread -lnl-tiny -lssl -lcrypto","all"]}
   ],
-  "mapd":[{"name":"mapd","cwd":build/"mapd","env":{},"argv":["make","-n","-w","-C",str(build/"mapd"),"V=s",f"TOPDIR={repo}",
+  "mapd":[{"name":"mapd","cwd":build/"mapd","env":{"EXTRA_CFLAGS":easy},"argv":["make","-n","-w","-C",str(build/"mapd"),"V=s",f"TOPDIR={repo}",
     "CONFIG_SUPPORT_OPENWRT=y","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y",f"CC={a.cc}",
-    f"LDO={a.cc}",f"EXTRA_CFLAGS={easy}",f"LDFLAGS={ld} -L{staging}/usr/lib","version","mapd"]}]
+    f"LDO={a.cc}",f"LDFLAGS={ld} -L{staging}/usr/lib","version","mapd"]}]
  }
 
 def validate_compile_recipe(path,repo,build,a):
