@@ -83,7 +83,7 @@ def classify_source_reference(build,row):
 
 def make_specs(repo,build,a):
  cpp,cflags,ld=a.cppflags,a.cflags,a.ldflags
- easy=f"{cpp} {cflags} -Wno-error=deprecated-declarations -DCONFIG_SUPPORT_OPENWRT"
+ easy=f"{cpp} {cflags}  -DCONFIG_SUPPORT_OPENWRT"
  staging=str(a.staging); linux_rel=os.path.relpath(a.linux,repo)
  return {
   "libmapd":[{"name":"libmapd","cwd":build/"libmapd","env":{},"argv":["make","-n","-w","-C",str(build/"libmapd"),"V=s",
@@ -119,6 +119,8 @@ def make_specs(repo,build,a):
 def validate_compile_recipe(path,repo,build,a):
  recipe=Path(path).read_text(encoding="utf-8",errors="replace")
  linux_rel=os.path.relpath(a.linux,repo); staging=str(a.staging)
+ for forbidden in ("-Wno-error=deprecated-declarations","-Wno-deprecated-declarations"):
+  if forbidden in recipe: raise SystemExit("deprecated-API warning suppression is forbidden in Build/Compile recipe: "+forbidden)
  expected=[
   f"-C {build}/libmapd",f'CFLAGS="{a.cppflags} {a.cflags} -Werror -g"',
   f"-C {build}/wappd",f'UAPD_INCLUDE_PATH="{a.linux}/include/uapi/linux/wapp -I{staging}/usr/include"',
