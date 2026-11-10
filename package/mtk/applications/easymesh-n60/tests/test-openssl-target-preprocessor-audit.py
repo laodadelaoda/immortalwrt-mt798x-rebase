@@ -7,7 +7,7 @@ m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 with tempfile.TemporaryDirectory() as d:
  root=Path(d); src=root/"conditional.c"
  src.write_text(
-  "#if defined(OPENSSL_NO_ENGINE) && \\n"
+  "#if defined(OPENSSL_NO_ENGINE) && \\\n"
   "    !defined(OPENSSL_NO_DEPRECATED_3_0)\n"
   "ENGINE_by_id(\"dynamic\");\n"
   "#elif defined(CONFIG_NATIVE_WINDOWS)\nRSA_new();\n"
@@ -88,7 +88,7 @@ with tempfile.TemporaryDirectory() as d:
  # The expanded recipe and all component dry-runs must preserve strict
  # deprecation diagnostics; any demotion of -Werror is a hard failure.
  original_recipe=recipe.read_text(encoding="utf-8")
- recipe.write_text(original_recipe+"\nCFLAGS=-Wno-error=deprecated-declarations\n",encoding="utf-8")
+ recipe.write_text(original_recipe+"\\nCFLAGS=-Wno-error=deprecated-declarations\\n",encoding="utf-8")
  try:
   m.validate_compile_recipe(recipe,root,build,args)
   raise AssertionError("deprecated-warning demotion in expanded recipe must fail")
@@ -245,7 +245,7 @@ with tempfile.TemporaryDirectory() as td:
 
 
 # Source-reference classification must receive the inventory lexer explicitly;
-# exercise both direct source and target-preprocessed callsite paths.
+# exercise the direct-source path as well as target-preprocessed callsite mapping.
 inventory=m.inventory_module(Path(__file__).resolve().parents[5])
 with tempfile.TemporaryDirectory() as td:
  root=Path(td)
@@ -254,4 +254,4 @@ with tempfile.TemporaryDirectory() as td:
  row={"path":"wappd/call.c","line":1,"api":"EVP_PKEY_cmp"}
  assert m.classify_source_reference(root,row,inventory)=="CALL_EXPRESSION"
 
-print("PASS: conditional branches, source mapping, preprocess-only argv, exact component flags, source classifier module wiring, token-paste macro fail-closed classification and safe 1905 sub-build enumeration.")
+print("PASS: conditional branches, source mapping, preprocess-only argv, exact component flags, source classifier wiring, token-paste macro fail-closed classification and safe 1905 sub-build enumeration.")
