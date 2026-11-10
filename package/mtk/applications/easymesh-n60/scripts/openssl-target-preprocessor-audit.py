@@ -263,7 +263,8 @@ def main():
   "openssl_header_tree_sha256":tree_sha(hdr),"prepared_source_tree_sha256":tree_sha(build),"components":results,
   "callsite_counts":{"total":len(callsites),**counts},"macro_reference_counts":{"total":len(macro_rows),**macro_counts},
   "complete":len(complete)==4 and counts["UNKNOWN_FAIL_CLOSED"]==0 and macro_counts["UNKNOWN_FAIL_CLOSED"]==0,
-  "workflow_build_scope":{"target_toolchain_install":True,"dependency_dev_packages":["datconf","libnl-tiny"],"openssl":"Configure and build_generated headers only","easymesh_component_compile":False,"firmware_compile":False},\n  "limitations":["the audit script itself preprocesses only; the enclosing workflow builds the target toolchain and required dependency development packages","direct source expressions are classified separately from macro-body references","ambiguous source-line mapping is UNKNOWN_FAIL_CLOSED"]}
+  "workflow_build_scope":{"target_toolchain_install":True,"dependency_dev_packages":["datconf","libnl-tiny"],"openssl":"Configure and build_generated headers only","easymesh_component_compile":False,"firmware_compile":False},
+  "limitations":["the audit script itself preprocesses only; the enclosing workflow builds the target toolchain and required dependency development packages","direct source expressions are classified separately from macro-body references","ambiguous source-line mapping is UNKNOWN_FAIL_CLOSED"]}
  (out/"callsite-reachability.json").write_text(json.dumps(callsites,indent=2)+"\n")
  (out/"macro-reference-reachability.json").write_text(json.dumps(macro_rows,indent=2)+"\n")
  (out/"openssl-target-preprocessor-summary.json").write_text(json.dumps(summary,indent=2)+"\n")
