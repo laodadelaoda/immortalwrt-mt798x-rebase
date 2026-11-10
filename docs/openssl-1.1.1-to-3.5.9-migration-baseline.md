@@ -13,7 +13,7 @@ The compatibility comparison is pinned to the final public OpenSSL 1.1.1 release
 - Current repository `package/libs/openssl/Makefile` pin: `603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a`
 - Current package version: `3.5.9`; official 3.5.9 release notes: [OpenSSL 3.5 Series Release Notes](https://www.openssl-library.org/news/openssl-3.5-notes/)
 
-The 1.1.1w archive digest is published in the OpenSSL project's release announcement. The 3.5.9 digest above is the repository's active package pin; it must still be checked against the downloaded archive and recorded in the migration attestation before use. The 1.1.1w archive has not yet been downloaded and independently re-hashed in this audit.
+The 1.1.1w archive digest is published in the OpenSSL project's release announcement. The 3.5.9 digest matches the current OpenSSL package pin and public mirror checksum records. Both archive bytes still need independent CI download/hash verification; the new read-only baseline workflow performs that check before generating the header delta.
 
 ## Scope and evidence anchor
 
@@ -31,6 +31,8 @@ The C-keyword parser correction is now present in the repository, but this CSV p
 
 ## Normative source hierarchy
 
+The OpenSSL 3.5 migration guide itself states that its migration coverage is currently OpenSSL 3.0 and 3.1; it is the authoritative 1.1.1-to-3.x migration framework, but it is not a complete changelog for 3.5.9-specific changes. The 3.5.9 target manuals, release notes and the pinned 3.5.9 source headers must also be consulted.
+
 1. [OpenSSL 3.5 migration guide](https://docs.openssl.org/3.5/man7/ossl-guide-migration/) — migration policy and 1.1.1 → 3.0 architecture/API guidance.
 2. [OpenSSL 3.5 EVP_MAC manual](https://docs.openssl.org/3.5/man3/EVP_MAC/) — HMAC/CMAC migration target.
 3. [OpenSSL 3.5 EVP_PKEY manual](https://docs.openssl.org/3.5/man3/EVP_PKEY/) and algorithm-specific EVP manuals — key generation, access, comparison, derivation and validation.
@@ -46,17 +48,19 @@ OpenSSL's guide explicitly warns that deprecated low-level APIs may bypass Provi
 
 - A pinned 3.5.9 package source and a source inventory script.
 - A fail-closed policy file, but its `api_rules` object is empty.
-- A lexical scanner with a small self-test, plus a Provider smoke/runtime test.
+- A 64-row migration map with per-API official mapping kind/section/manual link; all rows remain UNREVIEWED.
+- A lexical scanner that now requires complete mapping coverage and rejects unreviewed rows, plus a Provider smoke/runtime test.
+- A read-only baseline auditor and a separate workflow to download/hash 1.1.1w and 3.5.9 and compare public-header inventories.
 - A const-correctness check for a narrow `EVP_PKEY_get0_EC_KEY` pattern.
 - A pristine-vs-prepared call-count delta.
 
 ## Gaps against the requested standard
 
-1. **No complete per-API official mapping.** The existing policy is empty; no API row records the exact official manual page, replacement rationale, or “no direct replacement” conclusion.
-2. **The 1.1.1 source pin is declared but not yet verified locally.** OpenSSL 1.1.1w is pinned to the official published SHA256, but the archive has not yet been downloaded, independently hashed, unpacked and used to generate a 1.1.1 header/API catalog. The 3.5.9 pin likewise needs an independent archive-hash check. There is no 1.1.1-vs-3.5.9 declaration/deprecation diff yet.
+1. **The 64-name research matrix now records per-API official guidance, but it is not yet reviewed.** Each row has an official migration-guide section, a target manual URL, a proposed mapping class and a call-site semantic checklist. All 64 rows remain UNREVIEWED/approval=false; the mapping is research evidence, not permission to edit or suppress the API.
+2. **The source/header comparison is implemented but not yet CI-verified.** The new workflow must prove both archive hashes, exact source versions, 64-row header coverage and a reproducible 1.1.1w-vs-3.5.9 header delta. Until it passes, no source-baseline verification is claimed.
 3. **No semantic call-site review.** The inventory has component/path/line but does not capture argument expressions, return-value handling, ownership transfer, error-queue behavior, provider properties, or algorithm parameters.
 4. **Lexical coverage is incomplete.** Regex scanning cannot reliably resolve macros, aliases, indirect/function-pointer calls, conditional compilation, wrappers, or type-level const/ownership. Clang AST/preprocessor evidence is required. In particular, the N60 config does not set `CONFIG_OPENSSL_ENGINE`; the OpenWrt OpenSSL Makefile therefore adds `no-engine`, while the lexical scan still sees ENGINE calls in `1905daemon`. The active/inactive preprocessor branches must be resolved before treating those calls as reachable migration work.
-5. **Tests are not migration-equivalence tests.** The Provider test demonstrates a narrow Provider runtime path; it does not prove HMAC/CMAC/AES/DH/EC/RSA/ENGINE/serialization behavior matches the vendor's 1.1.1 behavior.
+5. **Tests are not migration-equivalence tests.** The Provider test demonstrates a narrow Provider runtime path; it does not prove HMAC/CMAC/AES/DH/EC/RSA/ENGINE/serialization behavior matches the vendor's 1.1.1 behavior. The header-delta workflow is inventory evidence only, not a semantic regression suite.
 6. **No machine-enforced approval workflow.** The policy schema does not require official reference, call-site IDs, semantic test IDs, reviewers, or evidence hashes. The empty policy is fail-closed but cannot express a reviewed migration decision.
 7. **No reusable supplier-update credential.** The OpenSSL inventory is not yet bound to vendor Lock SHA256, exact source archive SHA256, OpenSSL source archive SHA256, patch-stack digest, source-tree digest, Git SHA, run/attempt, toolchain/compiler versions and test evidence hashes.
 8. **Provider architecture is not inventoried.** ENGINE names, controls, hardware key loading, provider availability, default properties and algorithm fetch paths are not yet mapped to actual runtime requirements. The target OpenSSL package retains ENGINE-related build/config options, but the N60 config currently does not enable `CONFIG_OPENSSL_ENGINE`; source-level ENGINE references must be distinguished from compiled paths.
