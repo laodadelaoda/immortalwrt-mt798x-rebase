@@ -74,6 +74,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py
           python3 package/mtk/applications/easymesh-n60/scripts/audit-openssl-migration-baseline.py \
             --repo-root "$GITHUB_WORKSPACE" \
             --openssl-1111-source "$RUNNER_TEMP/openssl-migration/1.1.1w" \
