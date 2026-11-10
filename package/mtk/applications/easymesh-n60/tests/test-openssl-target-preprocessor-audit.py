@@ -84,6 +84,23 @@ with tempfile.TemporaryDirectory() as d:
  recipe=root/"Build-Compile.expanded.txt"; recipe.write_text("\n".join(recipe_lines),encoding="utf-8")
  assert m.validate_compile_recipe(recipe,root,build,args)==m.sha(recipe)
 
+ # MAPD's Makefile includes $(TOPDIR)/.config. The audit's isolated
+ # metadata target must receive the same repository TOPDIR as production.
+ from unittest.mock import patch
+ calls=[]
+ def fake_make(argv,**kwargs):
+  calls.append(argv)
+  return SimpleNamespace(returncode=0,stdout="make: Nothing to be done for 'version'.\n")
+ with tempfile.TemporaryDirectory() as td:
+  rr=Path(td); (rr/"build"/"mapd").mkdir(parents=True); out=rr/"out"; out.mkdir()
+  with patch.object(m.subprocess,"run",side_effect=fake_make):
+   m.prepare_mapd_version(rr/"build",rr,out,"aarch64-test-gcc")
+  assert len(calls)==2
+  assert all(f"TOPDIR={rr}" in argv for argv in calls)
+  assert calls[0][1]=="-n" and calls[1][1]=="-w"
+  assert (out/"mapd-version-dry-run.log").is_file()
+  assert (out/"mapd-version-generation.log").is_file()
+
  # Exact compiler -o output, not same-directory filename guessing, is the
  # ownership key for existing object files.
  assert commands[0]["object_output"]==str((root/"foo.o").resolve())
