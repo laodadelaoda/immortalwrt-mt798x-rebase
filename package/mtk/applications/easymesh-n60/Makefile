@@ -83,7 +83,7 @@ endef
 
 define Build/Compile
 	set -eu; \
-	TARGET_EASYMESH_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Wno-error=deprecated-declarations"; \
+	TARGET_EASYMESH_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS)"; \
 	OPENWRT_EASYMESH_CFLAGS="$$$$TARGET_EASYMESH_CFLAGS -DCONFIG_SUPPORT_OPENWRT"; \
 	WAPP_UAPI_DIR="$(LINUX_DIR)/include/uapi/linux/wapp"; \
 	test -s "$$$$WAPP_UAPI_DIR/wapp_cmm_type.h" || { echo "Missing MTK WAPP UAPI header: $$$$WAPP_UAPI_DIR/wapp_cmm_type.h" >&2; exit 1; }; \
@@ -100,16 +100,16 @@ define Build/Compile
 	WAPP_COMPILE_LOG="$(PKG_BUILD_DIR)/wapp-compile.log"; \
 	$(MAKE) -C $(PKG_BUILD_DIR)/wappd \
 		TOPDIR="$(TOPDIR)" UAPD_INCLUDE_PATH="$(LINUX_DIR)/include/uapi/linux/wapp -I$(STAGING_DIR)/usr/include" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R2_SUPPORT=y CONFIG_MAP_R3_SUPPORT=y \
-		CC="$(TARGET_CC)" EXTRA_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -Wno-error=deprecated-declarations -I$(LINUX_DIR)/include/uapi/linux/wapp" \
+		CC="$(TARGET_CC)" EXTRA_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -I$(LINUX_DIR)/include/uapi/linux/wapp" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto" \
 		V=s all > "$$$$WAPP_COMPILE_LOG" 2>&1 || { cat "$$$$WAPP_COMPILE_LOG"; exit 1; }; \
 	if grep -Eq '(^|: )error:|make(\[[0-9]+\])?: \*\*\*' "$$$$WAPP_COMPILE_LOG"; then cat "$$$$WAPP_COMPILE_LOG"; echo "WAPP compiler log contains an error despite a successful make status" >&2; exit 1; fi; \
 	cat "$$$$WAPP_COMPILE_LOG"; \
 	grep -F 'common/main.c' "$$$$WAPP_COMPILE_LOG" | grep -Fq -- '-Werror' || { echo "WAPP compile command lost -Werror" >&2; exit 1; }; \
-	grep -F 'common/main.c' "$$$$WAPP_COMPILE_LOG" | grep -Fq -- '-Wno-error=deprecated-declarations' || { echo "WAPP deprecated-API diagnostics are not explicitly visible as non-fatal warnings" >&2; exit 1; }; \
+	! grep -Fq -- '-Wno-error=deprecated-declarations' "$$$$WAPP_COMPILE_LOG" || { echo "WAPP must not demote deprecated-API diagnostics" >&2; exit 1; }; \\
 	! grep -Fq -- '-Wno-deprecated-declarations' "$$$$WAPP_COMPILE_LOG" || { echo "WAPP must not suppress deprecated-API diagnostics" >&2; exit 1; }; \
 	! grep -Fq 'unused-but-set-variable' "$$$$WAPP_COMPILE_LOG" || { echo "WAPP still emits an unused-but-set-variable diagnostic after the DPP source fix" >&2; exit 1; }; \
-	echo "PASS: WAPP common/main.c compiled with -Werror; deprecated-API warnings remain visible and non-fatal."; \
+	echo "PASS: WAPP common/main.c retains -Werror with no deprecated-API warning demotion."; \
 	mkdir -p $(PKG_BUILD_DIR)/1905daemon/obj; \
 	P1905_COMPILE_LOG="$(PKG_BUILD_DIR)/p1905-compile.log"; \
 	EXTRA_CFLAGS="$$$$OPENWRT_EASYMESH_CFLAGS" $(MAKE) -C $(PKG_BUILD_DIR)/1905daemon \
