@@ -74,7 +74,7 @@ static int test_rsa_asn1_mapping(void)
     null_provider = OSSL_PROVIDER_load(legacy_libctx, "null");
     C(null_provider != NULL);
     cursor = der;
-    legacy_decoded = d2i_PrivateKey_ex(NULL, EVP_PKEY_RSA, &cursor,
+    legacy_decoded = d2i_PrivateKey_ex(EVP_PKEY_RSA, NULL, &cursor,
                                       (long)der_len, legacy_libctx, NULL);
     C(legacy_decoded != NULL && cursor == der + der_len);
     legacy_generic_ssl = SSL_new(ctx);
