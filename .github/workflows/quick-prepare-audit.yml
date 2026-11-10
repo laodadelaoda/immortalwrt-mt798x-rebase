@@ -500,7 +500,7 @@ jobs:
           # Evaluate the EasyMesh Package Makefile and print its expanded target variables.
           # This uses the package's own kernel.mk/rules.mk context, not guessed flags.
           VARS_OUTPUT="$(make -s -C package/mtk/applications/easymesh-n60 TOPDIR="$GITHUB_WORKSPACE" \
-            --eval='dump-n60-target-vars:; @printf "%s\n" "__TARGET_CC__$(TARGET_CC)" "__TARGET_AR__$(TARGET_AR)" "__TARGET_RANLIB__$(TARGET_RANLIB)" "__TARGET_CPPFLAGS__$(TARGET_CPPFLAGS)" "__TARGET_CFLAGS__$(TARGET_CFLAGS)" "__TARGET_LDFLAGS__$(TARGET_LDFLAGS)" "__STAGING_DIR__$(STAGING_DIR)" "__LINUX_DIR__$(LINUX_DIR)"' \
+            --eval='dump-n60-target-vars:; @printf "%s\n" "__TARGET_CC__$(TARGET_CC)" "__TARGET_AR__$(TARGET_AR)" "__TARGET_RANLIB__$(TARGET_RANLIB)" "__TARGET_CPPFLAGS__$(TARGET_CPPFLAGS)" "__TARGET_CFLAGS__$(TARGET_CFLAGS)" "__TARGET_LDFLAGS__$(TARGET_LDFLAGS)" "__STAGING_DIR__$(STAGING_DIR)" "__LINUX_DIR__$(LINUX_DIR)" "__TARGET_PATH__$(TARGET_PATH)"' \
             dump-n60-target-vars)"
           while IFS= read -r line; do
             case "$line" in
@@ -512,9 +512,10 @@ jobs:
               __TARGET_LDFLAGS__*) TARGET_LDFLAGS="${line#__TARGET_LDFLAGS__}" ;;
               __STAGING_DIR__*) STAGING_DIR="${line#__STAGING_DIR__}" ;;
               __LINUX_DIR__*) LINUX_DIR="${line#__LINUX_DIR__}" ;;
+              __TARGET_PATH__*) TARGET_PATH="${line#__TARGET_PATH__}" ;;
             esac
           done <<< "$VARS_OUTPUT"
-          [[ -n "$TARGET_CC" && -n "$TARGET_AR" && -n "$TARGET_RANLIB" && -n "$TARGET_CFLAGS" && -n "$STAGING_DIR" && -n "$LINUX_DIR" ]] || {
+          [[ -n "$TARGET_CC" && -n "$TARGET_AR" && -n "$TARGET_RANLIB" && -n "$TARGET_CFLAGS" && -n "$STAGING_DIR" && -n "$LINUX_DIR" && -n "$TARGET_PATH" ]] || {
             echo "::error::OpenWrt target compiler/flags/staging variables are incomplete."
             printf '%s\n' "$VARS_OUTPUT"
             exit 1
@@ -523,6 +524,7 @@ jobs:
             echo "::error::Compiler/binutils wrappers are not supported by this evidence parser; fail closed."
             exit 1
           }
+          export PATH="$TARGET_PATH:$PATH"
           TARGET_CC="$(command -v "$TARGET_CC")"
           TARGET_AR="$(command -v "$TARGET_AR")"
           TARGET_RANLIB="$(command -v "$TARGET_RANLIB")"
