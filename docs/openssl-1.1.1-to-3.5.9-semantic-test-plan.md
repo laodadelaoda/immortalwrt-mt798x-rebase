@@ -167,3 +167,34 @@ The 424 callsites are lexical source locations, not 424 proven target-preprocess
 
 **Required correction to the audit pipeline:** preserve both counts: (1) lexical deprecated references and (2) compiler-preprocessed active references. Add explicit `ACTIVE`, `EXCLUDED_WITH_EVIDENCE` and `UNKNOWN_FAIL_CLOSED` reachability states per callsite. Do not mark a whole API family excluded when only some callsites are guarded. The strict gate must continue to reject any active or unknown deprecated callsite until its migration row and semantic tests are reviewed. Do not change vendor code or approve map rows to clear this run.
 
+
+
+## Target-preprocessor reachability audit — implementation status
+
+The current branch was re-inspected after Run 42731708257. The existing inventory implementation still performs lexical scanning of the prepared source tree. Its `callsite_context()` records only opening `#if/#ifdef/#ifndef` lines and pops at `#endif`; it does not model `#else`, `#elif`, continued conditional expressions or macro expansion under the target compiler. Its output is therefore a hint for selecting preprocessor probes, not a reachability result.
+
+The Run 42731708257 artifact was re-counted directly:
+- 2,833 lexical OpenSSL call occurrences in prepared sources;
+- 424 deprecated-name callsites with context records;
+- 223 deprecated-name callsites in `wappd`, 201 in `1905daemon`;
+- no deprecated-name callsites were emitted for `mapd` or `libmapd` in this artifact;
+- the context parser exposed guard hints including `OPENSSL_VERSION_NUMBER < 0x10100000L` (37 callsites), `OPENSSL_NO_ENGINE` (18), `OPENSSL_IS_BORINGSSL` (2), `CONFIG_NATIVE_WINDOWS` (5), `CONFIG_SUITEB` (7), `CONFIG_OPENSSL_CMAC` (12), `CONFIG_ECC` (36), and `CONFIG_FIPS` (8). These are overlapping, incomplete lexical hints, not mutually exclusive branch counts and not proof of exclusion.
+
+**Reachability disposition:** all 424 deprecated-name callsites are currently `UNKNOWN_FAIL_CLOSED`. None can yet be promoted to `ACTIVE` or `EXCLUDED_WITH_EVIDENCE`, because the artifact contains no per-translation-unit target preprocessor output or exact compile-command manifest. In particular, the 18 ENGINE-guard hints remain unknown. The OpenSSL package Makefile's `no-engine` selection and the absence of `CONFIG_OPENSSL_ENGINE` in the target config are configuration inputs only; neither substitutes for generated target headers plus actual preprocessor output.
+
+The current EasyMesh package Makefile exposes distinct compile environments:
+- `libmapd`: `TARGET_CPPFLAGS TARGET_CFLAGS -Werror -g`;
+- WAPP: `TARGET_CPPFLAGS TARGET_CFLAGS -Wno-error=deprecated-declarations`, plus the WAPP UAPI include path and package-specific definitions;
+- P1905: `EXTRA_CFLAGS` derived from target CPP/C flags, with package-specific DSA/MAP feature definitions and recursive make propagation;
+- MAPD: target CPP/C flags through `EXTRA_CFLAGS`, with its own package feature definitions.
+
+Consequently, one generic `-E` invocation or a hand-written set of `-D` flags would be invalid. The next audit implementation must capture the actual GNU Make-expanded compile command for every translation unit in each component, including recursive make variables, generated configuration headers, target sysroot/include ordering and the prepared OpenSSL headers. It must then replay each command as preprocessing only (no object compilation or firmware link), retain source line markers, and bind every result to the target config, toolchain identity, Make-expanded variable snapshot, OpenSSL prepared-header digest, vendor source tree digest and Git SHA.
+
+Required per-callsite state rules:
+- `ACTIVE`: the exact deprecated call expression is present in the target compiler's preprocessed translation unit, with source path/line recovered from line markers.
+- `EXCLUDED_WITH_EVIDENCE`: the callsite is absent from that translation unit's complete preprocessor output, and the evidence bundle identifies the exact compiler, full arguments, source file, generated headers and preprocessing output hash.
+- `UNKNOWN_FAIL_CLOSED`: no exact compile command, missing generated header, preprocessing error, ambiguous source mapping, unsupported compiler wrapper or incomplete evidence. Unknown is a gate failure, never an implicit exclusion.
+
+Do not infer ENGINE exclusion from `no-engine`; do not infer old-version compatibility-wrapper exclusion from a presumed OpenSSL version; do not infer BoringSSL, Windows, SuiteB, FIPS, ECC or CMAC branch reachability from repository defaults. Each callsite must be classified independently from its own translation unit's target preprocessor result. Function-level dead-code/link reachability is a separate later analysis and must not be conflated with preprocessor exclusion.
+
+No supplier source was changed in this audit pass. No firmware or EasyMesh component compilation was performed. The present evidence is insufficient to start API-family migration approval; the strict gate remains closed until the target-preprocessor evidence is generated and independently checked.
