@@ -180,7 +180,13 @@ def map_preexisting_objects(preexisting,compile_commands):
   if suffix==".lo" and outputs is None:
    unmapped.append(artifact_path); continue
   matched=[]
-  for output in outputs or []: matched.extend(by_output.get(output,[]))
+  missing_outputs=[]
+  for output in outputs or []:
+   if output not in by_output: missing_outputs.append(output)
+   else: matched.extend(by_output[output])
+  if missing_outputs:
+   unmapped.append({"artifact":artifact_path,"unmatched_libtool_objects":missing_outputs})
+   continue
   if matched and len(set(matched))==1:
    mapped.append({"artifact":artifact_path,"sources":sorted(set(matched)),"method":"exact-compiler-output"})
    continue
@@ -441,8 +447,8 @@ def main():
     "ambiguous_object_mappings":object_mapping["ambiguous_object_mappings"],
     "unmapped_object_artifacts":object_mapping["unmapped_object_artifacts"],"preprocess_failures":pp_errors,
     "translation_units":tus,"source_reachability_complete":source_complete}
-  (out/f"compile-commands-{comp}.json").write_text(json.dumps(compile_commands,indent=2)+"\\n")
- (out/"make-compile-command.txt").write_text("component-only Make -n -w dry-runs, bound to expanded Build/Compile recipe\\n")
+  (out/f"compile-commands-{comp}.json").write_text(json.dumps(compile_commands,indent=2)+"\n")
+ (out/"make-compile-command.txt").write_text("component-only Make -n -w dry-runs, bound to expanded Build/Compile recipe\n")
  binary_rows,binary_audit_complete,opaque_binary_openSSL_refs=audit_binary_inputs(build,out)
  complete={c for c,v in results.items() if v["source_reachability_complete"]}
  macro_rows=[]; macro_counts={"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
@@ -476,7 +482,7 @@ def main():
   non_call_references.append({"component":r["component"],"path":r["path"],"line":r["line"],"api":r["api"],
     "reference_kind":r["reference_kind"],"reachability_status":state,"conditional_branch_path":r["branch_path"],
     "source_sha256":sha(build/r["path"])})
- (out/"openssl-non-call-reference-reachability.json").write_text(json.dumps(non_call_references,indent=2)+"\\n")
+ (out/"openssl-non-call-reference-reachability.json").write_text(json.dumps(non_call_references,indent=2)+"\n")
  summary={"schema_version":1,"git_sha":subprocess.run(["git","rev-parse","HEAD"],cwd=repo,text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
   "firmware_compile_invoked":False,"method":"expanded OpenWrt Build/Compile recipe validation followed by component Make -n -w V=s and exact-command -E -dD/-dM replay",
   "target_compiler":a.cc,"target_compiler_realpath":str(compiler_path),"target_compiler_sha256":sha(compiler_path),
