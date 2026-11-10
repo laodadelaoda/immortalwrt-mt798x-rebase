@@ -110,6 +110,20 @@ def scan_macro_references(root,names,depr):
     state="ACTIVE_MACRO_EXPANSION_REQUIRES_CPP" if name in reachable else "UNREFERENCED_MACRO_DEFINITION"
     out.append({"component":item["component"],"path":item["path"],"line":item["line"],"macro":name,"api":api,"reachability":state})
  return out
+def callsite_context(root,rows,radius=5):
+ out=[]
+ for row in rows:
+  p=root/row["path"]
+  lines=p.read_text(encoding="utf-8",errors="replace").splitlines()
+  n=row["line"]-1; guards=[]
+  for line in lines[:n+1]:
+   stripped=line.strip()
+   if re.match(r"^#\s*(if|ifdef|ifndef)\b",stripped):
+    guards.append(stripped)
+   elif re.match(r"^#\s*endif\b",stripped) and guards:
+    guards.pop()
+  out.append({"component":row["component"],"path":row["path"],"line":row["line"],"api":row["api"],"preprocessor_guards":guards,"context":"\n".join(f"{i+1}: {lines[i]}" for i in range(max(0,n-radius),min(len(lines),n+radius+1)))})
+ return out
 def const_audit(root):
  out=[]
  mutable=re.compile(r"(?m)^[ \t]*(?!const\b)(?:static[ \t]+)?EC_KEY\s*\*\s*(\w+)\s*=\s*(?:\(\s*EC_KEY\s*\*\s*\)\s*)?EVP_PKEY_get0_EC_KEY\s*\(")
@@ -151,7 +165,7 @@ def main():
    if not mr["proposed_replacement"].strip() or not mr["semantic_review_requirements"].strip(): ap.error("incomplete migration research fields for "+api)
    if mr["approval"].lower() not in {"true","false"}: ap.error("invalid approval value for "+api)
    migration_map[api]=mr
- names,depr=catalog(a.openssl_source); rows=scan(a.source_root,names,depr); before=scan(a.pristine_root,names,depr); macro_refs=scan_macro_references(a.source_root,names,depr); const=const_audit(a.source_root)
+ names,depr=catalog(a.openssl_source); rows=scan(a.source_root,names,depr); before=scan(a.pristine_root,names,depr); macro_refs=scan_macro_references(a.source_root,names,depr); contexts=callsite_context(a.source_root,rows); const=const_audit(a.source_root)
  failures=[]; inventory=[]
  for mr in macro_refs:
   if mr["reachability"]=="ACTIVE_MACRO_EXPANSION_REQUIRES_CPP": failures.append("deprecated API is referenced by an active macro expansion; require preprocessor evidence: "+mr["api"]+" via "+mr["macro"]+" at "+mr["path"]+":"+str(mr["line"]))
@@ -188,7 +202,8 @@ def main():
  csvout(a.output_dir/"openssl-api-delta.csv",delta,["api","pristine_calls","prepared_calls","delta","deprecated"])
  csvout(a.output_dir/"openssl-const-correctness.csv",const,["component","path","line","kind"])
  csvout(a.output_dir/"openssl-api-macro-references.csv",macro_refs,["component","path","line","macro","api","reachability"])
- summary={"openssl_version":"3.5.9","components":COMP,"prepared_calls":len(rows),"pristine_calls":len(before),"header_apis":len(names),"deprecated_apis":len(depr),"migration_map_rows":len(migration_map),"migration_map_unreviewed":sum(1 for x in migration_map.values() if x["migration_status"]!="APPROVED" or x["approval"].lower()!="true"),"macro_definition_references":len(macro_refs),"macro_definition_unreferenced":sum(1 for x in macro_refs if x["reachability"]=="UNREFERENCED_MACRO_DEFINITION"),"macro_definition_active":sum(1 for x in macro_refs if x["reachability"]=="ACTIVE_MACRO_EXPANSION_REQUIRES_CPP"),"const_findings":const,"failures":failures,"limitations":["lexical inventory, not Clang AST/type analysis","macro reachability is a conservative lexical graph; active macro expansions require target preprocessor evidence","indirect function-pointer calls require compiler evidence"]}
+ (a.output_dir/"openssl-api-callsite-context.json").write_text(json.dumps(contexts,indent=2)+"\n")
+ summary={"openssl_version":"3.5.9","components":COMP,"prepared_calls":len(rows),"pristine_calls":len(before),"header_apis":len(names),"deprecated_apis":len(depr),"migration_map_rows":len(migration_map),"migration_map_unreviewed":sum(1 for x in migration_map.values() if x["migration_status"]!="APPROVED" or x["approval"].lower()!="true"),"macro_definition_references":len(macro_refs),"macro_definition_unreferenced":sum(1 for x in macro_refs if x["reachability"]=="UNREFERENCED_MACRO_DEFINITION"),"macro_definition_active":sum(1 for x in macro_refs if x["reachability"]=="ACTIVE_MACRO_EXPANSION_REQUIRES_CPP"),"source_context_rows":len(contexts),"deprecated_call_sites":sum(1 for x in rows if x["deprecated_macro"]),"deprecated_source_apis":len({x["api"] for x in rows if x["deprecated_macro"]}),"const_findings":const,"failures":failures,"limitations":["lexical inventory, not Clang AST/type analysis","macro reachability is a conservative lexical graph; active macro expansions require target preprocessor evidence","indirect function-pointer calls require compiler evidence"]}
  (a.output_dir/"openssl-api-audit.json").write_text(json.dumps(summary,indent=2)+"\n")
  (a.output_dir/"openssl-api-audit.txt").write_text("\n".join([f"prepared calls: {len(rows)}",f"pristine calls: {len(before)}",f"strict failures: {len(failures)}"]+["FAIL: "+x for x in failures])+"\n")
  print("OpenSSL API inventory: prepared=%d pristine=%d failures=%d"%(len(rows),len(before),len(failures)))
