@@ -198,3 +198,62 @@ Required per-callsite state rules:
 Do not infer ENGINE exclusion from `no-engine`; do not infer old-version compatibility-wrapper exclusion from a presumed OpenSSL version; do not infer BoringSSL, Windows, SuiteB, FIPS, ECC or CMAC branch reachability from repository defaults. Each callsite must be classified independently from its own translation unit's target preprocessor result. Function-level dead-code/link reachability is a separate later analysis and must not be conflated with preprocessor exclusion.
 
 No supplier source was changed in this audit pass. No firmware or EasyMesh component compilation was performed. The present evidence is insufficient to start API-family migration approval; the strict gate remains closed until the target-preprocessor evidence is generated and independently checked.
+
+
+## Implemented target-preprocessor audit pipeline (not yet executed on CI)
+
+The implementation is now present on `n60pro-mtk-closed-driver`:
+
+- `scripts/openssl-target-preprocessor-audit.py`
+- `tests/test-openssl-target-preprocessor-audit.py`
+- `.github/workflows/quick-prepare-audit.yml` — the new audit step is part of the reusable Quick Prepare job and retains its evidence even when a strict gate fails.
+
+This is an implementation commit, **not yet a target-preprocessor pass**. No callsite has been promoted based on the code being present; all classifications remain pending the first complete CI evidence bundle.
+
+### Exact target inputs
+
+The workflow reads expanded variables from the actual EasyMesh package Makefile context using a Make `--eval` target. It captures `TARGET_CC`, `TARGET_AR`, `TARGET_RANLIB`, `TARGET_CPPFLAGS`, `TARGET_CFLAGS`, `TARGET_LDFLAGS`, `STAGING_DIR`, `LINUX_DIR` and `TARGET_PATH`. It does not synthesize compiler flags or `-D` definitions.
+
+It separately reads the OpenSSL package's actual expanded `PKG_SOURCE`, `PKG_SOURCE_URL`, `PKG_HASH`, `PKG_BUILD_DIR`, `PATCH_DIR` and `OPENSSL_OPTIONS`. The artifact records the OpenSSL source identity, package hash, full patch-directory file hashes/tree digest, configured source-tree digest, generated-header digest and the target `.config` digest.
+
+The workflow runs the OpenSSL package Configure step and its `build_generated` header-generation target, then stages the generated public headers. It records `configdata.pm --dump`. The generated `OPENSSL_NO_ENGINE` definition is retained as diagnostic evidence only; it is not itself used to exclude ENGINE callsites.
+
+### No firmware or EasyMesh compilation
+
+The audit does install the N60 cross-toolchain and stage the target development headers for datconf/libkvcutil and libnl-tiny. These are prerequisite toolchain/dependency operations, not a firmware image build and not an EasyMesh component build. OpenSSL Configure/header generation does not compile OpenSSL.
+
+For each of WAPP, MAPD, P1905 and libmapd, the script invokes the component's real Make target in `-B -n -w` mode to enumerate compile commands, then replays each captured target compiler command as preprocessing only (`-E -dD`) and macro snapshot only (`-E -dM`). It does not invoke `-c`, link, package, or firmware targets. MAPD's `version` metadata target is run only after a dry-run check proves that its recipe contains no compiler invocation.
+
+### Per-translation-unit and per-callsite evidence
+
+The output includes the dry-run logs, extracted compile-command JSON, preprocessed source with line markers, macro snapshot, stderr, SHA256 values and a per-callsite reachability ledger. Each translation unit records the actual target values of:
+
+- `OPENSSL_NO_ENGINE` and `OPENSSL_NO_DEPRECATED_3_0`;
+- `OPENSSL_IS_BORINGSSL`;
+- `CONFIG_NATIVE_WINDOWS` and `CONFIG_SUITEB`;
+- `CONFIG_OPENSSL_CMAC`, `CONFIG_ECC`, `CONFIG_FIPS`, `CONFIG_TESTING_OPTIONS`;
+- `OPENSSL_NO_DH` and `OPENSSL_NO_DSA`.
+
+The source conditional-path parser now preserves nested `#if`, continued conditional expressions, `#elif` and `#else` branches. The compiler's preprocessed output, not this lexical branch path, is the deciding evidence.
+
+Direct source occurrences receive one of the three requested states:
+- `ACTIVE`: the call expression is present at the mapped source path and line in target-preprocessed output;
+- `EXCLUDED_WITH_EVIDENCE`: the component's complete translation-unit set preprocesses successfully and that call expression is absent;
+- `UNKNOWN_FAIL_CLOSED`: incomplete Make command enumeration, compiler mismatch, preprocessing failure or ambiguous line mapping.
+
+Macro-body references are emitted in a separate ledger. They are excluded only when the full component preprocessing completes and no active expression for that API exists in the component; otherwise they remain unknown. The audit fails closed on any unknown direct callsite or macro reference.
+
+### ENGINE decision rule
+
+OpenSSL 3.x deprecates ENGINE APIs, but deprecation is not proof that a target build excludes them. The workflow does not convert the textual `no-engine` Configure option into an exclusion decision. For each translation unit, the generated target macro snapshot and actual preprocessor output determine whether `OPENSSL_NO_ENGINE` is defined and whether the guarded ENGINE expression survives. Any missing translation unit or ambiguous mapping leaves the affected callsites unknown.
+
+### First-run acceptance criteria
+
+The first CI evidence bundle must show:
+1. all four component Make dry-runs succeeded and every target C/C++ compile command was captured;
+2. every captured translation unit completed both preprocessing passes;
+3. the compiler identity, target config, Make-expanded OpenSSL source/patch inputs and generated header tree are bound by SHA256;
+4. every direct callsite and macro reference has a justified state, with zero `UNKNOWN_FAIL_CLOSED`;
+5. ENGINE, old-version compatibility, BoringSSL, Windows, SuiteB, CMAC, ECC and FIPS states are visible in the actual per-translation-unit macro snapshots.
+
+A successful reachability audit still does **not** approve any API migration. Only after it passes will API families be reviewed against the official OpenSSL 1.1.1w/3.5.9 behavior and differential semantic tests. No supplier source has been modified by this implementation.
