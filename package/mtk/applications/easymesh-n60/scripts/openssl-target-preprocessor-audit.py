@@ -53,6 +53,48 @@ def inventory_module(repo):
  s=importlib.util.spec_from_file_location("openssl_inventory",p)
  m=importlib.util.module_from_spec(s); s.loader.exec_module(m); return m
 
+def make_specs(repo,build,a):
+ cpp,cflags,ld=a.cppflags,a.cflags,a.ldflags
+ easy=f"{cpp} {cflags} -Wno-error=deprecated-declarations -DCONFIG_SUPPORT_OPENWRT"
+ staging=str(a.staging); linux_rel=os.path.relpath(a.linux,repo)
+ return {
+  "libmapd":{"cwd":build/"libmapd","env":{},"argv":["make","-n","-w","-C",str(build/"libmapd"),"V=s",
+    f"CC={a.cc}",f"CFLAGS={cpp} {cflags} -Werror -g",f"LDFLAGS={ld}","all"]},
+  "wappd":{"cwd":build/"wappd","env":{},"argv":["make","-n","-w","-C",str(build/"wappd"),"V=s",
+    f"TOPDIR={repo}",f"UAPD_INCLUDE_PATH={a.linux}/include/uapi/linux/wapp -I{staging}/usr/include",
+    "CONFIG_SUPPORT_OPENWRT=y","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y",f"CC={a.cc}",
+    f"EXTRA_CFLAGS={cpp} {cflags} -Wno-error=deprecated-declarations -I{a.linux}/include/uapi/linux/wapp",
+    f"LDFLAGS={ld} -L{staging}/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto","all"]},
+  "1905daemon":{"cwd":build/"1905daemon","env":{"EXTRA_CFLAGS":easy},
+    "argv":["make","-n","-w","-C",str(build/"1905daemon"),"V=s",f"TOPDIR={repo}",f"ROOTDIR={repo}",
+    f"LINUXDIR={linux_rel}",f"STAGING_DIR={staging}","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y",
+    "MAP_R3_SUPPORT=y","SWTICH_DSA_ARCH=y",f"CC={a.cc}",f"AR={a.ar}",f"RANLIB={a.ranlib}",
+    f"LDFLAGS={ld} -L{staging}/usr/lib -Wl,--no-as-needed -lpthread -lnl-tiny -lssl -lcrypto","all"]},
+  "mapd":{"cwd":build/"mapd","env":{},"argv":["make","-n","-w","-C",str(build/"mapd"),"V=s",f"TOPDIR={repo}",
+    "CONFIG_SUPPORT_OPENWRT=y","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y",f"CC={a.cc}",
+    f"LDO={a.cc}",f"EXTRA_CFLAGS={easy}",f"LDFLAGS={ld} -L{staging}/usr/lib","version","mapd"]}
+ }
+
+def validate_compile_recipe(path,repo,build,a):
+ recipe=Path(path).read_text(encoding="utf-8",errors="replace")
+ linux_rel=os.path.relpath(a.linux,repo); staging=str(a.staging)
+ expected=[
+  f"-C {build}/libmapd",f'CFLAGS="{a.cppflags} {a.cflags} -Werror -g"',
+  f"-C {build}/wappd",f'UAPD_INCLUDE_PATH="{a.linux}/include/uapi/linux/wapp -I{staging}/usr/include"',
+  f'EXTRA_CFLAGS="{a.cppflags} {a.cflags} -Wno-error=deprecated-declarations -I{a.linux}/include/uapi/linux/wapp"',
+  f"-C {build}/1905daemon",f'LINUXDIR="{linux_rel}"',f'STAGING_DIR="{staging}"',
+  f"-C {build}/mapd",'EXTRA_CFLAGS="$$OPENWRT_EASYMESH_CFLAGS"',
+  'OPENWRT_EASYMESH_CFLAGS="$$TARGET_EASYMESH_CFLAGS -DCONFIG_SUPPORT_OPENWRT"',
+  "CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y","MAP_R3_SUPPORT=y","SWTICH_DSA_ARCH=y","version mapd"
+ ]
+ missing=[x for x in expected if x not in recipe]
+ if missing: raise SystemExit("expanded EasyMesh Build/Compile recipe differs from audit assumptions: "+repr(missing))
+ if recipe.count(f'CC="{a.cc}"')<4:
+  raise SystemExit("expanded Build/Compile recipe does not bind target CC to all four component builds")
+ if f'AR="{a.ar}"' not in recipe or f'RANLIB="{a.ranlib}"' not in recipe:
+  raise SystemExit("expanded Build/Compile recipe does not bind target AR/RANLIB")
+ return sha(path)
+
 def parse_commands(log,base,compiler,component_roots):
  cmds=[]; errors={name:[] for name in component_roots}; dirs=[Path(base)]
  def locate(src,cwd):
@@ -167,10 +209,10 @@ def main():
  ap.add_argument("--openssl-source-dir",type=Path,required=True); ap.add_argument("--openssl-patch-dir",type=Path,required=True)
  ap.add_argument("--openssl-pkg-source",required=True); ap.add_argument("--openssl-pkg-source-url",required=True)
  ap.add_argument("--openssl-pkg-hash",required=True); ap.add_argument("--openssl-options",required=True)
- ap.add_argument("--target-config",type=Path,required=True)
+ ap.add_argument("--target-config",type=Path,required=True); ap.add_argument("--package-compile-recipe",type=Path,required=True)
  ap.add_argument("--cc",required=True); ap.add_argument("--ar",required=True); ap.add_argument("--ranlib",required=True)
  ap.add_argument("--cppflags",default=""); ap.add_argument("--cflags",required=True); ap.add_argument("--ldflags",default="")
- a=ap.parse_args(); repo=a.repo_dir.resolve(); build=a.build_dir.resolve(); a.staging=a.staging_dir.resolve(); a.linux=a.linux_dir.resolve(); a.openssl_source_dir=a.openssl_source_dir.resolve(); a.openssl_patch_dir=a.openssl_patch_dir.resolve(); a.target_config=a.target_config.resolve()
+ a=ap.parse_args(); repo=a.repo_dir.resolve(); build=a.build_dir.resolve(); a.staging=a.staging_dir.resolve(); a.linux=a.linux_dir.resolve(); a.openssl_source_dir=a.openssl_source_dir.resolve(); a.openssl_patch_dir=a.openssl_patch_dir.resolve(); a.target_config=a.target_config.resolve(); a.package_compile_recipe=a.package_compile_recipe.resolve()
  out=a.output_dir.resolve(); out.mkdir(parents=True,exist_ok=True); (out/"preprocessed").mkdir(exist_ok=True)
  for c in COMP:
   if not (build/c).is_dir(): raise SystemExit(f"missing prepared component: {build/c}")
