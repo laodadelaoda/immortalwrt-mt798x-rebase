@@ -30,6 +30,14 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate baseline auditor syntax and deprecation parser
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile package/mtk/applications/easymesh-n60/scripts/audit-openssl-migration-baseline.py
+          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-migration-baseline-selftest.py
 
       - name: Download immutable OpenSSL 1.1.1w reference archive
         shell: bash
@@ -72,6 +80,9 @@ jobs:
             --openssl-359-source "$RUNNER_TEMP/openssl-migration/3.5.9" \
             --archive-1111 "$RUNNER_TEMP/openssl-migration/openssl-1.1.1w.tar.gz" \
             --archive-359 "$RUNNER_TEMP/openssl-migration/openssl-3.5.9.tar.gz" \
+            --git-sha "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
             --output-dir "$GITHUB_WORKSPACE/artifacts/openssl-migration-baseline"
 
       - name: Upload immutable OpenSSL migration baseline evidence
