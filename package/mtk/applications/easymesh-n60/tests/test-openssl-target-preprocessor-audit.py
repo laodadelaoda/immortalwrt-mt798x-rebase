@@ -84,6 +84,17 @@ with tempfile.TemporaryDirectory() as d:
  ]
  recipe=root/"Build-Compile.expanded.txt"; recipe.write_text("\n".join(recipe_lines),encoding="utf-8")
  assert m.validate_compile_recipe(recipe,root,build,args)==m.sha(recipe)
+ # The expanded recipe and all component dry-runs must preserve strict
+ # deprecation diagnostics; any demotion of -Werror is a hard failure.
+ original_recipe=recipe.read_text(encoding="utf-8")
+ recipe.write_text(original_recipe+"\\nCFLAGS=-Wno-error=deprecated-declarations\\n",encoding="utf-8")
+ try:
+  m.validate_compile_recipe(recipe,root,build,args)
+  raise AssertionError("deprecated-warning demotion in expanded recipe must fail")
+ except SystemExit as exc:
+  assert "deprecated-API warning suppression is forbidden" in str(exc)
+ recipe.write_text(original_recipe,encoding="utf-8")
+ assert all("-Wno-error=deprecated-declarations" not in " ".join(spec["argv"]) for group in specs.values() for spec in group)
 
  # Target preprocessing must use the actual deprecated API set from
  # the pinned OpenSSL 3.5.9 headers, not mark every public API deprecated.
