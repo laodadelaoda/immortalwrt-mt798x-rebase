@@ -48,15 +48,27 @@ with tempfile.TemporaryDirectory() as d:
  for key,path in input_paths.items():
   if key not in {"migration_lock","openssl_package_makefile"}: path.write_text("fixture:"+key+"\n")
  att={
-  "schema_version":1,"status":"VERIFIED","baseline_id":lock["baseline_id"],
+  "schema_version":2,"status":"VERIFIED","baseline_id":lock["baseline_id"],
   "run":{"id":1,"attempt":1,"git_sha":"c"*40},
   "artifact":{"id":1,"sha256":"d"*64},
   "source":{"archive_sha256":{"1.1.1w":from_hash,"3.5.9":to_hash}},
-  "results":{"failures":[],"migration_map_rows":64,"migration_map_apis_present_in_1_1_1w":64,"migration_map_apis_deprecated_in_3_5_9":64},
+  "results":{"failures":[],"migration_map_rows":68,"migration_map_apis_present_in_1_1_1w":68,"migration_map_apis_deprecated_in_3_5_9":68},
   "input_sha256":{key:m.sha256_file(path) for key,path in input_paths.items()}
  }
  (tests/"openssl-migration-baseline.attestation.json").write_text(__import__("json").dumps(att))
  assert m.validate_openssl_source(Path(d),repo)=="3.5.9"
+ # A stale or incorrect input digest must invalidate the baseline credential.
+ att_path=tests/"openssl-migration-baseline.attestation.json"
+ saved_att=__import__("json").loads(att_path.read_text())
+ bad_att=dict(saved_att); bad_att["input_sha256"]=dict(saved_att["input_sha256"])
+ bad_att["input_sha256"]["api_policy"]="0"*64
+ att_path.write_text(__import__("json").dumps(bad_att))
+ try:
+  m.validate_openssl_source(Path(d),repo)
+  raise AssertionError("incorrect baseline input SHA256 must fail")
+ except ValueError as exc:
+  assert "input hash mismatch" in str(exc)
+ att_path.write_text(__import__("json").dumps(saved_att))
 
  (h/"opensslv.h").write_text("# define OPENSSL_VERSION_MAJOR 3\n# define OPENSSL_VERSION_MINOR 5\n# define OPENSSL_VERSION_PATCH 9\n")
  assert m.validate_openssl_source(Path(d),repo)=="3.5.9"
@@ -71,12 +83,13 @@ with tempfile.TemporaryDirectory() as d:
  assert len(m.const_audit(root))==1
 with (Path(__file__).with_name("openssl-111-to-359-migration-map.csv")).open(encoding="utf-8",newline="") as f:
  rows=list(__import__("csv").DictReader(f))
- assert len(rows)==64, len(rows)
- assert len({r["api"] for r in rows})==64
+ assert len(rows)==68, len(rows)
+ assert len({r["api"] for r in rows})==68
  assert all(r["migration_status"]=="UNREVIEWED" and r["approval"]=="false" for r in rows)
  assert all(r["official_mapping_kind"] and r["official_mapping_section"] for r in rows)
  assert all(r["source_reachability_status"] and r["source_reachability_evidence"] for r in rows)
  assert next(r for r in rows if r["api"]=="EVP_CIPHER_CTX_iv_noconst")["source_reachability_status"]=="UNREFERENCED_MACRO_DEFINITION"
  assert all(r["official_migration_guide_url"].startswith("https://docs.openssl.org/3.5/") for r in rows)
  assert all(r["official_target_manual_url"].startswith("https://docs.openssl.org/3.5/") for r in rows)
-print("PASS: inventory parser masks comments/literals, preserves call-site lines, excludes C type keywords, detects deprecated declarations/const loss, distinguishes active/unreferenced macro expansions and validates the 64-row unapproved migration baseline.")
+ assert {"ASN1_STRING_data","SSL_use_RSAPrivateKey","SSL_use_RSAPrivateKey_ASN1","TLSv1_method"}.issubset({r["api"] for r in rows})
+print("PASS: inventory parser masks comments/literals, preserves call-site lines, excludes C type keywords, detects deprecated declarations/const loss, distinguishes active/unreferenced macro expansions and validates the 68-row unapproved migration baseline.")
