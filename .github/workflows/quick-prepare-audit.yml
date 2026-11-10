@@ -749,6 +749,7 @@ jobs:
             --summary artifacts/easymesh-openssl-preprocessor-audit/openssl-target-preprocessor-summary.json \
             --macros artifacts/easymesh-openssl-preprocessor-audit/macro-reference-reachability.json \
             --migration-map package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv \
+            --delta artifacts/easymesh-openssl-api-audit/openssl-api-delta.csv \
             --scope-manifest package/mtk/applications/easymesh-n60/tests/openssl-easymesh-scope.json \
             --policy package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json \
             --source-root "$BUILD_DIR" --repo-root "$GITHUB_WORKSPACE" \

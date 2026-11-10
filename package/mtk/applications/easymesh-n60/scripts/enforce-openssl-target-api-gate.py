@@ -37,15 +37,22 @@ def observe_preprocessed_output(path,source_path,line_number,api):
 
 REQUIRED_EASYMESH_COMPONENTS={"wappd","mapd","1905daemon","libmapd"}
 
-def build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migration_map):
- """Derive the real EasyMesh deprecated-API subset without changing the 68-row reference baseline."""
+def build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migration_map,delta_rows=None):
+ """Retain every original EasyMesh API candidate; isolate target-ACTIVE calls for migration."""
+ delta_by_api={r.get("api"):r for r in (delta_rows or []) if r.get("api")}
  rows={}
  def item(api):
-  return rows.setdefault(api,{"api":api,"components":set(),"source_reference_count":0,
-   "active_call_sites":0,"excluded_call_sites":0,"unknown_call_sites":0,
-   "declaration_references":0,"other_non_call_references":0,
-   "macro_references":0,"macro_active":0,"macro_excluded":0,"macro_unknown":0,
-   "source_locations":[]})
+  if api not in rows:
+   mr=migration_map.get(api,{})
+   try: baseline_count=int(mr.get("observed_lexical_occurrences") or 0)
+   except (TypeError,ValueError): baseline_count=0
+   rows[api]={"api":api,"components":set(x for x in mr.get("observed_components","").split(";") if x),
+    "baseline_lexical_occurrences":baseline_count,"pristine_call_count":None,"prepared_call_count":None,
+    "source_reference_count":0,"active_call_sites":0,"excluded_call_sites":0,"unknown_call_sites":0,
+    "declaration_references":0,"other_non_call_references":0,
+    "macro_references":0,"macro_active":0,"macro_excluded":0,"macro_unknown":0,"source_locations":[]}
+  return rows[api]
+ for api in migration_map: item(api)
  for r in inventory_rows:
   if not r.get("deprecated_macro"): continue
   x=item(r["api"]); x["components"].add(r["component"]); x["source_reference_count"]+=1
@@ -62,8 +69,7 @@ def build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migra
   if r.get("reference_kind")=="DECLARATION_OR_DEFINITION": x["declaration_references"]+=1
   else: x["other_non_call_references"]+=1
   x["source_locations"].append({"component":r["component"],"path":r["path"],"line":int(r["line"]),
-   "kind":"NON_CALL_REFERENCE","reachability_status":r.get("reachability_status"),
-   "reference_kind":r.get("reference_kind")})
+   "kind":"NON_CALL_REFERENCE","reachability_status":r.get("reachability_status"),"reference_kind":r.get("reference_kind")})
  for r in macro_rows:
   x=item(r["api"]); x["components"].add(r["component"]); x["macro_references"]+=1
   status=r.get("reachability_status")
@@ -75,13 +81,29 @@ def build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migra
  out=[]
  for api,x in sorted(rows.items()):
   mr=migration_map.get(api,{})
+  delta=delta_by_api.get(api)
+  if delta:
+   try:
+    x["pristine_call_count"]=int(delta["pristine_calls"])
+    x["prepared_call_count"]=int(delta["prepared_calls"])
+   except (KeyError,TypeError,ValueError):
+    x["pristine_call_count"]=None; x["prepared_call_count"]=None
+  elif x["source_reference_count"]:
+   x["pristine_call_count"]=x["baseline_lexical_occurrences"] or x["source_reference_count"]
+   x["prepared_call_count"]=x["source_reference_count"]
+  else:
+   x["pristine_call_count"]=x["baseline_lexical_occurrences"] or None
+   x["prepared_call_count"]=0
   if x["unknown_call_sites"] or x["macro_unknown"]: status="UNKNOWN_FAIL_CLOSED"
   elif x["active_call_sites"] or x["macro_active"]: status="ACTIVE"
-  elif x["excluded_call_sites"] or x["macro_excluded"] or x["declaration_references"] or x["other_non_call_references"]:
+  elif x["prepared_call_count"]==0 and (x["pristine_call_count"] or 0)>0 and delta:
+   status="NO_LONGER_PRESENT_AFTER_PATCH"
+  elif x["prepared_call_count"] and (x["excluded_call_sites"] or x["macro_excluded"] or x["declaration_references"] or x["other_non_call_references"]):
    status="EXCLUDED_WITH_EVIDENCE"
   else: status="UNKNOWN_FAIL_CLOSED"
   x.update({"components":sorted(x["components"]),"scope_status":status,
    "needs_migration_review":x["active_call_sites"]>0,
+   "requires_patch_semantic_review":status=="NO_LONGER_PRESENT_AFTER_PATCH",
    "migration_status":mr.get("migration_status","MISSING_FROM_GLOBAL_BASELINE"),
    "approval":mr.get("approval","false"),"global_baseline_candidate":api in migration_map,
    "source_locations":sorted(x["source_locations"],key=lambda z:(z["component"],z["path"],z["line"],z["kind"]))})
@@ -105,7 +127,7 @@ def validate_scope_manifest(scope,summary,migration_map):
   failures.append("EasyMesh supporting dependency boundary list must explicitly retain datconf/libkvcutil and libnl-tiny")
  return failures
 
-def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,policy,source_root,expected_git_sha):
+def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,policy,source_root,expected_git_sha,delta_rows=None):
  failures=[]
  if summary.get("git_sha")!=expected_git_sha: failures.append("target preprocessor evidence Git SHA mismatch")
  if summary.get("firmware_compile_invoked") is not False: failures.append("firmware compilation was invoked or not disproven")
@@ -240,7 +262,7 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
    failures.append("legacy-retained API lacks a concrete compatibility/interoperability justification: "+api)
 
  counts=Counter(x["api"] for x in active)
- subset=build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migration_map)
+ subset=build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migration_map,delta_rows)
  active_subset=[x["api"] for x in subset if x["needs_migration_review"]]
  return {
   "schema_version":2,"git_sha":expected_git_sha,"firmware_compile_invoked":False,
@@ -251,14 +273,14 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
   "migration_map_rows":len(migration_map),
   "easymesh_api_candidate_count":len(subset),
   "easymesh_api_migration_required_count":len(active_subset),
-  "easymesh_api_migration_required":active_subset,"easymesh_api_subset":subset,
+  "easymesh_api_migration_required":active_subset,"easymesh_api_subset":subset,\n  "easymesh_api_removed_by_patch":[x["api"] for x in subset if x["requires_patch_semantic_review"]],
   "active_apis_unreviewed":[api for api in active_apis if api not in migration_map or migration_map[api].get("migration_status")!="APPROVED" or str(migration_map[api].get("approval","")).lower()!="true"],
   "failures":failures,"complete":not failures
  }
 
 def main():
  ap=argparse.ArgumentParser()
- for name in ("inventory","callsites","noncalls","summary","macros","migration-map","policy","source-root","repo-root","output","scope-manifest"):
+ for name in ("inventory","callsites","noncalls","summary","macros","migration-map","delta","policy","source-root","repo-root","output","scope-manifest"):
   ap.add_argument("--"+name,type=Path,required=True)
  a=ap.parse_args()
  repo=a.repo_root.resolve()
@@ -269,8 +291,8 @@ def main():
  migration_map={x["api"]:x for x in migration_rows}
  summary=load_json(a.summary)
  scope=load_json(a.scope_manifest)
- report=evaluate(inventory,load_json(a.callsites),load_json(a.noncalls),summary,
-                 load_json(a.macros),migration_map,load_json(a.policy),a.source_root,git.stdout.strip())
+ with a.delta.open(encoding="utf-8",newline="") as f: delta_rows=list(csv.DictReader(f))\n report=evaluate(inventory,load_json(a.callsites),load_json(a.noncalls),summary,
+                 load_json(a.macros),migration_map,load_json(a.policy),a.source_root,git.stdout.strip(),delta_rows)
  report["failures"].extend(validate_scope_manifest(scope,summary,migration_map))
  report["scope"]={"scope_id":scope.get("scope_id"),"openssl_version":scope.get("openssl_version"),
   "primary_components":scope.get("primary_components"),"supporting_dependencies":scope.get("supporting_dependencies"),
@@ -282,9 +304,9 @@ def main():
  subset={"schema_version":1,"scope_id":scope.get("scope_id"),"openssl_version":scope.get("openssl_version"),
   "git_sha":git.stdout.strip(),"scope_components":scope.get("primary_components"),
   "global_baseline":report["scope"]["global_baseline"],
-  "candidate_api_count":report["easymesh_api_candidate_count"],
+  "candidate_api_count":report["easymesh_api_candidate_count"],\n  "original_68_candidate_set_preserved":len(migration_map)==68,
   "migration_required_api_count":report["easymesh_api_migration_required_count"],
-  "migration_required_apis":report["easymesh_api_migration_required"],
+  "migration_required_apis":report["easymesh_api_migration_required"],\n  "removed_by_patch_requiring_semantic_review":report["easymesh_api_removed_by_patch"],
   "apis":report["easymesh_api_subset"],"dependency_boundary_policy":scope.get("supporting_dependencies")}
  (a.output.parent/"easymesh-openssl-api-subset.json").write_text(json.dumps(subset,indent=2)+"\n",encoding="utf-8")
  fields=["api","components","source_reference_count","active_call_sites","excluded_call_sites","unknown_call_sites",
@@ -294,7 +316,7 @@ def main():
   writer=csv.DictWriter(f,fieldnames=fields); writer.writeheader()
   for row in report["easymesh_api_subset"]:
    writer.writerow({k:(";".join(row[k]) if k=="components" else row[k]) for k in fields})
- print(json.dumps({k:report[k] for k in ("target_active_call_sites","target_active_apis","easymesh_api_candidate_count","easymesh_api_migration_required","excluded_with_evidence","declarations_or_definitions","unknown_fail_closed","complete","failures")},indent=2))
+ print(json.dumps({k:report[k] for k in ("target_active_call_sites","target_active_apis","easymesh_api_candidate_count","easymesh_api_migration_required","easymesh_api_removed_by_patch","excluded_with_evidence","declarations_or_definitions","unknown_fail_closed","complete","failures")},indent=2))
  return 0 if report["complete"] else 1
 
 if __name__=="__main__": raise SystemExit(main())

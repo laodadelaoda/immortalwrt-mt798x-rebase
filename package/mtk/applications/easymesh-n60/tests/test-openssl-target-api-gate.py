@@ -146,11 +146,21 @@ subset=m.build_easymesh_api_subset(
   {"component":"wappd","path":"wappd/c.c","line":30,"api":"ENGINE_by_id","reference_kind":"CALL_EXPRESSION","reachability_status":"EXCLUDED_WITH_EVIDENCE"}],
  [],[],{"EVP_PKEY_cmp":{"migration_status":"UNREVIEWED","approval":"false"},
          "EC_KEY_new":{"migration_status":"UNREVIEWED","approval":"false"},
-         "ENGINE_by_id":{"migration_status":"UNREVIEWED","approval":"false"}})
+         "ENGINE_by_id":{"migration_status":"UNREVIEWED","approval":"false"}},[])
 assert len(subset)==3
 assert [x["api"] for x in subset if x["needs_migration_review"]]==["EVP_PKEY_cmp"]
 assert next(x for x in subset if x["api"]=="ENGINE_by_id")["scope_status"]=="EXCLUDED_WITH_EVIDENCE"
 assert next(x for x in subset if x["api"]=="EC_KEY_new")["needs_migration_review"] is False
+
+removed=m.build_easymesh_api_subset([],[],[],[],
+ {"EVP_MD_CTX_md":{"observed_lexical_occurrences":"2","observed_components":"wappd;1905daemon","migration_status":"UNREVIEWED","approval":"false"}},
+ [{"api":"EVP_MD_CTX_md","pristine_calls":"2","prepared_calls":"0","delta":"-2","deprecated":"True"}])
+assert len(removed)==1 and removed[0]["scope_status"]=="NO_LONGER_PRESENT_AFTER_PATCH"
+assert removed[0]["requires_patch_semantic_review"] is True and removed[0]["needs_migration_review"] is False
+unknown_removed=m.build_easymesh_api_subset([],[],[],[],
+ {"EVP_MD_CTX_md":{"observed_lexical_occurrences":"2","observed_components":"wappd","migration_status":"UNREVIEWED","approval":"false"}},[])
+assert unknown_removed[0]["scope_status"]=="UNKNOWN_FAIL_CLOSED"
+
 scope={"schema_version":1,"scope_id":"n60-easymesh-openssl-3.5.9","openssl_version":"3.5.9",
  "primary_components":["wappd","mapd","1905daemon","libmapd"],
  "supporting_dependencies":[{"name":"datconf"},{"name":"libnl-tiny"}],
