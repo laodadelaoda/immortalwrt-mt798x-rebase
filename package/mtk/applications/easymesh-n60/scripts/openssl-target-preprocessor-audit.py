@@ -134,6 +134,25 @@ def pp_hits(path,cwd,names):
    lineno+=1
  return hits,filehits
 
+def prepare_mapd_version(build,repo,out,compiler):
+ # The production Build/Compile invokes "version mapd". Run only the metadata
+ # target after proving its dry-run has no compiler invocation.
+ directory=build/"mapd"
+ dry=subprocess.run(["make","-n","-w","-C",str(directory),"V=s","version"],cwd=repo,
+                    text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+ (out/"mapd-version-dry-run.log").write_text(dry.stdout,encoding="utf-8")
+ if dry.returncode: raise SystemExit("MAPD version target dry-run failed")
+ for line in dry.stdout.splitlines():
+  try: tokens=shlex.split(line)
+  except ValueError: raise SystemExit("cannot parse MAPD version target dry-run; fail closed")
+  candidates=[Path(t).name for t in tokens if Path(t).name.endswith(("gcc","clang","cc")) or Path(t).name.startswith("clang")]
+  if compiler in candidates or candidates:
+   raise SystemExit("MAPD version target dry-run contains a compiler invocation; refusing to execute it")
+ run=subprocess.run(["make","-w","-C",str(directory),"V=s","version"],cwd=repo,
+                    text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+ (out/"mapd-version-generation.log").write_text(run.stdout,encoding="utf-8")
+ if run.returncode: raise SystemExit("MAPD version metadata generation failed")
+
 def main():
  ap=argparse.ArgumentParser()
  for n in ("repo","build","staging","linux","output"): ap.add_argument("--"+n+"-dir" if n in ("repo","build","output") else "--"+n+"-dir",type=Path,required=True)
@@ -149,6 +168,7 @@ def main():
  cc=shlex.split(a.cc)
  compiler=Path(cc[-1]).name if cc else ""
  if not cc or not (Path(cc[-1]).is_file() or shutil.which(cc[-1])): raise SystemExit(f"target compiler missing: {a.cc}")
+ prepare_mapd_version(build,repo,out,compiler)
  inv=inventory_module(repo)
  with (repo/"package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv").open(encoding="utf-8",newline="") as f: mapping=list(csv.DictReader(f))
  names={x["api"] for x in mapping}
