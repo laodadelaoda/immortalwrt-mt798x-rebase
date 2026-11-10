@@ -362,9 +362,12 @@ def main():
     h,fh=pp_hits(dest,cmd["cwd"],names); hits.update(h); filehits.update(fh)
     source_root=(build/comp).resolve()
     for hit in h:
-     try: Path(hit[0]).resolve().relative_to(source_root)
+     try:
+      Path(hit[0]).resolve().relative_to(source_root)
+      rel=Path(hit[0]).resolve().relative_to(build.resolve())
      except ValueError: continue
-     api_hits_by_component[comp].add(hit[2])
+     kind=classify_source_reference(build,{"path":str(rel),"line":hit[1],"api":hit[2]})
+     if kind!="DECLARATION_OR_DEFINITION": api_hits_by_component[comp].add(hit[2])
    else: pp_errors.append(item)
    tus.append(item)
   make_ok=all(code==0 for code in run_codes)
@@ -390,14 +393,27 @@ def main():
  callsites=[]; counts={"ACTIVE":0,"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
  for r in call_rows:
   src=canon(build/r["path"],repo); key=(src,r["line"],r["api"])
-  if key in hits: state="ACTIVE"
+  if r["reference_kind"]=="UNKNOWN_REFERENCE_KIND": state="UNKNOWN_FAIL_CLOSED"
+  elif key in hits: state="ACTIVE"
   elif (src,r["api"]) in filehits: state="UNKNOWN_FAIL_CLOSED"
   elif r["component"] in complete: state="EXCLUDED_WITH_EVIDENCE"
   else: state="UNKNOWN_FAIL_CLOSED"
   counts[state]+=1
-  callsites.append({"component":r["component"],"path":r["path"],"line":r["line"],"api":r["api"],"reachability_status":state,
+  callsites.append({"component":r["component"],"path":r["path"],"line":r["line"],"api":r["api"],"reference_kind":r["reference_kind"],"reachability_status":state,
     "conditional_branch_path":r["branch_path"],"source_sha256":sha(build/r["path"]),
     "translation_units":[x["source"] for x in results[r["component"]]["translation_units"] if x["returncode"]==0]})
+ non_call_references=[]; non_call_counts={"ACTIVE":0,"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
+ for r in non_call_rows:
+  src=canon(build/r["path"],repo); key=(src,r["line"],r["api"])
+  if key in hits: state="ACTIVE"
+  elif (src,r["api"]) in filehits: state="UNKNOWN_FAIL_CLOSED"
+  elif r["component"] in complete: state="EXCLUDED_WITH_EVIDENCE"
+  else: state="UNKNOWN_FAIL_CLOSED"
+  non_call_counts[state]+=1
+  non_call_references.append({"component":r["component"],"path":r["path"],"line":r["line"],"api":r["api"],
+    "reference_kind":r["reference_kind"],"reachability_status":state,"conditional_branch_path":r["branch_path"],
+    "source_sha256":sha(build/r["path"])})
+ (out/"openssl-non-call-reference-reachability.json").write_text(json.dumps(non_call_references,indent=2)+"\\n")
  summary={"schema_version":1,"git_sha":subprocess.run(["git","rev-parse","HEAD"],cwd=repo,text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
   "firmware_compile_invoked":False,"method":"expanded OpenWrt Build/Compile recipe validation followed by component Make -n -w V=s and exact-command -E -dD/-dM replay",
   "target_compiler":a.cc,"target_compiler_realpath":str(compiler_path),"target_compiler_sha256":sha(compiler_path),
@@ -410,11 +426,11 @@ def main():
   "openssl_patch_dir":str(a.openssl_patch_dir),"openssl_patch_tree_sha256":tree_sha(a.openssl_patch_dir),
   "openssl_source_tree_sha256":tree_sha(a.openssl_source_dir),"openssl_configure_sha256":sha(a.openssl_source_dir/"Configure"),"openssl_configdata_sha256":sha(a.openssl_source_dir/"configdata.pm"),
   "openssl_header_tree_sha256":tree_sha(hdr),"prepared_source_tree_sha256":tree_sha(build),"components":results,
-  "callsite_counts":{"total":len(callsites),**counts},"macro_reference_counts":{"total":len(macro_rows),**macro_counts},
-  "source_reachability_complete":len(complete)==4 and counts["UNKNOWN_FAIL_CLOSED"]==0 and macro_counts["UNKNOWN_FAIL_CLOSED"]==0,
+  "callsite_counts":{"total":len(callsites),**counts},"non_call_reference_counts":{"total":len(non_call_references),**non_call_counts},"macro_reference_counts":{"total":len(macro_rows),**macro_counts},
+  "source_reachability_complete":len(complete)==4 and counts["UNKNOWN_FAIL_CLOSED"]==0 and non_call_counts["UNKNOWN_FAIL_CLOSED"]==0 and macro_counts["UNKNOWN_FAIL_CLOSED"]==0,
   "opaque_binary_input_count":len(binary_rows),"opaque_binary_symbol_audit_complete":binary_audit_complete,
   "opaque_binary_openSSL_references_found":opaque_binary_openSSL_refs,
-  "complete":len(complete)==4 and counts["UNKNOWN_FAIL_CLOSED"]==0 and macro_counts["UNKNOWN_FAIL_CLOSED"]==0 and binary_audit_complete and not opaque_binary_openSSL_refs,
+  "complete":len(complete)==4 and counts["UNKNOWN_FAIL_CLOSED"]==0 and non_call_counts["UNKNOWN_FAIL_CLOSED"]==0 and macro_counts["UNKNOWN_FAIL_CLOSED"]==0 and binary_audit_complete and not opaque_binary_openSSL_refs,
   "workflow_build_scope":{"target_toolchain_install":True,"dependency_dev_packages":["datconf","libnl-tiny"],"openssl":"Configure and build_generated headers only","easymesh_component_compile":False,"firmware_compile":False},
   "limitations":["the audit script itself preprocesses only; the enclosing workflow builds the target toolchain and required dependency development packages","prebuilt objects and archives are inventoried and symbol-scanned; symbol absence cannot prove absence of statically embedded code or dlsym-based loading","direct source expressions are classified separately from macro-body references","ambiguous source-line mapping is UNKNOWN_FAIL_CLOSED"]}
  (out/"callsite-reachability.json").write_text(json.dumps(callsites,indent=2)+"\n")
