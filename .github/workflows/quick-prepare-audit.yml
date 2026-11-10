@@ -694,6 +694,7 @@ jobs:
           OPENSSL_CONFIGURE="${OPENSSL_CONFIGURES[0]}"
           python3 package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py
           python3 package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py \
+            --strict \
             --repo-root "$GITHUB_WORKSPACE" \
             --source-root "$BUILD_DIR" \
             --pristine-root "${BUILD_DIR}-openssl-pristine" \
