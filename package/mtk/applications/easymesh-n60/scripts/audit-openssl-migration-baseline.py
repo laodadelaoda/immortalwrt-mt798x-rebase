@@ -47,6 +47,9 @@ def main():
     ap.add_argument("--openssl-359-source",type=Path,required=True)
     ap.add_argument("--archive-1111",type=Path,required=True)
     ap.add_argument("--archive-359",type=Path,required=True)
+    ap.add_argument("--git-sha",required=True)
+    ap.add_argument("--run-id",required=True)
+    ap.add_argument("--run-attempt",required=True)
     ap.add_argument("--output-dir",type=Path,required=True)
     a=ap.parse_args()
 
@@ -120,13 +123,24 @@ def main():
         w=csv.DictWriter(f,fieldnames=fields); w.writeheader(); w.writerows(rows)
     summary={
         "baseline_id":lock["baseline_id"],
+        "git_sha":a.git_sha,
+        "run_id":int(a.run_id),
+        "run_attempt":int(a.run_attempt),
+        "input_sha256":{
+            "migration_lock":sha256(lock_path),
+            "migration_map":sha256(map_path),
+            "openssl_package_makefile":sha256(makefile),
+            "api_inventory_script":sha256(a.repo_root/"package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py"),
+            "api_policy":sha256(a.repo_root/"package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json")
+        },
         "from_version":lock["from"]["version"],
         "to_version":lock["to"]["version"],
         "archive_sha256":{"1.1.1w":h1111,"3.5.9":h359},
         "header_tree_sha256":{"1.1.1w":header_digest(files1111),"3.5.9":header_digest(files359)},
         "header_api_names":{"1.1.1w":len(names1111),"3.5.9":len(names359)},
-        "deprecated_api_declarations":{"1.1.1w":len(depr1111),"3.5.9":len(depr359)},
+        "deprecated_api_declarations":{"3.5.9":len(depr359)},
         "migration_map_rows":len(mapping),
+        "migration_map_apis_with_1_1_1w_deprecation_annotation":sum(1 for r in rows if r["deprecation_annotation_1_1_1w"]),
         "migration_map_apis_present_and_deprecated_in_3_5_9":sum(1 for r in rows if r["present_in_3_5_9_headers"]=="true" and r["deprecated_in_3_5_9_headers"]=="true"),
         "api_presence_in_1_1_1w":sum(1 for r in rows if r["present_in_1_1_1w_headers"]=="true"),
         "failures":failures,
