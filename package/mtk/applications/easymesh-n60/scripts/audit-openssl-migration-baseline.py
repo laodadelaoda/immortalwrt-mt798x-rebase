@@ -22,14 +22,14 @@ def header_files(root):
     return sorted(base.rglob("*.h"))
 
 def token_present(files, api):
-    rx=re.compile(r"\\b"+re.escape(api)+r"\\b")
+    rx=re.compile(r"\b"+re.escape(api)+r"\b")
     return any(rx.search(p.read_text(encoding="utf-8",errors="replace")) for p in files)
 
 def header_digest(files):
     h=hashlib.sha256()
     for p in files:
         rel=p.as_posix().split("/include/openssl/",1)[-1]
-        h.update(rel.encode()); h.update(b"\\0"); h.update(bytes.fromhex(sha256(p))); h.update(b"\\n")
+        h.update(rel.encode()); h.update(b"\0"); h.update(bytes.fromhex(sha256(p))); h.update(b"\n")
     return h.hexdigest()
 
 def main():
@@ -47,7 +47,7 @@ def main():
     makefile=a.repo_root/"package/libs/openssl/Makefile"
     lock=json.loads(lock_path.read_text())
     mk=makefile.read_text()
-    version=re.search(r"(?m)^PKG_VERSION:=([^\\s#]+)",mk)
+    version=re.search(r"(?m)^PKG_VERSION:=([^\s#]+)",mk)
     pkg_hash=re.search(r"(?m)^PKG_HASH:=([0-9a-f]{64})",mk)
     if not version or version.group(1)!="3.5.9" or not pkg_hash:
         raise SystemExit("OpenWrt OpenSSL package is not pinned to the expected 3.5.9 baseline")
@@ -112,7 +112,7 @@ def main():
         "failures":failures,
         "limitations":["header symbol presence is not proof of source-level call reachability or semantic equivalence","the 1.1.1w deprecation parser is informational; API-specific migration decisions require official manual review"]
     }
-    (a.output_dir/"openssl-migration-baseline.json").write_text(json.dumps(summary,indent=2)+"\\n")
+    (a.output_dir/"openssl-migration-baseline.json").write_text(json.dumps(summary,indent=2)+"\n")
     print(json.dumps(summary,indent=2))
     return 1 if failures else 0
 
