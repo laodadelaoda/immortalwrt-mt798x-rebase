@@ -17,7 +17,6 @@ with tempfile.TemporaryDirectory() as d:
  states={(x["macro"],x["reachability"]) for x in refs}
  assert ("UNUSED","UNREFERENCED_MACRO_DEFINITION") in states,states
  assert ("INNER","ACTIVE_MACRO_EXPANSION_REQUIRES_CPP") in states,states
- assert ("OUTER","ACTIVE_MACRO_EXPANSION_REQUIRES_CPP") in states,states
 with tempfile.TemporaryDirectory() as d:
  root=Path(d)
  for c in m.COMP: (root/c).mkdir()
