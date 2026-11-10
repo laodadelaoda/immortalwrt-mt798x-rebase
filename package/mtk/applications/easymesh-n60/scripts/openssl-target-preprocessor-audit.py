@@ -119,8 +119,10 @@ def make_specs(repo,build,a):
 def validate_compile_recipe(path,repo,build,a):
  recipe=Path(path).read_text(encoding="utf-8",errors="replace")
  linux_rel=os.path.relpath(a.linux,repo); staging=str(a.staging)
- for forbidden in ("-Wno-error=deprecated-declarations","-Wno-deprecated-declarations"):
-  if forbidden in recipe: raise SystemExit("deprecated-API warning suppression is forbidden in Build/Compile recipe: "+forbidden)
+ for line in recipe.splitlines():
+  if "grep " in line: continue  # negative Makefile assertions mention forbidden flags literally
+  for forbidden in ("-Wno-error=deprecated-declarations","-Wno-deprecated-declarations"):
+   if forbidden in line: raise SystemExit("deprecated-API warning suppression is forbidden in Build/Compile compiler arguments: "+forbidden)
  expected=[
   f"-C {build}/libmapd",f'CFLAGS="{a.cppflags} {a.cflags} -Werror -g"',
   f"-C {build}/wappd",f'UAPD_INCLUDE_PATH="{a.linux}/include/uapi/linux/wapp -I{staging}/usr/include"',
