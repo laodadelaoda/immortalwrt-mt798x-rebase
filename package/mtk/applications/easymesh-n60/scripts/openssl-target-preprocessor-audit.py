@@ -239,16 +239,16 @@ def main():
   p=build/r["path"]
   if str(p) not in branches: branches[str(p)]=branch_path(p)
   r["branch_path"]=branches[str(p)][r["line"]-1]
- roots={name:(build/name).resolve() for name in COMP}
- dry_argv=["make","-n","-w","V=s","package/mtk/applications/easymesh-n60/compile"]
- dry_run=subprocess.run(dry_argv,cwd=repo,env=os.environ.copy(),text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
- dry_log=out/"make-dry-run-easymesh-package.log"; dry_log.write_text(dry_run.stdout,encoding="utf-8")
- commands,parse_errors=parse_commands(dry_run.stdout,repo,compiler,roots)
- commands_by_component={name:[] for name in COMP}
- for command in commands: commands_by_component[command["component"]].append(command)
- results={}; hits=set(); filehits=set(); api_hits_by_component={x:set() for x in COMP}
+ recipe_sha=validate_compile_recipe(a.package_compile_recipe,repo,build,a)
+ specs=make_specs(repo,build,a); results={}; hits=set(); filehits=set(); api_hits_by_component={x:set() for x in COMP}
  for comp in COMP:
-  cmds=commands_by_component[comp]; tus=[]; pp_errors=[]
+  spec=specs[comp]; env=os.environ.copy(); env.update(spec["env"])
+  run=subprocess.run(spec["argv"],cwd=repo,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+  log=out/f"make-dry-run-{comp}.log"; log.write_text(run.stdout,encoding="utf-8")
+  cmds,parse_errors=parse_commands(run.stdout,spec["cwd"],compiler,{comp:spec["cwd"].resolve()})
+  preexisting=[str(p.relative_to(spec["cwd"])) for p in spec["cwd"].rglob("*")
+               if p.is_file() and p.suffix.lower() in (".o",".lo",".a",".so")]
+  tus=[]; pp_errors=[]
   for i,cmd in enumerate(cmds):
    key=hashlib.sha256((comp+cmd["source"]+str(i)).encode()).hexdigest()[:16]
    dest=out/"preprocessed"/f"{comp}-{key}.i"; pargv=cpp_argv(cmd,dest)
@@ -265,11 +265,12 @@ def main():
     h,fh=pp_hits(dest,cmd["cwd"],names); hits.update(h); filehits.update(fh); api_hits_by_component[comp].update(x[2] for x in h)
    else: pp_errors.append(item)
    tus.append(item)
-  complete=dry_run.returncode==0 and bool(cmds) and not parse_errors[comp] and not pp_errors
-  results[comp]={"make_returncode":dry_run.returncode,"log":str(dry_log),"compile_commands":len(cmds),
-    "parse_errors":parse_errors[comp],"preprocess_failures":pp_errors,"translation_units":tus,"complete":complete}
-  (out/f"compile-commands-{comp}.json").write_text(json.dumps(cmds,indent=2)+"\n")
- (out/"make-compile-command.txt").write_text(" ".join(shlex.quote(x) for x in dry_argv)+"\n")
+  complete=run.returncode==0 and bool(cmds) and not parse_errors[comp] and not pp_errors and not preexisting
+  results[comp]={"make_returncode":run.returncode,"log":str(log),"compile_commands":len(cmds),
+    "parse_errors":parse_errors[comp],"preexisting_build_artifacts":preexisting,
+    "preprocess_failures":pp_errors,"translation_units":tus,"complete":complete}
+  (out/f"compile-commands-{comp}.json").write_text(json.dumps(cmds,indent=2)+"\\n")
+ (out/"make-compile-command.txt").write_text("component Make dry-runs from the expanded package Build/Compile recipe\\n")
  complete={c for c,v in results.items() if v["complete"]}
  macro_refs=inv.scan_macro_references(build,names,{x:"OSSL_DEPRECATED" for x in names})
  macro_rows=[]; macro_counts={"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
@@ -292,13 +293,13 @@ def main():
     "conditional_branch_path":r["branch_path"],"source_sha256":sha(build/r["path"]),
     "translation_units":[x["source"] for x in results[r["component"]]["translation_units"] if x["returncode"]==0]})
  summary={"schema_version":1,"git_sha":subprocess.run(["git","rev-parse","HEAD"],cwd=repo,text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
-  "firmware_compile_invoked":False,"method":"native OpenWrt package make -n -w V=s command enumeration; exact target compiler commands replayed as -E -dD",
+  "firmware_compile_invoked":False,"method":"expanded OpenWrt Build/Compile recipe validation followed by component Make -n -w V=s and exact-command -E -dD/-dM replay",
   "target_compiler":a.cc,"target_compiler_realpath":str(Path(cc[-1]).resolve()),"target_compiler_sha256":sha(Path(cc[-1]).resolve()),
   "target_compiler_triplet":subprocess.run([cc[-1],"-dumpmachine"],text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
   "target_compiler_version":subprocess.run([cc[-1],"-dumpfullversion"],text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
   "target_compiler_sysroot":subprocess.run([cc[-1],"-print-sysroot"],text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
   "target_ar":a.ar,"target_ranlib":a.ranlib,"target_cppflags":a.cppflags,"target_cflags":a.cflags,"target_ldflags":a.ldflags,
-  "target_config_sha256":sha(a.target_config),"openssl_pkg_source":a.openssl_pkg_source,"openssl_pkg_source_url":a.openssl_pkg_source_url,
+  "target_config_sha256":sha(a.target_config),"package_compile_recipe_sha256":recipe_sha,"openssl_pkg_source":a.openssl_pkg_source,"openssl_pkg_source_url":a.openssl_pkg_source_url,
   "openssl_pkg_hash":a.openssl_pkg_hash,"openssl_options":a.openssl_options,"openssl_build_dir":str(a.openssl_source_dir),
   "openssl_patch_dir":str(a.openssl_patch_dir),"openssl_patch_tree_sha256":tree_sha(a.openssl_patch_dir),
   "openssl_source_tree_sha256":tree_sha(a.openssl_source_dir),"openssl_configure_sha256":sha(a.openssl_source_dir/"Configure"),"openssl_configdata_sha256":sha(a.openssl_source_dir/"configdata.pm"),
