@@ -103,7 +103,7 @@ def main():
             failures.append("API not found as deprecated in OpenSSL 3.5.9 headers: "+api)
         rows.append({
             "api":api,
-            "observed_lexical_occurrences_run_42724660705":item["observed_lexical_occurrences_run_42724660705"],
+            "observed_lexical_occurrences":item["observed_lexical_occurrences"],
             "observed_components":item["observed_components"],
             "source_reachability_status":item["source_reachability_status"],
             "source_reachability_evidence":item["source_reachability_evidence"],
@@ -152,7 +152,6 @@ def main():
         "migration_map_apis_deprecated_in_3_5_9":sum(1 for r in rows if r["present_in_3_5_9_headers"]=="true" and r["deprecated_in_3_5_9_headers"]=="true"),
         "migration_map_apis_present_and_deprecated_in_3_5_9":sum(1 for r in rows if r["present_in_3_5_9_headers"]=="true" and r["deprecated_in_3_5_9_headers"]=="true"),
         "migration_map_apis_with_1_1_1w_deprecation_annotation":sum(1 for r in rows if r["deprecation_annotation_1_1_1w"]),
-        "migration_map_apis_present_and_deprecated_in_3_5_9":sum(1 for r in rows if r["present_in_3_5_9_headers"]=="true" and r["deprecated_in_3_5_9_headers"]=="true"),
         "api_presence_in_1_1_1w":sum(1 for r in rows if r["present_in_1_1_1w_headers"]=="true"),
         "failures":failures,
         "limitations":["header symbol presence is not proof of source-level call reachability or semantic equivalence","the 1.1.1w deprecation parser is informational; API-specific migration decisions require official manual review"]
