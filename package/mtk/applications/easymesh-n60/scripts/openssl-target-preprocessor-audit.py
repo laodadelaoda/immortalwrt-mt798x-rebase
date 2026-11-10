@@ -495,7 +495,7 @@ def main():
       Path(hit[0]).resolve().relative_to(source_root)
       rel=Path(hit[0]).resolve().relative_to(build.resolve())
      except ValueError: continue
-     kind=classify_source_reference(build,{"path":str(rel),"line":hit[1],"api":hit[2]})
+     kind=classify_source_reference(build,{"path":str(rel),"line":hit[1],"api":hit[2]},inv)
      if kind!="DECLARATION_OR_DEFINITION": api_hits_by_component[comp].add(hit[2])
    else: pp_errors.append(item)
    tus.append(item)
