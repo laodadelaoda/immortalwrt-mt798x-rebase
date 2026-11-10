@@ -133,7 +133,7 @@ def main():
  validate_openssl_source(a.openssl_source,a.repo_root)
  policy=json.loads(a.policy.read_text())
  if policy.get("schema_version")!=1 or policy.get("openssl_version")!="3.5.9" or not isinstance(policy.get("api_rules"),dict): ap.error("invalid OpenSSL API policy schema/version")
- required_map={"api","proposed_replacement","official_mapping_kind","official_mapping_section","official_migration_guide_url","official_target_manual_url","migration_status","approval","semantic_review_requirements"}
+ required_map={"api","proposed_replacement","official_mapping_kind","official_mapping_section","official_migration_guide_url","official_target_manual_url","migration_status","approval","semantic_review_requirements","source_reachability_status","source_reachability_evidence"}
  with a.migration_map.open(encoding="utf-8",newline="") as mf:
   reader=csv.DictReader(mf)
   if not required_map.issubset(set(reader.fieldnames or [])): ap.error("migration map is missing required columns")
@@ -146,6 +146,8 @@ def main():
    if not mr["official_mapping_section"].strip(): ap.error("missing official migration section for "+api)
    for field in ("official_migration_guide_url","official_target_manual_url"):
     if not mr[field].startswith("https://docs.openssl.org/3.5/"): ap.error("non-3.5 official reference URL for "+api+": "+field)
+   if mr["source_reachability_status"] not in {"PREPROCESSOR_REACHABILITY_UNVERIFIED","UNREFERENCED_MACRO_DEFINITION","OPENSSL_NO_ENGINE_GUARD_REQUIRES_PREPROCESSOR"}: ap.error("invalid source reachability status for "+api)
+   if not mr["source_reachability_evidence"].strip(): ap.error("missing source reachability evidence for "+api)
    if not mr["proposed_replacement"].strip() or not mr["semantic_review_requirements"].strip(): ap.error("incomplete migration research fields for "+api)
    if mr["approval"].lower() not in {"true","false"}: ap.error("invalid approval value for "+api)
    migration_map[api]=mr
@@ -153,6 +155,8 @@ def main():
  failures=[]; inventory=[]
  for mr in macro_refs:
   if mr["reachability"]=="ACTIVE_MACRO_EXPANSION_REQUIRES_CPP": failures.append("deprecated API is referenced by an active macro expansion; require preprocessor evidence: "+mr["api"]+" via "+mr["macro"]+" at "+mr["path"]+":"+str(mr["line"]))
+  mapped=migration_map.get(mr["api"])
+  if mr["reachability"]=="UNREFERENCED_MACRO_DEFINITION" and mapped and mapped["source_reachability_status"]!="UNREFERENCED_MACRO_DEFINITION": failures.append("macro reachability differs from migration map: "+mr["api"])
  for api,mr in migration_map.items():
   if api not in depr: failures.append("migration map API is not deprecated in pinned OpenSSL 3.5.9 headers: "+api)
   if mr["migration_status"]=="APPROVED" and mr["approval"].lower()!="true": failures.append("migration map approval/status mismatch: "+api)
