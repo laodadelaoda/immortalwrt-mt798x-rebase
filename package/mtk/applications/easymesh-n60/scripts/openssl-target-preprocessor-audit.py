@@ -395,6 +395,10 @@ def prepare_mapd_version(build,repo,out,compiler,args):
  (out/"mapd-version-generation.log").write_text(run.stdout,encoding="utf-8")
  if run.returncode: raise SystemExit("MAPD version metadata generation failed")
 
+def openssl_header_root(args):
+  # Keep the CLI namespace contract explicit and unit-testable.
+  return args.openssl_source_dir
+
 def main():
  ap=argparse.ArgumentParser()
  for n in ("repo","build","staging","linux","output"): ap.add_argument("--"+n+"-dir" if n in ("repo","build","output") else "--"+n+"-dir",type=Path,required=True)
@@ -428,7 +432,7 @@ def main():
  if len(mapping)!=64 or len(mapped_api_names)!=64: raise SystemExit("migration map must contain 64 unique APIs")
  # Target evidence must cover every API deprecated by the exact pinned 3.5.9
  # public headers, not merely the 64 APIs in the 1.1.1w baseline map.
- names,depr=inv.catalog(a.openssl_source_dir)
+ names,depr=inv.catalog(openssl_header_root(a))
  rows=[r for r in inv.scan(build,names,depr) if r.get("deprecated_macro")]
  for row in rows: row["reference_kind"]=classify_source_reference(build,row)
  call_rows=[row for row in rows if row["reference_kind"] in ("CALL_EXPRESSION","UNKNOWN_REFERENCE_KIND")]
