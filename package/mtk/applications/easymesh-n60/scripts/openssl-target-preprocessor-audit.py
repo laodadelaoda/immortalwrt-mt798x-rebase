@@ -53,19 +53,16 @@ def inventory_module(repo):
  s=importlib.util.spec_from_file_location("openssl_inventory",p)
  m=importlib.util.module_from_spec(s); s.loader.exec_module(m); return m
 
-def make_specs(repo,build,a):
- cpp,cflags,ld=a.cppflags,a.cflags,a.ldflags
- easy=f"{cpp} {cflags} -Wno-error=deprecated-declarations -DCONFIG_SUPPORT_OPENWRT"
- st=str(a.staging); linux_rel=os.path.relpath(a.linux,repo)
- return {
- "libmapd":(["make","-B","-n","-w","-C",str(build/"libmapd"),"V=s",f"CC={a.cc}",f"CFLAGS={cpp} {cflags} -Werror -g",f"LDFLAGS={ld}","all"],{}),
- "wappd":(["make","-B","-n","-w","-C",str(build/"wappd"),"V=s",f"TOPDIR={repo}",f"UAPD_INCLUDE_PATH={a.linux}/include/uapi/linux/wapp -I{st}/usr/include","CONFIG_SUPPORT_OPENWRT=y","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y",f"CC={a.cc}",f"EXTRA_CFLAGS={cpp} {cflags} -Wno-error=deprecated-declarations -I{a.linux}/include/uapi/linux/wapp",f"LDFLAGS={ld} -L{st}/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto","all"],{}),
- "1905daemon":(["make","-B","-n","-w","-C",str(build/"1905daemon"),"V=s",f"TOPDIR={repo}",f"ROOTDIR={repo}",f"LINUXDIR={linux_rel}",f"STAGING_DIR={st}","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y","MAP_R3_SUPPORT=y","SWTICH_DSA_ARCH=y",f"CC={a.cc}",f"AR={a.ar}",f"RANLIB={a.ranlib}",f"LDFLAGS={ld} -L{st}/usr/lib -Wl,--no-as-needed -lpthread -lnl-tiny -lssl -lcrypto","all"],{"EXTRA_CFLAGS":easy}),
- "mapd":(["make","-B","-n","-w","-C",str(build/"mapd"),"V=s",f"TOPDIR={repo}","CONFIG_SUPPORT_OPENWRT=y","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y",f"CC={a.cc}",f"LDO={a.cc}",f"EXTRA_CFLAGS={easy}",f"LDFLAGS={ld} -L{st}/usr/lib","version","mapd"],{})
- }
-
-def parse_commands(log,base,compiler):
- cmds=[]; errors=[]; dirs=[Path(base)]
+def parse_commands(log,base,compiler,component_roots):
+ cmds=[]; errors={name:[] for name in component_roots}; dirs=[Path(base)]
+ def locate(src,cwd):
+  p=Path(src); p=p if p.is_absolute() else Path(cwd)/p
+  resolved=Path(os.path.realpath(str(p)))
+  for name,root in component_roots.items():
+   try: resolved.relative_to(root)
+   except ValueError: continue
+   return name,resolved
+  return None,resolved
  for n,line in enumerate(log.splitlines(),1):
   m=ENTER.search(line)
   if m: dirs.append(Path(m.group(1))); continue
@@ -74,7 +71,8 @@ def parse_commands(log,base,compiler):
    continue
   try: ts=shlex.split(line)
   except ValueError as e:
-   if compiler in line and "-c" in line: errors.append(f"{n}: {e}")
+   if "-c" in line and any(str(root) in line for root in component_roots.values()):
+    for name in errors: errors[name].append(f"{n}: cannot parse component compile command: {e}")
    continue
   cwd=dirs[-1]
   if "cd" in ts and "&&" in ts:
@@ -83,18 +81,28 @@ def parse_commands(log,base,compiler):
     cwd=Path(ts[i+1]); cwd=cwd if cwd.is_absolute() else dirs[-1]/cwd
     ts=ts[i+3:]
   if "-c" not in ts: continue
+  srcs=[x for x in ts if Path(x).suffix.lower() in EXT]
+  relevant=[]
+  for src in srcs:
+   name,resolved=locate(src,cwd)
+   if name: relevant.append((name,src,resolved))
+  if not relevant: continue
   ci=next((i for i,t in enumerate(ts) if Path(t).name==compiler),None)
   if ci is None:
    candidates=[Path(t).name for t in ts if Path(t).name.endswith(("gcc","clang","cc")) or Path(t).name.startswith("clang")]
-   if candidates: errors.append(f"{n}: non-target compiler in compile command: {candidates}")
+   for name,src,resolved in relevant:
+    errors[name].append(f"{n}: non-target or unrecognized compiler for {resolved}: {candidates or ts[:3]}")
    continue
-  argv=ts[ci:]; srcs=[x for x in argv if Path(x).suffix.lower() in EXT]
-  existing=[]
-  for x in srcs:
-   q=Path(x); q=q if q.is_absolute() else cwd/q
-   if q.is_file(): existing.append((x,q.resolve()))
-  if len(existing)!=1: errors.append(f"{n}: expected one source file, found {srcs}"); continue
-  cmds.append({"cwd":str(cwd.resolve()),"argv":argv,"source":str(existing[0][1]),"line":n})
+  if len(relevant)!=1:
+   for name,src,resolved in relevant:
+    errors[name].append(f"{n}: expected one component source in compiler command, found {len(relevant)}")
+   continue
+  name,src,resolved=relevant[0]
+  if not resolved.is_file():
+   errors[name].append(f"{n}: component source file does not exist: {resolved}")
+   continue
+  cmds.append({"component":name,"cwd":str(Path(cwd).resolve()),"argv":ts[ci:],
+               "source":str(resolved),"line":n})
  return cmds,errors
 
 def cpp_argv(cmd,out):
@@ -189,12 +197,16 @@ def main():
   p=build/r["path"]
   if str(p) not in branches: branches[str(p)]=branch_path(p)
   r["branch_path"]=branches[str(p)][r["line"]-1]
- specs=make_specs(repo,build,a); results={}; hits=set(); filehits=set(); api_hits_by_component={x:set() for x in COMP}
+ roots={name:(build/name).resolve() for name in COMP}
+ dry_argv=["make","-n","-w","V=s","package/mtk/applications/easymesh-n60/compile"]
+ dry_run=subprocess.run(dry_argv,cwd=repo,env=os.environ.copy(),text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+ dry_log=out/"make-dry-run-easymesh-package.log"; dry_log.write_text(dry_run.stdout,encoding="utf-8")
+ commands,parse_errors=parse_commands(dry_run.stdout,repo,compiler,roots)
+ commands_by_component={name:[] for name in COMP}
+ for command in commands: commands_by_component[command["component"]].append(command)
+ results={}; hits=set(); filehits=set(); api_hits_by_component={x:set() for x in COMP}
  for comp in COMP:
-  argv,extra=specs[comp]; env=os.environ.copy(); env.update(extra)
-  run=subprocess.run(argv,cwd=repo,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-  log=out/f"make-dry-run-{comp}.log"; log.write_text(run.stdout,encoding="utf-8")
-  cmds,parse_errors=parse_commands(run.stdout,build/comp,compiler); tus=[]; pp_errors=[]
+  cmds=commands_by_component[comp]; tus=[]; pp_errors=[]
   for i,cmd in enumerate(cmds):
    key=hashlib.sha256((comp+cmd["source"]+str(i)).encode()).hexdigest()[:16]
    dest=out/"preprocessed"/f"{comp}-{key}.i"; pargv=cpp_argv(cmd,dest)
@@ -211,9 +223,11 @@ def main():
     h,fh=pp_hits(dest,cmd["cwd"],names); hits.update(h); filehits.update(fh); api_hits_by_component[comp].update(x[2] for x in h)
    else: pp_errors.append(item)
    tus.append(item)
-  complete=run.returncode==0 and bool(cmds) and not parse_errors and not pp_errors
-  results[comp]={"make_returncode":run.returncode,"log":str(log),"compile_commands":len(cmds),"parse_errors":parse_errors,"preprocess_failures":pp_errors,"translation_units":tus,"complete":complete}
+  complete=dry_run.returncode==0 and bool(cmds) and not parse_errors[comp] and not pp_errors
+  results[comp]={"make_returncode":dry_run.returncode,"log":str(dry_log),"compile_commands":len(cmds),
+    "parse_errors":parse_errors[comp],"preprocess_failures":pp_errors,"translation_units":tus,"complete":complete}
   (out/f"compile-commands-{comp}.json").write_text(json.dumps(cmds,indent=2)+"\n")
+ (out/"make-compile-command.txt").write_text(" ".join(shlex.quote(x) for x in dry_argv)+"\n")
  complete={c for c,v in results.items() if v["complete"]}
  macro_refs=inv.scan_macro_references(build,names,{x:"OSSL_DEPRECATED" for x in names})
  macro_rows=[]; macro_counts={"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
