@@ -20,7 +20,7 @@ with tempfile.TemporaryDirectory() as d:
 with tempfile.TemporaryDirectory() as d:
  root=Path(d)
  for c in m.COMP: (root/c).mkdir()
- (root/"1905daemon/guard.c").write_text("#ifndef OPENSSL_NO_ENGINE\nvoid f(void) { ENGINE_by_id(\\"dynamic\\"); }\n#endif\n")
+ (root/"1905daemon/guard.c").write_text('#ifndef OPENSSL_NO_ENGINE\nvoid f(void) { ENGINE_by_id("dynamic"); }\n#endif\n')
  rows=m.scan_text((root/"1905daemon/guard.c").read_text(),{"ENGINE_by_id"},{"ENGINE_by_id":"OSSL_DEPRECATEDIN_3_0"},"1905daemon","1905daemon/guard.c")
  ctx=m.callsite_context(root,rows)
  assert ctx and ctx[0]["preprocessor_guards"]==["#ifndef OPENSSL_NO_ENGINE"],ctx
