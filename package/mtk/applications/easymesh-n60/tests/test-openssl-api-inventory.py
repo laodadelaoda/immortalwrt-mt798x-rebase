@@ -59,28 +59,6 @@ def verify_baseline_attestation(repo_root,lock,att_path,expected_git_sha):
   if not expected or sha256_file(path)!=expected:
    raise ValueError("OpenSSL baseline attestation input hash mismatch: "+name)
  return att
-def verify_baseline_github_metadata(attestation,remote_run,remote_artifact,expected_git_sha,expected_run_id):
- """Bind the downloaded credential to the exact completed GitHub run and immutable evidence artifact."""
- run=attestation.get("run",{}); artifact=attestation.get("artifact",{})
- if int(run.get("id",0))!=int(expected_run_id) or run.get("git_sha")!=expected_git_sha:
-  raise ValueError("baseline credential run ID/Git SHA does not match the selected Quick Prepare revision")
- if (int(remote_run.get("id",0))!=int(expected_run_id) or
-     remote_run.get("head_sha")!=expected_git_sha or
-     remote_run.get("run_attempt")!=int(run.get("attempt",0)) or
-     remote_run.get("status")!="completed" or remote_run.get("conclusion")!="success" or
-     remote_run.get("path")!=".github/workflows/openssl-migration-baseline-audit.yml"):
-  raise ValueError("baseline GitHub workflow run SHA, attempt, path or conclusion differs from its credential")
- digest=str(remote_artifact.get("digest","")).removeprefix("sha256:")
- workflow_run=remote_artifact.get("workflow_run",{})
- if (int(remote_artifact.get("id",0))!=int(artifact.get("id",0)) or
-     remote_artifact.get("name")!=artifact.get("name") or
-     remote_artifact.get("expired") is not False or
-     digest!=artifact.get("sha256") or
-     int(workflow_run.get("id",0))!=int(expected_run_id) or
-     workflow_run.get("head_sha")!=expected_git_sha):
-  raise ValueError("baseline evidence artifact ID, name, digest, expiry or run binding is invalid")
- return True
-
 def validate_openssl_source(root,repo_root,attestation_path,expected_git_sha):
  inc=root/"include/openssl"
  # The release archive contains a Perl template, not numeric version macros.

@@ -32,7 +32,8 @@ permissions:
   actions: read
 
 concurrency:
-  group: n60-pro-quick-prepare-only-v2-${{ github.ref }}
+  # Each audited SHA gets an isolated Prepare workspace; stale revisions cannot block the current gate.
+  group: n60-pro-quick-prepare-only-v2-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:

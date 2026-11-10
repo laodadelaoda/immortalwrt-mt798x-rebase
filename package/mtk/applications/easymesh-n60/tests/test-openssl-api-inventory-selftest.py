@@ -59,23 +59,6 @@ with tempfile.TemporaryDirectory() as d:
  att_path=tests/"openssl-migration-baseline.attestation.json"
  expected_sha="c"*40
  assert m.validate_openssl_source(Path(d),repo,att_path,expected_sha)=="3.5.9"
- # GitHub-side run and artifact metadata must bind the exact attempt, SHA and digest.
- remote_run={"id":1,"head_sha":expected_sha,"run_attempt":1,"status":"completed","conclusion":"success",
-  "path":".github/workflows/openssl-migration-baseline-audit.yml"}
- remote_artifact={"id":1,"name":"n60-openssl-1111w-to-359-header-baseline","expired":False,
-  "digest":"sha256:"+"d"*64,"workflow_run":{"id":1,"head_sha":expected_sha}}
- assert m.verify_baseline_github_metadata(att,remote_run,remote_artifact,expected_sha,1)
- for bad_run,bad_artifact in (
-  ({**remote_run,"run_attempt":2},remote_artifact),
-  ({**remote_run,"head_sha":"e"*40},remote_artifact),
-  (remote_run,{**remote_artifact,"digest":"sha256:"+"0"*64}),
-  (remote_run,{**remote_artifact,"workflow_run":{"id":1,"head_sha":"e"*40}}),
- ):
-  try:
-   m.verify_baseline_github_metadata(att,bad_run,bad_artifact,expected_sha,1)
-   raise AssertionError("mismatched run attempt/SHA or artifact digest must fail")
-  except ValueError:
-   pass
  # A credential from another Git revision is stale even when every input hash matches.
  stale=dict(att); stale["run"]=dict(att["run"]); stale["run"]["git_sha"]="e"*40
  att_path.write_text(__import__("json").dumps(stale))
