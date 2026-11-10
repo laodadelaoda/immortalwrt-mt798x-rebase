@@ -41,6 +41,13 @@ with tempfile.TemporaryDirectory() as d:
  non[0]["source_sha256"]="0"*64
  report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
  assert not report["complete"] and any("SHA256 mismatch" in x for x in report["failures"])
+ # A matching hash outside the prepared component tree is not valid evidence.
+ outside=root.parent/"outside.c"; outside.write_text("EVP_PKEY_cmp(a,b);\n")
+ outside_row={"component":"wappd","path":"../outside.c","line":1,"api":"EVP_PKEY_cmp","reference_kind":"CALL_EXPRESSION","reachability_status":"EXCLUDED_WITH_EVIDENCE","source_sha256":m.sha256(outside)}
+ outside_inv=[{"component":"wappd","path":"../outside.c","line":"1","api":"EVP_PKEY_cmp","deprecated_macro":"OSSL_DEPRECATEDIN_3_0"}]
+ summary["callsite_counts"]={"total":1,"UNKNOWN_FAIL_CLOSED":0}; summary["non_call_reference_counts"]={"total":0,"UNKNOWN_FAIL_CLOSED":0}
+ report=m.evaluate(outside_inv,[outside_row],[],summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
+ assert not report["complete"] and any("escapes" in x for x in report["failures"])
  # An active call passes only with an explicit approved migration decision and policy.
  non=[]; call=[{"component":"wappd","path":"wappd/x.c","line":1,"api":"EVP_PKEY_cmp","reference_kind":"CALL_EXPRESSION","reachability_status":"ACTIVE","source_sha256":digest}]
  summary["callsite_counts"]={"total":1,"UNKNOWN_FAIL_CLOSED":0}; summary["non_call_reference_counts"]={"total":0,"UNKNOWN_FAIL_CLOSED":0}
