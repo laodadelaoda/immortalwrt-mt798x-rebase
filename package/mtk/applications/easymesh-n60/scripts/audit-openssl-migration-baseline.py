@@ -133,6 +133,9 @@ def main():
             "migration_map":sha256(map_path),
             "openssl_package_makefile":sha256(makefile),
             "api_inventory_script":sha256(a.repo_root/"package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py"),
+            "api_inventory_selftest":sha256(a.repo_root/"package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py"),
+            "baseline_auditor_script":sha256(a.repo_root/"package/mtk/applications/easymesh-n60/scripts/audit-openssl-migration-baseline.py"),
+            "baseline_auditor_selftest":sha256(a.repo_root/"package/mtk/applications/easymesh-n60/tests/test-openssl-migration-baseline-selftest.py"),
             "api_policy":sha256(a.repo_root/"package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json")
         },
         "from_version":lock["from"]["version"],
