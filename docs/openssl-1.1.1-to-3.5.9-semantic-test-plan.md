@@ -144,3 +144,26 @@ A policy allow/retain rule may be added only after the corresponding evidence ex
 ## Current gate
 
 The 64-name matrix has official mapping sections and target manual links, but all rows remain `UNREVIEWED` and `approval=false`. The header baseline and run-bound attestation pass. The next work is to inspect the real callsite-context artifact, resolve target preprocessor reachability (especially ENGINE), then create concrete test cases per active API. No WAPP/MAPD/1905daemon source migration or Quick/Full compilation is authorized by this plan.
+
+## Quick Prepare failure review — Run 42731708257
+
+Run URL: https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/actions/runs/42731708257
+
+The fixed-vendor source patch audit completed successfully. The Quick Prepare job reached the strict OpenSSL API migration gate; the inventory self-test passed, then the strict gate returned non-zero because the migration map intentionally has 64 rows with `UNREVIEWED` status. This is an expected fail-closed result, not evidence that the OpenSSL Provider runtime or vendor Prepare failed.
+
+Run-specific audit artifact:
+- Artifact ID: `13726904954`
+- Name: `n60-openssl-3.5.9-api-and-provider-audit`
+- ZIP SHA256: `972c894497599f99380368bfdc0a2b4accd9a533607a8e41aff3d4289f73cb87`
+
+The artifact records 2,833 prepared-source OpenSSL call occurrences, 2,837 pristine-source occurrences, 424 lexical callsites whose names are marked deprecated by OpenSSL 3.5.9 headers, 63 distinct deprecated source API names, 64 migration-map rows and zero const-correctness findings. Three references to `EVP_CIPHER_CTX_iv_noconst` occur only in unreferenced macro definitions; there are no direct deprecated callsites for that API in this run. The 64th map row is therefore a macro-reference/reachability item, not a 64th observed direct call API.
+
+The 424 callsites are lexical source locations, not 424 proven target-preprocessed calls. The artifact explicitly retains this limitation. Several groups require target preprocessing before they can be counted as active migration work:
+
+- Compatibility wrappers guarded by `OPENSSL_VERSION_NUMBER < 0x10100000L` (including local HMAC and DH compatibility shims) are not compiled against OpenSSL 3.5.9. Other HMAC/DH calls outside those wrappers remain independently present and must still be reviewed.
+- ENGINE calls are guarded by `OPENSSL_NO_ENGINE` conditions. The OpenWrt package selects `no-engine` for N60, but the exact target preprocessor output is still required before these callsites can be excluded.
+- `SHA1_Transform` occurrences are guarded by `OPENSSL_IS_BORINGSSL`; prove that macro is absent in the actual N60 compile environment.
+- `CONFIG_NATIVE_WINDOWS`, `CONFIG_SUITEB`, `CONFIG_OPENSSL_CMAC`, `CONFIG_ECC`, `CONFIG_FIPS` and `CONFIG_TESTING_OPTIONS` guarded paths must be resolved against the actual package/component configuration, not inferred from source defaults.
+
+**Required correction to the audit pipeline:** preserve both counts: (1) lexical deprecated references and (2) compiler-preprocessed active references. Add explicit `ACTIVE`, `EXCLUDED_WITH_EVIDENCE` and `UNKNOWN_FAIL_CLOSED` reachability states per callsite. Do not mark a whole API family excluded when only some callsites are guarded. The strict gate must continue to reject any active or unknown deprecated callsite until its migration row and semantic tests are reviewed. Do not change vendor code or approve map rows to clear this run.
+
