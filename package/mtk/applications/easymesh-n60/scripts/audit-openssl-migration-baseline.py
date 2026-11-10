@@ -101,8 +101,10 @@ def main():
             failures.append("API not found as deprecated in OpenSSL 3.5.9 headers: "+api)
         rows.append({
             "api":api,
-            "observed_calls_run_42724660705":item["observed_calls_run_42724660705"],
+            "observed_lexical_occurrences_run_42724660705":item["observed_lexical_occurrences_run_42724660705"],
             "observed_components":item["observed_components"],
+            "source_reachability_status":item["source_reachability_status"],
+            "source_reachability_evidence":item["source_reachability_evidence"],
             "present_in_1_1_1w_headers":str(present1111).lower(),
             "deprecation_annotation_1_1_1w":deprecated1111,
             "present_in_3_5_9_headers":str(present359).lower(),
