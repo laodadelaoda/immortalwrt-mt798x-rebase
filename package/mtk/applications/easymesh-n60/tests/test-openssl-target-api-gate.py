@@ -174,7 +174,7 @@ assert not m.validate_removed_api_reviews([removed_row],approved_removed,
 scope={"schema_version":1,"scope_id":"n60-easymesh-openssl-3.5.9","openssl_version":"3.5.9",
  "primary_components":["wappd","mapd","1905daemon","libmapd"],
  "supporting_dependencies":[{"name":"datconf"},{"name":"libnl-tiny"}],
- "global_baseline":{"expected_rows":68,"role":"TRACEABILITY_ONLY","is_migration_approval":False}}
+ "global_baseline":{"path":"package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv","expected_rows":68,"role":"TRACEABILITY_ONLY","is_migration_approval":False}}
 scope_summary={"components":{x:{} for x in scope["primary_components"]}}
 scope_map={f"api{i}":{} for i in range(68)}
 assert m.validate_scope_manifest(scope,scope_summary,scope_map)==[]
