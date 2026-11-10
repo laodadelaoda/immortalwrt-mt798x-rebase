@@ -374,7 +374,7 @@ def prepare_mapd_version(build,repo,out,compiler):
  # The production Build/Compile invokes "version mapd". Run only the metadata
  # target after proving its dry-run has no compiler invocation.
  directory=build/"mapd"
- dry=subprocess.run(["make","-n","-w","-C",str(directory),"V=s","version"],cwd=repo,
+ dry=subprocess.run(["make","-n","-w","-C",str(directory),f"TOPDIR={repo}","V=s","version"],cwd=repo,
                     text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
  (out/"mapd-version-dry-run.log").write_text(dry.stdout,encoding="utf-8")
  if dry.returncode: raise SystemExit("MAPD version target dry-run failed")
@@ -384,7 +384,7 @@ def prepare_mapd_version(build,repo,out,compiler):
   candidates=[Path(t).name for t in tokens if Path(t).name.endswith(("gcc","clang","cc")) or Path(t).name.startswith("clang")]
   if compiler in candidates or candidates:
    raise SystemExit("MAPD version target dry-run contains a compiler invocation; refusing to execute it")
- run=subprocess.run(["make","-w","-C",str(directory),"V=s","version"],cwd=repo,
+ run=subprocess.run(["make","-w","-C",str(directory),f"TOPDIR={repo}","V=s","version"],cwd=repo,
                     text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
  (out/"mapd-version-generation.log").write_text(run.stdout,encoding="utf-8")
  if run.returncode: raise SystemExit("MAPD version metadata generation failed")
