@@ -554,6 +554,13 @@ jobs:
           LINUX_DIR="$(realpath "$LINUX_DIR")"
           TARGET_STAGING="$STAGING_DIR"
 
+          # Export the exact expanded Build/Compile recipe without executing it.
+          # GNU make's file() function writes the recipe text; the only shell command is true.
+          make -s -C package/mtk/applications/easymesh-n60 TOPDIR="$GITHUB_WORKSPACE" \
+            --eval='dump-n60-build-compile:; $(file >$(TOPDIR)/artifacts/easymesh-openssl-preprocessor-audit/easymesh-Build-Compile.expanded.txt,$(Build/Compile)) @true' \
+            dump-n60-build-compile
+          test -s "$OUT/easymesh-Build-Compile.expanded.txt"
+
           # Stage target dependency headers used by the components' actual include paths.
           # These are dependency packages only, not firmware or EasyMesh binaries.
           make -C package/mtk/applications/datconf TOPDIR="$GITHUB_WORKSPACE" \
@@ -604,7 +611,8 @@ test -n "$(find "$TARGET_STAGING/usr/include/libnl-tiny" -type f -print -quit)"
             --openssl-source-dir "$OPENSSL_SOURCE" --openssl-patch-dir "$OPENSSL_PATCH_DIR" \
             --openssl-pkg-source "$PKG_SOURCE" --openssl-pkg-source-url "$PKG_SOURCE_URL" \
             --openssl-pkg-hash "$PKG_HASH" --openssl-options "$OPENSSL_OPTIONS" \
-            --target-config "$GITHUB_WORKSPACE/.config"
+            --target-config "$GITHUB_WORKSPACE/.config" \\
+            --package-compile-recipe "$OUT/easymesh-Build-Compile.expanded.txt"
 
       - name: Preflight OpenSSL audit implementation inputs after MT Wi-Fi 026
         shell: bash
