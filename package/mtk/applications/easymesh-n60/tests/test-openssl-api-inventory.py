@@ -31,7 +31,12 @@ def validate_openssl_source(root,repo_root):
  mk=repo_root/"package/libs/openssl/Makefile"
  text=mk.read_text(encoding="utf-8")
  m=re.search(r"(?m)^PKG_VERSION\s*:=\s*([^\s#]+)",text)
- if not m or m.group(1)!="3.5.9": raise ValueError("repository OpenSSL package is not pinned to 3.5.9")
+ h=re.search(r"(?m)^PKG_HASH:=([0-9a-f]{64})",text)
+ if not m or m.group(1)!="3.5.9" or not h: raise ValueError("repository OpenSSL package is not pinned to the expected 3.5.9 version/hash")
+ lock_path=repo_root/"package/mtk/applications/easymesh-n60/tests/openssl-migration-baseline.lock.json"
+ lock=json.loads(lock_path.read_text(encoding="utf-8"))
+ if lock.get("schema_version")!=1 or lock.get("from",{}).get("version")!="1.1.1w" or lock.get("to",{}).get("version")!="3.5.9": raise ValueError("invalid OpenSSL 1.1.1w-to-3.5.9 migration baseline lock")
+ if lock["to"].get("sha256")!=h.group(1) or not re.fullmatch(r"[0-9a-f]{64}",lock["from"].get("sha256","")): raise ValueError("OpenSSL package hash does not match immutable migration baseline lock")
  generated=inc/"opensslv.h"
  if generated.is_file():
   vh=generated.read_text(encoding="utf-8")
