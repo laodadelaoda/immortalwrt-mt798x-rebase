@@ -16,15 +16,15 @@
 static int test_rsa_asn1_mapping(void)
 {
     EVP_PKEY_CTX *kg = NULL;
-    EVP_PKEY *rsa = NULL;
+    EVP_PKEY *rsa = NULL, *legacy_decoded = NULL;
     OSSL_ENCODER_CTX *encoder = NULL;
     unsigned char *der = NULL;
+    const unsigned char *cursor;
     size_t der_len = 0;
     unsigned int bits = 2048;
     OSSL_PARAM params[2];
-    SSL_CTX *ctx = NULL, *legacy_ctx = NULL;
-    SSL *generic_ssl = NULL, *legacy_ssl = NULL;
-    SSL *bad_generic_ssl = NULL, *bad_legacy_ssl = NULL;
+    SSL_CTX *ctx = NULL;
+    SSL *generic_ssl = NULL, *legacy_ssl = NULL, *legacy_generic_ssl = NULL;
     OSSL_LIB_CTX *legacy_libctx = NULL;
     OSSL_PROVIDER *null_provider = NULL;
     EVP_PKEY *generic_key, *legacy_key;
@@ -45,7 +45,7 @@ static int test_rsa_asn1_mapping(void)
     C(der != NULL && der_len > 8 && der_len <= (size_t)LONG_MAX);
 
     /* Provider-decoder path: compare the generic API with the deprecated
-     * RSA-specific reference API. The warning suppression is local to this
+     * RSA-specific reference API. Warning suppression is local to this
      * test-only reference call; production sources retain -Werror. */
     ctx = SSL_CTX_new(TLS_method());
     C(ctx != NULL);
@@ -66,28 +66,23 @@ static int test_rsa_asn1_mapping(void)
     C(EVP_PKEY_get_bits(generic_key) == 2048 &&
       EVP_PKEY_get_bits(legacy_key) == 2048);
 
-    /* No default decoder: the generic API must fall back to the same legacy
-     * d2i_RSAPrivateKey path used by the deprecated wrapper. */
+    /* Force the generic decoder's legacy fallback by loading only the null
+     * provider in a separate library context. Then install that legacy key
+     * through SSL_use_PrivateKey and compare it with the old RSA wrapper. */
     legacy_libctx = OSSL_LIB_CTX_new();
     C(legacy_libctx != NULL);
     null_provider = OSSL_PROVIDER_load(legacy_libctx, "null");
     C(null_provider != NULL);
-    legacy_ctx = SSL_CTX_new_ex(legacy_libctx, NULL, TLS_method());
-    C(legacy_ctx != NULL);
-    bad_generic_ssl = SSL_new(legacy_ctx);
-    bad_legacy_ssl = SSL_new(legacy_ctx);
-    C(bad_generic_ssl != NULL && bad_legacy_ssl != NULL);
-    C(SSL_use_PrivateKey_ASN1(EVP_PKEY_RSA, bad_generic_ssl, der,
-                              (long)der_len) == 1);
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    old_ret = SSL_use_RSAPrivateKey_ASN1(bad_legacy_ssl, der, (long)der_len);
-#pragma GCC diagnostic pop
-    C(old_ret == 1);
-    generic_key = SSL_get_privatekey(bad_generic_ssl);
-    legacy_key = SSL_get_privatekey(bad_legacy_ssl);
-    C(generic_key != NULL && legacy_key != NULL);
-    C(EVP_PKEY_eq(generic_key, legacy_key) == 1);
+    cursor = der;
+    legacy_decoded = d2i_PrivateKey_ex(NULL, EVP_PKEY_RSA, &cursor,
+                                      (long)der_len, legacy_libctx, NULL);
+    C(legacy_decoded != NULL && cursor == der + der_len);
+    legacy_generic_ssl = SSL_new(ctx);
+    C(legacy_generic_ssl != NULL);
+    C(SSL_use_PrivateKey(legacy_generic_ssl, legacy_decoded) == 1);
+    legacy_key = SSL_get_privatekey(legacy_generic_ssl);
+    C(legacy_key != NULL && EVP_PKEY_eq(legacy_decoded, legacy_key) == 1);
+    C(EVP_PKEY_eq(legacy_key, SSL_get_privatekey(legacy_ssl)) == 1);
 
     /* Both APIs must reject truncated DER and leave an error on the queue. */
     ERR_clear_error();
@@ -102,20 +97,20 @@ static int test_rsa_asn1_mapping(void)
 #pragma GCC diagnostic pop
     old_error = ERR_peek_last_error();
     C(new_bad == 0 && old_bad == 0 && new_error != 0 && old_error != 0);
-    puts("PASS: RSA PKCS#1 DER generic/legacy equivalence, provider and legacy decoder paths, and truncated-input failure.");
+    puts("PASS: RSA PKCS#1 DER provider decode, legacy decoder fallback, key installation, and truncated-input failure.");
     ok = 1;
 out:
     ERR_clear_error();
     SSL_free(generic_ssl);
     SSL_free(legacy_ssl);
-    SSL_free(bad_generic_ssl);
-    SSL_free(bad_legacy_ssl);
+    SSL_free(legacy_generic_ssl);
     SSL_CTX_free(ctx);
-    SSL_CTX_free(legacy_ctx);
-    OSSL_PROVIDER_unload(null_provider);
+    if (null_provider != NULL)
+        OSSL_PROVIDER_unload(null_provider);
     OSSL_LIB_CTX_free(legacy_libctx);
     OSSL_ENCODER_CTX_free(encoder);
     OPENSSL_free(der);
+    EVP_PKEY_free(legacy_decoded);
     EVP_PKEY_free(rsa);
     EVP_PKEY_CTX_free(kg);
     return ok;
