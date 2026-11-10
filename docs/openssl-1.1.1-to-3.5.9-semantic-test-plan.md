@@ -118,6 +118,10 @@ The reference and target harnesses must use the exact archive hashes from the mi
 
 The test harness must not silently normalize away differences in key encoding, point format, padding, output length, error behavior or provider selection.
 
+## N60 ENGINE configuration evidence
+
+The current `config/n60pro-1001.config` does not set `CONFIG_OPENSSL_ENGINE`. The OpenWrt OpenSSL package Makefile therefore selects `no-engine` for this target. This is strong configuration evidence that the ENGINE family should be excluded from the N60 build, but the generated OpenSSL configuration header and target preprocessor output have not yet been captured by the migration audit. Until that proof is attached, the 20 ENGINE-family source occurrences remain unclassified; do not delete or rewrite the guarded code.
+
 ## Existing Provider runtime smoke-test coverage and limits
 
 The current Provider runtime test is a useful smoke gate: it exercises SHA-256, AES-GCM encrypt/decrypt, P-256 key generation and ECDSA sign/verify against the 3.5.9 source copy. It does **not** establish 1.1.1w↔3.5.9 equivalence, and it does not cover HMAC/CMAC, DES/Legacy Provider behavior, DH, RSA padding modes, SEC1 serialization, DPP's custom EC point arithmetic, or the target package's exact `OPENSSL_OPTIONS`. Those require the differential family tests above; a passing smoke test must never mark a migration-map row approved.
