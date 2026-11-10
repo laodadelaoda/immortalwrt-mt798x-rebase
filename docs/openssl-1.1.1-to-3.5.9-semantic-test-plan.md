@@ -102,7 +102,7 @@ Every API row must identify which dimensions apply. An omitted dimension require
 - **Ownership/lifetime:** borrowed vs owned objects, reference-count transitions, transfer-on-set semantics, BIO ownership, cleanup on every error path and no double-free/use-after-free.
 - **Error propagation:** return values, OpenSSL error queue, caller-visible failure handling and no success-shaped fallback.
 - **Provider behavior:** default vs legacy provider selection, explicit fetch properties, provider availability and non-exportable key handling.
-- **Build reachability:** actual target compiler defines, `OPENSSL_NO_ENGINE`, conditional compilation and the real Make-expanded include/library paths.
+- **Build reachability:** actual target compiler defines, `OPENSSL_NO_ENGINE`, `OPENSSL_NO_MD5`, `OPENSSL_NO_SHA`, `CONFIG_SHA256`, `CONFIG_SHA384`, `CONFIG_SHA512`, `CONFIG_OPENSSL_CMAC`, `CONFIG_FIPS`, conditional compilation and the real Make-expanded include/library paths.
 
 ## Differential harness and evidence
 
