@@ -88,7 +88,7 @@ with tempfile.TemporaryDirectory() as d:
  # ownership key for existing object files.
  assert commands[0]["object_output"]==str((root/"foo.o").resolve())
  comp=root/"build"/"wappd"; (comp/"obj").mkdir(parents=True)
- source=root/"build"/"wappd"/"src.c"; source.parent.mkdir(parents=True)
+ source=root/"build"/"wappd"/"src.c"; source.parent.mkdir(parents=True,exist_ok=True)
  source.write_text("int f(void) { return EVP_PKEY_eq(a,b); }\n")
  obj=comp/"obj"/"actual.o"; obj.write_bytes(b"object")
  lo=comp/"libsample.lo"; lo.write_text("# libtool object file\npic_object='.libs/libsample.o'\nnon_pic_object='none'\n")
