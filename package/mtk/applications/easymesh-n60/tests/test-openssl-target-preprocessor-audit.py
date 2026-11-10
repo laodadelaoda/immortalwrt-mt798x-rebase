@@ -94,13 +94,16 @@ with tempfile.TemporaryDirectory() as d:
  lo=comp/"libsample.lo"; lo.write_text("# libtool object file\npic_object='.libs/libsample.o'\nnon_pic_object='none'\n")
  (comp/".libs").mkdir()
  libobj=comp/".libs"/"libsample.o"; libobj.write_bytes(b"object")
- lo_cmd={"source":str(source.resolve()),"object_output":str(obj.resolve())}
  lo_source=comp/"libsrc.c"; lo_source.write_text("int g(void) { return 0; }\n")
  lo_cmd={"source":str(lo_source.resolve()),"object_output":str(libobj.resolve())}
  mapped=m.map_preexisting_objects([obj,lo],[
   {"source":str(source.resolve()),"object_output":str(obj.resolve())},
   lo_cmd])
  assert len(mapped["mapped"])==2 and not mapped["unmapped_object_artifacts"]
+ partial_lo=comp/"partial.lo"
+ partial_lo.write_text("# libtool object file\npic_object='.libs/not-built.o'\nnon_pic_object='none'\n")
+ partial=m.map_preexisting_objects([partial_lo],[])
+ assert partial["unmapped_object_artifacts"]
  # Multiple adjacent source candidates are not silently selected.
  ambiguous_obj=comp/"ambiguous.o"; ambiguous_obj.write_bytes(b"object")
  (comp/"ambiguous.c").write_text("int c;\n")
