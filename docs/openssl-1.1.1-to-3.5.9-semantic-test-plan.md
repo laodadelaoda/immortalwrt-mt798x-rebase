@@ -32,6 +32,23 @@ The migration baseline attestation is a provenance prerequisite. It is not a mig
 | Encoding (`d2i_ECPrivateKey`, `i2d_ECPrivateKey`, `i2o_ECPublicKey`) | `OSSL_DECODER`, `OSSL_ENCODER`, `EVP_PKEY_get1_encoded_public_key` | Preserve SEC1 vs PKCS#8, DER vs PEM, point conversion form, password callback, output bytes/length, parse compatibility and error queue |
 | SHA-1 (`SHA1_Transform`) | EVP digest API for complete-message hashing; no assumed raw-transform equivalent | Inspect whether the caller supplies a complete message or manipulates raw compression state. If raw state/padding semantics are required, redesign; do not substitute a one-shot digest call |
 
+## Initial source-review priority
+
+The original source inventory (Run 42724660705) reported 429 deprecated-name occurrences. Five were references inside unexpanded WAPP macro definitions, leaving 424 source-level callsite occurrences across 63 API names after the macro-reachability correction. These are lexical source occurrences, not yet a count of target-preprocessed active calls.
+
+| Review cluster | Source-level occurrences after macro correction | Priority rationale |
+|---|---:|---|
+| EC / EVP_PKEY legacy bridge | 282 | Dominant ownership and provider-compatibility risk; review the whole EC key lifecycle together |
+| DH / DSA / RSA | 51 | Key object ownership, key generation/derivation, padding and serialization |
+| HMAC / CMAC | 40 | Digest/cipher parameters, incremental operation and output equivalence |
+| ENGINE / provider redesign | 20 | First resolve `OPENSSL_NO_ENGINE` reachability; if active, redesign rather than rename |
+| Key encoding / decoding | 13 | Preserve SEC1/PKCS#8, DER/PEM and EC point form |
+| AES / DES cipher | 12 | Preserve modes, IV/padding and legacy-provider constraints |
+| EVP generic / other | 4 | Accessor semantics, return codes and object lifetime |
+| SHA-1 low-level | 2 | Determine whether raw compression state is being manipulated |
+
+The 20 ENGINE occurrences are not yet confirmed as compiled calls; the N60 OpenSSL package selects `no-engine`, but the target preprocessor guard stack must prove exclusion. Counts must be refreshed from the current Quick Prepare artifact before any migration patch is proposed.
+
 ## Mandatory test dimensions
 
 Every API row must identify which dimensions apply. An omitted dimension requires an explicit reason.
