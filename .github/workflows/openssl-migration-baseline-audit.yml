@@ -1,4 +1,5 @@
 name: OpenSSL 1.1.1w to 3.5.9 migration baseline audit
+# Header inventory includes both checked-in *.h and public *.h.in source templates.
 
 on:
   push:
