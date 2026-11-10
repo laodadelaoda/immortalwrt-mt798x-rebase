@@ -4,13 +4,6 @@ name: OpenSSL 1.1.1w to 3.5.9 migration baseline audit
 on:
   push:
     branches: ["n60pro-mtk-closed-driver"]
-    paths:
-      - ".github/workflows/openssl-migration-baseline-audit.yml"
-      - "docs/openssl-1.1.1-to-3.5.9-migration-baseline.md"
-      - "package/libs/openssl/Makefile"
-      - "package/mtk/applications/easymesh-n60/tests/openssl-*"
-      - "package/mtk/applications/easymesh-n60/tests/test-openssl-*.py"
-      - "package/mtk/applications/easymesh-n60/scripts/audit-openssl-migration-baseline.py"
   workflow_dispatch:
 
 permissions:
