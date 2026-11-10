@@ -518,25 +518,55 @@ def main():
    state="UNKNOWN_FAIL_CLOSED"
    reason="macro is lexically reachable or target preprocessing cannot prove its expansion inactive"
   macro_counts[state]+=1
-  macro_rows.append({**item,"reachability_status":state,"reason":reason})
+  macro_rows.append({**item,"reachability_status":state,"reason":reason,
+    "source_sha256":sha(build/item["path"])})
  callsites=[]; counts={"ACTIVE":0,"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
  for r in call_rows:
   src=canon(build/r["path"],repo)
   state=classify_reference_reachability(src,r["line"],r["api"],r["reference_kind"],
      hits,emitted_lines,compiled_sources_by_component[r["component"]],r["component"] in complete)
   counts[state]+=1
+  source_digest=sha(build/r["path"])
+  compiled_tus=[x for x in results[r["component"]]["translation_units"] if x["returncode"]==0 and x.get("preprocessed_sha256")]
+  source_tus=[x for x in compiled_tus if canon(x["source"],repo)==src]
+  negative_proof=None
+  if state=="EXCLUDED_WITH_EVIDENCE":
+   negative_proof={"source_translation_unit":bool(source_tus),
+    "component_complete":r["component"] in complete,
+    "api_hit_absent":(src,r["line"],r["api"]) not in hits,
+    "source_line_absent":(src,r["line"]) not in emitted_lines,
+    "preprocessed_sha256":sorted(x["preprocessed_sha256"] for x in source_tus),
+    "target_compiler_sha256":sha(compiler_path),
+    "target_config_sha256":sha(a.target_config),
+    "source_sha256":source_digest,
+    "conditional_branch_path":r["branch_path"]}
   callsites.append({"component":r["component"],"path":r["path"],"line":r["line"],"api":r["api"],"reference_kind":r["reference_kind"],"reachability_status":state,
-    "conditional_branch_path":r["branch_path"],"source_sha256":sha(build/r["path"]),
-    "translation_units":[x["source"] for x in results[r["component"]]["translation_units"] if x["returncode"]==0]})
+    "conditional_branch_path":r["branch_path"],"source_sha256":source_digest,
+    "translation_units":[x["source"] for x in compiled_tus],
+    "preprocessor_negative_evidence":negative_proof})
  non_call_references=[]; non_call_counts={"ACTIVE":0,"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
  for r in non_call_rows:
   src=canon(build/r["path"],repo)
   state=classify_reference_reachability(src,r["line"],r["api"],r["reference_kind"],
      hits,emitted_lines,compiled_sources_by_component[r["component"]],r["component"] in complete)
   non_call_counts[state]+=1
+  source_digest=sha(build/r["path"])
+  compiled_tus=[x for x in results[r["component"]]["translation_units"] if x["returncode"]==0 and x.get("preprocessed_sha256")]
+  source_tus=[x for x in compiled_tus if canon(x["source"],repo)==src]
+  negative_proof=None
+  if state=="EXCLUDED_WITH_EVIDENCE":
+   negative_proof={"source_translation_unit":bool(source_tus),
+    "component_complete":r["component"] in complete,
+    "api_hit_absent":(src,r["line"],r["api"]) not in hits,
+    "source_line_absent":(src,r["line"]) not in emitted_lines,
+    "preprocessed_sha256":sorted(x["preprocessed_sha256"] for x in source_tus),
+    "target_compiler_sha256":sha(compiler_path),
+    "target_config_sha256":sha(a.target_config),
+    "source_sha256":source_digest,
+    "conditional_branch_path":r["branch_path"]}
   non_call_references.append({"component":r["component"],"path":r["path"],"line":r["line"],"api":r["api"],
     "reference_kind":r["reference_kind"],"reachability_status":state,"conditional_branch_path":r["branch_path"],
-    "source_sha256":sha(build/r["path"])})
+    "source_sha256":source_digest,"preprocessor_negative_evidence":negative_proof})
  (out/"openssl-non-call-reference-reachability.json").write_text(json.dumps(non_call_references,indent=2)+"\n")
  summary={"schema_version":1,"git_sha":subprocess.run(["git","rev-parse","HEAD"],cwd=repo,text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
   "firmware_compile_invoked":False,"method":"expanded OpenWrt Build/Compile recipe validation followed by component Make -n -w V=s and exact-command -E -dD/-dM replay",

@@ -20,8 +20,25 @@ with tempfile.TemporaryDirectory() as d:
  assert not report["complete"] and any("semantic review/approval" in x for x in report["failures"])
  # A source occurrence excluded by the exact N60 preprocessor is not an active API defect.
  call[0]["reachability_status"]="EXCLUDED_WITH_EVIDENCE"
+ # A bare status label is not evidence: the exact source must be a successful
+ # target translation unit, and the negative observation must bind its hashes.
  report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
- assert report["complete"] and report["excluded_with_evidence"]==1
+ assert not report["complete"] and any("negative target-preprocessor proof" in x for x in report["failures"])
+ tu={"source":str(src.resolve()),"returncode":0,"preprocessed_sha256":"1"*64}
+ summary["components"]={"wappd":{"source_reachability_complete":True,"translation_units":[tu]}}
+ call[0]["preprocessor_negative_evidence"]={
+  "source_translation_unit":True,"component_complete":True,"api_hit_absent":True,
+  "source_line_absent":True,"preprocessed_sha256":["1"*64],
+  "target_compiler_sha256":"2"*64,"target_config_sha256":"3"*64,
+  "source_sha256":digest,"conditional_branch_path":[]}
+ summary["target_compiler_sha256"]="2"*64; summary["target_config_sha256"]="3"*64
+ report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
+ assert report["complete"] and report["excluded_with_evidence"]==1,report["failures"]
+ # Falsifying any one observation must revoke exclusion.
+ call[0]["preprocessor_negative_evidence"]["api_hit_absent"]=False
+ report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
+ assert not report["complete"] and any("negative target-preprocessor proof" in x for x in report["failures"])
+ call[0]["preprocessor_negative_evidence"]["api_hit_absent"]=True
  # A declaration/definition is inventoried but is not treated as an API invocation.
  call[0]["reference_kind"]="DECLARATION_OR_DEFINITION"
  call[0]["reachability_status"]="ACTIVE"
@@ -67,4 +84,14 @@ with tempfile.TemporaryDirectory() as d:
  policy={"api_rules":{"EVP_PKEY_cmp":{"status":"LEGACY_RETAINED","reason":"Retained temporarily for interoperability with the existing vendor protocol implementation; replacement requires end-to-end key equality regression evidence.","approved":True}}}
  report=m.evaluate(inv,call,non,summary,macros,migration,policy,root,git)
  assert report["complete"],report["failures"]
+ # A macro cannot be excluded by a caller-supplied status without lexical and source-hash proof.
+ macro={"component":"wappd","path":"wappd/x.c","line":1,"macro":"WRAP","api":"EVP_PKEY_cmp",
+  "reachability":"ACTIVE_MACRO_EXPANSION_REQUIRES_CPP","reachability_status":"EXCLUDED_WITH_EVIDENCE",
+  "reason":"macro definition has no lexical reference in the component and target preprocessing completed",
+  "source_sha256":digest}
+ report=m.evaluate([],[],[],{"git_sha":git,"firmware_compile_invoked":False,"complete":True,
+  "source_reachability_complete":True,"callsite_counts":{"total":0,"UNKNOWN_FAIL_CLOSED":0},
+  "non_call_reference_counts":{"total":0,"UNKNOWN_FAIL_CLOSED":0},"macro_reference_counts":{"total":1,"UNKNOWN_FAIL_CLOSED":0},
+  "components":{"wappd":{"source_reachability_complete":True}}},[macro],{},{"api_rules":{}},root,git)
+ assert not report["complete"] and any("macro EXCLUDED_WITH_EVIDENCE" in x for x in report["failures"])
 print("PASS: exact target reachability excludes inactive APIs and declarations; active, unknown, missing, stale and unapproved cases are handled fail-closed.")

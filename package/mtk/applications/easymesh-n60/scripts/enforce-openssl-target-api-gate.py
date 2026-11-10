@@ -34,6 +34,16 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
  if summary.get("macro_reference_counts",{}).get("total")!=len(macro_rows): failures.append("macro evidence count mismatch")
  if any(x.get("reachability_status")=="UNKNOWN_FAIL_CLOSED" for x in macro_rows):
   failures.append("macro reachability retains UNKNOWN_FAIL_CLOSED references")
+ for row in macro_rows:
+  if row.get("reachability_status")=="EXCLUDED_WITH_EVIDENCE":
+   component=summary.get("components",{}).get(row.get("component"),{})
+   source=(Path(source_root).resolve()/str(row.get("path",""))).resolve()
+   valid=(row.get("reachability")=="UNREFERENCED_MACRO_DEFINITION" and
+          row.get("reason")=="macro definition has no lexical reference in the component and target preprocessing completed" and
+          component.get("source_reachability_complete") is True and
+          source.is_relative_to(Path(source_root).resolve()) and source.is_file() and
+          sha256(source)==row.get("source_sha256"))
+   if not valid: failures.append("macro EXCLUDED_WITH_EVIDENCE lacks matching lexical/source proof: "+repr(key(row)))
 
  evidence={}
  for group in (callsites,noncalls):
@@ -49,6 +59,23 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
     failures.append("target source path escapes the prepared component tree: "+repr(k))
    elif not source.is_file() or sha256(source)!=row.get("source_sha256"):
     failures.append("target source SHA256 mismatch: "+repr(k))
+   if status=="EXCLUDED_WITH_EVIDENCE":
+    proof=row.get("preprocessor_negative_evidence")
+    component=summary.get("components",{}).get(k[0],{})
+    compiled=[x for x in component.get("translation_units",[]) if x.get("returncode")==0 and x.get("preprocessed_sha256")]
+    source_text=str(source)
+    matching=[x for x in compiled if str(Path(x.get("source","")).resolve())==source_text]
+    expected_hashes=sorted(x["preprocessed_sha256"] for x in matching)
+    valid=(component.get("source_reachability_complete") is True and bool(matching) and
+      isinstance(proof,dict) and proof.get("source_translation_unit") is True and
+      proof.get("component_complete") is True and proof.get("api_hit_absent") is True and
+      proof.get("source_line_absent") is True and
+      proof.get("preprocessed_sha256")==expected_hashes and
+      proof.get("target_compiler_sha256")==summary.get("target_compiler_sha256") and
+      proof.get("target_config_sha256")==summary.get("target_config_sha256") and
+      proof.get("source_sha256")==row.get("source_sha256") and
+      proof.get("conditional_branch_path")==row.get("conditional_branch_path"))
+    if not valid: failures.append("EXCLUDED_WITH_EVIDENCE lacks matching negative target-preprocessor proof: "+repr(k))
    evidence[k]=row
 
  inventory={}
