@@ -30,4 +30,17 @@ with tempfile.TemporaryDirectory() as d:
  argv=m.cpp_argv(cmd,root/"x.i")
  assert "-E" in argv and "-c" not in argv and "-MMD" not in argv and "-MF" not in argv
  assert argv[-2:]==["-o",str(root/"x.i")]
+ macrofile=root/"macros.txt"
+ macrofile.write_text("#define OPENSSL_NO_ENGINE 1\\n#define CONFIG_SUITEB\\n")
+ snapshot=m.macro_snapshot(macrofile)
+ assert snapshot["OPENSSL_NO_ENGINE"]=={"defined":True,"value":"1"}
+ assert snapshot["CONFIG_SUITEB"]["defined"] is True
+ assert snapshot["OPENSSL_IS_BORINGSSL"]["defined"] is False
+ (root/"foo.c").write_text("int f(void) { return 0; }\\n")
+ log=f"make[1]: Entering directory '{root}'\\n/tool/aarch64-test-gcc -c foo.c -o foo.o\\nmake[1]: Leaving directory '{root}'\\n"
+ commands,errors=m.parse_commands(log,root,"aarch64-test-gcc")
+ assert not errors and len(commands)==1 and commands[0]["source"]==str((root/"foo.c").resolve())
+ hostlog=f"/usr/bin/gcc -c '{root}/foo.c' -o foo.o\\n"
+ hostcommands,hosterrors=m.parse_commands(hostlog,root,"aarch64-test-gcc")
+ assert not hostcommands and hosterrors,hosterrors
 print("PASS: multiline conditional branches, elif/else, nested guards, GCC line markers and preprocess-only argv conversion.")
