@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory() as d:
  hits,files=m.pp_hits(pp,root,{"EVP_PKEY_cmp","ENGINE_by_id"})
  assert ("/tmp/a.c",1,"EVP_PKEY_cmp") in hits
  assert ("/tmp/inc.h",20,"ENGINE_by_id") in hits
- assert ("/tmp/inc.h","ENGINE_by_id") in files
+ assert ("/tmp/inc.h",20) in files
  cmd={"argv":["/tool/aarch64-gcc","-Iinc","-MMD","-MF","x.d","-c","x.c","-o","x.o"]}
  argv=m.cpp_argv(cmd,root/"x.i")
  assert "-E" in argv and "-c" not in argv and "-MMD" not in argv and "-MF" not in argv
