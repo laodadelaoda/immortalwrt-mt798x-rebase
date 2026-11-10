@@ -217,17 +217,17 @@ def macro_snapshot(path):
  return {name:{"defined":name in found,"value":found.get(name)} for name in FOCUS_MACROS}
 
 def pp_hits(path,cwd,names):
- hits=set(); filehits=set(); current=None; lineno=1
+ hits=set(); emitted_lines=set(); current=None; lineno=1
  for line in Path(path).read_text(encoding="utf-8",errors="replace").splitlines():
   m=MARK.match(line)
   if m: lineno=int(m.group(1)); current=canon(m.group(2),cwd); continue
   if line.lstrip().startswith("#"): continue
   if current:
+   emitted_lines.add((current,lineno))
    for m in CALL.finditer(line):
-    if m.group(1) in names:
-     hits.add((current,lineno,m.group(1))); filehits.add((current,m.group(1)))
+    if m.group(1) in names: hits.add((current,lineno,m.group(1)))
    lineno+=1
- return hits,filehits
+ return hits,emitted_lines
 
 def audit_binary_inputs(build,out):
  rows=[]; nm_available=shutil.which("nm"); file_available=shutil.which("file"); strings_available=shutil.which("strings")
@@ -324,7 +324,7 @@ def main():
   r["branch_path"]=branches[str(p)][r["line"]-1]
  recipe_sha=validate_compile_recipe(a.package_compile_recipe,repo,build,a)
  (build/"1905daemon"/"obj").mkdir(parents=True,exist_ok=True)
- specs=make_specs(repo,build,a); results={}; hits=set(); filehits=set(); api_hits_by_component={x:set() for x in COMP}
+ specs=make_specs(repo,build,a); results={}; hits=set(); emitted_lines=set(); api_hits_by_component={x:set() for x in COMP}
  macro_refs=inv.scan_macro_references(build,names,{x:"OSSL_DEPRECATED" for x in names})
  source_calls_by_component={x:sum(1 for row in call_rows if row["component"]==x) for x in COMP}
  macro_refs_by_component={x:sum(1 for item in macro_refs if item["component"]==x) for x in COMP}
@@ -359,7 +359,7 @@ def main():
    if pp.returncode==0 and dest.is_file() and mp.returncode==0 and macrofile.is_file():
     item["preprocessed_sha256"]=sha(dest); item["macro_snapshot_sha256"]=sha(macrofile)
     item["target_macro_snapshot"]=macro_snapshot(macrofile)
-    h,fh=pp_hits(dest,cmd["cwd"],names); hits.update(h); filehits.update(fh)
+    h,emitted=pp_hits(dest,cmd["cwd"],names); hits.update(h); emitted_lines.update(emitted)
     source_root=(build/comp).resolve()
     for hit in h:
      try:
@@ -395,7 +395,7 @@ def main():
   src=canon(build/r["path"],repo); key=(src,r["line"],r["api"])
   if r["reference_kind"]=="UNKNOWN_REFERENCE_KIND": state="UNKNOWN_FAIL_CLOSED"
   elif key in hits: state="ACTIVE"
-  elif (src,r["api"]) in filehits: state="UNKNOWN_FAIL_CLOSED"
+  elif (src,r["line"]) in emitted_lines: state="UNKNOWN_FAIL_CLOSED"
   elif r["component"] in complete: state="EXCLUDED_WITH_EVIDENCE"
   else: state="UNKNOWN_FAIL_CLOSED"
   counts[state]+=1
@@ -406,7 +406,7 @@ def main():
  for r in non_call_rows:
   src=canon(build/r["path"],repo); key=(src,r["line"],r["api"])
   if key in hits: state="ACTIVE"
-  elif (src,r["api"]) in filehits: state="UNKNOWN_FAIL_CLOSED"
+  elif (src,r["line"]) in emitted_lines: state="UNKNOWN_FAIL_CLOSED"
   elif r["component"] in complete: state="EXCLUDED_WITH_EVIDENCE"
   else: state="UNKNOWN_FAIL_CLOSED"
   non_call_counts[state]+=1
