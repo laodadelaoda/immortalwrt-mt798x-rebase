@@ -26,7 +26,7 @@ def token_present(files, api):
     return any(rx.search(p.read_text(encoding="utf-8",errors="replace")) for p in files)
 
 def deprecation_annotation(files, api):
-    rx=re.compile(r"((?:OSSL_)?DEPRECATEDIN_[A-Za-z0-9_]+)[\s\S]{0,700}?\b"+re.escape(api)+r"\s*\(")
+    rx=re.compile(r"((?:OSSL_)?DEPRECATEDIN_[A-Za-z0-9_]+)[^;{}]{0,700}?\b"+re.escape(api)+r"\s*\(")
     for p in files:
         m=rx.search(p.read_text(encoding="utf-8",errors="replace"))
         if m:
