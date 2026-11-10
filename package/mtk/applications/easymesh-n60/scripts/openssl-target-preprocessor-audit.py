@@ -140,6 +140,68 @@ def validate_compile_recipe(path,repo,build,a):
   raise SystemExit("expanded Build/Compile recipe does not bind target AR/RANLIB")
  return sha(path)
 
+def object_output_path(argv,source,cwd):
+ """Resolve the compiler's actual -o output, or its documented default."""
+ output=None; i=0
+ while i<len(argv):
+  token=argv[i]
+  if token=="-o":
+   if i+1>=len(argv): return None
+   output=argv[i+1]; i+=1
+  elif token.startswith("-o") and len(token)>2:
+   output=token[2:]
+  i+=1
+ if output is None: output=str(Path(source).with_suffix(".o").name)
+ return canon(output,cwd)
+
+def parse_libtool_objects(path):
+ """Read only libtool's literal object-path metadata; never evaluate the file."""
+ found=[]
+ try: lines=Path(path).read_text(encoding="utf-8",errors="replace").splitlines()
+ except OSError: return None
+ for line in lines:
+  m=re.match(r"^\s*(?:pic_object|non_pic_object)\s*=\s*['\"]([^'\"]+)['\"]\s*$",line)
+  if m and m.group(1)!="none":
+   found.append(canon(m.group(1),Path(path).parent))
+ return sorted(set(found)) if found else None
+
+def map_preexisting_objects(preexisting,compile_commands):
+ """Map existing .o/.lo artifacts to real -o outputs and source files."""
+ by_output={}
+ for cmd in compile_commands:
+  output=cmd.get("object_output")
+  if output: by_output.setdefault(output,[]).append(cmd["source"])
+ uncompiled=[]; ambiguous=[]; unmapped=[]; mapped=[]
+ for artifact in preexisting:
+  suffix=artifact.suffix.lower()
+  if suffix not in (".o",".lo"): continue
+  artifact_path=str(artifact.resolve())
+  outputs=[artifact_path] if suffix==".o" else parse_libtool_objects(artifact)
+  if suffix==".lo" and outputs is None:
+   unmapped.append(artifact_path); continue
+  matched=[]
+  for output in outputs or []: matched.extend(by_output.get(output,[]))
+  if matched and len(set(matched))==1:
+   mapped.append({"artifact":artifact_path,"sources":sorted(set(matched)),"method":"exact-compiler-output"})
+   continue
+  if len(set(matched))>1:
+   ambiguous.append({"artifact":artifact_path,"sources":sorted(set(matched))}); continue
+  candidates=[artifact.with_suffix(ext).resolve() for ext in EXT if artifact.with_suffix(ext).is_file()]
+  if len(candidates)==1: uncompiled.append(str(candidates[0]))
+  elif len(candidates)>1:
+   ambiguous.append({"artifact":artifact_path,"source_candidates":[str(x) for x in sorted(candidates)]})
+  else: unmapped.append(artifact_path)
+ return {"mapped":mapped,"uncompiled_source_artifacts":sorted(set(uncompiled)),
+         "ambiguous_object_mappings":ambiguous,"unmapped_object_artifacts":unmapped}
+
+def source_reachability_is_complete(make_ok,parse_errors,preprocess_errors,
+                                    uncompiled,ambiguous,unmapped,
+                                    compile_command_count,source_call_count,macro_reference_count):
+ """Fail closed when references exist but no target translation unit was observed."""
+ return bool(make_ok and not parse_errors and not preprocess_errors and
+             not uncompiled and not ambiguous and not unmapped and
+             (compile_command_count>0 or (source_call_count==0 and macro_reference_count==0)))
+
 def parse_commands(log,base,compiler,component_roots):
  cmds=[]; errors={name:[] for name in component_roots}; dirs=[Path(base)]
  def locate(src,cwd):
@@ -188,8 +250,9 @@ def parse_commands(log,base,compiler,component_roots):
   if not resolved.is_file():
    errors[name].append(f"{n}: component source file does not exist: {resolved}")
    continue
-  cmds.append({"component":name,"cwd":str(Path(cwd).resolve()),"argv":ts[ci:],
-               "source":str(resolved),"line":n})
+  argv=ts[ci:]
+  cmds.append({"component":name,"cwd":str(Path(cwd).resolve()),"argv":argv,
+               "source":str(resolved),"object_output":object_output_path(argv,resolved,cwd),"line":n})
  return cmds,errors
 
 def cpp_argv(cmd,out):
@@ -338,14 +401,8 @@ def main():
    cmds,perrors=parse_commands(run.stdout,spec["cwd"],compiler,{comp: (build/comp).resolve()})
    parse_errors.extend(perrors[comp]); compile_commands.extend(cmds)
   preexisting=[p for p in (build/comp).rglob("*") if p.is_file() and p.suffix.lower() in (".o",".lo",".a",".so")]
-  compiled_sources={Path(cmd["source"]).resolve() for cmd in compile_commands}
-  uncompiled_source_artifacts=[]
-  for artifact in preexisting:
-   if artifact.suffix.lower() in (".o",".lo"):
-    candidates=[artifact.with_suffix(ext) for ext in (".c",".cc",".cpp",".cxx")]
-    for candidate in candidates:
-     if candidate.is_file() and candidate.resolve() not in compiled_sources:
-      uncompiled_source_artifacts.append(str(candidate))
+  object_mapping=map_preexisting_objects(preexisting,compile_commands)
+  uncompiled_source_artifacts=object_mapping["uncompiled_source_artifacts"]
   for i,cmd in enumerate(compile_commands):
    key=hashlib.sha256((comp+cmd["source"]+str(i)).encode()).hexdigest()[:16]
    dest=out/"preprocessed"/f"{comp}-{key}.i"; pargv=cpp_argv(cmd,dest)
@@ -372,12 +429,16 @@ def main():
    else: pp_errors.append(item)
    tus.append(item)
   make_ok=all(code==0 for code in run_codes)
-  source_complete=make_ok and not parse_errors and not pp_errors and not uncompiled_source_artifacts
-  if not compile_commands and source_calls_by_component[comp]==0 and macro_refs_by_component[comp]==0 and make_ok and not parse_errors:
-   source_complete=True
+  source_complete=source_reachability_is_complete(
+   make_ok,parse_errors,pp_errors,uncompiled_source_artifacts,
+   object_mapping["ambiguous_object_mappings"],object_mapping["unmapped_object_artifacts"],
+   len(compile_commands),source_calls_by_component[comp],macro_refs_by_component[comp])
   results[comp]={"make_returncodes":run_codes,"logs":logs,"compile_commands":len(compile_commands),
     "parse_errors":parse_errors,"preexisting_binary_inputs":[str(p.relative_to(build/comp)) for p in preexisting],
-    "uncompiled_source_artifacts":uncompiled_source_artifacts,"preprocess_failures":pp_errors,
+    "object_output_mappings":object_mapping["mapped"],
+    "uncompiled_source_artifacts":uncompiled_source_artifacts,
+    "ambiguous_object_mappings":object_mapping["ambiguous_object_mappings"],
+    "unmapped_object_artifacts":object_mapping["unmapped_object_artifacts"],"preprocess_failures":pp_errors,
     "translation_units":tus,"source_reachability_complete":source_complete}
   (out/f"compile-commands-{comp}.json").write_text(json.dumps(compile_commands,indent=2)+"\\n")
  (out/"make-compile-command.txt").write_text("component-only Make -n -w dry-runs, bound to expanded Build/Compile recipe\\n")
