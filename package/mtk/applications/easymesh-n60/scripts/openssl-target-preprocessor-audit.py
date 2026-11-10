@@ -58,10 +58,10 @@ def make_specs(repo,build,a):
  easy=f"{cpp} {cflags} -Wno-error=deprecated-declarations -DCONFIG_SUPPORT_OPENWRT"
  st=str(a.staging); linux_rel=os.path.relpath(a.linux,repo)
  return {
- "libmapd":(["make","-B","-n","-C",str(build/"libmapd"),"V=s",f"CC={a.cc}",f"CFLAGS={cpp} {cflags} -Werror -g",f"LDFLAGS={ld}","all"],{}),
- "wappd":(["make","-B","-n","-C",str(build/"wappd"),"V=s",f"TOPDIR={repo}",f"UAPD_INCLUDE_PATH={a.linux}/include/uapi/linux/wapp -I{st}/usr/include","CONFIG_SUPPORT_OPENWRT=y","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y",f"CC={a.cc}",f"EXTRA_CFLAGS={cpp} {cflags} -Wno-error=deprecated-declarations -I{a.linux}/include/uapi/linux/wapp",f"LDFLAGS={ld} -L{st}/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto","all"],{}),
- "1905daemon":(["make","-B","-n","-C",str(build/"1905daemon"),"V=s",f"TOPDIR={repo}",f"ROOTDIR={repo}",f"LINUXDIR={linux_rel}",f"STAGING_DIR={st}","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y","MAP_R3_SUPPORT=y","SWTICH_DSA_ARCH=y",f"CC={a.cc}",f"AR={a.ar}",f"RANLIB={a.ranlib}",f"LDFLAGS={ld} -L{st}/usr/lib -Wl,--no-as-needed -lpthread -lnl-tiny -lssl -lcrypto","all"],{"EXTRA_CFLAGS":easy}),
- "mapd":(["make","-B","-n","-C",str(build/"mapd"),"V=s",f"TOPDIR={repo}","CONFIG_SUPPORT_OPENWRT=y","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y",f"CC={a.cc}",f"LDO={a.cc}",f"EXTRA_CFLAGS={easy}",f"LDFLAGS={ld} -L{st}/usr/lib","version","mapd"],{})
+ "libmapd":(["make","-B","-n","-w","-C",str(build/"libmapd"),"V=s",f"CC={a.cc}",f"CFLAGS={cpp} {cflags} -Werror -g",f"LDFLAGS={ld}","all"],{}),
+ "wappd":(["make","-B","-n","-w","-C",str(build/"wappd"),"V=s",f"TOPDIR={repo}",f"UAPD_INCLUDE_PATH={a.linux}/include/uapi/linux/wapp -I{st}/usr/include","CONFIG_SUPPORT_OPENWRT=y","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y",f"CC={a.cc}",f"EXTRA_CFLAGS={cpp} {cflags} -Wno-error=deprecated-declarations -I{a.linux}/include/uapi/linux/wapp",f"LDFLAGS={ld} -L{st}/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto","all"],{}),
+ "1905daemon":(["make","-B","-n","-w","-C",str(build/"1905daemon"),"V=s",f"TOPDIR={repo}",f"ROOTDIR={repo}",f"LINUXDIR={linux_rel}",f"STAGING_DIR={st}","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y","MAP_R3_SUPPORT=y","SWTICH_DSA_ARCH=y",f"CC={a.cc}",f"AR={a.ar}",f"RANLIB={a.ranlib}",f"LDFLAGS={ld} -L{st}/usr/lib -Wl,--no-as-needed -lpthread -lnl-tiny -lssl -lcrypto","all"],{"EXTRA_CFLAGS":easy}),
+ "mapd":(["make","-B","-n","-w","-C",str(build/"mapd"),"V=s",f"TOPDIR={repo}","CONFIG_SUPPORT_OPENWRT=y","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y",f"CC={a.cc}",f"LDO={a.cc}",f"EXTRA_CFLAGS={easy}",f"LDFLAGS={ld} -L{st}/usr/lib","version","mapd"],{})
  }
 
 def parse_commands(log,base,compiler):
