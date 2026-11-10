@@ -465,37 +465,38 @@ def main():
  (out/"make-compile-command.txt").write_text("component-only Make -n -w dry-runs, bound to expanded Build/Compile recipe\n")
  binary_rows,binary_audit_complete,opaque_binary_openSSL_refs=audit_binary_inputs(build,out)
  complete={c for c,v in results.items() if v["source_reachability_complete"]}
-  compiled_sources_by_component={
-   comp:{canon(item["source"],repo) for item in results[comp]["translation_units"]}
-   for comp in COMP}
-  macro_rows=[]; macro_counts={"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
-  for item in macro_refs:
-   if item["reachability"]=="UNREFERENCED_MACRO_DEFINITION" and item["component"] in complete:
-    state="EXCLUDED_WITH_EVIDENCE"
-    reason="macro definition has no lexical reference in the component and target preprocessing completed"
-   else:
-    state="UNKNOWN_FAIL_CLOSED"
-    reason="macro is lexically reachable or target preprocessing cannot prove its expansion inactive"
-   macro_counts[state]+=1
-   macro_rows.append({**item,"reachability_status":state,"reason":reason})
-  callsites=[]; counts={"ACTIVE":0,"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
-  for r in call_rows:
-   src=canon(build/r["path"],repo)
-   state=classify_reference_reachability(src,r["line"],r["api"],r["reference_kind"],
-      hits,emitted_lines,compiled_sources_by_component[r["component"]],r["component"] in complete)
-   counts[state]+=1
-   callsites.append({"component":r["component"],"path":r["path"],"line":r["line"],"api":r["api"],"reference_kind":r["reference_kind"],"reachability_status":state,
-     "conditional_branch_path":r["branch_path"],"source_sha256":sha(build/r["path"]),
-     "translation_units":[x["source"] for x in results[r["component"]]["translation_units"] if x["returncode"]==0]})
-  non_call_references=[]; non_call_counts={"ACTIVE":0,"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
-  for r in non_call_rows:
-   src=canon(build/r["path"],repo)
-   state=classify_reference_reachability(src,r["line"],r["api"],r["reference_kind"],
-      hits,emitted_lines,compiled_sources_by_component[r["component"]],r["component"] in complete)
-   non_call_counts[state]+=1
-   non_call_references.append({"component":r["component"],"path":r["path"],"line":r["line"],"api":r["api"],
-     "reference_kind":r["reference_kind"],"reachability_status":state,"conditional_branch_path":r["branch_path"],
-     "source_sha256":sha(build/r["path"])})
+ compiled_sources_by_component={
+  comp:{canon(item["source"],repo) for item in results[comp]["translation_units"]}
+  for comp in COMP}
+ macro_rows=[]; macro_counts={"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
+ for item in macro_refs:
+  if item["reachability"]=="UNREFERENCED_MACRO_DEFINITION" and item["component"] in complete:
+   state="EXCLUDED_WITH_EVIDENCE"
+   reason="macro definition has no lexical reference in the component and target preprocessing completed"
+  else:
+   state="UNKNOWN_FAIL_CLOSED"
+   reason="macro is lexically reachable or target preprocessing cannot prove its expansion inactive"
+  macro_counts[state]+=1
+  macro_rows.append({**item,"reachability_status":state,"reason":reason})
+ callsites=[]; counts={"ACTIVE":0,"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
+ for r in call_rows:
+  src=canon(build/r["path"],repo)
+  state=classify_reference_reachability(src,r["line"],r["api"],r["reference_kind"],
+     hits,emitted_lines,compiled_sources_by_component[r["component"]],r["component"] in complete)
+  counts[state]+=1
+  callsites.append({"component":r["component"],"path":r["path"],"line":r["line"],"api":r["api"],"reference_kind":r["reference_kind"],"reachability_status":state,
+    "conditional_branch_path":r["branch_path"],"source_sha256":sha(build/r["path"]),
+    "translation_units":[x["source"] for x in results[r["component"]]["translation_units"] if x["returncode"]==0]})
+ non_call_references=[]; non_call_counts={"ACTIVE":0,"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
+ for r in non_call_rows:
+  src=canon(build/r["path"],repo)
+  state=classify_reference_reachability(src,r["line"],r["api"],r["reference_kind"],
+     hits,emitted_lines,compiled_sources_by_component[r["component"]],r["component"] in complete)
+  non_call_counts[state]+=1
+  non_call_references.append({"component":r["component"],"path":r["path"],"line":r["line"],"api":r["api"],
+    "reference_kind":r["reference_kind"],"reachability_status":state,"conditional_branch_path":r["branch_path"],
+    "source_sha256":sha(build/r["path"])})
+ (out/"openssl-non-call-reference-reachability.json").write_text(json.dumps(non_call_references,indent=2)+"\n")
  summary={"schema_version":1,"git_sha":subprocess.run(["git","rev-parse","HEAD"],cwd=repo,text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
   "firmware_compile_invoked":False,"method":"expanded OpenWrt Build/Compile recipe validation followed by component Make -n -w V=s and exact-command -E -dD/-dM replay",
   "target_compiler":a.cc,"target_compiler_realpath":str(compiler_path),"target_compiler_sha256":sha(compiler_path),
