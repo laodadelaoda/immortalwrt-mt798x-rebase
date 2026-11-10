@@ -120,6 +120,17 @@ with tempfile.TemporaryDirectory() as d:
   assert calls[0][1]=="-n" and calls[1][1]=="-w"
   assert (out/"mapd-version-dry-run.log").is_file()
   assert (out/"mapd-version-generation.log").is_file()
+  unsafe_calls=[]
+  def unsafe_make(argv,**kwargs):
+   unsafe_calls.append(argv)
+   return SimpleNamespace(returncode=0,stdout="/usr/bin/aarch64-test-gcc -c generated.c -o generated.o\n")
+  with patch.object(m.subprocess,"run",side_effect=unsafe_make):
+   try:
+    m.prepare_mapd_version(rr/"build",rr,out,"aarch64-test-gcc",args)
+    raise AssertionError("compiler invocation must block MAPD metadata generation")
+   except SystemExit as exc:
+    assert "compiler invocation" in str(exc)
+  assert len(unsafe_calls)==1,"unsafe dry-run must never execute the real make target"
 
  # Exact compiler -o output, not same-directory filename guessing, is the
  # ownership key for existing object files.
