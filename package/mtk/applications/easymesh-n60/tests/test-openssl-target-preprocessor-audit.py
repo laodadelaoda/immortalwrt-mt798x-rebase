@@ -38,9 +38,21 @@ with tempfile.TemporaryDirectory() as d:
  assert snapshot["OPENSSL_IS_BORINGSSL"]["defined"] is False
  (root/"foo.c").write_text("int f(void) { return 0; }\\n")
  log=f"make[1]: Entering directory '{root}'\\n/tool/aarch64-test-gcc -c foo.c -o foo.o\\nmake[1]: Leaving directory '{root}'\\n"
- commands,errors=m.parse_commands(log,root,"aarch64-test-gcc")
- assert not errors and len(commands)==1 and commands[0]["source"]==str((root/"foo.c").resolve())
+ commands,errors=m.parse_commands(log,root,"aarch64-test-gcc",{"component":root.resolve()})
+ assert not errors["component"] and len(commands)==1 and commands[0]["source"]==str((root/"foo.c").resolve())
  hostlog=f"/usr/bin/gcc -c '{root}/foo.c' -o foo.o\\n"
- hostcommands,hosterrors=m.parse_commands(hostlog,root,"aarch64-test-gcc")
- assert not hostcommands and hosterrors,hosterrors
-print("PASS: multiline conditional branches, elif/else, nested guards, GCC line markers and preprocess-only argv conversion.")
+ hostcommands,hosterrors=m.parse_commands(hostlog,root,"aarch64-test-gcc",{"component":root.resolve()})
+ assert not hostcommands and hosterrors["component"],hosterrors
+ from types import SimpleNamespace
+ args=SimpleNamespace(cppflags="-Itarget",cflags="-O2",ldflags="-Wl,-z,now",
+  staging=root/"staging",linux=root/"linux",cc="aarch64-test-gcc",ar="aarch64-test-ar",ranlib="aarch64-test-ranlib")
+ specs=m.make_specs(root,root/"build",args)
+ assert len(specs["1905daemon"])==3
+ main_1905=specs["1905daemon"][0]["argv"]
+ assert main_1905[main_1905.index("-o")+1]=="eth_ops_lib"
+ assert specs["1905daemon"][1]["name"]=="1905daemon-ethernet"
+ assert specs["1905daemon"][2]["name"]=="1905daemon-libbridge"
+ assert specs["1905daemon"][1]["env"]["EXTRA_CFLAGS"].endswith("-DCONFIG_SUPPORT_OPENWRT")
+ assert specs["mapd"][0]["env"]["EXTRA_CFLAGS"].endswith("-DCONFIG_SUPPORT_OPENWRT")
+ assert not any(x.startswith("EXTRA_CFLAGS=") for x in specs["mapd"][0]["argv"])
+print("PASS: conditional branches, source mapping, preprocess-only argv, exact component flags and safe 1905 sub-build enumeration.")
