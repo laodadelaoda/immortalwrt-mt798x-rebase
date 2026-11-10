@@ -72,7 +72,7 @@ with tempfile.TemporaryDirectory() as d:
   f"-C {build}/libmapd",f'CFLAGS="{args.cppflags} {args.cflags} -Werror -g"',
   f'LDFLAGS="{args.ldflags}"',f"-C {build}/wappd",
   f'UAPD_INCLUDE_PATH="{args.linux}/include/uapi/linux/wapp -I{staging}/usr/include"',
-  f'EXTRA_CFLAGS="{args.cppflags} {args.cflags} -Wno-error=deprecated-declarations -I{args.linux}/include/uapi/linux/wapp"',
+  f'EXTRA_CFLAGS="{args.cppflags} {args.cflags}  -I{args.linux}/include/uapi/linux/wapp"',
   f'LDFLAGS="{args.ldflags} -L{staging}/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto"',
   f"-C {build}/1905daemon",f'LINUXDIR="{linux_rel}"',f'STAGING_DIR="{staging}"',
   f'LDFLAGS="{args.ldflags} -L{staging}/usr/lib -Wl,--no-as-needed -lpthread -lnl-tiny -lssl -lcrypto"',
