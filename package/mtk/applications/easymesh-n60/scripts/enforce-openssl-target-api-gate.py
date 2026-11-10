@@ -20,8 +20,8 @@ def key(row):
  return (row.get("component"),row.get("path"),int(row.get("line",0)),row.get("api"))
 
 def observe_preprocessed_output(path,source_path,line_number,api):
- marker=re.compile(r'^#\\s*(\\d+)\\s+"([^"]+)"')
- call=re.compile(r"\\b"+re.escape(api)+r"\\s*\\(")
+ marker=re.compile(r'^#\s*(\d+)\s+"([^"]+)"')
+ call=re.compile(r"\b"+re.escape(api)+r"\s*\(")
  current=None; lineno=1; emitted=False; hit=False
  for text in Path(path).read_text(encoding="utf-8",errors="replace").splitlines():
   m=marker.match(text)

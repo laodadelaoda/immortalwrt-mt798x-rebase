@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory() as d:
  report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
  assert not report["complete"] and any("negative target-preprocessor proof" in x for x in report["failures"])
  ppout=root/"unit.i"
- ppout.write_text(f'# 1 "{src.resolve()}"\\nint f(void) {{ return 0; }}\\n')
+ ppout.write_text(f'# 2 "{src.resolve()}"\nint f(void) {{ return 0; }}\n')
  pp_digest=m.sha256(ppout)
  tu={"source":str(src.resolve()),"returncode":0,"preprocessed_sha256":pp_digest,"preprocessed_output":str(ppout.resolve())}
  summary["components"]={"wappd":{"source_reachability_complete":True,"translation_units":[tu]}}
