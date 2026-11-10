@@ -8,18 +8,19 @@ r=m.scan_text(s,{"EVP_sha1","EVP_sha256","EVP_PKEY_get0_EC_KEY"},{"EVP_PKEY_get0
 assert [(x["api"],x["line"]) for x in r]==[("EVP_sha256",2),("EVP_PKEY_get0_EC_KEY",4)],r
 with tempfile.TemporaryDirectory() as d:
  h=Path(d)/"include/openssl"; h.mkdir(parents=True)
- template=h/"opensslv.h.in"
- template.write_text("/* OpenSSL version template */\n")
+ (h/"opensslv.h.in").write_text("/* OpenSSL version template */\n")
  repo=Path(d)/"repo"; (repo/"package/libs/openssl").mkdir(parents=True)
  (repo/"package/libs/openssl/Makefile").write_text("PKG_VERSION:=3.5.9\n")
  assert m.validate_openssl_source(Path(d),repo)=="3.5.9"
  (h/"opensslv.h").write_text("# define OPENSSL_VERSION_MAJOR 3\n# define OPENSSL_VERSION_MINOR 5\n# define OPENSSL_VERSION_PATCH 9\n")
  assert m.validate_openssl_source(Path(d),repo)=="3.5.9"
- (h/"evp.h").write_text("int EVP_sha256(void);\nOSSL_DEPRECATEDIN_3_0 const EC_KEY *EVP_PKEY_get0_EC_KEY(const EVP_PKEY *pkey);\n")
- names,depr=m.catalog(Path(d)); assert "EVP_sha256" in names and depr.get("EVP_PKEY_get0_EC_KEY")=="OSSL_DEPRECATEDIN_3_0"
+ (h/"evp.h").write_text("int EVP_sha256(void);\nint (*openssl_callback)(void);\nOSSL_DEPRECATEDIN_3_0 const EC_KEY *EVP_PKEY_get0_EC_KEY(const EVP_PKEY *pkey);\n")
+ names,depr=m.catalog(Path(d))
+ assert "EVP_sha256" in names and depr.get("EVP_PKEY_get0_EC_KEY")=="OSSL_DEPRECATEDIN_3_0"
+ assert "int" not in names, names
 with tempfile.TemporaryDirectory() as d:
  root=Path(d)
  for c in m.COMP: (root/c).mkdir()
  (root/"wappd/x.c").write_text("EC_KEY *bad=EVP_PKEY_get0_EC_KEY(p);\nconst EC_KEY *ok=EVP_PKEY_get0_EC_KEY(p);\n")
  assert len(m.const_audit(root))==1
-print("PASS: inventory parser masks comments/literals, preserves call-site lines and detects deprecated declarations/const loss.")
+print("PASS: inventory parser masks comments/literals, preserves call-site lines, excludes C type keywords and detects deprecated declarations/const loss.")
