@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Enforce OpenSSL migration policy only for exact, active N60 target call sites."""
-import argparse,csv,hashlib,json,subprocess,sys
+import argparse,csv,hashlib,json,re,subprocess,sys
 from collections import Counter
 from pathlib import Path
 
