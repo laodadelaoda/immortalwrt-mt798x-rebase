@@ -429,9 +429,9 @@ def main():
  inv=inventory_module(repo)
  with (repo/"package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv").open(encoding="utf-8",newline="") as f: mapping=list(csv.DictReader(f))
  mapped_api_names={x["api"] for x in mapping}
- if len(mapping)!=64 or len(mapped_api_names)!=64: raise SystemExit("migration map must contain 64 unique APIs")
+ if len(mapping)!=68 or len(mapped_api_names)!=68: raise SystemExit("migration map must contain 68 unique APIs")
  # Target evidence must cover every API deprecated by the exact pinned 3.5.9
- # public headers, not merely the 64 APIs in the 1.1.1w baseline map.
+ # public headers, not merely the 68 APIs in the 1.1.1w baseline map.
  names,depr=inv.catalog(openssl_header_root(a))
  rows=[r for r in inv.scan(build,names,depr) if r.get("deprecated_macro")]
  for row in rows: row["reference_kind"]=classify_source_reference(build,row)
