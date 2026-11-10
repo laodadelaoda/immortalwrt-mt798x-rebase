@@ -5,6 +5,10 @@ from collections import Counter
 from pathlib import Path
 COMP=("wappd","mapd","1905daemon","libmapd")
 EXT={".c",".h",".cc",".cpp",".cxx",".inc"}
+# DECL is a deliberately lightweight header lexer. Exclude C type keywords
+# so function-pointer declarators such as "int (*callback)(void)" cannot be
+# misreported as an OpenSSL API named "int".
+C_KEYWORDS={"auto","break","case","char","const","continue","default","do","double","else","enum","extern","float","for","goto","if","inline","int","long","register","restrict","return","short","signed","sizeof","static","struct","switch","typedef","union","unsigned","void","volatile","while","_Bool","_Complex","_Imaginary"}
 MASK=re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'',re.S)
 DECL=re.compile(r"\b([A-Za-z_]\w*)\s*\([^;{}]*\)\s*;",re.S)
 DEPR=re.compile(r"(OSSL_DEPRECATEDIN_[A-Za-z0-9_]+)[\s\S]{0,700}?;",re.S)
@@ -29,7 +33,7 @@ def catalog(root):
  names=set(); deprecated={}
  for p in sorted(inc.rglob("*.h")):
   s=clean(p.read_text(encoding="utf-8",errors="replace"))
-  names.update(m.group(1) for m in DECL.finditer(s) if not m.group(1).startswith(("OSSL_","OPENSSL_")))
+  names.update(m.group(1) for m in DECL.finditer(s) if m.group(1) not in C_KEYWORDS and not m.group(1).startswith(("OSSL_","OPENSSL_")))
   for m in DEPR.finditer(s):
    ds=list(DECL.finditer(m.group(0)))
    if ds: deprecated[ds[-1].group(1)]=m.group(1)
