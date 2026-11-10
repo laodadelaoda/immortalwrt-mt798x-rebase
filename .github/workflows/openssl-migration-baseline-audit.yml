@@ -8,7 +8,7 @@ on:
       - "docs/openssl-1.1.1-to-3.5.9-migration-baseline.md"
       - "package/libs/openssl/Makefile"
       - "package/mtk/applications/easymesh-n60/tests/openssl-*"
-      - "package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py"
+      - "package/mtk/applications/easymesh-n60/tests/test-openssl-*.py"
       - "package/mtk/applications/easymesh-n60/scripts/audit-openssl-migration-baseline.py"
   workflow_dispatch:
 
