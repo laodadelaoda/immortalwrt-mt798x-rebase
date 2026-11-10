@@ -23,4 +23,11 @@ with tempfile.TemporaryDirectory() as d:
  for c in m.COMP: (root/c).mkdir()
  (root/"wappd/x.c").write_text("EC_KEY *bad=EVP_PKEY_get0_EC_KEY(p);\nconst EC_KEY *ok=EVP_PKEY_get0_EC_KEY(p);\n")
  assert len(m.const_audit(root))==1
-print("PASS: inventory parser masks comments/literals, preserves call-site lines, excludes C type keywords and detects deprecated declarations/const loss.")
+with (Path(__file__).with_name("openssl-111-to-359-migration-map.csv")).open(encoding="utf-8",newline="") as f:
+ rows=list(__import__("csv").DictReader(f))
+ assert len(rows)==64, len(rows)
+ assert len({r["api"] for r in rows})==64
+ assert all(r["migration_status"]=="UNREVIEWED" and r["approval"]=="false" for r in rows)
+ assert all(r["official_migration_guide_url"].startswith("https://docs.openssl.org/3.5/") for r in rows)
+ assert all(r["official_target_manual_url"].startswith("https://docs.openssl.org/3.5/") for r in rows)
+print("PASS: inventory parser masks comments/literals, preserves call-site lines, excludes C type keywords, detects deprecated declarations/const loss and validates the 64-row unapproved migration baseline.")
