@@ -45,6 +45,7 @@ with tempfile.TemporaryDirectory() as d:
  hostcommands,hosterrors=m.parse_commands(hostlog,root,"aarch64-test-gcc",{"component":root.resolve()})
  assert not hostcommands and hosterrors["component"],hosterrors
  from types import SimpleNamespace
+ assert m.openssl_header_root(SimpleNamespace(openssl_source_dir=root/"openssl")) == root/"openssl"
  args=SimpleNamespace(cppflags="-Itarget",cflags="-O2",ldflags="-Wl,-z,now",
   staging=root/"staging",linux=root/"linux",cc="aarch64-test-gcc",ar="aarch64-test-ar",ranlib="aarch64-test-ranlib")
  assert m.classify_reference_text("static HMAC_CTX *HMAC_CTX_new(void)\n{\n}", "HMAC_CTX_new",1)=="DECLARATION_OR_DEFINITION"
