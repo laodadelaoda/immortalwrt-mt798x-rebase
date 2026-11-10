@@ -250,7 +250,7 @@ def main():
     "conditional_branch_path":r["branch_path"],"source_sha256":sha(build/r["path"]),
     "translation_units":[x["source"] for x in results[r["component"]]["translation_units"] if x["returncode"]==0]})
  summary={"schema_version":1,"git_sha":subprocess.run(["git","rev-parse","HEAD"],cwd=repo,text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
-  "firmware_compile_invoked":False,"method":"make -B -n command enumeration; exact target compiler commands replayed as -E -dD",
+  "firmware_compile_invoked":False,"method":"native OpenWrt package make -n -w V=s command enumeration; exact target compiler commands replayed as -E -dD",
   "target_compiler":a.cc,"target_compiler_realpath":str(Path(cc[-1]).resolve()),"target_compiler_sha256":sha(Path(cc[-1]).resolve()),
   "target_compiler_triplet":subprocess.run([cc[-1],"-dumpmachine"],text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
   "target_compiler_version":subprocess.run([cc[-1],"-dumpfullversion"],text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
@@ -263,7 +263,7 @@ def main():
   "openssl_header_tree_sha256":tree_sha(hdr),"prepared_source_tree_sha256":tree_sha(build),"components":results,
   "callsite_counts":{"total":len(callsites),**counts},"macro_reference_counts":{"total":len(macro_rows),**macro_counts},
   "complete":len(complete)==4 and counts["UNKNOWN_FAIL_CLOSED"]==0 and macro_counts["UNKNOWN_FAIL_CLOSED"]==0,
-  "limitations":["direct source expressions are classified separately from macro-body references","ambiguous source-line mapping is UNKNOWN_FAIL_CLOSED","no object, library, package or firmware is compiled or linked"]}
+  "workflow_build_scope":{"target_toolchain_install":True,"dependency_dev_packages":["datconf","libnl-tiny"],"openssl":"Configure and build_generated headers only","easymesh_component_compile":False,"firmware_compile":False},\n  "limitations":["the audit script itself preprocesses only; the enclosing workflow builds the target toolchain and required dependency development packages","direct source expressions are classified separately from macro-body references","ambiguous source-line mapping is UNKNOWN_FAIL_CLOSED"]}
  (out/"callsite-reachability.json").write_text(json.dumps(callsites,indent=2)+"\n")
  (out/"macro-reference-reachability.json").write_text(json.dumps(macro_rows,indent=2)+"\n")
  (out/"openssl-target-preprocessor-summary.json").write_text(json.dumps(summary,indent=2)+"\n")
