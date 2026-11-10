@@ -73,6 +73,7 @@ with tempfile.TemporaryDirectory() as d:
   f'LDFLAGS="{args.ldflags}"',f"-C {build}/wappd",
   f'UAPD_INCLUDE_PATH="{args.linux}/include/uapi/linux/wapp -I{staging}/usr/include"',
   f'EXTRA_CFLAGS="{args.cppflags} {args.cflags} -I{args.linux}/include/uapi/linux/wapp"',
+  "! grep -Fq -- '-Wno-error=deprecated-declarations' $WAPP_COMPILE_LOG",
   f'LDFLAGS="{args.ldflags} -L{staging}/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto"',
   f"-C {build}/1905daemon",f'LINUXDIR="{linux_rel}"',f'STAGING_DIR="{staging}"',
   f'LDFLAGS="{args.ldflags} -L{staging}/usr/lib -Wl,--no-as-needed -lpthread -lnl-tiny -lssl -lcrypto"',
