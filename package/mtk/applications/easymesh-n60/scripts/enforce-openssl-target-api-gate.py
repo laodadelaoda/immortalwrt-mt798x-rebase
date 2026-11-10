@@ -273,7 +273,8 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
   "migration_map_rows":len(migration_map),
   "easymesh_api_candidate_count":len(subset),
   "easymesh_api_migration_required_count":len(active_subset),
-  "easymesh_api_migration_required":active_subset,"easymesh_api_subset":subset,\n  "easymesh_api_removed_by_patch":[x["api"] for x in subset if x["requires_patch_semantic_review"]],
+  "easymesh_api_migration_required":active_subset,"easymesh_api_subset":subset,
+  "easymesh_api_removed_by_patch":[x["api"] for x in subset if x["requires_patch_semantic_review"]],
   "active_apis_unreviewed":[api for api in active_apis if api not in migration_map or migration_map[api].get("migration_status")!="APPROVED" or str(migration_map[api].get("approval","")).lower()!="true"],
   "failures":failures,"complete":not failures
  }
@@ -291,7 +292,8 @@ def main():
  migration_map={x["api"]:x for x in migration_rows}
  summary=load_json(a.summary)
  scope=load_json(a.scope_manifest)
- with a.delta.open(encoding="utf-8",newline="") as f: delta_rows=list(csv.DictReader(f))\n report=evaluate(inventory,load_json(a.callsites),load_json(a.noncalls),summary,
+ with a.delta.open(encoding="utf-8",newline="") as f: delta_rows=list(csv.DictReader(f))
+ report=evaluate(inventory,load_json(a.callsites),load_json(a.noncalls),summary,
                  load_json(a.macros),migration_map,load_json(a.policy),a.source_root,git.stdout.strip(),delta_rows)
  report["failures"].extend(validate_scope_manifest(scope,summary,migration_map))
  report["scope"]={"scope_id":scope.get("scope_id"),"openssl_version":scope.get("openssl_version"),
@@ -304,9 +306,11 @@ def main():
  subset={"schema_version":1,"scope_id":scope.get("scope_id"),"openssl_version":scope.get("openssl_version"),
   "git_sha":git.stdout.strip(),"scope_components":scope.get("primary_components"),
   "global_baseline":report["scope"]["global_baseline"],
-  "candidate_api_count":report["easymesh_api_candidate_count"],\n  "original_68_candidate_set_preserved":len(migration_map)==68,
+  "candidate_api_count":report["easymesh_api_candidate_count"],
+  "original_68_candidate_set_preserved":len(migration_map)==68,
   "migration_required_api_count":report["easymesh_api_migration_required_count"],
-  "migration_required_apis":report["easymesh_api_migration_required"],\n  "removed_by_patch_requiring_semantic_review":report["easymesh_api_removed_by_patch"],
+  "migration_required_apis":report["easymesh_api_migration_required"],
+  "removed_by_patch_requiring_semantic_review":report["easymesh_api_removed_by_patch"],
   "apis":report["easymesh_api_subset"],"dependency_boundary_policy":scope.get("supporting_dependencies")}
  (a.output.parent/"easymesh-openssl-api-subset.json").write_text(json.dumps(subset,indent=2)+"\n",encoding="utf-8")
  fields=["api","components","source_reference_count","active_call_sites","excluded_call_sites","unknown_call_sites",
