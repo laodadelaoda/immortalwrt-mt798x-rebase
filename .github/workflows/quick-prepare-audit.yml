@@ -25,7 +25,7 @@ jobs:
           name: n60-vendor-audit-attestation
           path: .audit-attestation
 
-      - name: Retrieve exact-SHA OpenSSL baseline credential
+      - name: Retrieve exact-SHA EasyMesh OpenSSL header-reference credential
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}

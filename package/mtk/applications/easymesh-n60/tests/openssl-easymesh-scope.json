@@ -34,6 +34,7 @@
     "expected_rows": 68,
     "role": "TRACEABILITY_ONLY",
     "is_migration_approval": false,
-    "description": "Retain all 68 original API candidates for traceability. Only target-preprocessed ACTIVE EasyMesh call sites require migration review; EXCLUDED_WITH_EVIDENCE items remain as evidence and do not trigger source changes."
+    "description": "Traceability set only: 68 EasyMesh-derived API candidates are not 68 approved source edits. The migration-required set is generated from target-preprocessed ACTIVE call sites; EXCLUDED_WITH_EVIDENCE entries remain traceable and do not trigger source changes.",
+    "origin": "The 68 API candidates were discovered from EasyMesh source inventory (WAPP/1905daemon call/reference scans) and cross-checked against the complete OpenSSL 1.1.1w/3.5.9 public-header sets."
   }
 }

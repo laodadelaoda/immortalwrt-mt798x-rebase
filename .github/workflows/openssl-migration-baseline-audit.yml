@@ -1,4 +1,4 @@
-name: OpenSSL 1.1.1w to 3.5.9 migration baseline audit
+name: N60 EasyMesh OpenSSL 1.1.1w to 3.5.9 API reference baseline
 # Header inventory includes both checked-in *.h and public *.h.in source templates.
 
 on:
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   header-baseline:
-    name: Verify immutable 1.1.1w and 3.5.9 source/header baselines
+    name: Verify OpenSSL headers for the retained 68 EasyMesh API candidates
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -64,7 +64,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/openssl-migration/3.5.9"
           tar -xzf "$archive" -C "$RUNNER_TEMP/openssl-migration/3.5.9" --strip-components=1
 
-      - name: Compare 1.1.1w and 3.5.9 public API headers against the 68-API baseline
+      - name: Compare retained EasyMesh API candidates against the complete OpenSSL headers
         shell: bash
         run: |
           set -Eeuo pipefail
