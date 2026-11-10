@@ -6,6 +6,8 @@ on:
     paths:
       - ".github/actions/easymesh-quick/action.yml"
       - ".github/workflows/easymesh-quick.yml"
+      - "package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py"
+      - "package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py"
   workflow_dispatch:
     inputs:
       device:
