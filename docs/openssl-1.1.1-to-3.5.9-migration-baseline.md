@@ -42,6 +42,24 @@ The OpenSSL 3.5 migration guide itself states that its migration coverage is cur
 
 OpenSSL's guide explicitly warns that deprecated low-level APIs may bypass Provider selection. The presence of a similarly named EVP API is not proof of semantic equivalence. ENGINE control, raw EC point arithmetic, legacy DES, raw SHA transform, and SEC1 serialization need special scrutiny rather than mechanical replacement.
 
+## Verified source/header baseline
+
+Successful read-only baseline audit: [run 42729318987](https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/actions/runs/42729318987), Git SHA `8048e19987de64b0591b7f3c819586977031ab51`, attempt 1.
+
+- Archive SHA256 verified: 1.1.1w `cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8`; 3.5.9 `603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a`.
+- Header-tree SHA256: 1.1.1w `f0b4d32266cfeff08cb8096aa0d6f98a14530930bad10859ba71bac5cac18236`; 3.5.9 `f36be543eec6d91693bf38704c4b4cd2b02983b2aec258ea837a665e15b72342`.
+- The 64 mapped APIs are all present in both releases; all 64 are deprecated in 3.5.9.
+- Five of the 64 already carry a deprecation annotation in 1.1.1w: `EC_GROUP_get_curve_GFp`, `EC_POINT_get_affine_coordinates_GFp`, `EC_POINT_set_affine_coordinates_GFp`, `EC_POINT_set_compressed_coordinates_GFp` (marked `DEPRECATEDIN_1_2_0`) and `HMAC_Init_ex` (marked `DEPRECATEDIN_1_1_0`). The remaining 59 in this inventory are not annotated as deprecated in 1.1.1w but are deprecated in 3.5.9.
+- The audit artifact binds Git SHA, run/attempt, lock/map/package Makefile/scanner/policy hashes and both source/header hashes.
+
+This is header/API provenance evidence only. It does not prove call-site reachability, equivalent behavior or approval to change source code.
+
+## Source reachability correction
+
+The original 429-call lexical report included five references to `EVP_CIPHER_CTX_iv_noconst` inside WAPP's local `crypto/evp.h` macro definitions. The header is included by `dpp/dpp.c`, but the top-level macros `IMPLEMENT_BLOCK_CIPHER` and `IMPLEMENT_CFBR` are not invoked in the fixed source tree. These five references are therefore recorded as `UNREFERENCED_MACRO_DEFINITION`, not active call sites. The scanner now separates macro-body references from function-call inventory and fails closed if a deprecated API is found in an active macro expansion.
+
+The ENGINE family is separately marked `OPENSSL_NO_ENGINE_GUARD_REQUIRES_PREPROCESSOR`: the N60 config omits `CONFIG_OPENSSL_ENGINE`, and the OpenWrt OpenSSL Makefile therefore selects `no-engine`. The actual `#if` guards and target preprocessor result must still be checked before counting those source references as active compiled calls.
+
 ## What is present today
 
 - The exact reference versions are now declared: OpenSSL 1.1.1w → 3.5.9.
@@ -57,7 +75,7 @@ OpenSSL's guide explicitly warns that deprecated low-level APIs may bypass Provi
 ## Gaps against the requested standard
 
 1. **The 64-name research matrix now records per-API official guidance, but it is not yet reviewed.** Each row has an official migration-guide section, a target manual URL, a proposed mapping class and a call-site semantic checklist. All 64 rows remain UNREVIEWED/approval=false; the mapping is research evidence, not permission to edit or suppress the API.
-2. **The source/header comparison is implemented but not yet CI-verified.** The new workflow must prove both archive hashes, exact source versions, 64-row header coverage and a reproducible 1.1.1w-vs-3.5.9 header delta. Until it passes, no source-baseline verification is claimed.
+2. **The source/header comparison is implemented but not yet CI-verified.** The new workflow has passed once for the 64-row header coverage and source hashes; it must continue to pass on every change to the baseline inputs.
 3. **No semantic call-site review.** The inventory has component/path/line but does not capture argument expressions, return-value handling, ownership transfer, error-queue behavior, provider properties, or algorithm parameters.
 4. **Lexical coverage is incomplete.** Regex scanning cannot reliably resolve macros, aliases, indirect/function-pointer calls, conditional compilation, wrappers, or type-level const/ownership. Clang AST/preprocessor evidence is required. In particular, the N60 config does not set `CONFIG_OPENSSL_ENGINE`; the OpenWrt OpenSSL Makefile therefore adds `no-engine`, while the lexical scan still sees ENGINE calls in `1905daemon`. The active/inactive preprocessor branches must be resolved before treating those calls as reachable migration work.
 5. **Tests are not migration-equivalence tests.** The Provider test demonstrates a narrow Provider runtime path; it does not prove HMAC/CMAC/AES/DH/EC/RSA/ENGINE/serialization behavior matches the vendor's 1.1.1 behavior. The header-delta workflow is inventory evidence only, not a semantic regression suite.
