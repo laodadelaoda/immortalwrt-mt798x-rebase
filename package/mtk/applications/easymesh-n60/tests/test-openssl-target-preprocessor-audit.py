@@ -30,6 +30,7 @@ with tempfile.TemporaryDirectory() as d:
  argv=m.cpp_argv(cmd,root/"x.i")
  assert "-E" in argv and "-c" not in argv and "-MMD" not in argv and "-MF" not in argv
  assert argv[-2:]==["-o",str(root/"x.i")]
+ assert "-oignored.o" not in m.cpp_argv({"argv":["cc","-c","x.c","-oignored.o"]},root/"joined.i")
  macrofile=root/"macros.txt"
  macrofile.write_text("#define OPENSSL_NO_ENGINE 1\\n#define CONFIG_SUITEB\\n")
  snapshot=m.macro_snapshot(macrofile)
@@ -90,7 +91,7 @@ with tempfile.TemporaryDirectory() as d:
  source=root/"build"/"wappd"/"src.c"; source.parent.mkdir(parents=True)
  source.write_text("int f(void) { return EVP_PKEY_eq(a,b); }\n")
  obj=comp/"obj"/"actual.o"; obj.write_bytes(b"object")
- lo=comp/"libsample.la"; lo.write_text("# libtool object file\npic_object='.libs/libsample.o'\nnon_pic_object='none'\n")
+ lo=comp/"libsample.lo"; lo.write_text("# libtool object file\npic_object='.libs/libsample.o'\nnon_pic_object='none'\n")
  (comp/".libs").mkdir()
  libobj=comp/".libs"/"libsample.o"; libobj.write_bytes(b"object")
  lo_cmd={"source":str(source.resolve()),"object_output":str(obj.resolve())}
