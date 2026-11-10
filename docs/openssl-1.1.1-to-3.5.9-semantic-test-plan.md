@@ -49,6 +49,36 @@ The original source inventory (Run 42724660705) reported 429 deprecated-name occ
 
 The 20 ENGINE occurrences are not yet confirmed as compiled calls; the N60 OpenSSL package selects `no-engine`, but the target preprocessor guard stack must prove exclusion. Counts must be refreshed from the current Quick Prepare artifact before any migration patch is proposed.
 
+## WAPP source-specific findings (preliminary, fixed archive)
+
+The source archive used for this review is WAPP `wappd-80ca5724.tar.bz2`, SHA256 `73fa8995533e701d3d5774faa92d274497f99e1a37c81ce445f25a959b4b7462`, matching the current vendor source lock. The inspected DPP artifact is a preliminary 017→018 patch-stage snapshot; the final callsite inventory must be refreshed from the current complete native Prepare tree before approving any patch.
+
+### EC / EVP_PKEY bridge is not a mechanical accessor replacement
+
+The WAPP DPP implementation uses the legacy EC_KEY bridge for protocol arithmetic, not merely to read a curve name:
+
+- `dpp_auth_derive_l_responder`: computes `L = ((bR + pR) mod q) * BI`. It reads two local private scalars, the peer bootstrap public point and group order, then performs scalar arithmetic and point multiplication.
+- `dpp_auth_derive_l_initiator`: computes `L = bI * (BR + PR)`. It adds two peer public points and multiplies by a local private scalar.
+- DPP reconfiguration derives `M = cI * (CR + PR)` and `M = ((cR + pR) mod q) * CI`, again requiring point addition and private-scalar arithmetic.
+- `dpp_gen_reconfig_id`, `dpp_update_reconfig_id` and `dpp_decrypt_e_id` perform random scalar/point generation, point addition, inversion and subtraction. `dpp_decrypt_e_id` explicitly computes `E-id = E'-id - s_C * A-NONCE`.
+- `dpp_pkey_from_point` wraps a named-curve public point into an EVP_PKEY; this should be rebuilt with provider-backed `EVP_PKEY_fromdata` and `OSSL_PARAM`, not by creating a legacy EC_KEY.
+- `dpp_copy_netaccesskey` serializes an EC private key using `i2d_ECPrivateKey`; the replacement must preserve SEC1 DER, not silently switch to PKCS#8.
+- `dpp_process_signed_connector` only needs the curve identity from a public key; a group-name parameter query is sufficient and avoids exporting key material.
+
+A viable candidate for the low-level arithmetic callsites is to query the group name with `EVP_PKEY_get_utf8_string_param(OSSL_PKEY_PARAM_GROUP_NAME)`, public point bytes with `EVP_PKEY_get_octet_string_param(OSSL_PKEY_PARAM_PUB_KEY)`, and—only where protocol arithmetic truly requires it—the private scalar with `EVP_PKEY_get_bn_param(OSSL_PKEY_PARAM_PRIV_KEY)`. Reconstruct an owned `EC_GROUP` and `EC_POINT` for the existing non-deprecated generic EC arithmetic. This candidate is **not approved** until the actual provider exportability and key ownership behavior are tested. It must not be assumed to work with non-exportable hardware/provider keys.
+
+The responder formula involving `bR + pR` is especially important: a simple `EVP_PKEY_derive` substitution is not obviously equivalent because the protocol computes a sum of private scalars before point multiplication. The initiator formula uses a sum of public points; a high-level derive path may be possible after constructing a temporary provider-backed peer key, but the exact x-coordinate and encoding must be compared.
+
+### WAPP ECDH point format
+
+`crypto_ecdh_get_pubkey` returns either the x-coordinate only or x||y depending on `inc_y`. `crypto_ecdh_set_peerkey` reconstructs either a compressed point (with the current y-bit choice) or an affine point, validates that it is on-curve, wraps it as a peer key and derives the shared secret. Tests must preserve the compressed-point parity convention, point validation, coordinate byte lengths and exact derived-secret bytes. Replacing the GFp-suffixed point functions with their generic counterparts is a direct API-family change, but the input/output format is protocol behavior and must not change.
+
+### WAPP HMAC and CMAC wrapper behavior
+
+The inspected `crypto/crypto_openssl.c` wrappers show that HMAC supports MD5, SHA-1 and SHA-256, accepts vector/chunked input, and returns the same wrapper-specific success/error codes. CMAC supports AES-128-CBC and AES-256-CBC, rejects other key lengths, and requires a 16-byte result. The `EVP_MAC` migration must preserve the selected digest/cipher, key length, vector update order, fault-injection path, output length and cleanup behavior. A generic HMAC-only test is insufficient.
+
+These WAPP findings explain why the EC and MAC clusters must be reviewed at the callsite/function level. The current vendor code has not been changed based on this preliminary review.
+
 ## Mandatory test dimensions
 
 Every API row must identify which dimensions apply. An omitted dimension requires an explicit reason.
