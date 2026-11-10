@@ -32,7 +32,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: n60-pro-quick-prepare-only-${{ github.ref }}
+  group: n60-pro-quick-prepare-only-v2-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
