@@ -228,6 +228,7 @@ def main():
  cc=shlex.split(a.cc)
  compiler=Path(cc[-1]).name if cc else ""
  if not cc or not (Path(cc[-1]).is_file() or shutil.which(cc[-1])): raise SystemExit(f"target compiler missing: {a.cc}")
+ compiler_path=Path(shutil.which(cc[-1]) or cc[-1]).resolve()
  prepare_mapd_version(build,repo,out,compiler)
  inv=inventory_module(repo)
  with (repo/"package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv").open(encoding="utf-8",newline="") as f: mapping=list(csv.DictReader(f))
@@ -294,10 +295,10 @@ def main():
     "translation_units":[x["source"] for x in results[r["component"]]["translation_units"] if x["returncode"]==0]})
  summary={"schema_version":1,"git_sha":subprocess.run(["git","rev-parse","HEAD"],cwd=repo,text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
   "firmware_compile_invoked":False,"method":"expanded OpenWrt Build/Compile recipe validation followed by component Make -n -w V=s and exact-command -E -dD/-dM replay",
-  "target_compiler":a.cc,"target_compiler_realpath":str(Path(cc[-1]).resolve()),"target_compiler_sha256":sha(Path(cc[-1]).resolve()),
-  "target_compiler_triplet":subprocess.run([cc[-1],"-dumpmachine"],text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
-  "target_compiler_version":subprocess.run([cc[-1],"-dumpfullversion"],text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
-  "target_compiler_sysroot":subprocess.run([cc[-1],"-print-sysroot"],text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
+  "target_compiler":a.cc,"target_compiler_realpath":str(compiler_path),"target_compiler_sha256":sha(compiler_path),
+  "target_compiler_triplet":subprocess.run([str(compiler_path),"-dumpmachine"],text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
+  "target_compiler_version":subprocess.run([str(compiler_path),"-dumpfullversion"],text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
+  "target_compiler_sysroot":subprocess.run([str(compiler_path),"-print-sysroot"],text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
   "target_ar":a.ar,"target_ranlib":a.ranlib,"target_cppflags":a.cppflags,"target_cflags":a.cflags,"target_ldflags":a.ldflags,
   "target_config_sha256":sha(a.target_config),"package_compile_recipe_sha256":recipe_sha,"openssl_pkg_source":a.openssl_pkg_source,"openssl_pkg_source_url":a.openssl_pkg_source_url,
   "openssl_pkg_hash":a.openssl_pkg_hash,"openssl_options":a.openssl_options,"openssl_build_dir":str(a.openssl_source_dir),
