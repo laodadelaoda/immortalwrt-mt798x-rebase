@@ -70,18 +70,43 @@ def csvout(path,rows,fields):
 def main():
  ap=argparse.ArgumentParser()
  for x in ("repo-root","source-root","pristine-root","openssl-source","policy","output-dir"): ap.add_argument("--"+x,type=Path,required=True)
+ ap.add_argument("--migration-map",type=Path,default=Path(__file__).with_name("openssl-111-to-359-migration-map.csv"))
  ap.add_argument("--strict",action="store_true"); a=ap.parse_args()
  for n,p in (("repo",a.repo_root),("source",a.source_root),("pristine",a.pristine_root),("OpenSSL",a.openssl_source)):
   if not p.is_dir(): ap.error(n+" directory missing: "+str(p))
  validate_openssl_source(a.openssl_source,a.repo_root)
  policy=json.loads(a.policy.read_text())
  if policy.get("schema_version")!=1 or policy.get("openssl_version")!="3.5.9" or not isinstance(policy.get("api_rules"),dict): ap.error("invalid OpenSSL API policy schema/version")
+ required_map={"api","candidate_replacement_not_approved","official_migration_guide_url","official_target_manual_url","migration_status","approval","semantic_review_requirements"}
+ with a.migration_map.open(encoding="utf-8",newline="") as mf:
+  reader=csv.DictReader(mf)
+  if not required_map.issubset(set(reader.fieldnames or [])): ap.error("migration map is missing required columns")
+  migration_map={}
+  for mr in reader:
+   api=mr["api"].strip()
+   if not api or api in migration_map: ap.error("empty or duplicate API in migration map: "+api)
+   if mr["migration_status"] not in {"UNREVIEWED","REVIEWED_NOT_APPROVED","APPROVED","NO_DIRECT_REPLACEMENT","LEGACY_RETAINED","REDESIGN_REQUIRED"}: ap.error("invalid migration status for "+api)
+   for field in ("official_migration_guide_url","official_target_manual_url"):
+    if not mr[field].startswith("https://docs.openssl.org/3.5/"): ap.error("non-3.5 official reference URL for "+api+": "+field)
+   if not mr["candidate_replacement_not_approved"].strip() or not mr["semantic_review_requirements"].strip(): ap.error("incomplete migration research fields for "+api)
+   if mr["approval"].lower() not in {"true","false"}: ap.error("invalid approval value for "+api)
+   migration_map[api]=mr
  names,depr=catalog(a.openssl_source); rows=scan(a.source_root,names,depr); before=scan(a.pristine_root,names,depr); const=const_audit(a.source_root)
  failures=[]; inventory=[]
+ for api,mr in migration_map.items():
+  if api not in depr: failures.append("migration map API is not deprecated in pinned OpenSSL 3.5.9 headers: "+api)
+  if mr["migration_status"]=="APPROVED" and mr["approval"].lower()!="true": failures.append("migration map approval/status mismatch: "+api)
+  if mr["migration_status"]!="APPROVED" and mr["approval"].lower()=="true": failures.append("migration map cannot approve non-APPROVED status: "+api)
  for r in rows:
-  x=dict(r); rule=policy["api_rules"].get(r["api"])
+  x=dict(r); rule=policy["api_rules"].get(r["api"]); mr=migration_map.get(r["api"])
   if r["deprecated_macro"]:
-   if not isinstance(rule,dict): x["classification"]="DEPRECATED_UNCLASSIFIED"; x["policy_reason"]=""; failures.append("unclassified "+r["api"]+" at "+r["path"]+":"+str(r["line"]))
+   if mr is None:
+    x["classification"]="MIGRATION_MAP_MISSING"; x["policy_reason"]=""; failures.append("missing migration reference row for "+r["api"]+" at "+r["path"]+":"+str(r["line"]))
+   elif mr["migration_status"]!="APPROVED" or mr["approval"].lower()!="true":
+    x["classification"]="MAPPED_UNREVIEWED"; x["policy_reason"]=mr["candidate_replacement_not_approved"]
+    failures.append("migration review/approval pending: "+r["api"]+" ("+mr["migration_status"]+") at "+r["path"]+":"+str(r["line"]))
+   elif not isinstance(rule,dict):
+    x["classification"]="APPROVED_MAP_WITHOUT_POLICY"; x["policy_reason"]=""; failures.append("approved migration map lacks detailed API policy: "+r["api"])
    else:
     st=rule.get("status"); reason=rule.get("reason",""); x["classification"]=st or "INVALID_POLICY"; x["policy_reason"]=reason
     if st not in {"DIRECT_REPLACEMENT","SEMANTIC_ADAPTATION","LEGACY_RETAINED","REQUIRES_REDESIGN","BLOCKED"} or not reason.strip() or rule.get("approved") is not True: failures.append("incomplete/unapproved policy: "+r["api"])
@@ -90,6 +115,7 @@ def main():
   inventory.append(x)
  for api in policy["api_rules"]:
   if api not in depr: failures.append("policy entry not deprecated in pinned headers: "+api)
+  if api not in migration_map: failures.append("policy API missing from migration map: "+api)
  for x in const: failures.append("const violation "+x["kind"]+" at "+x["path"]+":"+str(x["line"]))
  pc=Counter(x["api"] for x in before); qc=Counter(x["api"] for x in rows)
  delta=[{"api":k,"pristine_calls":pc[k],"prepared_calls":qc[k],"delta":qc[k]-pc[k],"deprecated":k in depr} for k in sorted(set(pc)|set(qc)) if pc[k]!=qc[k]]
@@ -97,7 +123,7 @@ def main():
  csvout(a.output_dir/"openssl-api-inventory.csv",inventory,["component","path","line","api","deprecated_macro","classification","policy_reason"])
  csvout(a.output_dir/"openssl-api-delta.csv",delta,["api","pristine_calls","prepared_calls","delta","deprecated"])
  csvout(a.output_dir/"openssl-const-correctness.csv",const,["component","path","line","kind"])
- summary={"openssl_version":"3.5.9","components":COMP,"prepared_calls":len(rows),"pristine_calls":len(before),"header_apis":len(names),"deprecated_apis":len(depr),"const_findings":const,"failures":failures,"limitations":["lexical inventory, not Clang AST/type analysis","macro-generated and indirect function-pointer calls require compiler evidence"]}
+ summary={"openssl_version":"3.5.9","components":COMP,"prepared_calls":len(rows),"pristine_calls":len(before),"header_apis":len(names),"deprecated_apis":len(depr),"migration_map_rows":len(migration_map),"migration_map_unreviewed":sum(1 for x in migration_map.values() if x["migration_status"]!="APPROVED" or x["approval"].lower()!="true"),"const_findings":const,"failures":failures,"limitations":["lexical inventory, not Clang AST/type analysis","macro-generated and indirect function-pointer calls require compiler evidence"]}
  (a.output_dir/"openssl-api-audit.json").write_text(json.dumps(summary,indent=2)+"\n")
  (a.output_dir/"openssl-api-audit.txt").write_text("\n".join([f"prepared calls: {len(rows)}",f"pristine calls: {len(before)}",f"strict failures: {len(failures)}"]+["FAIL: "+x for x in failures])+"\n")
  print("OpenSSL API inventory: prepared=%d pristine=%d failures=%d"%(len(rows),len(before),len(failures)))
