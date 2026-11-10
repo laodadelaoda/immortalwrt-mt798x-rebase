@@ -418,9 +418,12 @@ def main():
  prepare_mapd_version(build,repo,out,compiler)
  inv=inventory_module(repo)
  with (repo/"package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv").open(encoding="utf-8",newline="") as f: mapping=list(csv.DictReader(f))
- names={x["api"] for x in mapping}
- if len(mapping)!=64 or len(names)!=64: raise SystemExit("migration map must contain 64 unique APIs")
- rows=[r for r in inv.scan(build,names,{x:"OSSL_DEPRECATED" for x in names}) if r.get("deprecated_macro")]
+ mapped_api_names={x["api"] for x in mapping}
+ if len(mapping)!=64 or len(mapped_api_names)!=64: raise SystemExit("migration map must contain 64 unique APIs")
+ # Target evidence must cover every API deprecated by the exact pinned 3.5.9
+ # public headers, not merely the 64 APIs in the 1.1.1w baseline map.
+ names,depr=inv.catalog(a.openssl_source)
+ rows=[r for r in inv.scan(build,names,depr) if r.get("deprecated_macro")]
  for row in rows: row["reference_kind"]=classify_source_reference(build,row)
  call_rows=[row for row in rows if row["reference_kind"] in ("CALL_EXPRESSION","UNKNOWN_REFERENCE_KIND")]
  non_call_rows=[row for row in rows if row["reference_kind"]=="DECLARATION_OR_DEFINITION"]
@@ -432,7 +435,7 @@ def main():
  recipe_sha=validate_compile_recipe(a.package_compile_recipe,repo,build,a)
  (build/"1905daemon"/"obj").mkdir(parents=True,exist_ok=True)
  specs=make_specs(repo,build,a); results={}; hits=set(); emitted_lines=set(); api_hits_by_component={x:set() for x in COMP}
- macro_refs=inv.scan_macro_references(build,names,{x:"OSSL_DEPRECATED" for x in names})
+ macro_refs=inv.scan_macro_references(build,names,depr)
  source_calls_by_component={x:sum(1 for row in call_rows if row["component"]==x) for x in COMP}
  macro_refs_by_component={x:sum(1 for item in macro_refs if item["component"]==x) for x in COMP}
  for comp in COMP:
