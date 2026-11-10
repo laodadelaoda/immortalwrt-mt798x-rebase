@@ -56,11 +56,15 @@ jobs:
           artifact=a.get("artifact",{})
           if not str(artifact.get("id","")).isdigit() or len(artifact.get("sha256","")) != 64:
               raise SystemExit("baseline credential artifact identity is invalid")
-          remote_json=json.loads(subprocess.run(["gh","api",f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/artifacts/{artifact['id']}"],text=True,capture_output=True,check=True).stdout)
-          remote=remote_json.get("digest","").removeprefix("sha256:")
-          if remote_json.get("workflow_run",{}).get("id") != int(os.environ["BASELINE_RUN_ID"]) or remote != artifact["sha256"]:
-              raise SystemExit("baseline GitHub artifact digest differs from signed-off credential")
-          print("PASS: exact-SHA baseline artifact ID, digest, run and attempt verified.")
+          remote_artifact=json.loads(subprocess.run(["gh","api",f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/artifacts/{artifact['id']}"],text=True,capture_output=True,check=True).stdout)
+          remote_run=json.loads(subprocess.run(["gh","api",f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['BASELINE_RUN_ID']}"],text=True,capture_output=True,check=True).stdout)
+          import importlib.util
+          verifier_path=Path("package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py")
+          spec=importlib.util.spec_from_file_location("openssl_inventory_verifier",verifier_path)
+          verifier=importlib.util.module_from_spec(spec); spec.loader.exec_module(verifier)
+          verifier.verify_baseline_github_metadata(a,remote_run,remote_artifact,
+              os.environ["GITHUB_SHA"],int(os.environ["BASELINE_RUN_ID"]))
+          print("PASS: exact-SHA baseline artifact ID, digest, run path, conclusion, attempt and head SHA verified.")
           PY
 
       - name: Enforce exact audited source revision and Lock
