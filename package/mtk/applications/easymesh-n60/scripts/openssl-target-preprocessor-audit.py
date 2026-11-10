@@ -261,6 +261,7 @@ def cpp_argv(cmd,out):
   t=src[i]
   if t=="-c": dst.append("-E")
   elif t=="-o": i+=1
+  elif t.startswith("-o") and len(t)>2: pass
   elif t in ("-MF","-MT","-MQ"): i+=1
   elif t in ("-MMD","-MD","-MP","-MG") or t.startswith(("-Wp,-MD,","-Wp,-MMD,")): pass
   else: dst.append(t)
