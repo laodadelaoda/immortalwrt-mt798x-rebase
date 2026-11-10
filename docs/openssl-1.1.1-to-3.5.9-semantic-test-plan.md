@@ -118,6 +118,10 @@ The reference and target harnesses must use the exact archive hashes from the mi
 
 The test harness must not silently normalize away differences in key encoding, point format, padding, output length, error behavior or provider selection.
 
+## Existing Provider runtime smoke-test coverage and limits
+
+The current Provider runtime test is a useful smoke gate: it exercises SHA-256, AES-GCM encrypt/decrypt, P-256 key generation and ECDSA sign/verify against the 3.5.9 source copy. It does **not** establish 1.1.1w↔3.5.9 equivalence, and it does not cover HMAC/CMAC, DES/Legacy Provider behavior, DH, RSA padding modes, SEC1 serialization, DPP's custom EC point arithmetic, or the target package's exact `OPENSSL_OPTIONS`. Those require the differential family tests above; a passing smoke test must never mark a migration-map row approved.
+
 ## Approval states
 
 - `UNREVIEWED`: official guidance found, but source semantics not yet proven.
