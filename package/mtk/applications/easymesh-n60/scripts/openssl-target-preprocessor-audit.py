@@ -370,21 +370,27 @@ def audit_binary_inputs(build,out):
  (out/"opaque-binary-symbol-audit.json").write_text(json.dumps(rows,indent=2)+"\n")
  return rows,complete,open_refs
 
-def prepare_mapd_version(build,repo,out,compiler):
- # The production Build/Compile invokes "version mapd". Run only the metadata
- # target after proving its dry-run has no compiler invocation.
+def prepare_mapd_version(build,repo,out,compiler,args):
+ # Production Build/Compile calls "version mapd". Reproduce the exact target
+ # Make variables for the metadata-only "version" target; never invoke "mapd".
  directory=build/"mapd"
- dry=subprocess.run(["make","-n","-w","-C",str(directory),f"TOPDIR={repo}","V=s","version"],cwd=repo,
+ make_vars=[
+  f"TOPDIR={repo}","CONFIG_SUPPORT_OPENWRT=y","CONFIG_MAP_R2_SUPPORT=y",
+  "CONFIG_MAP_R3_SUPPORT=y",f"CC={args.cc}",f"LDO={args.cc}",
+  f"EXTRA_CFLAGS={args.cppflags} {args.cflags} -Wno-error=deprecated-declarations -DCONFIG_SUPPORT_OPENWRT",
+  f"LDFLAGS={args.ldflags} -L{args.staging}/usr/lib","V=s"
+ ]
+ dry=subprocess.run(["make","-n","-w","-C",str(directory),*make_vars,"version"],cwd=repo,
                     text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
  (out/"mapd-version-dry-run.log").write_text(dry.stdout,encoding="utf-8")
  if dry.returncode: raise SystemExit("MAPD version target dry-run failed")
  for line in dry.stdout.splitlines():
   try: tokens=shlex.split(line)
   except ValueError: raise SystemExit("cannot parse MAPD version target dry-run; fail closed")
-  candidates=[Path(t).name for t in tokens if Path(t).name.endswith(("gcc","clang","cc")) or Path(t).name.startswith("clang")]
+  candidates=[Path(t).name for t in tokens if Path(t).name.endswith(("gcc","clang","cc","g++","clang++","c++"))]
   if compiler in candidates or candidates:
    raise SystemExit("MAPD version target dry-run contains a compiler invocation; refusing to execute it")
- run=subprocess.run(["make","-w","-C",str(directory),f"TOPDIR={repo}","V=s","version"],cwd=repo,
+ run=subprocess.run(["make","-w","-C",str(directory),*make_vars,"version"],cwd=repo,
                     text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
  (out/"mapd-version-generation.log").write_text(run.stdout,encoding="utf-8")
  if run.returncode: raise SystemExit("MAPD version metadata generation failed")
@@ -415,7 +421,7 @@ def main():
  compiler=Path(cc[-1]).name if cc else ""
  if not cc or not (Path(cc[-1]).is_file() or shutil.which(cc[-1])): raise SystemExit(f"target compiler missing: {a.cc}")
  compiler_path=Path(shutil.which(cc[-1]) or cc[-1]).resolve()
- prepare_mapd_version(build,repo,out,compiler)
+ prepare_mapd_version(build,repo,out,compiler,a)
  inv=inventory_module(repo)
  with (repo/"package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv").open(encoding="utf-8",newline="") as f: mapping=list(csv.DictReader(f))
  mapped_api_names={x["api"] for x in mapping}
