@@ -38,7 +38,7 @@ def verify_baseline_attestation(repo_root,lock,att_path,expected_git_sha):
  run=att.get("run",{}); artifact=att.get("artifact",{}); source=att.get("source",{}); results=att.get("results",{})
  if not re.fullmatch(r"[0-9a-f]{40}",run.get("git_sha","")) or run.get("git_sha")!=expected_git_sha or int(run.get("id",0))<=0 or int(run.get("attempt",0))<=0:
   raise ValueError("OpenSSL baseline attestation is stale or has no matching run identity")
- if not re.fullmatch(r"[0-9a-f]{64}",artifact.get("sha256","")) or not artifact.get("id"):
+ if not re.fullmatch(r"[0-9a-f]{64}",artifact.get("sha256","")) or not str(artifact.get("id","")).isdigit() or artifact.get("name")!="n60-openssl-1111w-to-359-header-baseline":
   raise ValueError("OpenSSL baseline attestation has no artifact integrity identity")
  if source.get("archive_sha256",{}).get("1.1.1w")!=lock["from"]["sha256"] or source.get("archive_sha256",{}).get("3.5.9")!=lock["to"]["sha256"]:
   raise ValueError("OpenSSL baseline attestation archive hashes do not match the immutable lock")

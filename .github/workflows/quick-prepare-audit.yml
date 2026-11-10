@@ -37,6 +37,7 @@ jobs:
             sleep 20
           done
           [[ -n "$BASELINE_RUN_ID" ]] || { echo "::error::No successful OpenSSL baseline audit exists for exact SHA $GITHUB_SHA."; exit 1; }
+          export BASELINE_RUN_ID
           mkdir -p .openssl-baseline/evidence .openssl-baseline/attestation
           gh run download "$BASELINE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name n60-openssl-1111w-to-359-header-baseline --dir .openssl-baseline/evidence
           gh run download "$BASELINE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name n60-openssl-baseline-attestation --dir .openssl-baseline/attestation
@@ -45,6 +46,8 @@ jobs:
           from pathlib import Path
           p=Path(".openssl-baseline/attestation/openssl-migration-baseline.attestation.json")
           a=json.loads(p.read_text())
+          if a.get("run",{}).get("id") != int(os.environ["BASELINE_RUN_ID"]):
+              raise SystemExit("baseline credential does not belong to the downloaded workflow run")
           if a.get("run",{}).get("git_sha") != os.environ["GITHUB_SHA"]:
               raise SystemExit("baseline credential Git SHA does not match this Quick Prepare revision")
           if a.get("run",{}).get("id") <= 0 or a.get("run",{}).get("attempt") <= 0:
@@ -52,8 +55,9 @@ jobs:
           artifact=a.get("artifact",{})
           if not str(artifact.get("id","")).isdigit() or len(artifact.get("sha256","")) != 64:
               raise SystemExit("baseline credential artifact identity is invalid")
-          remote=subprocess.run(["gh","api",f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/artifacts/{artifact['id']}","--jq",".digest"],text=True,capture_output=True,check=True).stdout.strip().removeprefix("sha256:")
-          if remote != artifact["sha256"]:
+          remote_json=json.loads(subprocess.run(["gh","api",f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/artifacts/{artifact['id']}"],text=True,capture_output=True,check=True).stdout)
+          remote=remote_json.get("digest","").removeprefix("sha256:")
+          if remote_json.get("workflow_run",{}).get("id") != int(os.environ["BASELINE_RUN_ID"]) or remote != artifact["sha256"]:
               raise SystemExit("baseline GitHub artifact digest differs from signed-off credential")
           print("PASS: exact-SHA baseline artifact ID, digest, run and attempt verified.")
           PY
@@ -671,7 +675,6 @@ jobs:
             package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json \
             package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv \
             package/mtk/applications/easymesh-n60/tests/openssl-migration-baseline.lock.json \
-            package/mtk/applications/easymesh-n60/tests/openssl-migration-baseline.attestation.json \
             package/mtk/applications/easymesh-n60/tests/test-openssl-provider-runtime.c \
             package/mtk/applications/easymesh-n60/scripts/run-openssl-provider-runtime.sh; do
             test -s "$input" || {
@@ -735,6 +738,7 @@ jobs:
             --pristine-root "${BUILD_DIR}-openssl-pristine" \
             --openssl-source "$(dirname "$OPENSSL_CONFIGURE")" \
             --policy package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json \
+            --baseline-attestation .openssl-baseline/attestation/openssl-migration-baseline.attestation.json \
             --output-dir artifacts/easymesh-openssl-api-audit
           python3 package/mtk/applications/easymesh-n60/scripts/enforce-openssl-target-api-gate.py \
             --inventory artifacts/easymesh-openssl-api-audit/openssl-api-inventory.csv \
