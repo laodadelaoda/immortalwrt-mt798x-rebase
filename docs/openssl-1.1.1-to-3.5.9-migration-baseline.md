@@ -2,6 +2,19 @@
 
 Status: **baseline inventory committed for review; not an approval to migrate or suppress warnings**.
 
+## Immutable source baseline
+
+The compatibility comparison is pinned to the final public OpenSSL 1.1.1 release, **1.1.1w**, rather than an unspecified “1.1.1” snapshot:
+
+- 1.1.1w archive: `openssl-1.1.1w.tar.gz`
+- Official SHA256: `cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8`
+- Official release announcement: [OpenSSL 1.1.1w announcement](https://mta.openssl.org/pipermail/openssl-announce/2023-September/000274.html)
+- OpenSSL 3.5.9 archive: `openssl-3.5.9.tar.gz`
+- Current repository `package/libs/openssl/Makefile` pin: `603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a`
+- Current package version: `3.5.9`; official 3.5.9 release notes: [OpenSSL 3.5 Series Release Notes](https://www.openssl-library.org/news/openssl-3.5-notes/)
+
+The 1.1.1w archive digest is published in the OpenSSL project's release announcement. The 3.5.9 digest above is the repository's active package pin; it must still be checked against the downloaded archive and recorded in the migration attestation before use. The 1.1.1w archive has not yet been downloaded and independently re-hashed in this audit.
+
 ## Scope and evidence anchor
 
 This baseline is derived from the strict API inventory artifact for GitHub Actions run [42724660705](https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/actions/runs/42724660705), source revision `cd8c6ae45c01f3b671822e8f44aa26c6fbf52706`, against the pinned OpenSSL 3.5.9 public headers and the then-prepared EasyMesh source trees.
@@ -28,6 +41,8 @@ The C-keyword parser correction is now present in the repository, but this CSV p
 OpenSSL's guide explicitly warns that deprecated low-level APIs may bypass Provider selection. The presence of a similarly named EVP API is not proof of semantic equivalence. ENGINE control, raw EC point arithmetic, legacy DES, raw SHA transform, and SEC1 serialization need special scrutiny rather than mechanical replacement.
 
 ## What is present today
+
+- The exact reference versions are now declared: OpenSSL 1.1.1w → 3.5.9.
 
 - A pinned 3.5.9 package source and a source inventory script.
 - A fail-closed policy file, but its `api_rules` object is empty.
