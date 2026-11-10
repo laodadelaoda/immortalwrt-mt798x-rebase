@@ -10,7 +10,7 @@ mod=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 
 with tempfile.TemporaryDirectory() as td:
-    header=Path(td)/"openssl"/"test.h"
+    header=Path(td)/"include"/"openssl"/"test.h"
     header.parent.mkdir()
     header.write_text(
         "#define DEPRECATEDIN_1_1_0 __attribute__((deprecated))\n"
