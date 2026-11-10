@@ -77,7 +77,7 @@ def main():
  validate_openssl_source(a.openssl_source,a.repo_root)
  policy=json.loads(a.policy.read_text())
  if policy.get("schema_version")!=1 or policy.get("openssl_version")!="3.5.9" or not isinstance(policy.get("api_rules"),dict): ap.error("invalid OpenSSL API policy schema/version")
- required_map={"api","candidate_replacement_not_approved","official_migration_guide_url","official_target_manual_url","migration_status","approval","semantic_review_requirements"}
+ required_map={"api","proposed_replacement","official_migration_guide_url","official_target_manual_url","migration_status","approval","semantic_review_requirements"}
  with a.migration_map.open(encoding="utf-8",newline="") as mf:
   reader=csv.DictReader(mf)
   if not required_map.issubset(set(reader.fieldnames or [])): ap.error("migration map is missing required columns")
@@ -85,10 +85,10 @@ def main():
   for mr in reader:
    api=mr["api"].strip()
    if not api or api in migration_map: ap.error("empty or duplicate API in migration map: "+api)
-   if mr["migration_status"] not in {"UNREVIEWED","REVIEWED_NOT_APPROVED","APPROVED","NO_DIRECT_REPLACEMENT","LEGACY_RETAINED","REDESIGN_REQUIRED"}: ap.error("invalid migration status for "+api)
+   if mr["migration_status"] not in {"UNREVIEWED","REVIEWED_NOT_APPROVED","APPROVED"}: ap.error("invalid migration status for "+api)
    for field in ("official_migration_guide_url","official_target_manual_url"):
     if not mr[field].startswith("https://docs.openssl.org/3.5/"): ap.error("non-3.5 official reference URL for "+api+": "+field)
-   if not mr["candidate_replacement_not_approved"].strip() or not mr["semantic_review_requirements"].strip(): ap.error("incomplete migration research fields for "+api)
+   if not mr["proposed_replacement"].strip() or not mr["semantic_review_requirements"].strip(): ap.error("incomplete migration research fields for "+api)
    if mr["approval"].lower() not in {"true","false"}: ap.error("invalid approval value for "+api)
    migration_map[api]=mr
  names,depr=catalog(a.openssl_source); rows=scan(a.source_root,names,depr); before=scan(a.pristine_root,names,depr); const=const_audit(a.source_root)
@@ -103,7 +103,7 @@ def main():
    if mr is None:
     x["classification"]="MIGRATION_MAP_MISSING"; x["policy_reason"]=""; failures.append("missing migration reference row for "+r["api"]+" at "+r["path"]+":"+str(r["line"]))
    elif mr["migration_status"]!="APPROVED" or mr["approval"].lower()!="true":
-    x["classification"]="MAPPED_UNREVIEWED"; x["policy_reason"]=mr["candidate_replacement_not_approved"]
+    x["classification"]="MAPPED_UNREVIEWED"; x["policy_reason"]=mr["proposed_replacement"]
     failures.append("migration review/approval pending: "+r["api"]+" ("+mr["migration_status"]+") at "+r["path"]+":"+str(r["line"]))
    elif not isinstance(rule,dict):
     x["classification"]="APPROVED_MAP_WITHOUT_POLICY"; x["policy_reason"]=""; failures.append("approved migration map lacks detailed API policy: "+r["api"])
