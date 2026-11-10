@@ -70,7 +70,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/openssl-migration/3.5.9"
           tar -xzf "$archive" -C "$RUNNER_TEMP/openssl-migration/3.5.9" --strip-components=1
 
-      - name: Compare 1.1.1w and 3.5.9 public API headers against the 64-API baseline
+      - name: Compare 1.1.1w and 3.5.9 public API headers against the 68-API baseline
         shell: bash
         run: |
           set -Eeuo pipefail
