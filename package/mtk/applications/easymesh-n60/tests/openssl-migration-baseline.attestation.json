@@ -3,22 +3,22 @@
   "status": "VERIFIED",
   "baseline_id": "openssl-1.1.1w-to-3.5.9",
   "run": {
-    "id": 42729596233,
+    "id": 42730118690,
     "attempt": 1,
-    "git_sha": "bb0c4e53131338fa5e6b078c5978138829d0ac54",
-    "url": "https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/actions/runs/42729596233"
+    "git_sha": "de967a9df2c6664afb11dad3621e2abc1f4c9eac",
+    "url": "https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/actions/runs/42730118690"
   },
   "artifact": {
-    "id": 13722749535,
+    "id": 13725060356,
     "name": "n60-openssl-1111w-to-359-header-baseline",
-    "sha256": "28cac9a58aa7b87288bfbf95fe6deeb4003ac973de684ed09fbd1e1390f77638"
+    "sha256": "1322f9417e5c1c7fe163944de80083fe5f1b322426a97e5f479bdd9972cb5432"
   },
   "input_sha256": {
     "migration_lock": "03d49ed10ff20877dd089c79101e64dc3a093f68cfba9b8bbfa210ad76ff8662",
     "migration_map": "b03a27818d6bf678ab9717a879b1c375637561beb4978a93ebdc14558cfae747",
     "openssl_package_makefile": "4b911200b312e9a873967a3cce83b9bb700450fd6d1c4a4cebd5b43c695c4152",
-    "api_inventory_script": "fe34b749028768ba92b1bd8d9ce04e23f22fa0c0213bdde4ad45a43450fa18ef",
-    "api_inventory_selftest": "dafff6bfcddf6f765efa0c7185851f55a512820f45154b331e6f4a9d657bd582",
+    "api_inventory_script": "619e6722ca9e5ea4a9108675ab3bce93aacaef7e552db4801d2825d4a93e739d",
+    "api_inventory_selftest": "8f93a7ddd218cab2744b617579af8921c080acee592f6ae48737ef68032e245a",
     "baseline_auditor_script": "e3e2660a4c63c3390a8e7cf4f438e636140b48362f99a5a0df0f7d50741dcc86",
     "baseline_auditor_selftest": "2e1395ab129c1e7876e9a7115aa522ac2a4bc19d066bf230c7339cc0923ad536",
     "api_policy": "2242a77ec0a8ee1e3c066afb1f4d2881311c2e6493a41921095c963473c2fcc8"
