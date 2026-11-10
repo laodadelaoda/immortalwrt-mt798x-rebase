@@ -32,27 +32,27 @@ with tempfile.TemporaryDirectory() as d:
  assert argv[-2:]==["-o",str(root/"x.i")]
  assert "-oignored.o" not in m.cpp_argv({"argv":["cc","-c","x.c","-oignored.o"]},root/"joined.i")
  macrofile=root/"macros.txt"
- macrofile.write_text("#define OPENSSL_NO_ENGINE 1\\n#define CONFIG_SUITEB\\n")
+ macrofile.write_text("#define OPENSSL_NO_ENGINE 1\n#define CONFIG_SUITEB\n")
  snapshot=m.macro_snapshot(macrofile)
  assert snapshot["OPENSSL_NO_ENGINE"]=={"defined":True,"value":"1"}
  assert snapshot["CONFIG_SUITEB"]["defined"] is True
  assert snapshot["OPENSSL_IS_BORINGSSL"]["defined"] is False
- (root/"foo.c").write_text("int f(void) { return 0; }\\n")
- log=f"make[1]: Entering directory '{root}'\\n/tool/aarch64-test-gcc -c foo.c -o foo.o\\nmake[1]: Leaving directory '{root}'\\n"
+ (root/"foo.c").write_text("int f(void) { return 0; }\n")
+ log=f"make[1]: Entering directory '{root}'\n/tool/aarch64-test-gcc -c foo.c -o foo.o\nmake[1]: Leaving directory '{root}'\n"
  commands,errors=m.parse_commands(log,root,"aarch64-test-gcc",{"component":root.resolve()})
  assert not errors["component"] and len(commands)==1 and commands[0]["source"]==str((root/"foo.c").resolve())
- hostlog=f"/usr/bin/gcc -c '{root}/foo.c' -o foo.o\\n"
+ hostlog=f"/usr/bin/gcc -c '{root}/foo.c' -o foo.o\n"
  hostcommands,hosterrors=m.parse_commands(hostlog,root,"aarch64-test-gcc",{"component":root.resolve()})
  assert not hostcommands and hosterrors["component"],hosterrors
  from types import SimpleNamespace
  args=SimpleNamespace(cppflags="-Itarget",cflags="-O2",ldflags="-Wl,-z,now",
   staging=root/"staging",linux=root/"linux",cc="aarch64-test-gcc",ar="aarch64-test-ar",ranlib="aarch64-test-ranlib")
- assert m.classify_reference_text("static HMAC_CTX *HMAC_CTX_new(void)\\n{\\n}", "HMAC_CTX_new",1)=="DECLARATION_OR_DEFINITION"
- assert m.classify_reference_text("static void HMAC_CTX_free(HMAC_CTX *ctx)\\n{\\n}", "HMAC_CTX_free",1)=="DECLARATION_OR_DEFINITION"
- assert m.classify_reference_text("ctx = HMAC_CTX_new();\\n", "HMAC_CTX_new",1)=="CALL_EXPRESSION"
- assert m.classify_reference_text("if (ENGINE_by_id(name)) return 1;\\n", "ENGINE_by_id",1)=="CALL_EXPRESSION"
- source=root/"active.c"; source.write_text("line1\\nEVP_PKEY_eq(a,b);\\n#if 0\\nENGINE_by_id(name);\\n#endif\\n",encoding="utf-8")
- preprocessed=root/"active.i"; preprocessed.write_text(f'# 2 "{source}"\\nEVP_PKEY_eq(a,b);\\n',encoding="utf-8")
+ assert m.classify_reference_text("static HMAC_CTX *HMAC_CTX_new(void)\n{\n}", "HMAC_CTX_new",1)=="DECLARATION_OR_DEFINITION"
+ assert m.classify_reference_text("static void HMAC_CTX_free(HMAC_CTX *ctx)\n{\n}", "HMAC_CTX_free",1)=="DECLARATION_OR_DEFINITION"
+ assert m.classify_reference_text("ctx = HMAC_CTX_new();\n", "HMAC_CTX_new",1)=="CALL_EXPRESSION"
+ assert m.classify_reference_text("if (ENGINE_by_id(name)) return 1;\n", "ENGINE_by_id",1)=="CALL_EXPRESSION"
+ source=root/"active.c"; source.write_text("line1\nEVP_PKEY_eq(a,b);\n#if 0\nENGINE_by_id(name);\n#endif\n",encoding="utf-8")
+ preprocessed=root/"active.i"; preprocessed.write_text(f'# 2 "{source}"\nEVP_PKEY_eq(a,b);\n',encoding="utf-8")
  phits,pemitted=m.pp_hits(preprocessed,root,{"EVP_PKEY_eq","ENGINE_by_id"})
  assert (str(source.resolve()),2,"EVP_PKEY_eq") in phits
  assert (str(source.resolve()),2) in pemitted and (str(source.resolve()),4) not in pemitted
@@ -81,7 +81,7 @@ with tempfile.TemporaryDirectory() as d:
   "CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y","MAP_R3_SUPPORT=y","SWTICH_DSA_ARCH=y","version mapd",
   *(f'CC="{args.cc}"' for _ in range(4)),f'AR="{args.ar}"',f'RANLIB="{args.ranlib}"'
  ]
- recipe=root/"Build-Compile.expanded.txt"; recipe.write_text("\\n".join(recipe_lines),encoding="utf-8")
+ recipe=root/"Build-Compile.expanded.txt"; recipe.write_text("\n".join(recipe_lines),encoding="utf-8")
  assert m.validate_compile_recipe(recipe,root,build,args)==m.sha(recipe)
 
  # Exact compiler -o output, not same-directory filename guessing, is the
