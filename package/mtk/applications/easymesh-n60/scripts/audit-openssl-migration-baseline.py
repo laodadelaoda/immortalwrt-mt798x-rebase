@@ -70,10 +70,14 @@ def main():
     spec=importlib.util.spec_from_file_location("openssl_inventory",a.repo_root/"package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py")
     mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
     v1111=(a.openssl_1111_source/"include/openssl/opensslv.h").read_text(encoding="utf-8",errors="replace")
-    if not re.search(r"OPENSSL_VERSION_TEXT[^\\n]*1\\.1\\.1w",v1111):
+    if "OpenSSL 1.1.1w" not in v1111:
         raise SystemExit("OpenSSL source tree is not the pinned 1.1.1w release")
     v359=(a.openssl_359_source/"VERSION.dat").read_text(encoding="utf-8",errors="replace")
-    if not all(re.search(r"(?m)^"+k+r"=\\"?"+v+r"\\"?$",v359) for k,v in (("MAJOR","3"),("MINOR","5"),("PATCH","9"))):
+    version_fields={}
+    for line in v359.splitlines():
+        if "=" in line:
+            k,v=line.split("=",1); version_fields[k.strip()]=v.strip().strip('"')
+    if tuple(version_fields.get(k) for k in ("MAJOR","MINOR","PATCH")) != ("3","5","9"):
         raise SystemExit("OpenSSL source tree is not the pinned 3.5.9 release")
     names1111,depr1111=mod.catalog(a.openssl_1111_source)
     names359,depr359=mod.catalog(a.openssl_359_source)
