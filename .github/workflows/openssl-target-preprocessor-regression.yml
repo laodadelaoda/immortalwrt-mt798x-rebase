@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - audit/openssl-target-preprocessor-failclosed
+      - n60pro-mtk-closed-driver
     paths:
       - ".github/workflows/openssl-target-preprocessor-regression.yml"
       - "package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py"
