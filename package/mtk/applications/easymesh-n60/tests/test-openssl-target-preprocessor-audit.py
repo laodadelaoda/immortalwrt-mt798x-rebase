@@ -82,4 +82,58 @@ with tempfile.TemporaryDirectory() as d:
  ]
  recipe=root/"Build-Compile.expanded.txt"; recipe.write_text("\\n".join(recipe_lines),encoding="utf-8")
  assert m.validate_compile_recipe(recipe,root,build,args)==m.sha(recipe)
+
+ # Exact compiler -o output, not same-directory filename guessing, is the
+ # ownership key for existing object files.
+ assert commands[0]["object_output"]==str((root/"foo.o").resolve())
+ comp=root/"build"/"wappd"; (comp/"obj").mkdir(parents=True)
+ source=root/"build"/"wappd"/"src.c"; source.parent.mkdir(parents=True)
+ source.write_text("int f(void) { return EVP_PKEY_eq(a,b); }\n")
+ obj=comp/"obj"/"actual.o"; obj.write_bytes(b"object")
+ lo=comp/"libsample.la"; lo.write_text("# libtool object file\npic_object='.libs/libsample.o'\nnon_pic_object='none'\n")
+ (comp/".libs").mkdir()
+ libobj=comp/".libs"/"libsample.o"; libobj.write_bytes(b"object")
+ lo_cmd={"source":str(source.resolve()),"object_output":str(obj.resolve())}
+ lo_source=comp/"libsrc.c"; lo_source.write_text("int g(void) { return 0; }\n")
+ lo_cmd={"source":str(lo_source.resolve()),"object_output":str(libobj.resolve())}
+ mapped=m.map_preexisting_objects([obj,lo],[
+  {"source":str(source.resolve()),"object_output":str(obj.resolve())},
+  lo_cmd])
+ assert len(mapped["mapped"])==2 and not mapped["unmapped_object_artifacts"]
+ # Multiple adjacent source candidates are not silently selected.
+ ambiguous_obj=comp/"ambiguous.o"; ambiguous_obj.write_bytes(b"object")
+ (comp/"ambiguous.c").write_text("int c;\n")
+ (comp/"ambiguous.cpp").write_text("int cxx;\n")
+ ambiguous=m.map_preexisting_objects([ambiguous_obj],[])
+ assert len(ambiguous["ambiguous_object_mappings"])==1
+ # A single adjacent source with no matching compiler output is uncompiled.
+ stale_obj=comp/"stale.o"; stale_obj.write_bytes(b"object")
+ (comp/"stale.c").write_text("int stale;\n")
+ stale=m.map_preexisting_objects([stale_obj],[])
+ assert stale["uncompiled_source_artifacts"]==[str((comp/"stale.c").resolve())]
+ # A component with API references but zero target compile commands cannot pass.
+ assert not m.source_reachability_is_complete(True,[],[],[],[],[],0,1,0)
+ assert not m.source_reachability_is_complete(True,[],[],[],[],[],0,0,1)
+ assert m.source_reachability_is_complete(True,[],[],[],[],[],0,0,0)
+ assert not m.source_reachability_is_complete(True,[],[],[],[{"artifact":"x"}],[],1,0,0)
+ # Archives and shared objects remain in the independent symbol/string audit.
+ import os
+ bindir=root/"fake-bin"; bindir.mkdir()
+ for name,body in {
+  "nm":"#!/bin/sh\necho 'lib.a: U EVP_PKEY_free'\n",
+  "file":"#!/bin/sh\necho 'ELF 64-bit LSB shared object'\n",
+  "strings":"#!/bin/sh\necho 'libcrypto.so.3'\n",
+ }.items():
+  tool=bindir/name; tool.write_text(body); tool.chmod(0o755)
+ old_path=os.environ.get("PATH",""); os.environ["PATH"]=str(bindir)+os.pathsep+old_path
+ try:
+  binary_build=root/"binary-build"; (binary_build/"wappd").mkdir(parents=True)
+  (binary_build/"wappd"/"libsample.a").write_bytes(b"archive")
+  (binary_build/"wappd"/"libsample.so").write_bytes(b"shared")
+  binary_rows,binary_ok,openssl_refs=m.audit_binary_inputs(binary_build,root/"binary-audit")
+  assert binary_ok and openssl_refs
+  assert {Path(x["path"]).suffix for x in binary_rows}=={".a",".so"}
+ finally:
+  os.environ["PATH"]=old_path
+
 print("PASS: conditional branches, source mapping, preprocess-only argv, exact component flags and safe 1905 sub-build enumeration.")
