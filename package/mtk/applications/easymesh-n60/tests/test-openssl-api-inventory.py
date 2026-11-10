@@ -24,6 +24,41 @@ def mask_define_directives(s):
   else:
    out.append(lines[i]); i+=1
  return "".join(out)
+def sha256_file(path):
+ h=hashlib.sha256()
+ with path.open("rb") as f:
+  for chunk in iter(lambda:f.read(1024*1024),b""): h.update(chunk)
+ return h.hexdigest()
+def verify_baseline_attestation(repo_root,lock):
+ tests=repo_root/"package/mtk/applications/easymesh-n60/tests"
+ att_path=tests/"openssl-migration-baseline.attestation.json"
+ att=json.loads(att_path.read_text(encoding="utf-8"))
+ if att.get("schema_version")!=1 or att.get("status")!="VERIFIED" or att.get("baseline_id")!=lock.get("baseline_id"):
+  raise ValueError("missing, stale or invalid OpenSSL migration baseline attestation")
+ run=att.get("run",{}); artifact=att.get("artifact",{}); source=att.get("source",{}); results=att.get("results",{})
+ if not re.fullmatch(r"[0-9a-f]{40}",run.get("git_sha","")) or int(run.get("id",0))<=0 or int(run.get("attempt",0))<=0:
+  raise ValueError("OpenSSL baseline attestation has no valid run identity")
+ if not re.fullmatch(r"[0-9a-f]{64}",artifact.get("sha256","")) or not artifact.get("id"):
+  raise ValueError("OpenSSL baseline attestation has no artifact integrity identity")
+ if source.get("archive_sha256",{}).get("1.1.1w")!=lock["from"]["sha256"] or source.get("archive_sha256",{}).get("3.5.9")!=lock["to"]["sha256"]:
+  raise ValueError("OpenSSL baseline attestation archive hashes do not match the immutable lock")
+ if results.get("failures")!=[] or results.get("migration_map_rows")!=64 or results.get("migration_map_apis_present_in_1_1_1w")!=64 or results.get("migration_map_apis_deprecated_in_3_5_9")!=64:
+  raise ValueError("OpenSSL baseline attestation does not prove complete 64-API header coverage")
+ paths={
+  "migration_lock":tests/"openssl-migration-baseline.lock.json",
+  "migration_map":tests/"openssl-111-to-359-migration-map.csv",
+  "openssl_package_makefile":repo_root/"package/libs/openssl/Makefile",
+  "api_inventory_script":tests/"test-openssl-api-inventory.py",
+  "api_inventory_selftest":tests/"test-openssl-api-inventory-selftest.py",
+  "baseline_auditor_script":repo_root/"package/mtk/applications/easymesh-n60/scripts/audit-openssl-migration-baseline.py",
+  "baseline_auditor_selftest":tests/"test-openssl-migration-baseline-selftest.py",
+  "api_policy":tests/"openssl-api-policy.json"
+ }
+ for name,path in paths.items():
+  expected=att.get("input_sha256",{}).get(name)
+  if not expected or sha256_file(path)!=expected:
+   raise ValueError("OpenSSL baseline attestation input hash mismatch: "+name)
+ return att
 def validate_openssl_source(root,repo_root):
  inc=root/"include/openssl"
  # The release archive contains a Perl template, not numeric version macros.
@@ -37,6 +72,7 @@ def validate_openssl_source(root,repo_root):
  lock=json.loads(lock_path.read_text(encoding="utf-8"))
  if lock.get("schema_version")!=1 or lock.get("from",{}).get("version")!="1.1.1w" or lock.get("to",{}).get("version")!="3.5.9": raise ValueError("invalid OpenSSL 1.1.1w-to-3.5.9 migration baseline lock")
  if lock["to"].get("sha256")!=h.group(1) or not re.fullmatch(r"[0-9a-f]{64}",lock["from"].get("sha256","")): raise ValueError("OpenSSL package hash does not match immutable migration baseline lock")
+ verify_baseline_attestation(repo_root,lock)
  generated=inc/"opensslv.h"
  if generated.is_file():
   vh=generated.read_text(encoding="utf-8")
