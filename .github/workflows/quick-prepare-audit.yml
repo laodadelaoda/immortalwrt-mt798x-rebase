@@ -554,6 +554,13 @@ jobs:
           LINUX_DIR="$(realpath "$LINUX_DIR")"
           TARGET_STAGING="$STAGING_DIR"
 
+          # Export the expanded package Build/Compile recipe as data only.
+          # The recipe is not invoked; GNU make writes it through file() and runs true.
+          make -s -C package/mtk/applications/easymesh-n60 TOPDIR="$GITHUB_WORKSPACE" \
+            --eval='dump-n60-build-compile:; $(file >$(TOPDIR)/artifacts/easymesh-openssl-preprocessor-audit/easymesh-Build-Compile.expanded.txt,$(Build/Compile)) @true' \
+            dump-n60-build-compile
+          test -s "$OUT/easymesh-Build-Compile.expanded.txt"
+
           # Export the exact expanded Build/Compile recipe without executing it.
           # GNU make's file() function writes the recipe text; the only shell command is true.
           make -s -C package/mtk/applications/easymesh-n60 TOPDIR="$GITHUB_WORKSPACE" \
@@ -612,6 +619,7 @@ test -n "$(find "$TARGET_STAGING/usr/include/libnl-tiny" -type f -print -quit)"
             --openssl-pkg-source "$PKG_SOURCE" --openssl-pkg-source-url "$PKG_SOURCE_URL" \
             --openssl-pkg-hash "$PKG_HASH" --openssl-options "$OPENSSL_OPTIONS" \
             --target-config "$GITHUB_WORKSPACE/.config" \\
+            --package-compile-recipe "$OUT/easymesh-Build-Compile.expanded.txt" \\
             --package-compile-recipe "$OUT/easymesh-Build-Compile.expanded.txt"
 
       - name: Preflight OpenSSL audit implementation inputs after MT Wi-Fi 026
