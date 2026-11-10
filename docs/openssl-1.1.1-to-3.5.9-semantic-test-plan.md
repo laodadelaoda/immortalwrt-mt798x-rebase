@@ -75,6 +75,16 @@ The responder formula involving `bR + pR` is especially important: a simple `EVP
 
 `crypto_ecdh_get_pubkey` returns either the x-coordinate only or x||y depending on `inc_y`. `crypto_ecdh_set_peerkey` reconstructs either a compressed point (with the current y-bit choice) or an affine point, validates that it is on-curve, wraps it as a peer key and derives the shared secret. Tests must preserve the compressed-point parity convention, point validation, coordinate byte lengths and exact derived-secret bytes. Replacing the GFp-suffixed point functions with their generic counterparts is a direct API-family change, but the input/output format is protocol behavior and must not change.
 
+### Distinguish preprocessor reachability from function reachability
+
+In the inspected WAPP snapshot, the only source calls to `crypto_ecdh_get_pubkey` and `crypto_ecdh_set_peerkey` are inside the `#if 0` DPP PFS block. The helper definitions in `crypto/crypto_openssl.c` are outside that block and contain deprecated EC_KEY/GFp API calls. Therefore:
+
+- the PFS caller is preprocessor-disabled;
+- the helper definitions may still be compiled into the object;
+- no other WAPP source callsites were found in this snapshot, but external consumers and final link composition have not yet been ruled out.
+
+Do not classify these APIs as active runtime paths merely because the helper definitions exist. Conversely, do not delete or ignore them solely because their only in-tree callers are disabled: prove the object/link reachability and package consumers first. The scanner's next improvement should report preprocessor-disabled blocks separately from compiled-but-unreferenced functions.
+
 ### WAPP HMAC and CMAC wrapper behavior
 
 The inspected `crypto/crypto_openssl.c` wrappers show that HMAC supports MD5, SHA-1 and SHA-256, accepts vector/chunked input, and returns the same wrapper-specific success/error codes. CMAC supports AES-128-CBC and AES-256-CBC, rejects other key lengths, and requires a 16-byte result. The `EVP_MAC` migration must preserve the selected digest/cipher, key length, vector update order, fault-injection path, output length and cleanup behavior. A generic HMAC-only test is insufficient.
