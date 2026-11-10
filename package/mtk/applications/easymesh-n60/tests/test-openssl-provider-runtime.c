@@ -98,7 +98,15 @@ old_bad = test_only_SSL_use_RSAPrivateKey_ASN1(legacy_ssl, der,
                                                    (long)der_len - 1);
     old_error = ERR_peek_last_error();
     C(new_bad == 0 && old_bad == 0 && new_error != 0 && old_error != 0);
-    puts("PASS: RSA PKCS#1 DER provider decode, legacy decoder fallback, key installation, and truncated-input failure.");
+
+    ERR_clear_error();
+    new_bad = SSL_use_PrivateKey_ASN1(EVP_PKEY_RSA, generic_ssl, NULL, 0);
+    new_error = ERR_peek_last_error();
+    ERR_clear_error();
+    old_bad = test_only_SSL_use_RSAPrivateKey_ASN1(legacy_ssl, NULL, 0);
+    old_error = ERR_peek_last_error();
+    C(new_bad == 0 && old_bad == 0 && new_error != 0 && old_error != 0);
+    puts("PASS: RSA PKCS#1 DER provider decode, legacy decoder fallback, key installation, and NULL/truncated-input failures.");
     ok = 1;
 out:
     ERR_clear_error();
