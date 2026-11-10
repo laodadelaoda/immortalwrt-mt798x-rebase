@@ -8,7 +8,10 @@ EXT={".c",".cc",".cpp",".cxx"}
 MARK=re.compile(r'^\s*#\s*(\d+)\s+"([^"]+)"')
 ENTER=re.compile(r"make(?:\[\d+\])?: Entering directory ['\"](.+?)['\"]")
 LEAVE=re.compile(r"make(?:\[\d+\])?: Leaving directory ['\"](.+?)['\"]")
-CALL=re.compile(r"\b([A-Za-z_]\w*)\s*\(")
+CALL=re.compile(r"\b([A-Za-z_]\w*)\s*\\(")
+FOCUS_MACROS=("OPENSSL_NO_ENGINE","OPENSSL_NO_DEPRECATED_3_0","OPENSSL_IS_BORINGSSL",
+ "CONFIG_NATIVE_WINDOWS","CONFIG_SUITEB","CONFIG_OPENSSL_CMAC","CONFIG_ECC","CONFIG_FIPS",
+ "CONFIG_TESTING_OPTIONS","OPENSSL_NO_DH","OPENSSL_NO_DSA")
 
 def sha(p):
  h=hashlib.sha256()
@@ -106,6 +109,18 @@ def cpp_argv(cmd,out):
   i+=1
  dst.extend(["-dD","-o",str(out)]); return dst
 
+def macro_argv(cmd,out):
+ argv=cpp_argv(cmd,out)
+ argv[argv.index("-dD")]="-dM"
+ return argv
+
+def macro_snapshot(path):
+ found={}
+ for line in Path(path).read_text(encoding="utf-8",errors="replace").splitlines():
+  m=re.match(r"^#define\\s+([A-Za-z_]\\w*)(?:\\s+(.*))?$",line)
+  if m and m.group(1) in FOCUS_MACROS: found[m.group(1)]=m.group(2) or ""
+ return {name:{"defined":name in found,"value":found.get(name)} for name in FOCUS_MACROS}
+
 def pp_hits(path,cwd,names):
  hits=set(); filehits=set(); current=None; lineno=1
  for line in Path(path).read_text(encoding="utf-8",errors="replace").splitlines():
@@ -155,9 +170,15 @@ def main():
    dest=out/"preprocessed"/f"{comp}-{key}.i"; pargv=cpp_argv(cmd,dest)
    pp=subprocess.run(pargv,cwd=cmd["cwd"],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
    err=out/"preprocessed"/f"{comp}-{key}.stderr.txt"; err.write_text(pp.stderr,encoding="utf-8")
-   item={"source":cmd["source"],"cwd":cmd["cwd"],"make_log_line":cmd["line"],"argv":pargv,"returncode":pp.returncode,"stderr":str(err)}
-   if pp.returncode==0 and dest.is_file():
-    item["preprocessed_sha256"]=sha(dest); h,fh=pp_hits(dest,cmd["cwd"],names); hits.update(h); filehits.update(fh); api_hits_by_component[comp].update(x[2] for x in h)
+   macrofile=out/"preprocessed"/f"{comp}-{key}.macros.txt"; margv=macro_argv(cmd,macrofile)
+   mp=subprocess.run(margv,cwd=cmd["cwd"],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+   merr=out/"preprocessed"/f"{comp}-{key}.macros.stderr.txt"; merr.write_text(mp.stderr,encoding="utf-8")
+   item={"source":cmd["source"],"cwd":cmd["cwd"],"make_log_line":cmd["line"],"argv":pargv,"returncode":pp.returncode,
+         "macro_argv":margv,"macro_returncode":mp.returncode,"stderr":str(err),"macro_stderr":str(merr)}
+   if pp.returncode==0 and dest.is_file() and mp.returncode==0 and macrofile.is_file():
+    item["preprocessed_sha256"]=sha(dest); item["macro_snapshot_sha256"]=sha(macrofile)
+    item["target_macro_snapshot"]=macro_snapshot(macrofile)
+    h,fh=pp_hits(dest,cmd["cwd"],names); hits.update(h); filehits.update(fh); api_hits_by_component[comp].update(x[2] for x in h)
    else: pp_errors.append(item)
    tus.append(item)
   complete=run.returncode==0 and bool(cmds) and not parse_errors and not pp_errors
