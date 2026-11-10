@@ -79,8 +79,12 @@ def parse_commands(log,base,compiler):
    if i+2<len(ts):
     cwd=Path(ts[i+1]); cwd=cwd if cwd.is_absolute() else dirs[-1]/cwd
     ts=ts[i+3:]
+  if "-c" not in ts: continue
   ci=next((i for i,t in enumerate(ts) if Path(t).name==compiler),None)
-  if ci is None or "-c" not in ts[ci:]: continue
+  if ci is None:
+   candidates=[Path(t).name for t in ts if Path(t).name.endswith(("gcc","clang","cc")) or Path(t).name.startswith("clang")]
+   if candidates: errors.append(f"{n}: non-target compiler in compile command: {candidates}")
+   continue
   argv=ts[ci:]; srcs=[x for x in argv if Path(x).suffix.lower() in EXT]
   existing=[]
   for x in srcs:
@@ -140,7 +144,7 @@ def main():
   p=build/r["path"]
   if str(p) not in branches: branches[str(p)]=branch_path(p)
   r["branch_path"]=branches[str(p)][r["line"]-1]
- specs=make_specs(repo,build,a); results={}; hits=set(); filehits=set()
+ specs=make_specs(repo,build,a); results={}; hits=set(); filehits=set(); api_hits_by_component={x:set() for x in COMP}
  for comp in COMP:
   argv,extra=specs[comp]; env=os.environ.copy(); env.update(extra)
   run=subprocess.run(argv,cwd=repo,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
@@ -153,13 +157,22 @@ def main():
    err=out/"preprocessed"/f"{comp}-{key}.stderr.txt"; err.write_text(pp.stderr,encoding="utf-8")
    item={"source":cmd["source"],"cwd":cmd["cwd"],"make_log_line":cmd["line"],"argv":pargv,"returncode":pp.returncode,"stderr":str(err)}
    if pp.returncode==0 and dest.is_file():
-    item["preprocessed_sha256"]=sha(dest); h,fh=pp_hits(dest,cmd["cwd"],names); hits.update(h); filehits.update(fh)
+    item["preprocessed_sha256"]=sha(dest); h,fh=pp_hits(dest,cmd["cwd"],names); hits.update(h); filehits.update(fh); api_hits_by_component[comp].update(x[2] for x in h)
    else: pp_errors.append(item)
    tus.append(item)
   complete=run.returncode==0 and bool(cmds) and not parse_errors and not pp_errors
   results[comp]={"make_returncode":run.returncode,"log":str(log),"compile_commands":len(cmds),"parse_errors":parse_errors,"preprocess_failures":pp_errors,"translation_units":tus,"complete":complete}
   (out/f"compile-commands-{comp}.json").write_text(json.dumps(cmds,indent=2)+"\n")
  complete={c for c,v in results.items() if v["complete"]}
+ macro_refs=inv.scan_macro_references(build,names,{x:"OSSL_DEPRECATED" for x in names})
+ macro_rows=[]; macro_counts={"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
+ for item in macro_refs:
+  if item["reachability"]=="UNREFERENCED_MACRO_DEFINITION" and item["component"] in complete and item["api"] not in api_hits_by_component[item["component"]]:
+   state="EXCLUDED_WITH_EVIDENCE"
+  else: state="UNKNOWN_FAIL_CLOSED"
+  macro_counts[state]+=1
+  macro_rows.append({**item,"reachability_status":state,
+    "reason":"unreferenced macro plus complete component preprocessor evidence" if state=="EXCLUDED_WITH_EVIDENCE" else "macro expansion cannot be attributed conclusively; fail closed"})
  callsites=[]; counts={"ACTIVE":0,"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
  for r in rows:
   src=canon(build/r["path"],repo); key=(src,r["line"],r["api"])
@@ -175,9 +188,11 @@ def main():
   "firmware_compile_invoked":False,"method":"make -B -n command enumeration; exact target compiler commands replayed as -E -dD",
   "target_compiler":a.cc,"target_cppflags":a.cppflags,"target_cflags":a.cflags,"target_ldflags":a.ldflags,
   "openssl_header_tree_sha256":tree_sha(hdr),"prepared_source_tree_sha256":tree_sha(build),"components":results,
-  "callsite_counts":{"total":len(callsites),**counts},"complete":len(complete)==4 and counts["UNKNOWN_FAIL_CLOSED"]==0,
-  "limitations":["direct source expressions only; macro-body references remain separately tracked","ambiguous source-line mapping is UNKNOWN_FAIL_CLOSED","no object, library, package or firmware is compiled or linked"]}
+  "callsite_counts":{"total":len(callsites),**counts},"macro_reference_counts":{"total":len(macro_rows),**macro_counts},
+  "complete":len(complete)==4 and counts["UNKNOWN_FAIL_CLOSED"]==0 and macro_counts["UNKNOWN_FAIL_CLOSED"]==0,
+  "limitations":["direct source expressions are classified separately from macro-body references","ambiguous source-line mapping is UNKNOWN_FAIL_CLOSED","no object, library, package or firmware is compiled or linked"]}
  (out/"callsite-reachability.json").write_text(json.dumps(callsites,indent=2)+"\n")
+ (out/"macro-reference-reachability.json").write_text(json.dumps(macro_rows,indent=2)+"\n")
  (out/"openssl-target-preprocessor-summary.json").write_text(json.dumps(summary,indent=2)+"\n")
  files=sorted(x for x in out.rglob("*") if x.is_file() and x.name!="SHA256SUMS")
  (out/"SHA256SUMS").write_text("".join(f"{sha(x)}  {x.relative_to(out).as_posix()}\n" for x in files))
