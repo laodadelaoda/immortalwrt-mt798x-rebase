@@ -497,10 +497,26 @@ jobs:
           make -C "$OPENSSL_SOURCE" build_generated V=s 2>&1 | tee "$OUT/openssl-build-generated.log"
           (cd "$OPENSSL_SOURCE" && perl configdata.pm --dump) > "$OUT/openssl-configdata-dump.txt"
 
-          # Use OpenWrt's own expanded target variables; no guessed -D flags.
-          eval "$(make -s printvars VARS='TARGET_CC TARGET_AR TARGET_RANLIB TARGET_CPPFLAGS TARGET_CFLAGS TARGET_LDFLAGS STAGING_DIR LINUX_DIR' QUOTED=1)"
+          # Evaluate the EasyMesh Package Makefile and print its expanded target variables.
+          # This uses the package's own kernel.mk/rules.mk context, not guessed flags.
+          VARS_OUTPUT="$(make -s -C package/mtk/applications/easymesh-n60 TOPDIR="$GITHUB_WORKSPACE" \
+            --eval='dump-n60-target-vars:; @printf "%s\n" "__TARGET_CC__$(TARGET_CC)" "__TARGET_AR__$(TARGET_AR)" "__TARGET_RANLIB__$(TARGET_RANLIB)" "__TARGET_CPPFLAGS__$(TARGET_CPPFLAGS)" "__TARGET_CFLAGS__$(TARGET_CFLAGS)" "__TARGET_LDFLAGS__$(TARGET_LDFLAGS)" "__STAGING_DIR__$(STAGING_DIR)" "__LINUX_DIR__$(LINUX_DIR)"' \
+            dump-n60-target-vars)"
+          while IFS= read -r line; do
+            case "$line" in
+              __TARGET_CC__*) TARGET_CC="${line#__TARGET_CC__}" ;;
+              __TARGET_AR__*) TARGET_AR="${line#__TARGET_AR__}" ;;
+              __TARGET_RANLIB__*) TARGET_RANLIB="${line#__TARGET_RANLIB__}" ;;
+              __TARGET_CPPFLAGS__*) TARGET_CPPFLAGS="${line#__TARGET_CPPFLAGS__}" ;;
+              __TARGET_CFLAGS__*) TARGET_CFLAGS="${line#__TARGET_CFLAGS__}" ;;
+              __TARGET_LDFLAGS__*) TARGET_LDFLAGS="${line#__TARGET_LDFLAGS__}" ;;
+              __STAGING_DIR__*) STAGING_DIR="${line#__STAGING_DIR__}" ;;
+              __LINUX_DIR__*) LINUX_DIR="${line#__LINUX_DIR__}" ;;
+            esac
+          done <<< "$VARS_OUTPUT"
           [[ -n "$TARGET_CC" && -n "$TARGET_AR" && -n "$TARGET_RANLIB" && -n "$TARGET_CFLAGS" && -n "$STAGING_DIR" && -n "$LINUX_DIR" ]] || {
             echo "::error::OpenWrt target compiler/flags/staging variables are incomplete."
+            printf '%s\n' "$VARS_OUTPUT"
             exit 1
           }
           [[ "$TARGET_CC" != *" "* && "$TARGET_AR" != *" "* && "$TARGET_RANLIB" != *" "* ]] || {
