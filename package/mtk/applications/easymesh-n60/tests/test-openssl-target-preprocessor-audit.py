@@ -116,10 +116,18 @@ with tempfile.TemporaryDirectory() as d:
  stale=m.map_preexisting_objects([stale_obj],[])
  assert stale["uncompiled_source_artifacts"]==[str((comp/"stale.c").resolve())]
  # A component with API references but zero target compile commands cannot pass.
- assert not m.source_reachability_is_complete(True,[],[],[],[],[],0,1,0)
- assert not m.source_reachability_is_complete(True,[],[],[],[],[],0,0,1)
- assert m.source_reachability_is_complete(True,[],[],[],[],[],0,0,0)
- assert not m.source_reachability_is_complete(True,[],[],[],[{"artifact":"x"}],[],1,0,0)
+ assert not m.source_reachability_is_complete(True,[],[],[],[],[],0,1,0,0)
+ assert not m.source_reachability_is_complete(True,[],[],[],[],[],0,0,0,1)
+ assert not m.source_reachability_is_complete(True,[],[],[],[],[],0,0,1,0)
+ assert m.source_reachability_is_complete(True,[],[],[],[],[],0,0,0,0)
+ assert not m.source_reachability_is_complete(True,[],[],[],[{"artifact":"x"}],[],1,0,0,0)
+ compiled=str((comp/"libsrc.c").resolve())
+ not_compiled=str((comp/"not-compiled.c").resolve())
+ assert m.classify_reference_reachability(not_compiled,1,"EVP_PKEY_free","CALL_EXPRESSION",set(),set(),{compiled},True)=="UNKNOWN_FAIL_CLOSED"
+ assert m.classify_reference_reachability(compiled,1,"EVP_PKEY_free","CALL_EXPRESSION",{(compiled,1,"EVP_PKEY_free")},set(),{compiled},True)=="ACTIVE"
+ assert m.classify_reference_reachability(compiled,1,"EVP_PKEY_free","CALL_EXPRESSION",set(),{(compiled,1)},{compiled},True)=="UNKNOWN_FAIL_CLOSED"
+ assert m.classify_reference_reachability(compiled,1,"EVP_PKEY_free","CALL_EXPRESSION",set(),set(),{compiled},True)=="EXCLUDED_WITH_EVIDENCE"
+ assert m.classify_reference_reachability(compiled,1,"EVP_PKEY_free","UNKNOWN_REFERENCE_KIND",set(),set(),{compiled},True)=="UNKNOWN_FAIL_CLOSED"
  # Archives and shared objects remain in the independent symbol/string audit.
  import os
  bindir=root/"fake-bin"; bindir.mkdir()
