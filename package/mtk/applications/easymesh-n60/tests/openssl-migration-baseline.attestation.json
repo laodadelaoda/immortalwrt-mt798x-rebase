@@ -3,15 +3,15 @@
   "status": "VERIFIED",
   "baseline_id": "openssl-1.1.1w-to-3.5.9",
   "run": {
-    "id": 42831285594,
+    "id": 42832853849,
     "attempt": 1,
-    "git_sha": "fb47fb98e576a6dc49a20c4a1796056e9ea2f198",
-    "url": "https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/actions/runs/42831285594"
+    "git_sha": "53fb8c0ac8abe05675874620fe3e635ac835eb0e",
+    "url": "https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/actions/runs/42832853849"
   },
   "artifact": {
-    "id": 13772066105,
+    "id": 13772257337,
     "name": "n60-openssl-1111w-to-359-header-baseline",
-    "sha256": "509673f595201160ab7c3b5b177e6207d72e8b944b90c31a884c6aeacb4902e5"
+    "sha256": "536b6c77ac09b3fe52680330b1c59839fcec11e6065a67cf80a4d0b4e177003b"
   },
   "input_sha256": {
     "migration_lock": "03d49ed10ff20877dd089c79101e64dc3a093f68cfba9b8bbfa210ad76ff8662",
