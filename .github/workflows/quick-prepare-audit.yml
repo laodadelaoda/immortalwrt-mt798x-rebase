@@ -480,7 +480,7 @@ jobs:
             package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json \
             package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv \
             package/mtk/applications/easymesh-n60/tests/openssl-migration-baseline.lock.json \
-          package/mtk/applications/easymesh-n60/tests/openssl-migration-baseline.attestation.json \
+            package/mtk/applications/easymesh-n60/tests/openssl-migration-baseline.attestation.json \
             package/mtk/applications/easymesh-n60/tests/test-openssl-provider-runtime.c \
             package/mtk/applications/easymesh-n60/scripts/run-openssl-provider-runtime.sh; do
             test -s "$input" || {
