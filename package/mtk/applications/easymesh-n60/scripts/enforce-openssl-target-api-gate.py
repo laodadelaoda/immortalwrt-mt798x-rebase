@@ -49,12 +49,19 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
  if summary.get("macro_reference_counts",{}).get("total")!=len(macro_rows): failures.append("macro evidence count mismatch")
  if any(x.get("reachability_status")=="UNKNOWN_FAIL_CLOSED" for x in macro_rows):
   failures.append("macro reachability retains UNKNOWN_FAIL_CLOSED references")
+ active_component_api_hits={
+  (x.get("component"),x.get("api")) for x in callsites
+  if x.get("reachability_status")=="ACTIVE" and x.get("reference_kind") not in
+     {"DECLARATION_OR_DEFINITION","UNKNOWN_REFERENCE_KIND"}
+ }
  for row in macro_rows:
   if row.get("reachability_status")=="EXCLUDED_WITH_EVIDENCE":
+   if (row.get("component"),row.get("api")) in active_component_api_hits:
+    failures.append("macro exclusion contradicts an active target-preprocessor API hit in the same component: "+repr(key(row)))
    component=summary.get("components",{}).get(row.get("component"),{})
    source=(Path(source_root).resolve()/str(row.get("path",""))).resolve()
    valid=(row.get("reachability")=="UNREFERENCED_MACRO_DEFINITION" and
-          row.get("reason")=="macro definition has no lexical reference in the component and target preprocessing completed" and
+          row.get("reason")=="macro definition is lexically unreferenced and no target-preprocessed API call exists in the component" and
           component.get("source_reachability_complete") is True and
           source.is_relative_to(Path(source_root).resolve()) and source.is_file() and
           sha256(source)==row.get("source_sha256"))

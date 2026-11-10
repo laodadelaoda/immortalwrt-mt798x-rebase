@@ -218,4 +218,29 @@ with tempfile.TemporaryDirectory() as d:
  finally:
   os.environ["PATH"]=old_path
 
-print("PASS: conditional branches, source mapping, preprocess-only argv, exact component flags and safe 1905 sub-build enumeration.")
+# Lexical macro graphs can miss token-paste expansion. Target-preprocessed API
+# hits must therefore revoke a lexical-only macro exclusion.
+inactive={"reachability":"UNREFERENCED_MACRO_DEFINITION","api":"EVP_PKEY_cmp"}
+status,reason=m.classify_macro_reference(inactive,True,set())
+assert status=="EXCLUDED_WITH_EVIDENCE", (status,reason)
+status,reason=m.classify_macro_reference(inactive,True,{"EVP_PKEY_cmp"})
+assert status=="UNKNOWN_FAIL_CLOSED", (status,reason)
+status,reason=m.classify_macro_reference(inactive,False,set())
+assert status=="UNKNOWN_FAIL_CLOSED", (status,reason)
+with tempfile.TemporaryDirectory() as td:
+ root=Path(td)
+ for c in ("wappd","mapd","1905daemon","libmapd"): (root/c).mkdir()
+ (root/"wappd/macros.h").write_text(
+  "#define WRAP() EVP_PKEY_cmp(a,b)\n"
+  "#define CAT(a,b) a##b\n"
+  "#define CALL CAT(WR,AP)\n",encoding="utf-8")
+ (root/"wappd/use.c").write_text('#include "macros.h"\nCALL();\n',encoding="utf-8")
+ refs=inv.scan_macro_references(root,{"EVP_PKEY_cmp"},{"EVP_PKEY_cmp":"OSSL_DEPRECATEDIN_3_0"})
+ wrap=next(x for x in refs if x["macro"]=="WRAP")
+ assert wrap["reachability"]=="UNREFERENCED_MACRO_DEFINITION",wrap
+ # The target preprocessor observes EVP_PKEY_cmp in this component. The
+ # macro may have been expanded through ##, so the only safe state is UNKNOWN.
+ status,reason=m.classify_macro_reference(wrap,True,{"EVP_PKEY_cmp"})
+ assert status=="UNKNOWN_FAIL_CLOSED",(status,reason)
+
+print("PASS: conditional branches, source mapping, preprocess-only argv, exact component flags, token-paste macro fail-closed classification and safe 1905 sub-build enumeration.")

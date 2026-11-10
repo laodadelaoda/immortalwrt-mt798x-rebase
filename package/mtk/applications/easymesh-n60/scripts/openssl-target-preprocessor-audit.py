@@ -225,6 +225,15 @@ def classify_reference_reachability(source,line,api,reference_kind,hits,emitted_
  if component_complete: return "EXCLUDED_WITH_EVIDENCE"
  return "UNKNOWN_FAIL_CLOSED"
 
+def classify_macro_reference(item,component_complete,component_active_apis):
+ """Only exclude an unreferenced macro when target preprocessing sees no API call in its component."""
+ if (item.get("reachability")=="UNREFERENCED_MACRO_DEFINITION" and
+     component_complete and item.get("api") not in component_active_apis):
+  return ("EXCLUDED_WITH_EVIDENCE",
+          "macro definition is lexically unreferenced and no target-preprocessed API call exists in the component")
+ return ("UNKNOWN_FAIL_CLOSED",
+         "macro expansion cannot be excluded: lexical or target-preprocessor evidence is incomplete/active")
+
 def parse_commands(log,base,compiler,component_roots):
  cmds=[]; errors={name:[] for name in component_roots}; dirs=[Path(base)]
  def locate(src,cwd):
@@ -512,12 +521,8 @@ def main():
   for comp in COMP}
  macro_rows=[]; macro_counts={"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
  for item in macro_refs:
-  if item["reachability"]=="UNREFERENCED_MACRO_DEFINITION" and item["component"] in complete:
-   state="EXCLUDED_WITH_EVIDENCE"
-   reason="macro definition has no lexical reference in the component and target preprocessing completed"
-  else:
-   state="UNKNOWN_FAIL_CLOSED"
-   reason="macro is lexically reachable or target preprocessing cannot prove its expansion inactive"
+  state,reason=classify_macro_reference(
+   item,item["component"] in complete,api_hits_by_component[item["component"]])
   macro_counts[state]+=1
   macro_rows.append({**item,"reachability_status":state,"reason":reason,
     "source_sha256":sha(build/item["path"])})

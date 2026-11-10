@@ -116,4 +116,22 @@ with tempfile.TemporaryDirectory() as d:
   "non_call_reference_counts":{"total":0,"UNKNOWN_FAIL_CLOSED":0},"macro_reference_counts":{"total":1,"UNKNOWN_FAIL_CLOSED":0},
   "components":{"wappd":{"source_reachability_complete":True}}},[macro],{},{"api_rules":{}},root,git)
  assert not report["complete"] and any("macro EXCLUDED_WITH_EVIDENCE" in x for x in report["failures"])
-print("PASS: exact target reachability excludes inactive APIs and declarations; active, unknown, missing, stale and unapproved cases are handled fail-closed.")
+# A lexical macro exclusion is invalid if target preprocessing found the API
+# active anywhere in the same component (including token-paste expansion).
+active_call={"component":"wappd","path":"wappd/x.c","line":1,"api":"EVP_PKEY_cmp",
+ "reference_kind":"CALL_EXPRESSION","reachability_status":"ACTIVE","source_sha256":digest}
+active_inventory=[{"component":"wappd","path":"wappd/x.c","line":"1","api":"EVP_PKEY_cmp",
+ "deprecated_macro":"OSSL_DEPRECATEDIN_3_0"}]
+forged_macro={"component":"wappd","path":"wappd/x.c","line":1,"api":"EVP_PKEY_cmp","macro":"WRAP",
+ "reachability":"UNREFERENCED_MACRO_DEFINITION","reachability_status":"EXCLUDED_WITH_EVIDENCE",
+ "reason":"macro definition is lexically unreferenced and no target-preprocessed API call exists in the component",
+ "source_sha256":digest}
+macro_summary={"git_sha":git,"firmware_compile_invoked":False,"complete":True,
+ "source_reachability_complete":True,"callsite_counts":{"total":1,"UNKNOWN_FAIL_CLOSED":0},
+ "non_call_reference_counts":{"total":0,"UNKNOWN_FAIL_CLOSED":0},
+ "macro_reference_counts":{"total":1,"UNKNOWN_FAIL_CLOSED":0},
+ "components":{"wappd":{"source_reachability_complete":True}}}
+report=m.evaluate(active_inventory,[active_call],[],macro_summary,[forged_macro],{},{"api_rules":{}},root,git)
+assert not report["complete"] and any("macro exclusion contradicts an active target-preprocessor API hit" in x for x in report["failures"]),report["failures"]
+
+print("PASS: exact target reachability excludes inactive APIs and declarations; active, unknown, missing, stale, unapproved and token-paste macro exclusions are handled fail-closed.")
