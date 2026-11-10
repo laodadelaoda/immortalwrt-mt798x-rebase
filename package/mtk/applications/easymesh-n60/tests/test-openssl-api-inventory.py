@@ -83,7 +83,7 @@ def catalog(root):
  inc=root/"include/openssl"
  if not inc.is_dir(): raise ValueError("missing OpenSSL public headers: "+str(inc))
  names=set(); deprecated={}
- for p in sorted(inc.rglob("*.h")):
+ for p in sorted(x for x in inc.rglob("*") if x.is_file() and (x.name.endswith(".h") or x.name.endswith(".h.in"))):
   s=clean(p.read_text(encoding="utf-8",errors="replace"))
   names.update(m.group(1) for m in DECL.finditer(s) if m.group(1) not in C_KEYWORDS and not m.group(1).startswith(("OSSL_","OPENSSL_")))
   for m in DEPR.finditer(s):
