@@ -75,9 +75,9 @@ def classify_reference_text(text,api,line_number):
   return "DECLARATION_OR_DEFINITION"
  return "CALL_EXPRESSION"
 
-def classify_source_reference(build,row):
+def classify_source_reference(build,row,inventory):
  path=build/row["path"]
- try: source=inv.mask_define_directives(inv.clean(path.read_text(encoding="utf-8",errors="replace")))
+ try: source=inventory.mask_define_directives(inventory.clean(path.read_text(encoding="utf-8",errors="replace")))
  except OSError: return "UNKNOWN_REFERENCE_KIND"
  return classify_reference_text(source,row["api"],row["line"])
 
@@ -447,7 +447,7 @@ def main():
  # public headers, not merely the 68 APIs in the 1.1.1w baseline map.
  names,depr=inv.catalog(openssl_header_root(a))
  rows=[r for r in inv.scan(build,names,depr) if r.get("deprecated_macro")]
- for row in rows: row["reference_kind"]=classify_source_reference(build,row)
+ for row in rows: row["reference_kind"]=classify_source_reference(build,row,inv)
  call_rows=[row for row in rows if row["reference_kind"] in ("CALL_EXPRESSION","UNKNOWN_REFERENCE_KIND")]
  non_call_rows=[row for row in rows if row["reference_kind"]=="DECLARATION_OR_DEFINITION"]
  branches={}
