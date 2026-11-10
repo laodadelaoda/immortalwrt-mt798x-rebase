@@ -492,6 +492,10 @@ jobs:
             exit 1
           }
           OPENSSL_SOURCE="$(dirname "$OPENSSL_CONFIGURE_LIST")"
+          # build_generated creates generated public headers (including opensslv.h);
+          # it is a source-generation target, not a C compilation target.
+          make -C "$OPENSSL_SOURCE" build_generated V=s 2>&1 | tee "$OUT/openssl-build-generated.log"
+          (cd "$OPENSSL_SOURCE" && perl configdata.pm --dump) > "$OUT/openssl-configdata-dump.txt"
 
           # Use OpenWrt's own expanded target variables; no guessed -D flags.
           eval "$(make -s printvars VARS='TARGET_CC TARGET_AR TARGET_RANLIB TARGET_CPPFLAGS TARGET_CFLAGS TARGET_LDFLAGS STAGING_DIR LINUX_DIR' QUOTED=1)"
