@@ -140,6 +140,87 @@ def validate_compile_recipe(path,repo,build,a):
   raise SystemExit("expanded Build/Compile recipe does not bind target AR/RANLIB")
  return sha(path)
 
+def object_output_path(argv,source,cwd):
+ """Resolve the compiler's actual -o output, or its documented default."""
+ output=None; i=0
+ while i<len(argv):
+  token=argv[i]
+  if token=="-o":
+   if i+1>=len(argv): return None
+   output=argv[i+1]; i+=1
+  elif token.startswith("-o") and len(token)>2:
+   output=token[2:]
+  i+=1
+ if output is None: output=str(Path(source).with_suffix(".o").name)
+ return canon(output,cwd)
+
+def parse_libtool_objects(path):
+ """Read only libtool's literal object-path metadata; never evaluate the file."""
+ found=[]
+ try: lines=Path(path).read_text(encoding="utf-8",errors="replace").splitlines()
+ except OSError: return None
+ for line in lines:
+  m=re.match(r"^\s*(?:pic_object|non_pic_object)\s*=\s*['\"]([^'\"]+)['\"]\s*$",line)
+  if m and m.group(1)!="none":
+   found.append(canon(m.group(1),Path(path).parent))
+ return sorted(set(found)) if found else None
+
+def map_preexisting_objects(preexisting,compile_commands):
+ """Map existing .o/.lo artifacts to real -o outputs and source files."""
+ by_output={}
+ for cmd in compile_commands:
+  output=cmd.get("object_output")
+  if output: by_output.setdefault(output,[]).append(cmd["source"])
+ uncompiled=[]; ambiguous=[]; unmapped=[]; mapped=[]
+ for artifact in preexisting:
+  suffix=artifact.suffix.lower()
+  if suffix not in (".o",".lo"): continue
+  artifact_path=str(artifact.resolve())
+  outputs=[artifact_path] if suffix==".o" else parse_libtool_objects(artifact)
+  if suffix==".lo" and outputs is None:
+   unmapped.append(artifact_path); continue
+  matched=[]
+  missing_outputs=[]
+  for output in outputs or []:
+   if output not in by_output: missing_outputs.append(output)
+   else: matched.extend(by_output[output])
+  if missing_outputs and suffix==".lo":
+   unmapped.append({"artifact":artifact_path,"unmatched_libtool_objects":missing_outputs})
+   continue
+  if matched and len(set(matched))==1:
+   mapped.append({"artifact":artifact_path,"sources":sorted(set(matched)),"method":"exact-compiler-output"})
+   continue
+  if len(set(matched))>1:
+   ambiguous.append({"artifact":artifact_path,"sources":sorted(set(matched))}); continue
+  candidates=[artifact.with_suffix(ext).resolve() for ext in EXT if artifact.with_suffix(ext).is_file()]
+  if len(candidates)==1: uncompiled.append(str(candidates[0]))
+  elif len(candidates)>1:
+   ambiguous.append({"artifact":artifact_path,"source_candidates":[str(x) for x in sorted(candidates)]})
+  else: unmapped.append(artifact_path)
+ return {"mapped":mapped,"uncompiled_source_artifacts":sorted(set(uncompiled)),
+         "ambiguous_object_mappings":ambiguous,"unmapped_object_artifacts":unmapped}
+
+def source_reachability_is_complete(make_ok,parse_errors,preprocess_errors,
+                                    uncompiled,ambiguous,unmapped,
+                                    compile_command_count,source_call_count,
+                                    non_call_reference_count,macro_reference_count):
+ """Fail closed when references exist but no target translation unit was observed."""
+ return bool(make_ok and not parse_errors and not preprocess_errors and
+             not uncompiled and not ambiguous and not unmapped and
+             (compile_command_count>0 or
+              (source_call_count==0 and non_call_reference_count==0 and macro_reference_count==0)))
+
+def classify_reference_reachability(source,line,api,reference_kind,hits,emitted_lines,
+                                    compiled_sources,component_complete):
+ """Do not exclude a reference unless its containing source was actually preprocessed."""
+ key=(source,line,api)
+ if reference_kind=="UNKNOWN_REFERENCE_KIND": return "UNKNOWN_FAIL_CLOSED"
+ if key in hits: return "ACTIVE"
+ if (source,line) in emitted_lines: return "UNKNOWN_FAIL_CLOSED"
+ if source not in compiled_sources: return "UNKNOWN_FAIL_CLOSED"
+ if component_complete: return "EXCLUDED_WITH_EVIDENCE"
+ return "UNKNOWN_FAIL_CLOSED"
+
 def parse_commands(log,base,compiler,component_roots):
  cmds=[]; errors={name:[] for name in component_roots}; dirs=[Path(base)]
  def locate(src,cwd):
@@ -188,8 +269,9 @@ def parse_commands(log,base,compiler,component_roots):
   if not resolved.is_file():
    errors[name].append(f"{n}: component source file does not exist: {resolved}")
    continue
-  cmds.append({"component":name,"cwd":str(Path(cwd).resolve()),"argv":ts[ci:],
-               "source":str(resolved),"line":n})
+  argv=ts[ci:]
+  cmds.append({"component":name,"cwd":str(Path(cwd).resolve()),"argv":argv,
+               "source":str(resolved),"object_output":object_output_path(argv,resolved,cwd),"line":n})
  return cmds,errors
 
 def cpp_argv(cmd,out):
@@ -198,6 +280,7 @@ def cpp_argv(cmd,out):
   t=src[i]
   if t=="-c": dst.append("-E")
   elif t=="-o": i+=1
+  elif t.startswith("-o") and len(t)>2: pass
   elif t in ("-MF","-MT","-MQ"): i+=1
   elif t in ("-MMD","-MD","-MP","-MG") or t.startswith(("-Wp,-MD,","-Wp,-MMD,")): pass
   else: dst.append(t)
@@ -233,9 +316,33 @@ def audit_binary_inputs(build,out):
  rows=[]; nm_available=shutil.which("nm"); file_available=shutil.which("file"); strings_available=shutil.which("strings")
  nm_dir=out/"opaque-binary-nm"; nm_dir.mkdir(parents=True,exist_ok=True)
  for comp in COMP:
-  for p in sorted((build/comp).rglob("*")):
-   if not p.is_file() or p.suffix.lower() not in (".o",".lo",".a",".so"): continue
-   item={"component":comp,"path":str(p.relative_to(build/comp)),"sha256":sha(p)}
+  component_root=build/comp
+  candidates={}
+  for p in sorted(component_root.rglob("*")):
+   if p.is_file() and p.suffix.lower() in (".o",".lo",".a",".so"):
+    candidates[str(p.resolve())]=p
+  for lo in sorted(component_root.rglob("*.lo")):
+   for object_path in parse_libtool_objects(lo) or []:
+    obj=Path(object_path)
+    if obj.is_file() and obj.suffix.lower()==".o":
+     candidates[str(obj.resolve())]=obj
+  for _,p in sorted(candidates.items()):
+   suffix=p.suffix.lower()
+   display_path=str(p.relative_to(component_root)) if p.is_relative_to(component_root) else str(p)
+   item={"component":comp,"path":display_path,"sha256":sha(p)}
+   if suffix==".lo":
+    objects=parse_libtool_objects(p)
+    metadata_ok=bool(objects) and all(Path(x).is_file() for x in objects)
+    item["file_type"]="libtool object metadata"
+    item["file_returncode"]=0 if metadata_ok else 1
+    item["libtool_object_paths"]=objects or []
+    item["nm_returncode"]=0 if metadata_ok else 1
+    item["nm_output"]=None
+    item["openssl_undefined_symbols"]=[]
+    item["strings_returncode"]=0 if metadata_ok else 1
+    item["openssl_string_hits"]=[]
+    rows.append(item)
+    continue
    if file_available:
     f=subprocess.run([file_available,"-b",str(p)],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     item["file_type"]=f.stdout.strip(); item["file_returncode"]=f.returncode
@@ -253,9 +360,9 @@ def audit_binary_inputs(build,out):
     item["openssl_undefined_symbols"]=sorted(set(symbols))
    else: item["nm_returncode"]=127; item["openssl_undefined_symbols"]=[]
    if strings_available:
-    s=subprocess.run([strings_available,str(p)],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    hits=[line for line in s.stdout.splitlines() if re.search(r"libcrypto(\.so)?|libssl(\.so)?|OPENSSL_|EVP_|EC_KEY|ENGINE_|HMAC_|CMAC_|AES_|DES_|RSA_|DH_",line)]
-    item["strings_returncode"]=s.returncode; item["openssl_string_hits"]=hits[:100]
+    st=subprocess.run([strings_available,str(p)],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    hits=[line for line in st.stdout.splitlines() if re.search(r"libcrypto(\.so)?|libssl(\.so)?|OPENSSL_|EVP_|EC_KEY|ENGINE_|HMAC_|CMAC_|AES_|DES_|RSA_|DH_",line)]
+    item["strings_returncode"]=st.returncode; item["openssl_string_hits"]=hits[:100]
    else: item["strings_returncode"]=127; item["openssl_string_hits"]=[]
    rows.append(item)
  complete=all(x.get("nm_returncode")==0 and x.get("file_returncode")==0 and x.get("strings_returncode")==0 for x in rows) if rows else True
@@ -338,14 +445,8 @@ def main():
    cmds,perrors=parse_commands(run.stdout,spec["cwd"],compiler,{comp: (build/comp).resolve()})
    parse_errors.extend(perrors[comp]); compile_commands.extend(cmds)
   preexisting=[p for p in (build/comp).rglob("*") if p.is_file() and p.suffix.lower() in (".o",".lo",".a",".so")]
-  compiled_sources={Path(cmd["source"]).resolve() for cmd in compile_commands}
-  uncompiled_source_artifacts=[]
-  for artifact in preexisting:
-   if artifact.suffix.lower() in (".o",".lo"):
-    candidates=[artifact.with_suffix(ext) for ext in (".c",".cc",".cpp",".cxx")]
-    for candidate in candidates:
-     if candidate.is_file() and candidate.resolve() not in compiled_sources:
-      uncompiled_source_artifacts.append(str(candidate))
+  object_mapping=map_preexisting_objects(preexisting,compile_commands)
+  uncompiled_source_artifacts=object_mapping["uncompiled_source_artifacts"]
   for i,cmd in enumerate(compile_commands):
    key=hashlib.sha256((comp+cmd["source"]+str(i)).encode()).hexdigest()[:16]
    dest=out/"preprocessed"/f"{comp}-{key}.i"; pargv=cpp_argv(cmd,dest)
@@ -372,49 +473,54 @@ def main():
    else: pp_errors.append(item)
    tus.append(item)
   make_ok=all(code==0 for code in run_codes)
-  source_complete=make_ok and not parse_errors and not pp_errors and not uncompiled_source_artifacts
-  if not compile_commands and source_calls_by_component[comp]==0 and macro_refs_by_component[comp]==0 and make_ok and not parse_errors:
-   source_complete=True
+  source_complete=source_reachability_is_complete(
+   make_ok,parse_errors,pp_errors,uncompiled_source_artifacts,
+   object_mapping["ambiguous_object_mappings"],object_mapping["unmapped_object_artifacts"],
+   len(compile_commands),source_calls_by_component[comp],
+   sum(1 for row in non_call_rows if row["component"]==comp),macro_refs_by_component[comp])
   results[comp]={"make_returncodes":run_codes,"logs":logs,"compile_commands":len(compile_commands),
     "parse_errors":parse_errors,"preexisting_binary_inputs":[str(p.relative_to(build/comp)) for p in preexisting],
-    "uncompiled_source_artifacts":uncompiled_source_artifacts,"preprocess_failures":pp_errors,
+    "object_output_mappings":object_mapping["mapped"],
+    "uncompiled_source_artifacts":uncompiled_source_artifacts,
+    "ambiguous_object_mappings":object_mapping["ambiguous_object_mappings"],
+    "unmapped_object_artifacts":object_mapping["unmapped_object_artifacts"],"preprocess_failures":pp_errors,
     "translation_units":tus,"source_reachability_complete":source_complete}
-  (out/f"compile-commands-{comp}.json").write_text(json.dumps(compile_commands,indent=2)+"\\n")
- (out/"make-compile-command.txt").write_text("component-only Make -n -w dry-runs, bound to expanded Build/Compile recipe\\n")
+  (out/f"compile-commands-{comp}.json").write_text(json.dumps(compile_commands,indent=2)+"\n")
+ (out/"make-compile-command.txt").write_text("component-only Make -n -w dry-runs, bound to expanded Build/Compile recipe\n")
  binary_rows,binary_audit_complete,opaque_binary_openSSL_refs=audit_binary_inputs(build,out)
  complete={c for c,v in results.items() if v["source_reachability_complete"]}
+ compiled_sources_by_component={
+  comp:{canon(item["source"],repo) for item in results[comp]["translation_units"]}
+  for comp in COMP}
  macro_rows=[]; macro_counts={"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
  for item in macro_refs:
-  if item["component"] in complete and item["api"] not in api_hits_by_component[item["component"]]:
+  if item["reachability"]=="UNREFERENCED_MACRO_DEFINITION" and item["component"] in complete:
    state="EXCLUDED_WITH_EVIDENCE"
-  else: state="UNKNOWN_FAIL_CLOSED"
+   reason="macro definition has no lexical reference in the component and target preprocessing completed"
+  else:
+   state="UNKNOWN_FAIL_CLOSED"
+   reason="macro is lexically reachable or target preprocessing cannot prove its expansion inactive"
   macro_counts[state]+=1
-  macro_rows.append({**item,"reachability_status":state,
-    "reason":"complete target preprocessing contains no active expression for this API in the component" if state=="EXCLUDED_WITH_EVIDENCE" else "API is present in preprocessed component output; macro expansion cannot be attributed conclusively; fail closed"})
+  macro_rows.append({**item,"reachability_status":state,"reason":reason})
  callsites=[]; counts={"ACTIVE":0,"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
  for r in call_rows:
-  src=canon(build/r["path"],repo); key=(src,r["line"],r["api"])
-  if r["reference_kind"]=="UNKNOWN_REFERENCE_KIND": state="UNKNOWN_FAIL_CLOSED"
-  elif key in hits: state="ACTIVE"
-  elif (src,r["line"]) in emitted_lines: state="UNKNOWN_FAIL_CLOSED"
-  elif r["component"] in complete: state="EXCLUDED_WITH_EVIDENCE"
-  else: state="UNKNOWN_FAIL_CLOSED"
+  src=canon(build/r["path"],repo)
+  state=classify_reference_reachability(src,r["line"],r["api"],r["reference_kind"],
+     hits,emitted_lines,compiled_sources_by_component[r["component"]],r["component"] in complete)
   counts[state]+=1
   callsites.append({"component":r["component"],"path":r["path"],"line":r["line"],"api":r["api"],"reference_kind":r["reference_kind"],"reachability_status":state,
     "conditional_branch_path":r["branch_path"],"source_sha256":sha(build/r["path"]),
     "translation_units":[x["source"] for x in results[r["component"]]["translation_units"] if x["returncode"]==0]})
  non_call_references=[]; non_call_counts={"ACTIVE":0,"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
  for r in non_call_rows:
-  src=canon(build/r["path"],repo); key=(src,r["line"],r["api"])
-  if key in hits: state="ACTIVE"
-  elif (src,r["line"]) in emitted_lines: state="UNKNOWN_FAIL_CLOSED"
-  elif r["component"] in complete: state="EXCLUDED_WITH_EVIDENCE"
-  else: state="UNKNOWN_FAIL_CLOSED"
+  src=canon(build/r["path"],repo)
+  state=classify_reference_reachability(src,r["line"],r["api"],r["reference_kind"],
+     hits,emitted_lines,compiled_sources_by_component[r["component"]],r["component"] in complete)
   non_call_counts[state]+=1
   non_call_references.append({"component":r["component"],"path":r["path"],"line":r["line"],"api":r["api"],
     "reference_kind":r["reference_kind"],"reachability_status":state,"conditional_branch_path":r["branch_path"],
     "source_sha256":sha(build/r["path"])})
- (out/"openssl-non-call-reference-reachability.json").write_text(json.dumps(non_call_references,indent=2)+"\\n")
+ (out/"openssl-non-call-reference-reachability.json").write_text(json.dumps(non_call_references,indent=2)+"\n")
  summary={"schema_version":1,"git_sha":subprocess.run(["git","rev-parse","HEAD"],cwd=repo,text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
   "firmware_compile_invoked":False,"method":"expanded OpenWrt Build/Compile recipe validation followed by component Make -n -w V=s and exact-command -E -dD/-dM replay",
   "target_compiler":a.cc,"target_compiler_realpath":str(compiler_path),"target_compiler_sha256":sha(compiler_path),

@@ -25,33 +25,34 @@ with tempfile.TemporaryDirectory() as d:
  hits,files=m.pp_hits(pp,root,{"EVP_PKEY_cmp","ENGINE_by_id"})
  assert ("/tmp/a.c",1,"EVP_PKEY_cmp") in hits
  assert ("/tmp/inc.h",20,"ENGINE_by_id") in hits
- assert ("/tmp/inc.h","ENGINE_by_id") in files
+ assert ("/tmp/inc.h",20) in files
  cmd={"argv":["/tool/aarch64-gcc","-Iinc","-MMD","-MF","x.d","-c","x.c","-o","x.o"]}
  argv=m.cpp_argv(cmd,root/"x.i")
  assert "-E" in argv and "-c" not in argv and "-MMD" not in argv and "-MF" not in argv
  assert argv[-2:]==["-o",str(root/"x.i")]
+ assert "-oignored.o" not in m.cpp_argv({"argv":["cc","-c","x.c","-oignored.o"]},root/"joined.i")
  macrofile=root/"macros.txt"
- macrofile.write_text("#define OPENSSL_NO_ENGINE 1\\n#define CONFIG_SUITEB\\n")
+ macrofile.write_text("#define OPENSSL_NO_ENGINE 1\n#define CONFIG_SUITEB\n")
  snapshot=m.macro_snapshot(macrofile)
  assert snapshot["OPENSSL_NO_ENGINE"]=={"defined":True,"value":"1"}
  assert snapshot["CONFIG_SUITEB"]["defined"] is True
  assert snapshot["OPENSSL_IS_BORINGSSL"]["defined"] is False
- (root/"foo.c").write_text("int f(void) { return 0; }\\n")
- log=f"make[1]: Entering directory '{root}'\\n/tool/aarch64-test-gcc -c foo.c -o foo.o\\nmake[1]: Leaving directory '{root}'\\n"
+ (root/"foo.c").write_text("int f(void) { return 0; }\n")
+ log=f"make[1]: Entering directory '{root}'\n/tool/aarch64-test-gcc -c foo.c -o foo.o\nmake[1]: Leaving directory '{root}'\n"
  commands,errors=m.parse_commands(log,root,"aarch64-test-gcc",{"component":root.resolve()})
  assert not errors["component"] and len(commands)==1 and commands[0]["source"]==str((root/"foo.c").resolve())
- hostlog=f"/usr/bin/gcc -c '{root}/foo.c' -o foo.o\\n"
+ hostlog=f"/usr/bin/gcc -c '{root}/foo.c' -o foo.o\n"
  hostcommands,hosterrors=m.parse_commands(hostlog,root,"aarch64-test-gcc",{"component":root.resolve()})
  assert not hostcommands and hosterrors["component"],hosterrors
  from types import SimpleNamespace
  args=SimpleNamespace(cppflags="-Itarget",cflags="-O2",ldflags="-Wl,-z,now",
   staging=root/"staging",linux=root/"linux",cc="aarch64-test-gcc",ar="aarch64-test-ar",ranlib="aarch64-test-ranlib")
- assert m.classify_reference_text("static HMAC_CTX *HMAC_CTX_new(void)\\n{\\n}", "HMAC_CTX_new",1)=="DECLARATION_OR_DEFINITION"
- assert m.classify_reference_text("static void HMAC_CTX_free(HMAC_CTX *ctx)\\n{\\n}", "HMAC_CTX_free",1)=="DECLARATION_OR_DEFINITION"
- assert m.classify_reference_text("ctx = HMAC_CTX_new();\\n", "HMAC_CTX_new",1)=="CALL_EXPRESSION"
- assert m.classify_reference_text("if (ENGINE_by_id(name)) return 1;\\n", "ENGINE_by_id",1)=="CALL_EXPRESSION"
- source=root/"active.c"; source.write_text("line1\\nEVP_PKEY_eq(a,b);\\n#if 0\\nENGINE_by_id(name);\\n#endif\\n",encoding="utf-8")
- preprocessed=root/"active.i"; preprocessed.write_text(f'# 2 "{source}"\\nEVP_PKEY_eq(a,b);\\n',encoding="utf-8")
+ assert m.classify_reference_text("static HMAC_CTX *HMAC_CTX_new(void)\n{\n}", "HMAC_CTX_new",1)=="DECLARATION_OR_DEFINITION"
+ assert m.classify_reference_text("static void HMAC_CTX_free(HMAC_CTX *ctx)\n{\n}", "HMAC_CTX_free",1)=="DECLARATION_OR_DEFINITION"
+ assert m.classify_reference_text("ctx = HMAC_CTX_new();\n", "HMAC_CTX_new",1)=="CALL_EXPRESSION"
+ assert m.classify_reference_text("if (ENGINE_by_id(name)) return 1;\n", "ENGINE_by_id",1)=="CALL_EXPRESSION"
+ source=root/"active.c"; source.write_text("line1\nEVP_PKEY_eq(a,b);\n#if 0\nENGINE_by_id(name);\n#endif\n",encoding="utf-8")
+ preprocessed=root/"active.i"; preprocessed.write_text(f'# 2 "{source}"\nEVP_PKEY_eq(a,b);\n',encoding="utf-8")
  phits,pemitted=m.pp_hits(preprocessed,root,{"EVP_PKEY_eq","ENGINE_by_id"})
  assert (str(source.resolve()),2,"EVP_PKEY_eq") in phits
  assert (str(source.resolve()),2) in pemitted and (str(source.resolve()),4) not in pemitted
@@ -74,12 +75,86 @@ with tempfile.TemporaryDirectory() as d:
   f'LDFLAGS="{args.ldflags} -L{staging}/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto"',
   f"-C {build}/1905daemon",f'LINUXDIR="{linux_rel}"',f'STAGING_DIR="{staging}"',
   f'LDFLAGS="{args.ldflags} -L{staging}/usr/lib -Wl,--no-as-needed -lpthread -lnl-tiny -lssl -lcrypto"',
-  f"-C {build}/mapd",'EXTRA_CFLAGS="$OPENWRT_EASYMESH_CFLAGS"',
-  'OPENWRT_EASYMESH_CFLAGS="$TARGET_EASYMESH_CFLAGS -DCONFIG_SUPPORT_OPENWRT"',
+  f"-C {build}/mapd",'EXTRA_CFLAGS="$$OPENWRT_EASYMESH_CFLAGS"',
+  'OPENWRT_EASYMESH_CFLAGS="$$TARGET_EASYMESH_CFLAGS -DCONFIG_SUPPORT_OPENWRT"',
   f'LDFLAGS="{args.ldflags} -L{staging}/usr/lib"',
   "CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y","MAP_R3_SUPPORT=y","SWTICH_DSA_ARCH=y","version mapd",
   *(f'CC="{args.cc}"' for _ in range(4)),f'AR="{args.ar}"',f'RANLIB="{args.ranlib}"'
  ]
- recipe=root/"Build-Compile.expanded.txt"; recipe.write_text("\\n".join(recipe_lines),encoding="utf-8")
+ recipe=root/"Build-Compile.expanded.txt"; recipe.write_text("\n".join(recipe_lines),encoding="utf-8")
  assert m.validate_compile_recipe(recipe,root,build,args)==m.sha(recipe)
+
+ # Exact compiler -o output, not same-directory filename guessing, is the
+ # ownership key for existing object files.
+ assert commands[0]["object_output"]==str((root/"foo.o").resolve())
+ comp=root/"build"/"wappd"; (comp/"obj").mkdir(parents=True)
+ source=root/"build"/"wappd"/"src.c"; source.parent.mkdir(parents=True,exist_ok=True)
+ source.write_text("int f(void) { return EVP_PKEY_eq(a,b); }\n")
+ obj=comp/"obj"/"actual.o"; obj.write_bytes(b"object")
+ lo=comp/"libsample.lo"; lo.write_text("# libtool object file\npic_object='.libs/libsample.o'\nnon_pic_object='none'\n")
+ (comp/".libs").mkdir()
+ libobj=comp/".libs"/"libsample.o"; libobj.write_bytes(b"object")
+ lo_source=comp/"libsrc.c"; lo_source.write_text("int g(void) { return 0; }\n")
+ lo_cmd={"source":str(lo_source.resolve()),"object_output":str(libobj.resolve())}
+ mapped=m.map_preexisting_objects([obj,lo],[
+  {"source":str(source.resolve()),"object_output":str(obj.resolve())},
+  lo_cmd])
+ assert len(mapped["mapped"])==2 and not mapped["unmapped_object_artifacts"]
+ partial_lo=comp/"partial.lo"
+ partial_lo.write_text("# libtool object file\npic_object='.libs/not-built.o'\nnon_pic_object='none'\n")
+ partial=m.map_preexisting_objects([partial_lo],[])
+ assert partial["unmapped_object_artifacts"]
+ # Multiple adjacent source candidates are not silently selected.
+ ambiguous_obj=comp/"ambiguous.o"; ambiguous_obj.write_bytes(b"object")
+ (comp/"ambiguous.c").write_text("int c;\n")
+ (comp/"ambiguous.cpp").write_text("int cxx;\n")
+ ambiguous=m.map_preexisting_objects([ambiguous_obj],[])
+ assert len(ambiguous["ambiguous_object_mappings"])==1
+ # A single adjacent source with no matching compiler output is uncompiled.
+ stale_obj=comp/"stale.o"; stale_obj.write_bytes(b"object")
+ (comp/"stale.c").write_text("int stale;\n")
+ stale=m.map_preexisting_objects([stale_obj],[])
+ assert stale["uncompiled_source_artifacts"]==[str((comp/"stale.c").resolve())]
+ # A component with API references but zero target compile commands cannot pass.
+ assert not m.source_reachability_is_complete(True,[],[],[],[],[],0,1,0,0)
+ assert not m.source_reachability_is_complete(True,[],[],[],[],[],0,0,0,1)
+ assert not m.source_reachability_is_complete(True,[],[],[],[],[],0,0,1,0)
+ assert m.source_reachability_is_complete(True,[],[],[],[],[],0,0,0,0)
+ assert not m.source_reachability_is_complete(True,[],[],[],[{"artifact":"x"}],[],1,0,0,0)
+ compiled=str((comp/"libsrc.c").resolve())
+ not_compiled=str((comp/"not-compiled.c").resolve())
+ assert m.classify_reference_reachability(not_compiled,1,"EVP_PKEY_free","CALL_EXPRESSION",set(),set(),{compiled},True)=="UNKNOWN_FAIL_CLOSED"
+ assert m.classify_reference_reachability(compiled,1,"EVP_PKEY_free","CALL_EXPRESSION",{(compiled,1,"EVP_PKEY_free")},set(),{compiled},True)=="ACTIVE"
+ assert m.classify_reference_reachability(compiled,1,"EVP_PKEY_free","CALL_EXPRESSION",set(),{(compiled,1)},{compiled},True)=="UNKNOWN_FAIL_CLOSED"
+ assert m.classify_reference_reachability(compiled,1,"EVP_PKEY_free","CALL_EXPRESSION",set(),set(),{compiled},True)=="EXCLUDED_WITH_EVIDENCE"
+ assert m.classify_reference_reachability(compiled,1,"EVP_PKEY_free","UNKNOWN_REFERENCE_KIND",set(),set(),{compiled},True)=="UNKNOWN_FAIL_CLOSED"
+ # Archives and shared objects remain in the independent symbol/string audit.
+ import os
+ bindir=root/"fake-bin"; bindir.mkdir()
+ for name,body in {
+  "nm":"#!/bin/sh\necho 'lib.a: U EVP_PKEY_free'\n",
+  "file":"#!/bin/sh\necho 'ELF 64-bit LSB shared object'\n",
+  "strings":"#!/bin/sh\necho 'libcrypto.so.3'\n",
+ }.items():
+  tool=bindir/name; tool.write_text(body); tool.chmod(0o755)
+ old_path=os.environ.get("PATH",""); os.environ["PATH"]=str(bindir)+os.pathsep+old_path
+ try:
+  binary_build=root/"binary-build"; (binary_build/"wappd").mkdir(parents=True)
+  (binary_build/"wappd"/"libsample.a").write_bytes(b"archive")
+  (binary_build/"wappd"/"libsample.so").write_bytes(b"shared")
+  (binary_build/"wappd"/".libs").mkdir()
+  (binary_build/"wappd"/".libs"/"libsample.o").write_bytes(b"object")
+  (binary_build/"wappd"/"libsample.lo").write_text("# libtool object file\npic_object='.libs/libsample.o'\nnon_pic_object='none'\n")
+  binary_rows,binary_ok,openssl_refs=m.audit_binary_inputs(binary_build,root/"binary-audit")
+  assert binary_ok and openssl_refs
+  assert {Path(x["path"]).suffix for x in binary_rows}=={".a",".so",".lo",".o"}
+  lo_row=next(x for x in binary_rows if Path(x["path"]).suffix==".lo")
+  assert lo_row["file_type"]=="libtool object metadata" and lo_row["file_returncode"]==0
+  invalid_build=root/"invalid-binary-build"; (invalid_build/"wappd").mkdir(parents=True)
+  (invalid_build/"wappd"/"broken.lo").write_text("# libtool object file\npic_object='.libs/missing.o'\nnon_pic_object='none'\n")
+  invalid_rows,invalid_ok,_=m.audit_binary_inputs(invalid_build,root/"invalid-binary-audit")
+  assert not invalid_ok and next(x for x in invalid_rows if x["path"].endswith(".lo"))["file_returncode"]!=0
+ finally:
+  os.environ["PATH"]=old_path
+
 print("PASS: conditional branches, source mapping, preprocess-only argv, exact component flags and safe 1905 sub-build enumeration.")
