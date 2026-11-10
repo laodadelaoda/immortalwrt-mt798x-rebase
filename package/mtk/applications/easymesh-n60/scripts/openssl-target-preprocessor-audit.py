@@ -196,6 +196,40 @@ def pp_hits(path,cwd,names):
    lineno+=1
  return hits,filehits
 
+def audit_binary_inputs(build,out):
+ rows=[]; nm_available=shutil.which("nm"); file_available=shutil.which("file"); strings_available=shutil.which("strings")
+ nm_dir=out/"opaque-binary-nm"; nm_dir.mkdir(parents=True,exist_ok=True)
+ for comp in COMP:
+  for p in sorted((build/comp).rglob("*")):
+   if not p.is_file() or p.suffix.lower() not in (".o",".lo",".a",".so"): continue
+   item={"component":comp,"path":str(p.relative_to(build/comp)),"sha256":sha(p)}
+   if file_available:
+    f=subprocess.run([file_available,"-b",str(p)],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    item["file_type"]=f.stdout.strip(); item["file_returncode"]=f.returncode
+   else: item["file_type"]=None; item["file_returncode"]=127
+   if nm_available:
+    n=subprocess.run([nm_available,"-A","-u",str(p)],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    nm_path=nm_dir/(comp+"-"+hashlib.sha256(str(p).encode()).hexdigest()[:12]+".txt")
+    nm_path.write_text(n.stdout+n.stderr,encoding="utf-8")
+    item["nm_returncode"]=n.returncode; item["nm_output"]=str(nm_path)
+    symbols=[]
+    for line in n.stdout.splitlines():
+     m=re.search(r"\bU\s+([A-Za-z_]\w*)\s*$",line)
+     if m and re.match(r"^(OPENSSL_|EVP_|EC_|DH_|DSA_|RSA_|HMAC_|CMAC_|AES_|DES_|ENGINE_|CRYPTO_|BN_|BIO_|SSL_|X509_|OSSL_)",m.group(1)):
+      symbols.append(m.group(1))
+    item["openssl_undefined_symbols"]=sorted(set(symbols))
+   else: item["nm_returncode"]=127; item["openssl_undefined_symbols"]=[]
+   if strings_available:
+    s=subprocess.run([strings_available,str(p)],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    hits=[line for line in s.stdout.splitlines() if re.search(r"libcrypto(\.so)?|libssl(\.so)?|OPENSSL_|EVP_|EC_KEY|ENGINE_|HMAC_|CMAC_|AES_|DES_|RSA_|DH_",line)]
+    item["strings_returncode"]=s.returncode; item["openssl_string_hits"]=hits[:100]
+   else: item["strings_returncode"]=127; item["openssl_string_hits"]=[]
+   rows.append(item)
+ complete=all(x.get("nm_returncode")==0 and x.get("file_returncode")==0 and x.get("strings_returncode")==0 for x in rows) if rows else True
+ open_refs=any(x.get("openssl_undefined_symbols") or x.get("openssl_string_hits") for x in rows)
+ (out/"opaque-binary-symbol-audit.json").write_text(json.dumps(rows,indent=2)+"\n")
+ return rows,complete,open_refs
+
 def prepare_mapd_version(build,repo,out,compiler):
  # The production Build/Compile invokes "version mapd". Run only the metadata
  # target after proving its dry-run has no compiler invocation.
@@ -302,8 +336,8 @@ def main():
     "translation_units":tus,"source_reachability_complete":source_complete}
   (out/f"compile-commands-{comp}.json").write_text(json.dumps(compile_commands,indent=2)+"\\n")
  (out/"make-compile-command.txt").write_text("component-only Make -n -w dry-runs, bound to expanded Build/Compile recipe\\n")
- complete={c for c,v in results.items() if v["complete"]}
- macro_refs=inv.scan_macro_references(build,names,{x:"OSSL_DEPRECATED" for x in names})
+ binary_rows,binary_audit_complete,opaque_binary_openSSL_refs=audit_binary_inputs(build,out)
+ complete={c for c,v in results.items() if v["source_reachability_complete"]}
  macro_rows=[]; macro_counts={"EXCLUDED_WITH_EVIDENCE":0,"UNKNOWN_FAIL_CLOSED":0}
  for item in macro_refs:
   if item["component"] in complete and item["api"] not in api_hits_by_component[item["component"]]:
@@ -336,9 +370,12 @@ def main():
   "openssl_source_tree_sha256":tree_sha(a.openssl_source_dir),"openssl_configure_sha256":sha(a.openssl_source_dir/"Configure"),"openssl_configdata_sha256":sha(a.openssl_source_dir/"configdata.pm"),
   "openssl_header_tree_sha256":tree_sha(hdr),"prepared_source_tree_sha256":tree_sha(build),"components":results,
   "callsite_counts":{"total":len(callsites),**counts},"macro_reference_counts":{"total":len(macro_rows),**macro_counts},
-  "complete":len(complete)==4 and counts["UNKNOWN_FAIL_CLOSED"]==0 and macro_counts["UNKNOWN_FAIL_CLOSED"]==0,
+  "source_reachability_complete":len(complete)==4 and counts["UNKNOWN_FAIL_CLOSED"]==0 and macro_counts["UNKNOWN_FAIL_CLOSED"]==0,
+  "opaque_binary_input_count":len(binary_rows),"opaque_binary_symbol_audit_complete":binary_audit_complete,
+  "opaque_binary_openSSL_references_found":opaque_binary_openSSL_refs,
+  "complete":len(complete)==4 and counts["UNKNOWN_FAIL_CLOSED"]==0 and macro_counts["UNKNOWN_FAIL_CLOSED"]==0 and binary_audit_complete and not opaque_binary_openSSL_refs,
   "workflow_build_scope":{"target_toolchain_install":True,"dependency_dev_packages":["datconf","libnl-tiny"],"openssl":"Configure and build_generated headers only","easymesh_component_compile":False,"firmware_compile":False},
-  "limitations":["the audit script itself preprocesses only; the enclosing workflow builds the target toolchain and required dependency development packages","direct source expressions are classified separately from macro-body references","ambiguous source-line mapping is UNKNOWN_FAIL_CLOSED"]}
+  "limitations":["the audit script itself preprocesses only; the enclosing workflow builds the target toolchain and required dependency development packages","prebuilt objects and archives are inventoried and symbol-scanned; symbol absence cannot prove absence of statically embedded code or dlsym-based loading","direct source expressions are classified separately from macro-body references","ambiguous source-line mapping is UNKNOWN_FAIL_CLOSED"]}
  (out/"callsite-reachability.json").write_text(json.dumps(callsites,indent=2)+"\n")
  (out/"macro-reference-reachability.json").write_text(json.dumps(macro_rows,indent=2)+"\n")
  (out/"openssl-target-preprocessor-summary.json").write_text(json.dumps(summary,indent=2)+"\n")
