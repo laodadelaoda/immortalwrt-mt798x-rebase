@@ -87,7 +87,7 @@ Do not classify these APIs as active runtime paths merely because the helper def
 
 ### WAPP HMAC and CMAC wrapper behavior
 
-The inspected `crypto/crypto_openssl.c` wrappers show that HMAC supports MD5, SHA-1 and SHA-256, accepts vector/chunked input, and returns the same wrapper-specific success/error codes. CMAC supports AES-128-CBC and AES-256-CBC, rejects other key lengths, and requires a 16-byte result. The `EVP_MAC` migration must preserve the selected digest/cipher, key length, vector update order, fault-injection path, output length and cleanup behavior. A generic HMAC-only test is insufficient.
+The inspected `crypto/crypto_openssl.c` wrappers show that the vector HMAC APIs support MD5, SHA-1, SHA-256, SHA-384 and SHA-512; the separate `crypto_hash_init` interface supports MD5, SHA-1 and SHA-256. The wrappers accept vector/chunked input and have wrapper-specific success/error codes. `crypto_hash_update` currently ignores the low-level update return value, while `crypto_hash_finish` frees the context and returns 0 when either output pointer is NULL; these existing contracts need an explicit caller-impact decision rather than accidental behavior changes. `openssl_hmac_vector` also has a `TEST_FAIL()` fault-injection path. CMAC supports AES-128-CBC and AES-256-CBC, rejects other key lengths, and requires a 16-byte result. The `EVP_MAC` migration must preserve the selected digest/cipher, key length, vector update order, fault-injection path, output length, return semantics and cleanup behavior. A generic HMAC-only test is insufficient.
 
 These WAPP findings explain why the EC and MAC clusters must be reviewed at the callsite/function level. The current vendor code has not been changed based on this preliminary review.
 
