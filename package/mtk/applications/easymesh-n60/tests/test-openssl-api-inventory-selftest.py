@@ -28,7 +28,11 @@ with tempfile.TemporaryDirectory() as d:
  h=Path(d)/"include/openssl"; h.mkdir(parents=True)
  (h/"opensslv.h.in").write_text("/* OpenSSL version template */\n")
  repo=Path(d)/"repo"; (repo/"package/libs/openssl").mkdir(parents=True)
- (repo/"package/libs/openssl/Makefile").write_text("PKG_VERSION:=3.5.9\n")
+ tests=repo/"package/mtk/applications/easymesh-n60/tests"; tests.mkdir(parents=True)
+ from_hash="a"*64; to_hash="b"*64
+ (repo/"package/libs/openssl/Makefile").write_text("PKG_VERSION:=3.5.9\nPKG_HASH:="+to_hash+"\n")
+ lock={"schema_version":1,"from":{"version":"1.1.1w","sha256":from_hash},"to":{"version":"3.5.9","sha256":to_hash}}
+ (tests/"openssl-migration-baseline.lock.json").write_text(__import__("json").dumps(lock))
  assert m.validate_openssl_source(Path(d),repo)=="3.5.9"
  (h/"opensslv.h").write_text("# define OPENSSL_VERSION_MAJOR 3\n# define OPENSSL_VERSION_MINOR 5\n# define OPENSSL_VERSION_PATCH 9\n")
  assert m.validate_openssl_source(Path(d),repo)=="3.5.9"
