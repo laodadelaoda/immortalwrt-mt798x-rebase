@@ -16,8 +16,9 @@ with tempfile.TemporaryDirectory() as d:
  assert paths[2][0]["branch"].startswith("#if defined(OPENSSL_NO_ENGINE) && !defined")
  assert paths[4][0]["branch"].startswith("#elif defined(CONFIG_NATIVE_WINDOWS)")
  assert paths[7][0]["branch"]=="#else"
- assert paths[8][1]["branch"]=="#if defined(CONFIG_SUITEB)"
- assert paths[10][1]["branch"]=="#else"
+ assert paths[7][1]["branch"]=="#if defined(CONFIG_SUITEB)"
+ assert paths[8][1]["branch"]=="#else"
+ assert paths[9][1]["branch"]=="#else"
  pp=root/"unit.i"
  pp.write_text('# 1 "/tmp/a.c"\nint f(void) { return EVP_PKEY_cmp(a,b); }\n'
                '# 20 "/tmp/inc.h" 1\nint g(void) { return ENGINE_by_id("x") != 0; }\n')
