@@ -108,9 +108,15 @@ with tempfile.TemporaryDirectory() as d:
  with tempfile.TemporaryDirectory() as td:
   rr=Path(td); (rr/"build"/"mapd").mkdir(parents=True); out=rr/"out"; out.mkdir()
   with patch.object(m.subprocess,"run",side_effect=fake_make):
-   m.prepare_mapd_version(rr/"build",rr,out,"aarch64-test-gcc")
+   m.prepare_mapd_version(rr/"build",rr,out,"aarch64-test-gcc",args)
   assert len(calls)==2
-  assert all(f"TOPDIR={rr}" in argv for argv in calls)
+  for argv in calls:
+   for expected in (f"TOPDIR={rr}","CONFIG_SUPPORT_OPENWRT=y","CONFIG_MAP_R2_SUPPORT=y",
+                    "CONFIG_MAP_R3_SUPPORT=y",f"CC={args.cc}",f"LDO={args.cc}",
+                    f"EXTRA_CFLAGS={args.cppflags} {args.cflags} -Wno-error=deprecated-declarations -DCONFIG_SUPPORT_OPENWRT",
+                    f"LDFLAGS={args.ldflags} -L{args.staging}/usr/lib","V=s","version"):
+    assert expected in argv,(expected,argv)
+   assert "mapd" not in argv[-1:]
   assert calls[0][1]=="-n" and calls[1][1]=="-w"
   assert (out/"mapd-version-dry-run.log").is_file()
   assert (out/"mapd-version-generation.log").is_file()
