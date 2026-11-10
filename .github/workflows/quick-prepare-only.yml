@@ -1,4 +1,5 @@
 name: N60 Pro Quick precompile Package Prepare only
+# The reusable Prepare job consumes the exact-SHA baseline artifact generated on every branch push.
 
 on:
   push:
@@ -7,7 +8,6 @@ on:
     paths:
       - ".github/workflows/vendor-source-patch-audit.yml"
       - ".github/workflows/quick-prepare-audit.yml"
-      - ".github/workflows/openssl-migration-baseline-audit.yml"
       - ".github/scripts/**"
       - "config/n60pro-1001.config"
       - "docs/audit/easymesh-patch-dependencies.csv"
