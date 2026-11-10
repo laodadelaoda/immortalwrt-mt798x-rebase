@@ -9,7 +9,7 @@ def load(p):
  if not isinstance(x,dict): bad(f"invalid YAML mapping: {p}")
  return x
 D={p.name:load(p) for p in W.glob("*.yml")}; act=load(A)
-need={"build-package.yml","main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml","wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-template-audit.yml","copilot-ai-audit.yml","workflow-governance-audit.yml"}
+need={"build-package.yml","main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml","wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-template-audit.yml","copilot-ai-audit.yml","workflow-governance-audit.yml","openssl-migration-baseline-audit.yml"}
 if need-D.keys(): bad("missing workflow "+str(sorted(need-D.keys())))
 def tr(n): return D[n].get("on",{})
 def steps(d):
@@ -83,9 +83,9 @@ for n in ("wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-tem
  if "package/mtk/vendor-sources.lock.json" not in t["push"]["paths"]: bad(n+" must trigger when canonical vendor Lock changes")
 if set(tr("copilot-ai-audit.yml"))!={"workflow_dispatch"}: bad("Copilot audit must remain manual-only")
 if set(tr("workflow-governance-audit.yml"))!={"push"} or not tr("workflow-governance-audit.yml")["push"].get("paths"): bad("governance trigger mismatch")
-for n in ("main.yml","build-package.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml"):
+for n in ("main.yml","build-package.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml","openssl-migration-baseline-audit.yml"):
  if D[n].get("permissions",{}).get("contents")!="read": bad(n+" contents permission must be read")
-for n in ("main.yml","build-package.yml","workflow-governance-audit.yml"):
+for n in ("main.yml","build-package.yml","workflow-governance-audit.yml","openssl-migration-baseline-audit.yml"):
  for s in steps(D[n]):
   if str(s.get("uses","")).startswith("actions/checkout@") and s.get("with",{}).get("persist-credentials")!="false": bad(n+" checkout credentials must be disabled")
 for n in ("main.yml","copilot-ai-audit.yml"):
