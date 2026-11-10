@@ -473,7 +473,8 @@ def main():
    mp=subprocess.run(margv,cwd=cmd["cwd"],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
    merr=out/"preprocessed"/f"{comp}-{key}.macros.stderr.txt"; merr.write_text(mp.stderr,encoding="utf-8")
    item={"source":cmd["source"],"cwd":cmd["cwd"],"make_log_line":cmd["line"],"make_subtarget":cmd.get("subtarget"),
-         "argv":pargv,"returncode":pp.returncode,"macro_argv":margv,"macro_returncode":mp.returncode,
+         "argv":pargv,"returncode":pp.returncode,"preprocessed_output":str(dest.resolve()),
+         "macro_argv":margv,"macro_returncode":mp.returncode,
          "stderr":str(err),"macro_stderr":str(merr)}
    if pp.returncode==0 and dest.is_file() and mp.returncode==0 and macrofile.is_file():
     item["preprocessed_sha256"]=sha(dest); item["macro_snapshot_sha256"]=sha(macrofile)
@@ -582,6 +583,7 @@ def main():
   "openssl_header_tree_sha256":tree_sha(hdr),"prepared_source_tree_sha256":tree_sha(build),"components":results,
   "callsite_counts":{"total":len(callsites),**counts},"non_call_reference_counts":{"total":len(non_call_references),**non_call_counts},"macro_reference_counts":{"total":len(macro_rows),**macro_counts},
   "source_reachability_complete":len(complete)==4 and counts["UNKNOWN_FAIL_CLOSED"]==0 and non_call_counts["UNKNOWN_FAIL_CLOSED"]==0 and macro_counts["UNKNOWN_FAIL_CLOSED"]==0,
+  "evidence_output_dir":str(out),
   "opaque_binary_input_count":len(binary_rows),"opaque_binary_symbol_audit_complete":binary_audit_complete,
   "opaque_binary_openSSL_references_found":opaque_binary_openSSL_refs,
   "complete":len(complete)==4 and counts["UNKNOWN_FAIL_CLOSED"]==0 and non_call_counts["UNKNOWN_FAIL_CLOSED"]==0 and macro_counts["UNKNOWN_FAIL_CLOSED"]==0 and binary_audit_complete and not opaque_binary_openSSL_refs,

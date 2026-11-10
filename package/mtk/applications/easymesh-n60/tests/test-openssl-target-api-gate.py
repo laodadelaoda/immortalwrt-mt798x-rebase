@@ -24,12 +24,15 @@ with tempfile.TemporaryDirectory() as d:
  # target translation unit, and the negative observation must bind its hashes.
  report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
  assert not report["complete"] and any("negative target-preprocessor proof" in x for x in report["failures"])
- tu={"source":str(src.resolve()),"returncode":0,"preprocessed_sha256":"1"*64}
+ ppout=root/"unit.i"
+ ppout.write_text(f'# 1 "{src.resolve()}"\\nint f(void) {{ return 0; }}\\n')
+ pp_digest=m.sha256(ppout)
+ tu={"source":str(src.resolve()),"returncode":0,"preprocessed_sha256":pp_digest,"preprocessed_output":str(ppout.resolve())}
  summary["components"]={"wappd":{"source_reachability_complete":True,"translation_units":[tu]}}
  call[0]["conditional_branch_path"]=[]
  call[0]["preprocessor_negative_evidence"]={
   "source_translation_unit":True,"component_complete":True,"api_hit_absent":True,
-  "source_line_absent":True,"preprocessed_sha256":["1"*64],
+  "source_line_absent":True,"preprocessed_sha256":[pp_digest],
   "target_compiler_sha256":"2"*64,"target_config_sha256":"3"*64,
   "source_sha256":digest,"conditional_branch_path":[]}
  summary["target_compiler_sha256"]="2"*64; summary["target_config_sha256"]="3"*64

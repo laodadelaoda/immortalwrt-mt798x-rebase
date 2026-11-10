@@ -19,6 +19,21 @@ def load_json(path):
 def key(row):
  return (row.get("component"),row.get("path"),int(row.get("line",0)),row.get("api"))
 
+def observe_preprocessed_output(path,source_path,line_number,api):
+ marker=re.compile(r'^#\\s*(\\d+)\\s+"([^"]+)"')
+ call=re.compile(r"\\b"+re.escape(api)+r"\\s*\\(")
+ current=None; lineno=1; emitted=False; hit=False
+ for text in Path(path).read_text(encoding="utf-8",errors="replace").splitlines():
+  m=marker.match(text)
+  if m:
+   current=Path(m.group(2)).resolve(); lineno=int(m.group(1)); continue
+  if text.lstrip().startswith("#"): continue
+  if current==source_path and lineno==line_number:
+   emitted=True
+   if call.search(text): hit=True
+  if current: lineno+=1
+ return emitted,hit
+
 def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,policy,source_root,expected_git_sha):
  failures=[]
  if summary.get("git_sha")!=expected_git_sha: failures.append("target preprocessor evidence Git SHA mismatch")
@@ -66,10 +81,20 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
     source_text=str(source)
     matching=[x for x in compiled if str(Path(x.get("source","")).resolve())==source_text]
     expected_hashes=sorted(x["preprocessed_sha256"] for x in matching)
+    evidence_root=Path(summary.get("evidence_output_dir","")).resolve()
+    observed=[]
+    for tu in matching:
+     output=Path(tu.get("preprocessed_output","")).resolve()
+     if not output.is_relative_to(evidence_root) or not output.is_file() or sha256(output)!=tu.get("preprocessed_sha256"):
+      failures.append("excluded API has missing, escaped or hash-mismatched preprocessor output: "+repr(k))
+      continue
+     emitted,hit=observe_preprocessed_output(output,source,int(k[2]),str(k[3]))
+     observed.append((not emitted,not hit))
+    independently_absent=bool(observed) and all(x==(True,True) for x in observed)
     valid=(component.get("source_reachability_complete") is True and bool(matching) and
       isinstance(proof,dict) and proof.get("source_translation_unit") is True and
       proof.get("component_complete") is True and proof.get("api_hit_absent") is True and
-      proof.get("source_line_absent") is True and
+      proof.get("source_line_absent") is True and independently_absent and
       proof.get("preprocessed_sha256")==expected_hashes and
       proof.get("target_compiler_sha256")==summary.get("target_compiler_sha256") and
       proof.get("target_config_sha256")==summary.get("target_config_sha256") and
