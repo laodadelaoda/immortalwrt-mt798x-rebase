@@ -8,7 +8,7 @@ EXT={".c",".cc",".cpp",".cxx"}
 MARK=re.compile(r'^\s*#\s*(\d+)\s+"([^"]+)"')
 ENTER=re.compile(r"make(?:\[\d+\])?: Entering directory ['\"](.+?)['\"]")
 LEAVE=re.compile(r"make(?:\[\d+\])?: Leaving directory ['\"](.+?)['\"]")
-CALL=re.compile(r"\b([A-Za-z_]\w*)\s*\\(")
+CALL=re.compile(r"\b([A-Za-z_]\w*)\s*\(")
 FOCUS_MACROS=("OPENSSL_NO_ENGINE","OPENSSL_NO_DEPRECATED_3_0","OPENSSL_IS_BORINGSSL",
  "CONFIG_NATIVE_WINDOWS","CONFIG_SUITEB","CONFIG_OPENSSL_CMAC","CONFIG_ECC","CONFIG_FIPS",
  "CONFIG_TESTING_OPTIONS","OPENSSL_NO_DH","OPENSSL_NO_DSA")
@@ -117,7 +117,7 @@ def macro_argv(cmd,out):
 def macro_snapshot(path):
  found={}
  for line in Path(path).read_text(encoding="utf-8",errors="replace").splitlines():
-  m=re.match(r"^#define\\s+([A-Za-z_]\\w*)(?:\\s+(.*))?$",line)
+  m=re.match(r"^#define\s+([A-Za-z_]\w*)(?:\s+(.*))?$",line)
   if m and m.group(1) in FOCUS_MACROS: found[m.group(1)]=m.group(2) or ""
  return {name:{"defined":name in found,"value":found.get(name)} for name in FOCUS_MACROS}
 
