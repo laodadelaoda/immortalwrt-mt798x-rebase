@@ -77,7 +77,7 @@ def main():
  validate_openssl_source(a.openssl_source,a.repo_root)
  policy=json.loads(a.policy.read_text())
  if policy.get("schema_version")!=1 or policy.get("openssl_version")!="3.5.9" or not isinstance(policy.get("api_rules"),dict): ap.error("invalid OpenSSL API policy schema/version")
- required_map={"api","proposed_replacement","official_migration_guide_url","official_target_manual_url","migration_status","approval","semantic_review_requirements"}
+ required_map={"api","proposed_replacement","official_mapping_kind","official_mapping_section","official_migration_guide_url","official_target_manual_url","migration_status","approval","semantic_review_requirements"}
  with a.migration_map.open(encoding="utf-8",newline="") as mf:
   reader=csv.DictReader(mf)
   if not required_map.issubset(set(reader.fieldnames or [])): ap.error("migration map is missing required columns")
@@ -86,6 +86,8 @@ def main():
    api=mr["api"].strip()
    if not api or api in migration_map: ap.error("empty or duplicate API in migration map: "+api)
    if mr["migration_status"] not in {"UNREVIEWED","REVIEWED_NOT_APPROVED","APPROVED"}: ap.error("invalid migration status for "+api)
+   if mr["official_mapping_kind"] not in {"HIGH_LEVEL_API_MIGRATION","LEGACY_ALGORITHM_REVIEW","HIGH_LEVEL_OBJECT_MIGRATION","DIRECT_API_FAMILY_MAPPING","PARAMETER_GETTER_MIGRATION","PARAMETER_SETTER_MIGRATION","DIRECT_FUNCTION_MAPPING","READ_ONLY_PARAMETER_MIGRATION","PROVIDER_REDESIGN","REMOVE_REDUNDANT_CALL","KEY_IMPORT_MIGRATION","SEMANTIC_REDESIGN_REQUIRED","ENCODING_MIGRATION"}: ap.error("invalid official mapping kind for "+api)
+   if not mr["official_mapping_section"].strip(): ap.error("missing official migration section for "+api)
    for field in ("official_migration_guide_url","official_target_manual_url"):
     if not mr[field].startswith("https://docs.openssl.org/3.5/"): ap.error("non-3.5 official reference URL for "+api+": "+field)
    if not mr["proposed_replacement"].strip() or not mr["semantic_review_requirements"].strip(): ap.error("incomplete migration research fields for "+api)
