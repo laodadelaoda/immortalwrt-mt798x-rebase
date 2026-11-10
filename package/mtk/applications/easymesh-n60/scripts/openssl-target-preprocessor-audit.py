@@ -156,12 +156,22 @@ def prepare_mapd_version(build,repo,out,compiler):
 def main():
  ap=argparse.ArgumentParser()
  for n in ("repo","build","staging","linux","output"): ap.add_argument("--"+n+"-dir" if n in ("repo","build","output") else "--"+n+"-dir",type=Path,required=True)
+ ap.add_argument("--openssl-source-dir",type=Path,required=True); ap.add_argument("--openssl-patch-dir",type=Path,required=True)
+ ap.add_argument("--openssl-pkg-source",required=True); ap.add_argument("--openssl-pkg-source-url",required=True)
+ ap.add_argument("--openssl-pkg-hash",required=True); ap.add_argument("--openssl-options",required=True)
+ ap.add_argument("--target-config",type=Path,required=True)
  ap.add_argument("--cc",required=True); ap.add_argument("--ar",required=True); ap.add_argument("--ranlib",required=True)
  ap.add_argument("--cppflags",default=""); ap.add_argument("--cflags",required=True); ap.add_argument("--ldflags",default="")
- a=ap.parse_args(); repo=a.repo_dir.resolve(); build=a.build_dir.resolve(); a.staging=a.staging_dir.resolve(); a.linux=a.linux_dir.resolve()
+ a=ap.parse_args(); repo=a.repo_dir.resolve(); build=a.build_dir.resolve(); a.staging=a.staging_dir.resolve(); a.linux=a.linux_dir.resolve(); a.openssl_source_dir=a.openssl_source_dir.resolve(); a.openssl_patch_dir=a.openssl_patch_dir.resolve(); a.target_config=a.target_config.resolve()
  out=a.output_dir.resolve(); out.mkdir(parents=True,exist_ok=True); (out/"preprocessed").mkdir(exist_ok=True)
  for c in COMP:
   if not (build/c).is_dir(): raise SystemExit(f"missing prepared component: {build/c}")
+ if not (a.openssl_source_dir/"Configure").is_file() or not (a.openssl_source_dir/"configdata.pm").is_file():
+  raise SystemExit("missing configured OpenSSL source/configdata evidence")
+ if not a.openssl_patch_dir.is_dir() or not a.target_config.is_file():
+  raise SystemExit("missing expanded OpenSSL PATCH_DIR or target .config")
+ if not re.fullmatch(r"[0-9a-f]{64}",a.openssl_pkg_hash):
+  raise SystemExit("expanded OpenSSL PKG_HASH is not a SHA256 digest")
  hdr=a.staging/"usr/include/openssl"
  for f in ("configuration.h","opensslv.h"):
   if not (hdr/f).is_file(): raise SystemExit(f"missing Configure-generated target header: {hdr/f}")
@@ -228,7 +238,7 @@ def main():
  summary={"schema_version":1,"git_sha":subprocess.run(["git","rev-parse","HEAD"],cwd=repo,text=True,stdout=subprocess.PIPE,check=True).stdout.strip(),
   "firmware_compile_invoked":False,"method":"make -B -n command enumeration; exact target compiler commands replayed as -E -dD",
   "target_compiler":a.cc,"target_cppflags":a.cppflags,"target_cflags":a.cflags,"target_ldflags":a.ldflags,
-  "openssl_header_tree_sha256":tree_sha(hdr),"prepared_source_tree_sha256":tree_sha(build),"components":results,
+  "target_config_sha256":sha(a.target_config),"openssl_pkg_source":a.openssl_pkg_source,"openssl_pkg_source_url":a.openssl_pkg_source_url,\n  "openssl_pkg_hash":a.openssl_pkg_hash,"openssl_options":a.openssl_options,"openssl_build_dir":str(a.openssl_source_dir),\n  "openssl_patch_dir":str(a.openssl_patch_dir),"openssl_patch_tree_sha256":tree_sha(a.openssl_patch_dir),\n  "openssl_configure_sha256":sha(a.openssl_source_dir/"Configure"),"openssl_configdata_sha256":sha(a.openssl_source_dir/"configdata.pm"),\n  "openssl_header_tree_sha256":tree_sha(hdr),"prepared_source_tree_sha256":tree_sha(build),"components":results,
   "callsite_counts":{"total":len(callsites),**counts},"macro_reference_counts":{"total":len(macro_rows),**macro_counts},
   "complete":len(complete)==4 and counts["UNKNOWN_FAIL_CLOSED"]==0 and macro_counts["UNKNOWN_FAIL_CLOSED"]==0,
   "limitations":["direct source expressions are classified separately from macro-body references","ambiguous source-line mapping is UNKNOWN_FAIL_CLOSED","no object, library, package or firmware is compiled or linked"]}
