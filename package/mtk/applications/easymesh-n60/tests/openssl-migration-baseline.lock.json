@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "baseline_id": "openssl-1.1.1w-to-3.5.9",
+  "from": {
+    "version": "1.1.1w",
+    "archive": "openssl-1.1.1w.tar.gz",
+    "url": "https://www.openssl.org/source/old/1.1.1/openssl-1.1.1w.tar.gz",
+    "sha256": "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8",
+    "sha256_provenance": "OpenSSL project release announcement; independent download/hash verification pending"
+  },
+  "to": {
+    "version": "3.5.9",
+    "archive": "openssl-3.5.9.tar.gz",
+    "url": "https://www.openssl.org/source/openssl-3.5.9.tar.gz",
+    "sha256": "603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a",
+    "sha256_provenance": "Current repository package/libs/openssl/Makefile PKG_HASH; official checksum cross-check and independent download/hash verification pending"
+  },
+  "official_references": {
+    "migration_guide": "https://docs.openssl.org/3.5/man7/ossl-guide-migration/",
+    "provider_guide": "https://docs.openssl.org/3.5/man7/provider/",
+    "evp_mac": "https://docs.openssl.org/3.5/man3/EVP_MAC/",
+    "evp_pkey": "https://docs.openssl.org/3.5/man3/EVP_PKEY/",
+    "decoder": "https://docs.openssl.org/3.5/man3/OSSL_DECODER/",
+    "encoder": "https://docs.openssl.org/3.5/man3/OSSL_ENCODER/",
+    "release_notes": "https://www.openssl-library.org/news/openssl-3.5-notes/"
+  },
+  "migration_policy": "No source edit is approved until each API/call-site has a cited official recommendation and predeclared semantic regression test.",
+  "status": "REFERENCE_PINS_DECLARED_HASH_VERIFICATION_PENDING"
+}
