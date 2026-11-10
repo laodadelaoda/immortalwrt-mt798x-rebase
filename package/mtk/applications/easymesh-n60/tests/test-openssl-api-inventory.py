@@ -152,19 +152,25 @@ def scan_macro_references(root,names,depr):
     out.append({"component":item["component"],"path":item["path"],"line":item["line"],"macro":name,"api":api,"reachability":state})
  return out
 def callsite_context(root,rows,radius=5):
- out=[]
+ out=[]; cache={}
  for row in rows:
-  p=root/row["path"]
-  lines=p.read_text(encoding="utf-8",errors="replace").splitlines()
-  n=row["line"]-1; guards=[]
-  for line in lines[:n+1]:
-   stripped=line.strip()
-   if re.match(r"^#\s*(if|ifdef|ifndef)\b",stripped):
-    guards.append(stripped)
-   elif re.match(r"^#\s*endif\b",stripped) and guards:
-    guards.pop()
-  out.append({"component":row["component"],"path":row["path"],"line":row["line"],"api":row["api"],"preprocessor_guards":guards,"context":"\n".join(f"{i+1}: {lines[i]}" for i in range(max(0,n-radius),min(len(lines),n+radius+1)))})
+  rel=row["path"]
+  if rel not in cache:
+   lines=(root/rel).read_text(encoding="utf-8",errors="replace").splitlines()
+   stack=[]; guards_by_line=[]
+   for line in lines:
+    stripped=line.strip()
+    if re.match(r"^#\s*(if|ifdef|ifndef)\b",stripped):
+     stack.append(stripped)
+    elif re.match(r"^#\s*endif\b",stripped) and stack:
+     stack.pop()
+    guards_by_line.append(list(stack))
+   cache[rel]=(lines,guards_by_line)
+  lines,guards_by_line=cache[rel]
+  n=row["line"]-1
+  out.append({"component":row["component"],"path":rel,"line":row["line"],"api":row["api"],"preprocessor_guards":guards_by_line[n] if 0<=n<len(guards_by_line) else [],"context":"\n".join(f"{i+1}: {lines[i]}" for i in range(max(0,n-radius),min(len(lines),n+radius+1)))})
  return out
+
 def const_audit(root):
  out=[]
  mutable=re.compile(r"(?m)^[ \t]*(?!const\b)(?:static[ \t]+)?EC_KEY\s*\*\s*(\w+)\s*=\s*(?:\(\s*EC_KEY\s*\*\s*\)\s*)?EVP_PKEY_get0_EC_KEY\s*\(")
@@ -208,7 +214,7 @@ def main():
    if not mr["proposed_replacement"].strip() or not mr["semantic_review_requirements"].strip(): ap.error("incomplete migration research fields for "+api)
    if mr["approval"].lower() not in {"true","false"}: ap.error("invalid approval value for "+api)
    migration_map[api]=mr
- names,depr=catalog(a.openssl_source); rows=scan(a.source_root,names,depr); before=scan(a.pristine_root,names,depr); macro_refs=scan_macro_references(a.source_root,names,depr); contexts=callsite_context(a.source_root,rows); const=const_audit(a.source_root)
+ names,depr=catalog(a.openssl_source); rows=scan(a.source_root,names,depr); before=scan(a.pristine_root,names,depr); macro_refs=scan_macro_references(a.source_root,names,depr); contexts=callsite_context(a.source_root,[x for x in rows if x.get('deprecated_macro')]); const=const_audit(a.source_root)
  failures=[]; inventory=[]
  for mr in macro_refs:
   if mr["reachability"]=="ACTIVE_MACRO_EXPANSION_REQUIRES_CPP": failures.append("deprecated API is referenced by an active macro expansion; require preprocessor evidence: "+mr["api"]+" via "+mr["macro"]+" at "+mr["path"]+":"+str(mr["line"]))
