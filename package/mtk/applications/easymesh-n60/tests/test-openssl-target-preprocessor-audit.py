@@ -75,8 +75,8 @@ with tempfile.TemporaryDirectory() as d:
   f'LDFLAGS="{args.ldflags} -L{staging}/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto"',
   f"-C {build}/1905daemon",f'LINUXDIR="{linux_rel}"',f'STAGING_DIR="{staging}"',
   f'LDFLAGS="{args.ldflags} -L{staging}/usr/lib -Wl,--no-as-needed -lpthread -lnl-tiny -lssl -lcrypto"',
-  f"-C {build}/mapd",'EXTRA_CFLAGS="$OPENWRT_EASYMESH_CFLAGS"',
-  'OPENWRT_EASYMESH_CFLAGS="$TARGET_EASYMESH_CFLAGS -DCONFIG_SUPPORT_OPENWRT"',
+  f"-C {build}/mapd",'EXTRA_CFLAGS="$$OPENWRT_EASYMESH_CFLAGS"',
+  'OPENWRT_EASYMESH_CFLAGS="$$TARGET_EASYMESH_CFLAGS -DCONFIG_SUPPORT_OPENWRT"',
   f'LDFLAGS="{args.ldflags} -L{staging}/usr/lib"',
   "CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y","MAP_R3_SUPPORT=y","SWTICH_DSA_ARCH=y","version mapd",
   *(f'CC="{args.cc}"' for _ in range(4)),f'AR="{args.ar}"',f'RANLIB="{args.ranlib}"'
