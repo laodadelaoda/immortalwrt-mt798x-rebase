@@ -50,7 +50,7 @@ with tempfile.TemporaryDirectory() as d:
  att={
   "schema_version":2,"status":"VERIFIED","baseline_id":lock["baseline_id"],
   "run":{"id":1,"attempt":1,"git_sha":"c"*40},
-  "artifact":{"id":1,"sha256":"d"*64},
+  "artifact":{"id":1,"name":"n60-openssl-1111w-to-359-header-baseline","sha256":"d"*64},
   "source":{"archive_sha256":{"1.1.1w":from_hash,"3.5.9":to_hash}},
   "results":{"failures":[],"migration_map_rows":68,"migration_map_apis_present_in_1_1_1w":68,"migration_map_apis_deprecated_in_3_5_9":68},
   "input_sha256":{key:m.sha256_file(path) for key,path in input_paths.items()}

@@ -28,6 +28,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: n60-pro-quick-prepare-only-${{ github.ref }}
