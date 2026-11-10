@@ -547,9 +547,9 @@ jobs:
             exit 1
           }
           export PATH="$TARGET_PATH:$PATH"
-          TARGET_CC="$(command -v "$TARGET_CC")"
-          TARGET_AR="$(command -v "$TARGET_AR")"
-          TARGET_RANLIB="$(command -v "$TARGET_RANLIB")"
+          command -v "$TARGET_CC" >/dev/null
+          command -v "$TARGET_AR" >/dev/null
+          command -v "$TARGET_RANLIB" >/dev/null
           STAGING_DIR="$(realpath "$STAGING_DIR")"
           LINUX_DIR="$(realpath "$LINUX_DIR")"
           TARGET_STAGING="$STAGING_DIR"
