@@ -10,7 +10,7 @@ jobs:
   prepare-audit:
     name: Native Package Prepare and EasyMesh source contract tests (no compile)
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 120
     steps:
       - name: Checkout exact audited revision
         uses: actions/checkout@v5
@@ -470,12 +470,101 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Generate exact N60 target preprocessor evidence (no firmware build)
+        id: target_preprocessor
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OUT="artifacts/easymesh-openssl-preprocessor-audit"
+          mkdir -p "$OUT"
+
+          # Install the cross-toolchain only. No firmware or EasyMesh binary target is built.
+          make toolchain/install -j"$(nproc)" V=s
+
+          # OpenSSL Configure generates the actual target configuration headers; it does not compile OpenSSL.
+          make -C package/libs/openssl TOPDIR="$GITHUB_WORKSPACE" configure V=s
+          OPENSSL_CONFIGURE_LIST="$(find "$GITHUB_WORKSPACE/build_dir" -type f -path '*/openssl-3.5.9/Configure' -print | sort)"
+          OPENSSL_CONFIGURE_COUNT="$(printf '%s\n' "$OPENSSL_CONFIGURE_LIST" | grep -c . || true)"
+          [[ "$OPENSSL_CONFIGURE_COUNT" -eq 1 ]] || {
+            echo "::error::Expected exactly one OpenSSL 3.5.9 source tree; found $OPENSSL_CONFIGURE_COUNT."
+            printf '%s\n' "$OPENSSL_CONFIGURE_LIST"
+            exit 1
+          }
+          OPENSSL_SOURCE="$(dirname "$OPENSSL_CONFIGURE_LIST")"
+
+          # Use OpenWrt's own expanded target variables; no guessed -D flags.
+          eval "$(make -s printvars VARS='TARGET_CC TARGET_AR TARGET_RANLIB TARGET_CPPFLAGS TARGET_CFLAGS TARGET_LDFLAGS STAGING_DIR LINUX_DIR' QUOTED=1)"
+          [[ -n "$TARGET_CC" && -n "$TARGET_AR" && -n "$TARGET_RANLIB" && -n "$TARGET_CFLAGS" && -n "$STAGING_DIR" && -n "$LINUX_DIR" ]] || {
+            echo "::error::OpenWrt target compiler/flags/staging variables are incomplete."
+            exit 1
+          }
+          [[ "$TARGET_CC" != *" "* && "$TARGET_AR" != *" "* && "$TARGET_RANLIB" != *" "* ]] || {
+            echo "::error::Compiler/binutils wrappers are not supported by this evidence parser; fail closed."
+            exit 1
+          }
+          TARGET_CC="$(command -v "$TARGET_CC")"
+          TARGET_AR="$(command -v "$TARGET_AR")"
+          TARGET_RANLIB="$(command -v "$TARGET_RANLIB")"
+          STAGING_DIR="$(realpath "$STAGING_DIR")"
+          LINUX_DIR="$(realpath "$LINUX_DIR")"
+          TARGET_STAGING="$STAGING_DIR"
+
+          # Stage target dependency headers used by the components' actual include paths.
+          # These are dependency packages only, not firmware or EasyMesh binaries.
+          make -C package/mtk/applications/datconf TOPDIR="$GITHUB_WORKSPACE" \
+            CMAKE_OPTIONS="-DLUAPATH=/usr/lib/lua -DBUILD_LUA=OFF" \
+            "$TARGET_STAGING/stamp/.datconf_installed" -j"$(nproc)" V=s
+          make -C package/libs/libnl-tiny TOPDIR="$GITHUB_WORKSPACE" \
+            "$TARGET_STAGING/stamp/.libnl-tiny_installed" -j"$(nproc)" V=s
+
+          # Copy the exact Configure-generated OpenSSL headers into the target staging include path.
+          test -s "$OPENSSL_SOURCE/include/openssl/configuration.h"
+          test -s "$OPENSSL_SOURCE/include/openssl/opensslv.h"
+          rm -rf "$TARGET_STAGING/usr/include/openssl"
+          mkdir -p "$TARGET_STAGING/usr/include"
+          cp -a "$OPENSSL_SOURCE/include/openssl" "$TARGET_STAGING/usr/include/"
+          OPENSSL_HEADERS="$TARGET_STAGING/usr/include/openssl"
+          grep -Eq '^[[:space:]]*#[[:space:]]*define[[:space:]]+OPENSSL_VERSION_MAJOR[[:space:]]+3([[:space:]]|$)' "$OPENSSL_HEADERS/opensslv.h"
+          grep -Eq '^[[:space:]]*#[[:space:]]*define[[:space:]]+OPENSSL_VERSION_MINOR[[:space:]]+5([[:space:]]|$)' "$OPENSSL_HEADERS/opensslv.h"
+          grep -Eq '^[[:space:]]*#[[:space:]]*define[[:space:]]+OPENSSL_VERSION_PATCH[[:space:]]+9([[:space:]]|$)' "$OPENSSL_HEADERS/opensslv.h"
+          {
+            echo "OpenSSL source: $OPENSSL_SOURCE"
+            sha256sum "$OPENSSL_HEADERS/configuration.h" "$OPENSSL_HEADERS/opensslv.h"
+            echo "ENGINE-related generated macros (diagnostic only; compiler preprocessing is authoritative):"
+            grep -n 'OPENSSL_NO_ENGINE\|OPENSSL_ENGINE_STUBS\|OPENSSL_NO_DEPRECATED' \
+              "$OPENSSL_HEADERS/configuration.h" "$OPENSSL_HEADERS/opensslconf.h" 2>/dev/null || true
+          } | tee "$OUT/target-openssl-header-evidence.txt"
+
+          test -s "$TARGET_STAGING/usr/include/libdatconf.h"
+          test -s "$TARGET_STAGING/usr/include/libkvcutil.h"
+          test -s "$TARGET_STAGING/usr/include/libnl-tiny/netlink.h"
+          test -s "$LINUX_DIR/include/uapi/linux/wapp/wapp_cmm_type.h"
+          test -s "$LINUX_DIR/include/uapi/linux/wapp/mt_wlan_cmm_oid.h"
+
+          BUILD_DIR_LIST="$(find "$GITHUB_WORKSPACE/build_dir" -mindepth 2 -maxdepth 2 -type d -name 'easymesh-n60-7.6.7.3' -print | sort)"
+          BUILD_DIR_COUNT="$(printf '%s\n' "$BUILD_DIR_LIST" | grep -c . || true)"
+          [[ "$BUILD_DIR_COUNT" -eq 1 ]] || {
+            echo "::error::Expected exactly one EasyMesh Prepare tree; found $BUILD_DIR_COUNT."
+            printf '%s\n' "$BUILD_DIR_LIST"
+            exit 1
+          }
+          BUILD_DIR="$BUILD_DIR_LIST"
+          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py
+          python3 package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py \
+            --repo-dir "$GITHUB_WORKSPACE" --build-dir "$BUILD_DIR" \
+            --cc "$TARGET_CC" --ar "$TARGET_AR" --ranlib "$TARGET_RANLIB" \
+            --cppflags "$TARGET_CPPFLAGS" --cflags "$TARGET_CFLAGS" --ldflags "$TARGET_LDFLAGS" \
+            --staging-dir "$TARGET_STAGING" --linux-dir "$LINUX_DIR" --output-dir "$OUT"
+
       - name: Preflight OpenSSL audit implementation inputs after MT Wi-Fi 026
         shell: bash
         run: |
           set -Eeuo pipefail
           for input in \
             package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py \
+            package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py \
             package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py \
             package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json \
             package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv \
@@ -488,7 +577,8 @@ jobs:
               exit 1
             }
           done
-          echo "PASS: all existing OpenSSL audit-chain inputs are present after native Prepare and MT Wi-Fi 026 evidence."
+          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py
+          echo "PASS: OpenSSL inventory and target-preprocessor audit inputs are present after native Prepare and MT Wi-Fi 026 evidence."
 
       - name: Run Provider-native OpenSSL 3.5.9 runtime regression tests
         id: openssl_provider_runtime
@@ -552,6 +642,7 @@ jobs:
           name: n60-openssl-3.5.9-api-and-provider-audit
           path: |
             artifacts/easymesh-openssl-api-audit/
+            artifacts/easymesh-openssl-preprocessor-audit/
             ${{ runner.temp }}/n60-openssl-provider-runtime/
           if-no-files-found: error
           retention-days: 30
@@ -563,6 +654,29 @@ jobs:
           echo "::error::Provider-native OpenSSL 3.5.9 runtime regression tests failed."
           exit 1
 
+
+
+      - name: Enforce target preprocessor evidence completion
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ "${{ steps.target_preprocessor.outcome }}" != "success" ]]; then
+            echo "::error::Target preprocessor audit failed or retained UNKNOWN_FAIL_CLOSED callsites."
+            test ! -s artifacts/easymesh-openssl-preprocessor-audit/openssl-target-preprocessor-summary.json || \
+              cat artifacts/easymesh-openssl-preprocessor-audit/openssl-target-preprocessor-summary.json
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("artifacts/easymesh-openssl-preprocessor-audit/openssl-target-preprocessor-summary.json")
+          data=json.loads(p.read_text())
+          assert data.get("firmware_compile_invoked") is False
+          assert data.get("complete") is True
+          assert data.get("callsite_counts", {}).get("UNKNOWN_FAIL_CLOSED") == 0
+          print("PASS: direct deprecated source occurrences have target-preprocessor evidence.")
+          PY
 
       - name: Upload Linux kernel patch inventory and attestation
         if: always()
