@@ -134,7 +134,7 @@ jobs:
           }
           out=Path("artifacts/openssl-migration-baseline-attestation")
           out.mkdir(parents=True,exist_ok=True)
-          (out/"openssl-migration-baseline.attestation.json").write_text(json.dumps(att,indent=2)+"\\n")
+          (out/"openssl-migration-baseline.attestation.json").write_text(json.dumps(att,indent=2)+chr(10))
           print(json.dumps({"run":att["run"],"artifact":att["artifact"],"results":att["results"]},indent=2))
           PY
 
