@@ -41,6 +41,8 @@ with (Path(__file__).with_name("openssl-111-to-359-migration-map.csv")).open(enc
  assert len({r["api"] for r in rows})==64
  assert all(r["migration_status"]=="UNREVIEWED" and r["approval"]=="false" for r in rows)
  assert all(r["official_mapping_kind"] and r["official_mapping_section"] for r in rows)
+ assert all(r["source_reachability_status"] and r["source_reachability_evidence"] for r in rows)
+ assert next(r for r in rows if r["api"]=="EVP_CIPHER_CTX_iv_noconst")["source_reachability_status"]=="UNREFERENCED_MACRO_DEFINITION"
  assert all(r["official_migration_guide_url"].startswith("https://docs.openssl.org/3.5/") for r in rows)
  assert all(r["official_target_manual_url"].startswith("https://docs.openssl.org/3.5/") for r in rows)
 print("PASS: inventory parser masks comments/literals, preserves call-site lines, excludes C type keywords, detects deprecated declarations/const loss, distinguishes active/unreferenced macro expansions and validates the 64-row unapproved migration baseline.")
