@@ -194,24 +194,23 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
     proof=row.get("preprocessor_negative_evidence")
     component=summary.get("components",{}).get(k[0],{})
     compiled=[x for x in component.get("translation_units",[]) if x.get("returncode")==0 and x.get("preprocessed_sha256")]
-    source_text=str(source)
-    matching=[x for x in compiled if str(Path(x.get("source","")).resolve())==source_text]
-    expected_hashes=sorted(x["preprocessed_sha256"] for x in matching)
+    direct_source_tus=[x for x in compiled if str(Path(x.get("source","")).resolve())==str(source)]
+    expected_tus=[{"source":x["source"],"preprocessed_sha256":x["preprocessed_sha256"]} for x in compiled]
     evidence_root=Path(summary.get("evidence_output_dir","")).resolve()
     observed=[]
-    for tu in matching:
+    for tu in compiled:
      output=Path(tu.get("preprocessed_output","")).resolve()
      if not output.is_relative_to(evidence_root) or not output.is_file() or sha256(output)!=tu.get("preprocessed_sha256"):
-      failures.append("excluded API has missing, escaped or hash-mismatched preprocessor output: "+repr(k))
+      failures.append("excluded API has missing, escaped or hash-mismatched component preprocessor output: "+repr(k))
       continue
      emitted,hit=observe_preprocessed_output(output,source,int(k[2]),str(k[3]))
      observed.append((not emitted,not hit))
-    independently_absent=bool(observed) and all(x==(True,True) for x in observed)
-    valid=(component.get("source_reachability_complete") is True and bool(matching) and
-      isinstance(proof,dict) and proof.get("source_translation_unit") is True and
-      proof.get("component_complete") is True and proof.get("api_hit_absent") is True and
-      proof.get("source_line_absent") is True and independently_absent and
-      proof.get("preprocessed_sha256")==expected_hashes and
+    independently_absent=bool(compiled) and len(observed)==len(compiled) and all(x==(True,True) for x in observed)
+    valid=(component.get("source_reachability_complete") is True and bool(compiled) and
+      isinstance(proof,dict) and proof.get("source_is_direct_translation_unit") is bool(bool(direct_source_tus)) and
+      proof.get("component_compile_graph_complete") is True and proof.get("api_hit_absent") is True and
+      proof.get("source_line_absent_from_all_target_preprocessing") is True and independently_absent and
+      proof.get("preprocessed_translation_units")==expected_tus and
       proof.get("target_compiler_sha256")==summary.get("target_compiler_sha256") and
       proof.get("target_config_sha256")==summary.get("target_config_sha256") and
       proof.get("source_sha256")==row.get("source_sha256") and
