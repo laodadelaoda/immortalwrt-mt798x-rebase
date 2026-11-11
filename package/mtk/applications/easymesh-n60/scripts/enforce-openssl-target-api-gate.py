@@ -19,14 +19,17 @@ def load_json(path):
 def key(row):
  return (row.get("component"),row.get("path"),int(row.get("line",0)),row.get("api"))
 
-def observe_preprocessed_output(path,source_path,line_number,api):
+def observe_preprocessed_output(path,source_path,line_number,api,working_directory=None):
  marker=re.compile(r'^#\s*(\d+)\s+"([^"]+)"')
  call=re.compile(r"\b"+re.escape(api)+r"\s*\(")
+ base=Path(working_directory or Path.cwd()).resolve()
  current=None; lineno=1; emitted=False; hit=False
  for text in Path(path).read_text(encoding="utf-8",errors="replace").splitlines():
   m=marker.match(text)
   if m:
-   current=Path(m.group(2)).resolve(); lineno=int(m.group(1)); continue
+   marker_path=Path(m.group(2))
+   current=(marker_path if marker_path.is_absolute() else base/marker_path).resolve()
+   lineno=int(m.group(1)); continue
   if text.lstrip().startswith("#"): continue
   if current==source_path and lineno==line_number:
    emitted=True
@@ -203,7 +206,7 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
      if not output.is_relative_to(evidence_root) or not output.is_file() or sha256(output)!=tu.get("preprocessed_sha256"):
       failures.append("excluded API has missing, escaped or hash-mismatched component preprocessor output: "+repr(k))
       continue
-     emitted,hit=observe_preprocessed_output(output,source,int(k[2]),str(k[3]))
+     emitted,hit=observe_preprocessed_output(output,source,int(k[2]),str(k[3]),tu.get("cwd"))
      observed.append((not emitted,not hit))
     independently_absent=bool(compiled) and len(observed)==len(compiled) and all(x==(True,True) for x in observed)
     valid=(component.get("source_reachability_complete") is True and bool(compiled) and
