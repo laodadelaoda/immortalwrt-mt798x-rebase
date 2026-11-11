@@ -695,7 +695,7 @@ jobs:
             --matrix package/mtk/applications/easymesh-n60/tests/openssl-40-api-regression-matrix.json \
             --test-source package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regressions.c
           python3 -m py_compile package/mtk/applications/easymesh-n60/scripts/verify-openssl-api-migration-attestation.py
-          ruby -e 'require "yaml"; %w[.github/workflows/quick-prepare-audit.yml .github/workflows/main.yml].each { |p| YAML.load_file(p); puts "PASS: YAML parsed: #{p}" }'
+          ruby -e 'require "yaml"; %w[.github/workflows/quick-prepare-audit.yml .github/workflows/main.yml].each { |p| YAML.parse_file(p); puts "PASS: YAML parsed: #{p}" }'
           echo "PASS: OpenSSL inventory, preprocessor audit, exact 40-API regression matrix and workflow YAML inputs are valid after native Prepare and MT Wi-Fi 026 evidence."
 
       - name: Run Provider-native OpenSSL 3.5.9 runtime regression tests
