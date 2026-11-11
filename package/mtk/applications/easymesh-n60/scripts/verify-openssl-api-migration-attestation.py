@@ -110,6 +110,13 @@ def validate_ready(a):
         failures.append("target preprocessor evidence retains UNKNOWN_FAIL_CLOSED callsites")
     if regression.get("scope_id") != SCOPE or regression.get("openssl_version") != "3.5.9" or regression.get("status") != "PASS" or regression.get("api_count") != 40:
         failures.append("40-API provider regression result is incomplete or not PASS")
+    regression_inputs = regression.get("inputs", {})
+    if regression_inputs.get("matrix_sha256") != sha256(repo / MATRIX):
+        failures.append("40-API regression result was generated from a different test matrix")
+    if regression_inputs.get("test_source_sha256") != sha256(repo / "package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regressions.c"):
+        failures.append("40-API regression result was generated from a different C test source")
+    if not re.fullmatch(r"[0-9a-f]{64}", str(regression_inputs.get("test_log_sha256", ""))):
+        failures.append("40-API regression test log hash is missing or invalid")
     if any(x.get("status") != "PASS" for x in regression.get("api_coverage", [])) or len(regression.get("api_coverage", [])) != 40:
         failures.append("not all 40 APIs have passing regression coverage")
     if provider.get("openssl_version") != "3.5.9" or provider.get("result") != "PASS":
@@ -171,10 +178,12 @@ def verify(a):
         "provider_result": "provider-runtime-result.json",
         "baseline_attestation": "openssl-migration-baseline.attestation.json",
     }
+    evidence_paths = {}
     for key, basename in evidence_map.items():
         item = att.get("evidence", {}).get(key, {})
-        path = find_evidence(a.evidence_dir, basename)
-        if sha256(path) != item.get("sha256"):
+        evidence_path = find_evidence(a.evidence_dir, basename)
+        evidence_paths[key] = evidence_path
+        if sha256(evidence_path) != item.get("sha256"):
             raise ValueError("downloaded OpenSSL evidence hash mismatch: " + basename)
     vendor = Path(a.vendor_attestation)
     if sha256(vendor) != att.get("evidence", {}).get("vendor_attestation", {}).get("sha256"):
@@ -191,7 +200,21 @@ def verify(a):
             raise ValueError("OpenSSL API evidence artifact run ID or GitHub digest mismatch")
         if data.get("workflow_run", {}).get("head_sha") != current_sha:
             raise ValueError("OpenSSL API evidence artifact belongs to a different source revision")
-    print("PASS: OpenSSL 3.5.9 40-API migration credential, source hashes, run/attempt and evidence artifact verified.")
+        baseline = read_json(evidence_paths["baseline_attestation"])
+        baseline_artifact = baseline.get("artifact", {})
+        baseline_run = baseline.get("run", {})
+        baseline_remote = subprocess.run(
+            ["gh", "api", f"repos/{a.repository}/actions/artifacts/{baseline_artifact['id']}"],
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        baseline_data = json.loads(baseline_remote.stdout)
+        baseline_digest = str(baseline_data.get("digest", "")).removeprefix("sha256:")
+        if baseline_data.get("name") != baseline_artifact.get("name") or baseline_data.get("expired") is True:
+            raise ValueError("OpenSSL 1.1.1w-to-3.5.9 baseline artifact name/expiry validation failed")
+        if baseline_data.get("workflow_run", {}).get("id") != baseline_run.get("id") or baseline_digest != baseline_artifact.get("sha256"):
+            raise ValueError("OpenSSL baseline artifact run ID or GitHub digest mismatch")
+        if baseline_data.get("workflow_run", {}).get("head_sha") != current_sha or baseline_run.get("git_sha") != current_sha:
+            raise ValueError("OpenSSL baseline artifact belongs to a different source revision")
+    print("PASS: OpenSSL 3.5.9 40-API migration credential, source hashes, run/attempt and both evidence artifact digests verified.")
 
 def main():
     p = argparse.ArgumentParser()
