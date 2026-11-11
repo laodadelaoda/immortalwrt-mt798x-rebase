@@ -266,6 +266,13 @@ def classify_reference_reachability(source,line,api,reference_kind,hits,emitted_
  """Do not exclude a reference unless its containing source was actually preprocessed."""
  key=(source,line,api)
  if reference_kind=="UNKNOWN_REFERENCE_KIND": return "UNKNOWN_FAIL_CLOSED"
+ # A declaration/definition is a real target-preprocessed reference, but it is
+ # not an invocation. Preserve it as ACTIVE evidence so the API gate can count
+ # it separately without treating it as a deprecated call site.
+ if reference_kind=="DECLARATION_OR_DEFINITION":
+  if (source,line) in emitted_lines and source in compiled_sources and component_complete:
+   return "ACTIVE"
+  return "UNKNOWN_FAIL_CLOSED"
  if key in hits: return "ACTIVE"
  if (source,line) in emitted_lines: return "UNKNOWN_FAIL_CLOSED"
  if source not in compiled_sources: return "UNKNOWN_FAIL_CLOSED"
