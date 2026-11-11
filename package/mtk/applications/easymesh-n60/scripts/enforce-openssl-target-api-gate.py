@@ -40,7 +40,7 @@ def observe_preprocessed_output(path,source_path,line_number,api,working_directo
 
 REQUIRED_EASYMESH_COMPONENTS={"wappd","mapd","1905daemon","libmapd"}
 
-def build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migration_map,delta_rows=None):
+def build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migration_map,delta_rows=None,review_map=None):
  """Retain every original EasyMesh API candidate; isolate target-ACTIVE calls for migration."""
  delta_by_api={r.get("api"):r for r in (delta_rows or []) if r.get("api")}
  rows={}
@@ -108,11 +108,14 @@ def build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migra
    # negative evidence into UNKNOWN merely because prepared_call_count is zero.
    status="EXCLUDED_WITH_EVIDENCE"
   else: status="UNKNOWN_FAIL_CLOSED"
+  review=(review_map or {}).get(api,{})
   x.update({"components":sorted(x["components"]),"scope_status":status,
    "needs_migration_review":x["active_call_sites"]>0,
    "requires_patch_semantic_review":status=="NO_LONGER_PRESENT_AFTER_PATCH",
-   "migration_status":mr.get("migration_status","MISSING_FROM_GLOBAL_BASELINE"),
-   "approval":mr.get("approval","false"),"global_baseline_candidate":api in migration_map,
+   "review_status":review.get("review_status","MISSING_FROM_40_API_REVIEW"),
+   "approval":review.get("approval","false"),
+   "traceability_migration_status":mr.get("migration_status","NOT_IN_68_ROW_TRACEABILITY_BASELINE"),
+   "global_baseline_candidate":api in migration_map,
    "source_locations":sorted(x["source_locations"],key=lambda z:(z["component"],z["path"],z["line"],z["kind"]))})
   out.append(x)
  return out
@@ -369,7 +372,7 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
    failures.append("legacy-retained API lacks a concrete compatibility/interoperability justification: "+api)
 
  counts=Counter(x["api"] for x in active)
- subset=build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migration_map,delta_rows)
+ subset=build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migration_map,delta_rows,review_map)
  active_subset=[x["api"] for x in subset if x["needs_migration_review"]]
  failures.extend(validate_removed_api_reviews(subset,migration_map,policy,review_map))
  if review_map is not None: failures.extend(validate_semantic_review(list(review_map.values()),subset,expected_git_sha))
@@ -384,7 +387,7 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
   "easymesh_api_migration_required_count":len(active_subset),
   "easymesh_api_migration_required":active_subset,"easymesh_api_subset":subset,
   "easymesh_api_removed_by_patch":[x["api"] for x in subset if x["requires_patch_semantic_review"]],
-  "active_apis_unreviewed":[api for api in active_apis if api not in migration_map or migration_map[api].get("migration_status")!="APPROVED" or str(migration_map[api].get("approval","")).lower()!="true"],
+  "active_apis_unreviewed":[api for api in active_apis if api not in (review_map or {}) or (review_map or {})[api].get("review_status") not in {"IMPLEMENTED","MIGRATED","LEGACY_RETAINED"} or str((review_map or {})[api].get("approval","")).lower()!="true"],
   "failures":failures,"complete":not failures
  }
 
@@ -441,7 +444,7 @@ def main():
  fields=["api","components","baseline_lexical_occurrences","pristine_call_count","prepared_call_count","source_reference_count",
   "active_call_sites","excluded_call_sites","unknown_call_sites","declaration_references","other_non_call_references",
   "macro_references","macro_active","macro_excluded","macro_unknown","scope_status","needs_migration_review",
-  "requires_patch_semantic_review","migration_status","approval","global_baseline_candidate"]
+  "requires_patch_semantic_review","review_status","approval","traceability_migration_status","global_baseline_candidate"]
  with (a.output.parent/"easymesh-openssl-api-subset.csv").open("w",encoding="utf-8",newline="") as f:
   writer=csv.DictWriter(f,fieldnames=fields); writer.writeheader()
   for row in report["easymesh_api_subset"]:
