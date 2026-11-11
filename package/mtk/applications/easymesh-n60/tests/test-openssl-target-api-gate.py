@@ -5,10 +5,10 @@ p=Path(__file__).parents[1]/"scripts/enforce-openssl-target-api-gate.py"
 spec=importlib.util.spec_from_file_location("target_api_gate",p)
 m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 with tempfile.TemporaryDirectory() as d:
- root=Path(d); src=root/"wappd"/"x.c"; src.parent.mkdir(); src.write_text("EVP_PKEY_cmp(a,b);\n")
+ root=Path(d); src=root/"wappd"/"x.c"; src.parent.mkdir(); src.write_text('#if 0\nEVP_PKEY_cmp(a,b);\n#endif\nint f(void) { return 0; }\n')
  digest=m.sha256(src); git="a"*40
- inv=[{"component":"wappd","path":"wappd/x.c","line":"1","api":"EVP_PKEY_cmp","deprecated_macro":"OSSL_DEPRECATEDIN_3_0"}]
- call=[{"component":"wappd","path":"wappd/x.c","line":1,"api":"EVP_PKEY_cmp","reference_kind":"CALL_EXPRESSION","reachability_status":"ACTIVE","source_sha256":digest,"conditional_branch_path":[]}]
+ inv=[{"component":"wappd","path":"wappd/x.c","line":"2","api":"EVP_PKEY_cmp","deprecated_macro":"OSSL_DEPRECATEDIN_3_0"}]
+ call=[{"component":"wappd","path":"wappd/x.c","line":2,"api":"EVP_PKEY_cmp","reference_kind":"CALL_EXPRESSION","reachability_status":"ACTIVE","source_sha256":digest,"conditional_branch_path":[]}]
  non=[]; macros=[]
  summary={"git_sha":git,"firmware_compile_invoked":False,"complete":True,"source_reachability_complete":True,
   "callsite_counts":{"total":1,"UNKNOWN_FAIL_CLOSED":0},
@@ -29,7 +29,7 @@ with tempfile.TemporaryDirectory() as d:
  # emits the source line invalidates the negative proof.
  main1=root/"wappd"/"main1.c"; main1.write_text('#include "x.c"\\n')
  main2=root/"wappd"/"main2.c"; main2.write_text("int other(void) { return 0; }\\n")
- ppout=root/"unit1.i"; ppout.write_text(f'# 2 "{src.resolve()}"\\nint f(void) {{ return 0; }}\\n')
+ ppout=root/"unit1.i"; ppout.write_text(f'# 4 "{src.resolve()}"\\nint f(void) {{ return 0; }}\\n')
  ppout2=root/"unit2.i"; ppout2.write_text(f'# 1 "{main2.resolve()}"\\nint other(void) {{ return 0; }}\\n')
  pp_digest=m.sha256(ppout); pp_digest2=m.sha256(ppout2)
  tu={"source":str(main1.resolve()),"returncode":0,"preprocessed_sha256":pp_digest,"preprocessed_output":str(ppout.resolve())}
@@ -113,13 +113,13 @@ with tempfile.TemporaryDirectory() as d:
  assert not report["complete"] and any("SHA256 mismatch" in x for x in report["failures"])
  # A matching hash outside the prepared component tree is not valid evidence.
  outside=root.parent/"outside.c"; outside.write_text("EVP_PKEY_cmp(a,b);\n")
- outside_row={"component":"wappd","path":"../outside.c","line":1,"api":"EVP_PKEY_cmp","reference_kind":"CALL_EXPRESSION","reachability_status":"EXCLUDED_WITH_EVIDENCE","source_sha256":m.sha256(outside)}
- outside_inv=[{"component":"wappd","path":"../outside.c","line":"1","api":"EVP_PKEY_cmp","deprecated_macro":"OSSL_DEPRECATEDIN_3_0"}]
+ outside_row={"component":"wappd","path":"../outside.c","line":2,"api":"EVP_PKEY_cmp","reference_kind":"CALL_EXPRESSION","reachability_status":"EXCLUDED_WITH_EVIDENCE","source_sha256":m.sha256(outside)}
+ outside_inv=[{"component":"wappd","path":"../outside.c","line":"2","api":"EVP_PKEY_cmp","deprecated_macro":"OSSL_DEPRECATEDIN_3_0"}]
  summary["callsite_counts"]={"total":1,"UNKNOWN_FAIL_CLOSED":0}; summary["non_call_reference_counts"]={"total":0,"UNKNOWN_FAIL_CLOSED":0}
  report=m.evaluate(outside_inv,[outside_row],[],summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
  assert not report["complete"] and any("escapes" in x for x in report["failures"])
  # An active call passes only with an explicit approved migration decision and policy.
- non=[]; call=[{"component":"wappd","path":"wappd/x.c","line":1,"api":"EVP_PKEY_cmp","reference_kind":"CALL_EXPRESSION","reachability_status":"ACTIVE","source_sha256":digest}]
+ non=[]; call=[{"component":"wappd","path":"wappd/x.c","line":2,"api":"EVP_PKEY_cmp","reference_kind":"CALL_EXPRESSION","reachability_status":"ACTIVE","source_sha256":digest}]
  summary["callsite_counts"]={"total":1,"UNKNOWN_FAIL_CLOSED":0}; summary["non_call_reference_counts"]={"total":0,"UNKNOWN_FAIL_CLOSED":0}
  migration={"EVP_PKEY_cmp":{"migration_status":"APPROVED","approval":"true"}}
  policy={"api_rules":{"EVP_PKEY_cmp":{"status":"DIRECT_REPLACEMENT","reason":"Use EVP_PKEY_eq after confirming public-key equality semantics.","approved":True}}}
@@ -140,11 +140,11 @@ with tempfile.TemporaryDirectory() as d:
  assert not report["complete"] and any("macro EXCLUDED_WITH_EVIDENCE" in x for x in report["failures"])
 # A lexical macro exclusion is invalid if target preprocessing found the API
 # active anywhere in the same component (including token-paste expansion).
-active_call={"component":"wappd","path":"wappd/x.c","line":1,"api":"EVP_PKEY_cmp",
+active_call={"component":"wappd","path":"wappd/x.c","line":2,"api":"EVP_PKEY_cmp",
  "reference_kind":"CALL_EXPRESSION","reachability_status":"ACTIVE","source_sha256":digest}
-active_inventory=[{"component":"wappd","path":"wappd/x.c","line":"1","api":"EVP_PKEY_cmp",
+active_inventory=[{"component":"wappd","path":"wappd/x.c","line":"2","api":"EVP_PKEY_cmp",
  "deprecated_macro":"OSSL_DEPRECATEDIN_3_0"}]
-forged_macro={"component":"wappd","path":"wappd/x.c","line":1,"api":"EVP_PKEY_cmp","macro":"WRAP",
+forged_macro={"component":"wappd","path":"wappd/x.c","line":2,"api":"EVP_PKEY_cmp","macro":"WRAP",
  "reachability":"UNREFERENCED_MACRO_DEFINITION","reachability_status":"EXCLUDED_WITH_EVIDENCE",
  "reason":"macro definition is lexically unreferenced and no target-preprocessed API call exists in the component",
  "source_sha256":digest}
