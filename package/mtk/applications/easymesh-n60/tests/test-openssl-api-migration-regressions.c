@@ -80,7 +80,8 @@ static int make_dh(EVP_PKEY **out) {
  EVP_PKEY_CTX *ctx=NULL; char group[]="ffdhe2048"; OSSL_PARAM p[2]; int ok=0;
  ctx=EVP_PKEY_CTX_new_from_name(NULL,"DH","provider=default"); if(!ctx||EVP_PKEY_keygen_init(ctx)<=0) goto done;
  p[0]=OSSL_PARAM_construct_utf8_string(OSSL_PKEY_PARAM_GROUP_NAME,group,0); p[1]=OSSL_PARAM_construct_end();
- if(EVP_PKEY_CTX_set_params(ctx,p)<=0||EVP_PKEY_generate(ctx,out)<=0) goto done; ok=1;
+ if(EVP_PKEY_CTX_set_params(ctx,p)<=0||EVP_PKEY_generate(ctx,out)<=0) goto done;
+ ok=1;
 done: EVP_PKEY_CTX_free(ctx); return ok;
 }
 static int derive(EVP_PKEY *local,EVP_PKEY *peer,unsigned char *secret,size_t *len) {
