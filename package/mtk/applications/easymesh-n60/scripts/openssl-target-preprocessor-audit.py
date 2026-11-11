@@ -263,19 +263,27 @@ def source_reachability_is_complete(make_ok,parse_errors,preprocess_errors,
 
 def classify_reference_reachability(source,line,api,reference_kind,hits,emitted_lines,
                                     compiled_sources,component_complete):
- """Do not exclude a reference unless its containing source was actually preprocessed."""
+ """Classify a lexical reference against the complete target-preprocessed TU set.
+
+ A source file included by another translation unit is not itself a compiler
+ command's top-level source. Requiring it to appear in compiled_sources wrongly
+ marks every such include as UNKNOWN, even when the exact source line is absent
+ from every target preprocessor output. The complete component compile graph,
+ successful preprocessing of every TU, and absence of the source line together
+ are the negative reachability proof. A line that is emitted but does not map to
+ the expected API remains UNKNOWN (fail closed).
+ """
  key=(source,line,api)
  if reference_kind=="UNKNOWN_REFERENCE_KIND": return "UNKNOWN_FAIL_CLOSED"
- # A declaration/definition is a real target-preprocessed reference, but it is
- # not an invocation. Preserve it as ACTIVE evidence so the API gate can count
- # it separately without treating it as a deprecated call site.
+ line_emitted=(source,line) in emitted_lines
  if reference_kind=="DECLARATION_OR_DEFINITION":
-  if (source,line) in emitted_lines and source in compiled_sources and component_complete:
+  if line_emitted and component_complete:
    return "ACTIVE"
+  if not line_emitted and component_complete:
+   return "EXCLUDED_WITH_EVIDENCE"
   return "UNKNOWN_FAIL_CLOSED"
  if key in hits: return "ACTIVE"
- if (source,line) in emitted_lines: return "UNKNOWN_FAIL_CLOSED"
- if source not in compiled_sources: return "UNKNOWN_FAIL_CLOSED"
+ if line_emitted: return "UNKNOWN_FAIL_CLOSED"
  if component_complete: return "EXCLUDED_WITH_EVIDENCE"
  return "UNKNOWN_FAIL_CLOSED"
 
@@ -608,11 +616,12 @@ def main():
   source_tus=[x for x in compiled_tus if canon(x["source"],repo)==src]
   negative_proof=None
   if state=="EXCLUDED_WITH_EVIDENCE":
-   negative_proof={"source_translation_unit":bool(source_tus),
-    "component_complete":r["component"] in complete,
+   negative_proof={"component_compile_graph_complete":r["component"] in complete,
+    "source_is_direct_translation_unit":bool(source_tus),
     "api_hit_absent":(src,r["line"],r["api"]) not in hits,
-    "source_line_absent":(src,r["line"]) not in emitted_lines,
-    "preprocessed_sha256":sorted(x["preprocessed_sha256"] for x in source_tus),
+    "source_line_absent_from_all_target_preprocessing":(src,r["line"]) not in emitted_lines,
+    "preprocessed_translation_units":[{"source":x["source"],"preprocessed_sha256":x["preprocessed_sha256"]}
+      for x in compiled_tus],
     "target_compiler_sha256":sha(compiler_path),
     "target_config_sha256":sha(a.target_config),
     "source_sha256":source_digest,
@@ -632,11 +641,12 @@ def main():
   source_tus=[x for x in compiled_tus if canon(x["source"],repo)==src]
   negative_proof=None
   if state=="EXCLUDED_WITH_EVIDENCE":
-   negative_proof={"source_translation_unit":bool(source_tus),
-    "component_complete":r["component"] in complete,
+   negative_proof={"component_compile_graph_complete":r["component"] in complete,
+    "source_is_direct_translation_unit":bool(source_tus),
     "api_hit_absent":(src,r["line"],r["api"]) not in hits,
-    "source_line_absent":(src,r["line"]) not in emitted_lines,
-    "preprocessed_sha256":sorted(x["preprocessed_sha256"] for x in source_tus),
+    "source_line_absent_from_all_target_preprocessing":(src,r["line"]) not in emitted_lines,
+    "preprocessed_translation_units":[{"source":x["source"],"preprocessed_sha256":x["preprocessed_sha256"]}
+      for x in compiled_tus],
     "target_compiler_sha256":sha(compiler_path),
     "target_config_sha256":sha(a.target_config),
     "source_sha256":source_digest,
