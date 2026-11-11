@@ -15,6 +15,7 @@ MIGRATION_MAP = "package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-
 POLICY = "package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json"
 SCOPE_MANIFEST = "package/mtk/applications/easymesh-n60/tests/openssl-easymesh-scope.json"
 REPO_INPUTS = [
+    "package/mtk/vendor-sources.lock.json",
     REVIEW, MATRIX, MIGRATION_MAP, POLICY, SCOPE_MANIFEST,
     "package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regressions.c",
     "package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regression-matrix.py",
@@ -57,6 +58,7 @@ def validate_ready(a):
     regression = read_json(a.regression_results)
     provider = read_json(a.provider_result)
     baseline = read_json(a.baseline_attestation)
+    vendor = read_json(a.vendor_attestation)
     review = rows(repo / REVIEW)
     migration = rows(repo / MIGRATION_MAP)
     matrix = read_json(repo / MATRIX)
@@ -127,6 +129,14 @@ def validate_ready(a):
         failures.append("exact-SHA OpenSSL header baseline attestation is invalid")
     if not re.fullmatch(r"[0-9a-f]{64}", str(baseline_artifact.get("sha256", ""))):
         failures.append("OpenSSL baseline artifact digest is missing or invalid")
+    vendor_lock = repo / "package/mtk/vendor-sources.lock.json"
+    vendor_files = vendor.get("files", {})
+    if (vendor.get("status") != "passed" or vendor.get("commit_sha") != current_sha
+        or vendor.get("run_id") != str(run_id) or vendor.get("run_attempt") != str(attempt)
+        or vendor.get("lock_path") != "package/mtk/vendor-sources.lock.json"
+        or vendor.get("lock_sha256") != sha256(vendor_lock)
+        or vendor_files.get("package/mtk/vendor-sources.lock.json") != sha256(vendor_lock)):
+        failures.append("same-run vendor audit credential or immutable vendor lock SHA256 is invalid")
     artifact_id = str(a.artifact_id)
     artifact_digest = str(a.artifact_digest).removeprefix("sha256:")
     if not artifact_id.isdigit() or not re.fullmatch(r"[0-9a-f]{64}", artifact_digest):
@@ -149,6 +159,7 @@ def validate_ready(a):
         "inputs": {p: sha256(repo / p) for p in REPO_INPUTS},
         "evidence": evidence,
         "artifact": {"name": "n60-openssl-3.5.9-api-and-provider-audit", "id": int(artifact_id), "sha256": artifact_digest},
+        "vendor_lock_sha256": vendor.get("lock_sha256"),
         "result": {"api_gate": "PASS", "target_preprocessor": "PASS", "api_regressions": "PASS",
                    "provider_runtime": "PASS", "firmware_compile_invoked": False},
     }
@@ -185,9 +196,17 @@ def verify(a):
         evidence_paths[key] = evidence_path
         if sha256(evidence_path) != item.get("sha256"):
             raise ValueError("downloaded OpenSSL evidence hash mismatch: " + basename)
-    vendor = Path(a.vendor_attestation)
-    if sha256(vendor) != att.get("evidence", {}).get("vendor_attestation", {}).get("sha256"):
+    vendor_path = Path(a.vendor_attestation)
+    vendor = read_json(vendor_path)
+    lock_path = repo / "package/mtk/vendor-sources.lock.json"
+    if sha256(vendor_path) != att.get("evidence", {}).get("vendor_attestation", {}).get("sha256"):
         raise ValueError("vendor source audit credential hash differs from the OpenSSL API credential")
+    if (vendor.get("status") != "passed" or vendor.get("commit_sha") != current_sha
+        or vendor.get("run_id") != str(a.expected_run_id) or vendor.get("run_attempt") != str(a.expected_run_attempt)
+        or vendor.get("lock_sha256") != att.get("vendor_lock_sha256")
+        or vendor.get("lock_sha256") != sha256(lock_path)
+        or vendor.get("files", {}).get("package/mtk/vendor-sources.lock.json") != sha256(lock_path)):
+        raise ValueError("same-run vendor lock SHA256 is not bound to the OpenSSL API credential")
     if a.verify_remote_artifact:
         remote = subprocess.run(
             ["gh", "api", f"repos/{a.repository}/actions/artifacts/{att['artifact']['id']}"],
