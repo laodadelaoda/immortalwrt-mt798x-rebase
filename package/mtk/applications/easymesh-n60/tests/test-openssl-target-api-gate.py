@@ -130,7 +130,7 @@ with tempfile.TemporaryDirectory() as d:
  # An active call passes only with an explicit approved migration decision and policy.
  non=[]; call=[{"component":"wappd","path":"wappd/x.c","line":2,"api":"EVP_PKEY_cmp","reference_kind":"CALL_EXPRESSION","reachability_status":"ACTIVE","source_sha256":digest}]
  summary["callsite_counts"]={"total":1,"UNKNOWN_FAIL_CLOSED":0}; summary["non_call_reference_counts"]={"total":0,"UNKNOWN_FAIL_CLOSED":0}
- migration={"EVP_PKEY_cmp":{"migration_status":"APPROVED","approval":"true"}}
+ migration={"EVP_PKEY_cmp":{"migration_status":"LEGACY_RETAINED","approval":"true"}}
  policy={"api_rules":{"EVP_PKEY_cmp":{"status":"DIRECT_REPLACEMENT","reason":"Use EVP_PKEY_eq after confirming public-key equality semantics.","approved":True}}}
  report=m.evaluate(inv,call,non,summary,macros,migration,policy,root,git)
  assert not report["complete"] and any("still active" in x for x in report["failures"])
@@ -197,7 +197,7 @@ assert unknown_removed[0]["scope_status"]=="UNKNOWN_FAIL_CLOSED"
 removed_row={"api":"EVP_MD_CTX_md","requires_patch_semantic_review":True}
 unreviewed_removed={"EVP_MD_CTX_md":{"migration_status":"UNREVIEWED","approval":"false"}}
 assert m.validate_removed_api_reviews([removed_row],unreviewed_removed,{})
-approved_removed={"EVP_MD_CTX_md":{"migration_status":"APPROVED","approval":"true"}}
+approved_removed={"EVP_MD_CTX_md":{"migration_status":"MIGRATED","approval":"true"}}
 assert m.validate_removed_api_reviews([removed_row],approved_removed,{}) 
 assert not m.validate_removed_api_reviews([removed_row],approved_removed,
  {"api_rules":{"EVP_MD_CTX_md":{"status":"SEMANTIC_ADAPTATION","approved":True,"reason":"The removed call is replaced with a semantically equivalent EVP accessor."}}})
@@ -283,10 +283,10 @@ assert any("missing semantic_invariants" in x for x in m.validate_semantic_revie
 
 forged_approved=[dict(x) for x in review_rows]
 candidate=next(x for x in forged_approved if x["review_status"]=="IMPLEMENTED_PENDING_VALIDATION")
-candidate["review_status"]="APPROVED"
+candidate["review_status"]="MIGRATED"
 candidate["approval"]="true"
 candidate["review_basis"]="approved"
-assert any("lacks current-SHA/run/regression evidence" in x for x in m.validate_semantic_review(forged_approved,subset_rows,git))
+assert any("lacks current-SHA/run-attempt/regression evidence" in x for x in m.validate_semantic_review(forged_approved,subset_rows,git))
 
 
 # Each live target callsite must be joined to its 40-API semantic decision.
