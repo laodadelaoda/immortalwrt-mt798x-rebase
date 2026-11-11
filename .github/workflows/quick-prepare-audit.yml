@@ -524,7 +524,7 @@ jobs:
           # OpenSSL Configure generates target headers but does not compile OpenSSL.
           make -C package/libs/openssl TOPDIR="$GITHUB_WORKSPACE" configure V=s
           OPENSSL_VARS_OUTPUT="$(make -s -C package/libs/openssl TOPDIR="$GITHUB_WORKSPACE" \
-            --eval='dump-openssl-target-vars:; @printf "%s\\n" "__PKG_SOURCE__$(PKG_SOURCE)" "__PKG_SOURCE_URL__$(PKG_SOURCE_URL)" "__PKG_HASH__$(PKG_HASH)" "__PKG_BUILD_DIR__$(PKG_BUILD_DIR)" "__PATCH_DIR__$(PATCH_DIR)" "__OPENSSL_OPTIONS__$(OPENSSL_OPTIONS)"' \
+            --eval='dump-openssl-target-vars:; @printf "%s\n" "__PKG_SOURCE__$(PKG_SOURCE)" "__PKG_SOURCE_URL__$(PKG_SOURCE_URL)" "__PKG_HASH__$(PKG_HASH)" "__PKG_BUILD_DIR__$(PKG_BUILD_DIR)" "__PATCH_DIR__$(PATCH_DIR)" "__OPENSSL_OPTIONS__$(OPENSSL_OPTIONS)"' \
             dump-openssl-target-vars)"
           while IFS= read -r line; do
             case "$line" in
@@ -671,7 +671,7 @@ jobs:
           mapfile -t BUILD_DIRS < <(find "$GITHUB_WORKSPACE/build_dir" -mindepth 2 -maxdepth 2 -type d -name 'easymesh-n60-7.6.7.3' -print | sort)
           [[ "${#BUILD_DIRS[@]}" -eq 1 ]] || {
             echo "::error::Expected exactly one native EasyMesh Prepare tree for source capture; found ${#BUILD_DIRS[@]}."
-            printf '%s\\n' "${BUILD_DIRS[@]}"
+            printf '%s\n' "${BUILD_DIRS[@]}"
             exit 1
           }
           BUILD_DIR="${BUILD_DIRS[0]}"
@@ -707,10 +707,10 @@ jobs:
               for p in sorted(root.rglob("*")):
                   rel = p.relative_to(root).as_posix()
                   if p.is_symlink():
-                      h.update(b"L\\0" + rel.encode() + b"\\0" + str(p.readlink()).encode() + b"\\n")
+                      h.update(b"L\0" + rel.encode() + b"\0" + str(p.readlink()).encode() + b"\n")
                       files += 1
                   elif p.is_file():
-                      h.update(b"F\\0" + rel.encode() + b"\\0" + bytes.fromhex(sha256(p)) + b"\\n")
+                      h.update(b"F\0" + rel.encode() + b"\0" + bytes.fromhex(sha256(p)) + b"\n")
                       files += 1
               return {"sha256": h.hexdigest(), "entries": files}
           sources = {x["id"]: x for x in lock["sources"] if x["id"] in {"wappd", "1905daemon"}}
@@ -754,7 +754,7 @@ jobs:
                   for kind in ("prepared", "pristine")
               }
           }
-          (out / "source-manifest.json").write_text(json.dumps(manifest, indent=2) + "\\n", encoding="utf-8")
+          (out / "source-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
           print(json.dumps(manifest, indent=2))
           PY
 
