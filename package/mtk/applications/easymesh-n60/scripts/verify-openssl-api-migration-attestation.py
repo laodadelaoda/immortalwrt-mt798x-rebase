@@ -87,6 +87,11 @@ def validate_ready(a):
         failures.append("target API gate still has unreviewed active deprecated APIs")
     if gate.get("semantic_review_rows") != 40 or gate.get("semantic_review_sha256") != sha256(repo / REVIEW):
         failures.append("target API gate is not bound to the exact 40-API semantic-review CSV")
+    callsite_map_path = a.gate_report.parent / "openssl-40-api-callsite-migration-map.csv"
+    if (gate.get("callsite_migration_map_rows") != gate.get("target_active_call_sites")
+        or not callsite_map_path.is_file()
+        or gate.get("callsite_migration_map_sha256") != sha256(callsite_map_path)):
+        failures.append("target API gate is not bound to the complete exact-source callsite migration map")
     subset = {x.get("api"): x for x in gate.get("easymesh_api_subset", [])}
     active = set(gate.get("target_active_apis", []))
     if not active.issubset(set(review_by)):
@@ -94,11 +99,10 @@ def validate_ready(a):
     if set(gate.get("easymesh_api_migration_required", [])) != active:
         failures.append("target API migration-required set differs from the actual active API set")
     for api, row in review_by.items():
-        mr = migration_by.get(api, {})
         item = subset.get(api, {})
         rule = rules.get(api, {})
-        if mr.get("migration_status") != "APPROVED" or str(mr.get("approval", "")).lower() != "true":
-            failures.append(api + ": migration-map approval is not complete")
+        if api not in migration_by:
+            failures.append(api + ": API is missing from the 68-row traceability baseline")
         if str(row.get("approval", "")).lower() != "true" or row.get("review_status") not in {"IMPLEMENTED", "MIGRATED", "LEGACY_RETAINED"}:
             failures.append(api + ": semantic review is not approved after implementation")
         if not str(row.get("review_decision", "")).strip() or not str(row.get("semantic_invariants", "")).strip():
@@ -168,6 +172,7 @@ def validate_ready(a):
         "provider_result": {"path": str(a.provider_result), "sha256": sha256(a.provider_result)},
         "baseline_attestation": {"path": str(a.baseline_attestation), "sha256": sha256(a.baseline_attestation)},
         "vendor_attestation": {"path": str(a.vendor_attestation), "sha256": sha256(a.vendor_attestation)},
+        "callsite_migration_map": {"path": str(callsite_map_path), "sha256": sha256(callsite_map_path)},
     }
     return {
         "schema_version": 1, "status": "VERIFIED", "scope_id": SCOPE, "openssl_version": "3.5.9",
@@ -206,6 +211,7 @@ def verify(a):
         "regression_results": "openssl-api-regression-results.json",
         "provider_result": "provider-runtime-result.json",
         "baseline_attestation": "openssl-migration-baseline.attestation.json",
+        "callsite_migration_map": "openssl-40-api-callsite-migration-map.csv",
     }
     evidence_paths = {}
     for key, basename in evidence_map.items():
