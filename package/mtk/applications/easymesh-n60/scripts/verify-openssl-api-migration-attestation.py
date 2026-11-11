@@ -20,6 +20,7 @@ REPO_INPUTS = [
     "package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regression-matrix.py",
     "package/mtk/applications/easymesh-n60/scripts/run-openssl-provider-runtime.sh",
     "package/mtk/applications/easymesh-n60/scripts/enforce-openssl-target-api-gate.py",
+    "package/mtk/applications/easymesh-n60/scripts/verify-openssl-api-migration-attestation.py",
 ]
 
 def read_json(path):
@@ -96,6 +97,8 @@ def validate_ready(a):
         ids = matrix_by.get(api, {}).get("test_ids", [])
         if not ids or not set(ids).issubset(set(regression.get("passed_test_ids", []))):
             failures.append(api + ": required regression tests did not all pass")
+        if sorted(rule.get("regression_test_ids", [])) != sorted(ids):
+            failures.append(api + ": migration policy regression_test_ids do not match the 40-API test matrix")
         if api in active:
             if rule.get("status") != "LEGACY_RETAINED" or row.get("review_status") != "LEGACY_RETAINED":
                 failures.append(api + ": deprecated call remains active without an explicitly approved legacy-retention decision")
@@ -186,6 +189,8 @@ def verify(a):
             raise ValueError("OpenSSL API evidence artifact name/expiry validation failed")
         if data.get("workflow_run", {}).get("id") != int(a.expected_run_id) or digest != att["artifact"]["sha256"]:
             raise ValueError("OpenSSL API evidence artifact run ID or GitHub digest mismatch")
+        if data.get("workflow_run", {}).get("head_sha") != current_sha:
+            raise ValueError("OpenSSL API evidence artifact belongs to a different source revision")
     print("PASS: OpenSSL 3.5.9 40-API migration credential, source hashes, run/attempt and evidence artifact verified.")
 
 def main():
