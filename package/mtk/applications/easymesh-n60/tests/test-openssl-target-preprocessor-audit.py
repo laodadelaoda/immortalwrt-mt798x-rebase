@@ -31,6 +31,19 @@ with tempfile.TemporaryDirectory() as d:
  assert "-E" in argv and "-c" not in argv and "-MMD" not in argv and "-MF" not in argv
  assert argv[-2:]==["-o",str(root/"x.i")]
  assert "-oignored.o" not in m.cpp_argv({"argv":["cc","-c","x.c","-oignored.o"]},root/"joined.i")
+ # Link-only arguments from native Make dry-runs must not reach -E/-dM:
+ # otherwise GCC attempts to open static archives and treats absent link
+ # outputs as preprocessing failures.
+ link_cmd={"argv":["cc","-c","x.c","-o","x.o","-Lstage/lib","-lssl","-lcrypto",
+                  "-Wl,--no-as-needed","-Xlinker","--as-needed","../../lib_export/lib1905_interface.a",
+                  "libvendor.so.1","-pthread","-DOPENSSL_TARGET=1"]}
+ clean_argv=m.cpp_argv(link_cmd,root/"link.i")
+ joined=" ".join(clean_argv)
+ for token in ("-Lstage/lib","-lssl","-lcrypto","-Wl,--no-as-needed","--as-needed",
+               "lib1905_interface.a","libvendor.so.1"):
+  assert token not in clean_argv and token not in joined, (token,clean_argv)
+ assert "-pthread" in clean_argv and "-DOPENSSL_TARGET=1" in clean_argv
+ assert m.preprocessor_env(root/"target-staging",{})["STAGING_DIR"]==str((root/"target-staging").resolve())
  macrofile=root/"macros.txt"
  macrofile.write_text("#define OPENSSL_NO_ENGINE 1\n#define CONFIG_SUITEB\n")
  snapshot=m.macro_snapshot(macrofile)
