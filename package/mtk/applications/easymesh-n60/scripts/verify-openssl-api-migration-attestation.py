@@ -85,6 +85,8 @@ def validate_ready(a):
         failures.append("target API gate does not prove no firmware compile and zero UNKNOWN_FAIL_CLOSED")
     if gate.get("active_apis_unreviewed"):
         failures.append("target API gate still has unreviewed active deprecated APIs")
+    if gate.get("semantic_review_rows") != 40 or gate.get("semantic_review_sha256") != sha256(repo / REVIEW):
+        failures.append("target API gate is not bound to the exact 40-API semantic-review CSV")
     subset = {x.get("api"): x for x in gate.get("easymesh_api_subset", [])}
     active = set(gate.get("target_active_apis", []))
     if not active.issubset(set(review_by)):
