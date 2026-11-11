@@ -678,14 +678,23 @@ jobs:
             package/mtk/applications/easymesh-n60/tests/openssl-easymesh-scope.json \
             package/mtk/applications/easymesh-n60/tests/openssl-migration-baseline.lock.json \
             package/mtk/applications/easymesh-n60/tests/test-openssl-provider-runtime.c \
-            package/mtk/applications/easymesh-n60/scripts/run-openssl-provider-runtime.sh; do
+            package/mtk/applications/easymesh-n60/scripts/run-openssl-provider-runtime.sh \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regressions.c \
+            package/mtk/applications/easymesh-n60/tests/openssl-40-api-regression-matrix.json \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regression-matrix.py \
+            package/mtk/applications/easymesh-n60/scripts/verify-openssl-api-migration-attestation.py; do
             test -s "$input" || {
               echo "::error::Required OpenSSL audit input is missing or empty: $input"
               exit 1
             }
           done
           python3 package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py
-          echo "PASS: OpenSSL inventory and target-preprocessor audit inputs are present after native Prepare and MT Wi-Fi 026 evidence."
+          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regression-matrix.py \
+            --review package/mtk/applications/easymesh-n60/tests/openssl-40-active-api-semantic-review.csv \
+            --matrix package/mtk/applications/easymesh-n60/tests/openssl-40-api-regression-matrix.json \
+            --test-source package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regressions.c
+          python3 -m py_compile package/mtk/applications/easymesh-n60/scripts/verify-openssl-api-migration-attestation.py
+          echo "PASS: OpenSSL inventory, preprocessor audit and exact 40-API regression matrix inputs are present after native Prepare and MT Wi-Fi 026 evidence."
 
       - name: Run Provider-native OpenSSL 3.5.9 runtime regression tests
         id: openssl_provider_runtime
@@ -705,6 +714,24 @@ jobs:
             package/mtk/applications/easymesh-n60/tests/test-openssl-provider-runtime.c \
             "$RUNNER_TEMP/n60-openssl-provider-runtime" \
             "$GITHUB_WORKSPACE"
+
+      - name: Enforce provider-native 40-API regression results
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - "$RUNNER_TEMP/n60-openssl-provider-runtime/openssl-api-regression-results.json" <<'PY'
+          import json,sys
+          from pathlib import Path
+          p=Path(sys.argv[1])
+          data=json.loads(p.read_text())
+          assert data.get("scope_id") == "n60-easymesh-openssl-3.5.9"
+          assert data.get("openssl_version") == "3.5.9"
+          assert data.get("status") == "PASS"
+          assert data.get("api_count") == 40
+          assert len(data.get("api_coverage", [])) == 40
+          assert all(x.get("status") == "PASS" for x in data["api_coverage"])
+          print("PASS: provider-native regression suite covers all 40 EasyMesh API entries.")
+          PY
 
       - name: Enforce strict OpenSSL 3.5.9 API migration and const-correctness gate
         shell: bash
@@ -756,6 +783,7 @@ jobs:
             --output artifacts/easymesh-openssl-api-audit/openssl-target-api-gate.json
 
       - name: Upload OpenSSL API inventory and Provider runtime evidence
+        id: openssl_api_evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
@@ -763,6 +791,7 @@ jobs:
           path: |
             artifacts/easymesh-openssl-api-audit/
             artifacts/easymesh-openssl-preprocessor-audit/
+            .openssl-baseline/attestation/openssl-migration-baseline.attestation.json
             ${{ runner.temp }}/n60-openssl-provider-runtime/
           if-no-files-found: error
           retention-days: 30
@@ -797,6 +826,34 @@ jobs:
           assert data.get("callsite_counts", {}).get("UNKNOWN_FAIL_CLOSED") == 0
           print("PASS: direct deprecated source occurrences have target-preprocessor evidence.")
           PY
+
+      - name: Create immutable 40-API OpenSSL migration attestation
+        if: success()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 package/mtk/applications/easymesh-n60/scripts/verify-openssl-api-migration-attestation.py create \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --gate-report artifacts/easymesh-openssl-api-audit/openssl-target-api-gate.json \
+            --preprocessor-summary artifacts/easymesh-openssl-preprocessor-audit/openssl-target-preprocessor-summary.json \
+            --regression-results "$RUNNER_TEMP/n60-openssl-provider-runtime/openssl-api-regression-results.json" \
+            --provider-result "$RUNNER_TEMP/n60-openssl-provider-runtime/provider-runtime-result.json" \
+            --baseline-attestation .openssl-baseline/attestation/openssl-migration-baseline.attestation.json \
+            --vendor-attestation .audit-attestation/vendor-audit-attestation.json \
+            --output artifacts/openssl-api-migration-attestation.json \
+            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --expected-git-sha "$GITHUB_SHA" --ref "$GITHUB_REF" \
+            --artifact-id "${{ steps.openssl_api_evidence.outputs.artifact-id }}" \
+            --artifact-digest "${{ steps.openssl_api_evidence.outputs.artifact-digest }}"
+
+      - name: Upload immutable 40-API OpenSSL migration attestation
+        if: success()
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-openssl-api-migration-attestation
+          path: artifacts/openssl-api-migration-attestation.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload Linux kernel patch inventory and attestation
         if: always()
