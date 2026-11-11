@@ -222,14 +222,20 @@ with tempfile.TemporaryDirectory() as d:
  assert not m.source_reachability_is_complete(True,[],[],[],[{"artifact":"x"}],[],1,0,0,0)
  compiled=str((comp/"libsrc.c").resolve())
  not_compiled=str((comp/"not-compiled.c").resolve())
- assert m.classify_reference_reachability(not_compiled,1,"EVP_PKEY_free","CALL_EXPRESSION",set(),set(),{compiled},True)=="UNKNOWN_FAIL_CLOSED"
+ # A source file that is not a top-level TU may still be excluded when
+ # every TU in the component has been preprocessed successfully and the
+ # lexical source line is absent from all outputs.
+ assert m.classify_reference_reachability(not_compiled,1,"EVP_PKEY_free","CALL_EXPRESSION",set(),set(),{compiled},True)=="EXCLUDED_WITH_EVIDENCE"
+ assert m.classify_reference_reachability(not_compiled,1,"EVP_PKEY_free","CALL_EXPRESSION",set(),set(),{compiled},False)=="UNKNOWN_FAIL_CLOSED"
  assert m.classify_reference_reachability(compiled,1,"EVP_PKEY_free","CALL_EXPRESSION",{(compiled,1,"EVP_PKEY_free")},set(),{compiled},True)=="ACTIVE"
  assert m.classify_reference_reachability(compiled,1,"EVP_PKEY_free","CALL_EXPRESSION",set(),{(compiled,1)},{compiled},True)=="UNKNOWN_FAIL_CLOSED"
  assert m.classify_reference_reachability(compiled,1,"EVP_PKEY_free","CALL_EXPRESSION",set(),set(),{compiled},True)=="EXCLUDED_WITH_EVIDENCE"
  assert m.classify_reference_reachability(compiled,1,"EVP_PKEY_free","UNKNOWN_REFERENCE_KIND",set(),set(),{compiled},True)=="UNKNOWN_FAIL_CLOSED"
  # Target-preprocessed declarations are recorded but never counted as calls.
  assert m.classify_reference_reachability(compiled,1,"HMAC_CTX_free","DECLARATION_OR_DEFINITION",set(),{(compiled,1)},{compiled},True)=="ACTIVE"
- assert m.classify_reference_reachability(compiled,1,"HMAC_CTX_free","DECLARATION_OR_DEFINITION",set(),set(),{compiled},True)=="UNKNOWN_FAIL_CLOSED"
+ # Included headers/declaration files need not be top-level compiler inputs.
+ assert m.classify_reference_reachability(compiled,1,"HMAC_CTX_free","DECLARATION_OR_DEFINITION",set(),{(compiled,1)},set(),True)=="ACTIVE"
+ assert m.classify_reference_reachability(compiled,1,"HMAC_CTX_free","DECLARATION_OR_DEFINITION",set(),set(),{compiled},True)=="EXCLUDED_WITH_EVIDENCE"
  assert m.classify_reference_reachability(compiled,1,"HMAC_CTX_free","DECLARATION_OR_DEFINITION",set(),{(compiled,1)},{compiled},False)=="UNKNOWN_FAIL_CLOSED"
  # Archives and shared objects remain in the independent symbol/string audit.
  import os
