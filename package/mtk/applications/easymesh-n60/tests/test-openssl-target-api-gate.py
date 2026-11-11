@@ -103,11 +103,11 @@ with tempfile.TemporaryDirectory() as d:
  non[0]["reachability_status"]="ACTIVE"
  # An active API with no migration-map row must fail closed.
  report=m.evaluate(inv,call,non,summary,macros,{},policy,root,git)
- assert not report["complete"] and any("missing from the migration map" in x for x in report["failures"])
+ assert not report["complete"] and any("missing from the 40-API semantic review CSV" in x for x in report["failures"])
  # An active call contradicting a lexical exclusion claim must fail closed.
  false_exclusion={"EVP_PKEY_cmp":{"migration_status":"UNREVIEWED","approval":"false","source_reachability_status":"UNREFERENCED_MACRO_DEFINITION"}}
  report=m.evaluate(inv,call,non,summary,macros,false_exclusion,policy,root,git)
- assert not report["complete"] and any("contradicts the migration map's exclusion claim" in x for x in report["failures"])
+ assert not report["complete"] and any("remains unapproved" in x for x in report["failures"])
  # Unknown target reachability, missing evidence, and changed source bytes all fail closed.
  non[0]["reference_kind"]="UNKNOWN_REFERENCE_KIND"
  non[0]["reachability_status"]="UNKNOWN_FAIL_CLOSED"
