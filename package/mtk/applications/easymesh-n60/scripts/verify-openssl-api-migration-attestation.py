@@ -125,8 +125,11 @@ def validate_ready(a):
         failures.append("Provider-native OpenSSL runtime regression did not pass")
     baseline_run = baseline.get("run", {})
     baseline_artifact = baseline.get("artifact", {})
-    if baseline.get("status") != "VERIFIED" or baseline_run.get("git_sha") != current_sha:
-        failures.append("exact-SHA OpenSSL header baseline attestation is invalid")
+    if (baseline.get("status") != "VERIFIED" or baseline_run.get("git_sha") != current_sha
+        or not isinstance(baseline_run.get("id"), int) or not isinstance(baseline_run.get("attempt"), int)
+        or baseline_artifact.get("name") != "n60-openssl-1111w-to-359-header-baseline"
+        or not isinstance(baseline_artifact.get("id"), int)):
+        failures.append("exact-SHA OpenSSL header baseline attestation identity is invalid")
     if not re.fullmatch(r"[0-9a-f]{64}", str(baseline_artifact.get("sha256", ""))):
         failures.append("OpenSSL baseline artifact digest is missing or invalid")
     vendor_lock = repo / "package/mtk/vendor-sources.lock.json"
