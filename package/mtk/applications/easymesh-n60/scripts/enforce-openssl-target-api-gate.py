@@ -173,7 +173,7 @@ def validate_semantic_review(review_rows,subset,expected_git_sha):
    basis=str(row.get("review_basis",""))
    for token in ("git_sha="+expected_git_sha,"run_id=","regression_sha256="):
     if token not in basis:
-     failures.append(api+": approval lacks current-SHA/run/attestation evidence: "+token)
+     failures.append(api+": approval lacks current-SHA/run/regression evidence: "+token)
    if active!=0:
     failures.append(api+": approved migration still has active deprecated target callsites")
  for api,row in subset_by_api.items():
