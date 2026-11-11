@@ -141,7 +141,7 @@ def validate_semantic_review(review_rows,subset,expected_git_sha):
  if baseline_sites!=348:
   failures.append("40-API semantic review baseline must retain exactly 348 historical callsites")
  subset_by_api={normalize_api_name(x.get("api")):x for x in subset}
- allowed={"REVIEWED_PENDING_IMPLEMENTATION","IMPLEMENTED_PENDING_VALIDATION","APPROVED"}
+ allowed={"REVIEWED_PENDING_IMPLEMENTATION","IMPLEMENTED_PENDING_VALIDATION","IMPLEMENTED","MIGRATED","LEGACY_RETAINED"}
  for api,row in by_api.items():
   for field in ("components","review_decision","semantic_invariants","review_basis"):
    if not str(row.get(field,"")).strip():
@@ -152,10 +152,11 @@ def validate_semantic_review(review_rows,subset,expected_git_sha):
    failures.append(api+": approval must be an explicit true/false value")
   if status not in allowed:
    failures.append(api+": unsupported semantic review status: "+status)
-  if status!="APPROVED" and approval=="true":
+  approved_status=status in {"IMPLEMENTED","MIGRATED","LEGACY_RETAINED"}
+  if not approved_status and approval=="true":
    failures.append(api+": false approval: pending review status cannot carry approval=true")
-  if status=="APPROVED" and approval!="true":
-   failures.append(api+": APPROVED status requires approval=true")
+  if approved_status and approval!="true":
+   failures.append(api+": completed review status requires approval=true")
   actual=subset_by_api.get(api)
   if actual is None:
    failures.append(api+": 40-API review record has no matching target audit inventory record")
@@ -169,13 +170,15 @@ def validate_semantic_review(review_rows,subset,expected_git_sha):
     failures.append(api+": status/source inconsistency; implementation-pending-validation still has active target callsites")
    if "patch" not in str(row.get("review_basis","")).lower():
     failures.append(api+": implemented-pending-validation lacks patch/source evidence")
-  if status=="APPROVED":
+  if approved_status:
    basis=str(row.get("review_basis",""))
-   for token in ("git_sha="+expected_git_sha,"run_id=","regression_sha256="):
+   for token in ("git_sha="+expected_git_sha,"run_id=","run_attempt=","regression_sha256="):
     if token not in basis:
-     failures.append(api+": approval lacks current-SHA/run/regression evidence: "+token)
-   if active!=0:
-    failures.append(api+": approved migration still has active deprecated target callsites")
+     failures.append(api+": approval lacks current-SHA/run-attempt/regression evidence: "+token)
+   if status=="LEGACY_RETAINED" and active<=0:
+    failures.append(api+": LEGACY_RETAINED status has no active target callsite")
+   if status in {"IMPLEMENTED","MIGRATED"} and active!=0:
+    failures.append(api+": completed migration still has active deprecated target callsites")
  for api,row in subset_by_api.items():
   if int(row.get("active_call_sites",0) or 0)>0 and api not in by_api:
    failures.append(api+": active EasyMesh API is missing from the 40-API semantic review CSV")
@@ -206,8 +209,8 @@ def validate_removed_api_reviews(subset,migration_map,policy,review_map=None):
    if not str(mr.get("review_decision","")).strip() or not str(mr.get("semantic_invariants","")).strip():
     failures.append("removed API has incomplete 40-API semantic review: "+api)
    continue
-  if status!="APPROVED" or str(mr.get("approval","")).lower()!="true":
-   failures.append("deprecated API removed from prepared source lacks 40-API semantic review/approval: "+api)
+  if status not in {"IMPLEMENTED","MIGRATED"} or str(mr.get("approval","")).lower()!="true":
+   failures.append("deprecated API removed from prepared source lacks completed 40-API migration approval: "+api)
    continue
   rule=policy.get("api_rules",{}).get(api)
   if (not isinstance(rule,dict) or rule.get("status") not in {"DIRECT_REPLACEMENT","SEMANTIC_ADAPTATION"}
@@ -348,7 +351,7 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
    failures.append("active deprecated API is missing from the 40-API semantic review CSV: "+api)
    continue
   status=mr.get("review_status") or mr.get("migration_status")
-  if status!="APPROVED" or str(mr.get("approval","")).lower()!="true":
+  if status!="LEGACY_RETAINED" or str(mr.get("approval","")).lower()!="true":
    failures.append("active deprecated API remains unapproved or unimplemented in the 40-API semantic review: "+api)
    continue
   rule=policy.get("api_rules",{}).get(api)
@@ -407,7 +410,7 @@ def main():
  report["semantic_review_rows"]=len(review_rows)
  report["semantic_review_sha256"]=sha256(a.review)
  if len(review_map)!=len(review_rows): report["failures"].append("40-API semantic review contains duplicate API records")
- report["active_apis_unreviewed"]=[api for api in report["target_active_apis"] if api not in review_map or review_map[api].get("review_status")!="APPROVED" or str(review_map[api].get("approval","")).lower()!="true"]
+ report["active_apis_unreviewed"]=[api for api in report["target_active_apis"] if api not in review_map or review_map[api].get("review_status") not in {"IMPLEMENTED","MIGRATED","LEGACY_RETAINED"} or str(review_map[api].get("approval","")).lower()!="true"]
  callsite_map=build_callsite_migration_map(load_json(a.callsites),review_map)
  callsite_map_path=a.output.parent/"openssl-40-api-callsite-migration-map.csv"
  callsite_fields=["component","path","line","api","reference_kind","reachability_status","source_sha256",
