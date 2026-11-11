@@ -316,7 +316,7 @@ def main():
  report["scope"]={"scope_id":scope.get("scope_id"),"openssl_version":scope.get("openssl_version"),
   "primary_components":scope.get("primary_components"),"supporting_dependencies":scope.get("supporting_dependencies"),
   "global_baseline":{"path":scope.get("global_baseline",{}).get("path"),"rows":len(migration_rows),
-   "sha256":sha256_file(a.migration_map),"role":"TRACEABILITY_ONLY"}}
+   "sha256":sha256(a.migration_map),"role":"TRACEABILITY_ONLY"}}
  report["complete"]=not report["failures"]
  a.output.parent.mkdir(parents=True,exist_ok=True)
  a.output.write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
