@@ -209,6 +209,10 @@ with tempfile.TemporaryDirectory() as d:
  assert m.classify_reference_reachability(compiled,1,"EVP_PKEY_free","CALL_EXPRESSION",set(),{(compiled,1)},{compiled},True)=="UNKNOWN_FAIL_CLOSED"
  assert m.classify_reference_reachability(compiled,1,"EVP_PKEY_free","CALL_EXPRESSION",set(),set(),{compiled},True)=="EXCLUDED_WITH_EVIDENCE"
  assert m.classify_reference_reachability(compiled,1,"EVP_PKEY_free","UNKNOWN_REFERENCE_KIND",set(),set(),{compiled},True)=="UNKNOWN_FAIL_CLOSED"
+ # Target-preprocessed declarations are recorded but never counted as calls.
+ assert m.classify_reference_reachability(compiled,1,"HMAC_CTX_free","DECLARATION_OR_DEFINITION",set(),{(compiled,1)},{compiled},True)=="ACTIVE"
+ assert m.classify_reference_reachability(compiled,1,"HMAC_CTX_free","DECLARATION_OR_DEFINITION",set(),set(),{compiled},True)=="UNKNOWN_FAIL_CLOSED"
+ assert m.classify_reference_reachability(compiled,1,"HMAC_CTX_free","DECLARATION_OR_DEFINITION",set(),{(compiled,1)},{compiled},False)=="UNKNOWN_FAIL_CLOSED"
  # Archives and shared objects remain in the independent symbol/string audit.
  import os
  bindir=root/"fake-bin"; bindir.mkdir()
