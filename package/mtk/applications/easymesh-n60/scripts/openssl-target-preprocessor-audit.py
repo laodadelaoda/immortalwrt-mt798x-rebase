@@ -342,17 +342,29 @@ def parse_commands(log,base,compiler,component_roots):
  return cmds,errors
 
 def cpp_argv(cmd,out):
+ # Replay the target compiler's preprocessing phase, not its link phase.
+ # GNU Make's verbose commands may contain archives/shared libraries and
+ # linker-only flags; retaining them makes GCC try to open link inputs even
+ # with -E (and can falsely mark otherwise valid translation units UNKNOWN).
  src=cmd["argv"]; dst=[]; i=0
  while i<len(src):
   t=src[i]
   if t=="-c": dst.append("-E")
   elif t=="-o": i+=1
   elif t.startswith("-o") and len(t)>2: pass
-  elif t in ("-MF","-MT","-MQ"): i+=1
-  elif t in ("-MMD","-MD","-MP","-MG") or t.startswith(("-Wp,-MD,","-Wp,-MMD,")): pass
+  elif t in ("-MF","-MT","-MQ","-L","-l","-Xlinker","-T","-u"): i+=1
+  elif t in ("-MMD","-MD","-MP","-MG","-shared","-static","-rdynamic","-s") or t.startswith(("-Wp,-MD,","-Wp,-MMD,","-Wl,","-L","-l")): pass
+  elif Path(t).suffix.lower() in (".a",".o",".lo") or re.search(r"\\.so(?:\\.\\d+)*$",t): pass
   else: dst.append(t)
   i+=1
  dst.extend(["-dD","-o",str(out)]); return dst
+
+def preprocessor_env(staging,base=None):
+ env=(os.environ if base is None else base).copy()
+ # OpenWrt's target compiler wrapper uses STAGING_DIR to select target
+ # headers. Make's environment is not inherited by this independent replay.
+ env["STAGING_DIR"]=str(Path(staging).resolve())
+ return env
 
 def macro_argv(cmd,out):
  argv=cpp_argv(cmd,out)
@@ -530,10 +542,13 @@ def main():
   for i,cmd in enumerate(compile_commands):
    key=hashlib.sha256((comp+cmd["source"]+str(i)).encode()).hexdigest()[:16]
    dest=out/"preprocessed"/f"{comp}-{key}.i"; pargv=cpp_argv(cmd,dest)
-   pp=subprocess.run(pargv,cwd=cmd["cwd"],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+   # Reproduce the same target staging environment used by OpenWrt Make.
+   # Without this export, the toolchain wrapper falls back to host headers.
+   pp_env=preprocessor_env(a.staging)
+   pp=subprocess.run(pargv,cwd=cmd["cwd"],env=pp_env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
    err=out/"preprocessed"/f"{comp}-{key}.stderr.txt"; err.write_text(pp.stderr,encoding="utf-8")
    macrofile=out/"preprocessed"/f"{comp}-{key}.macros.txt"; margv=macro_argv(cmd,macrofile)
-   mp=subprocess.run(margv,cwd=cmd["cwd"],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+   mp=subprocess.run(margv,cwd=cmd["cwd"],env=pp_env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
    merr=out/"preprocessed"/f"{comp}-{key}.macros.stderr.txt"; merr.write_text(mp.stderr,encoding="utf-8")
    item={"source":cmd["source"],"cwd":cmd["cwd"],"make_log_line":cmd["line"],"make_subtarget":cmd.get("subtarget"),
          "argv":pargv,"returncode":pp.returncode,"preprocessed_output":str(dest.resolve()),
