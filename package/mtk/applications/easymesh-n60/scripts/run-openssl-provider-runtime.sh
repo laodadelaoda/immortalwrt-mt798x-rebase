@@ -9,7 +9,7 @@ PKG_VERSION="$(sed -n 's/^PKG_VERSION:=//p' "$repo/package/libs/openssl/Makefile
 echo "PASS: OpenSSL source template is present and package Makefile pins the audited archive to 3.5.9."
 build="$RUNNER_TEMP/n60-openssl-provider-host-build"; rm -rf "$build"; mkdir -p "$build"; cp -a "$src" "$build/openssl-src"
 cd "$build/openssl-src"
-perl ./Configure linux-x86_64 no-shared no-tests no-apps no-docs --prefix="$build/install"
+perl ./Configure linux-x86_64 shared no-tests no-apps no-docs --prefix="$build/install"
 make -j"$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)"
 test -s include/openssl/opensslv.h || { echo "FAIL: OpenSSL build did not generate include/openssl/opensslv.h"; exit 1; }
 test -s providers/legacy.so || { echo "FAIL: OpenSSL 3.5.9 Legacy Provider module was not built; DES migration regression cannot be validated."; exit 1; }
@@ -17,13 +17,13 @@ for item in "OPENSSL_VERSION_MAJOR 3" "OPENSSL_VERSION_MINOR 5" "OPENSSL_VERSION
  set -- $item
  grep -Eq "^[[:space:]]*#[[:space:]]*define[[:space:]]+$1[[:space:]]+$2([[:space:]]|$)" include/openssl/opensslv.h || { echo "FAIL: generated OpenSSL header version mismatch: $item"; exit 1; }
 done
-cc -std=c11 -Wall -Wextra -Werror -I"$build/openssl-src/include" "$test_c" "$build/openssl-src/libssl.a" "$build/openssl-src/libcrypto.a" -ldl -pthread -lresolv -o "$out/provider-runtime-test"
-OPENSSL_MODULES="$build/openssl-src/providers" OPENSSL_CONF=/dev/null "$out/provider-runtime-test"
+cc -std=c11 -Wall -Wextra -Werror -I"$build/openssl-src/include" "$test_c" -L"$build/openssl-src" -Wl,-rpath,"$build/openssl-src" -lssl -lcrypto -ldl -pthread -lresolv -o "$out/provider-runtime-test"
+LD_LIBRARY_PATH="$build/openssl-src${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" OPENSSL_MODULES="$build/openssl-src/providers" OPENSSL_CONF=/dev/null "$out/provider-runtime-test"
 REGRESSION_C="$repo/package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regressions.c"
 REGRESSION_MATRIX="$repo/package/mtk/applications/easymesh-n60/tests/openssl-40-api-regression-matrix.json"
 test -s "$REGRESSION_C" && test -s "$REGRESSION_MATRIX"
-cc -std=c11 -Wall -Wextra -Werror -I"$build/openssl-src/include" "$REGRESSION_C" "$build/openssl-src/libcrypto.a" -ldl -pthread -lresolv -o "$out/api-migration-regression-test"
-OPENSSL_MODULES="$build/openssl-src/providers" OPENSSL_CONF=/dev/null "$out/api-migration-regression-test" | tee "$out/api-migration-regressions.log"
+cc -std=c11 -Wall -Wextra -Werror -I"$build/openssl-src/include" "$REGRESSION_C" -L"$build/openssl-src" -Wl,-rpath,"$build/openssl-src" -lcrypto -ldl -pthread -lresolv -o "$out/api-migration-regression-test"
+LD_LIBRARY_PATH="$build/openssl-src${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" OPENSSL_MODULES="$build/openssl-src/providers" OPENSSL_CONF=/dev/null "$out/api-migration-regression-test" | tee "$out/api-migration-regressions.log"
 python3 - "$REGRESSION_MATRIX" "$REGRESSION_C" "$out/api-migration-regressions.log" "$out/openssl-api-regression-results.json" <<'PY'
 import hashlib,json,sys
 from pathlib import Path
