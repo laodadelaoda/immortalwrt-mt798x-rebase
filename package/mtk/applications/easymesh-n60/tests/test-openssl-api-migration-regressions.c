@@ -12,6 +12,25 @@
 #include <openssl/provider.h>
 #define CHECK(x) do { if (!(x)) { fprintf(stderr, "FAIL: %s:%d: %s (openssl=%s)\n", __FILE__, __LINE__, #x, ERR_error_string(ERR_peek_last_error(), NULL)); goto out; } } while (0)
 #define PASS(id) puts("PASS_TEST_ID:" id)
+static int aes_wrap_key_size_roundtrip(const char *name, const unsigned char plain[16])
+{
+ EVP_CIPHER *cipher=NULL; EVP_CIPHER_CTX *ctx=NULL;
+ unsigned char key[32]={0},wrapped[32],recovered[32];
+ int n=0,total=0,tail=0,dn=0,dt=0,ok=0;
+ cipher=EVP_CIPHER_fetch(NULL,name,"provider=default"); ctx=EVP_CIPHER_CTX_new();
+ if(!cipher||!ctx) goto out;
+ EVP_CIPHER_CTX_set_flags(ctx,EVP_CIPHER_CTX_FLAG_WRAP_ALLOW);
+ if(EVP_EncryptInit_ex2(ctx,cipher,key,NULL,NULL)<=0||EVP_EncryptUpdate(ctx,wrapped,&n,plain,16)<=0) goto out;
+ total=n; if(EVP_EncryptFinal_ex(ctx,wrapped+total,&tail)<=0) goto out; total+=tail;
+ if(EVP_CIPHER_CTX_reset(ctx)<=0) goto out;
+ EVP_CIPHER_CTX_set_flags(ctx,EVP_CIPHER_CTX_FLAG_WRAP_ALLOW);
+ if(EVP_DecryptInit_ex2(ctx,cipher,key,NULL,NULL)<=0||EVP_DecryptUpdate(ctx,recovered,&dn,wrapped,total)<=0) goto out;
+ if(EVP_DecryptFinal_ex(ctx,recovered+dn,&dt)<=0||dn+dt!=16||memcmp(recovered,plain,16)!=0) goto out;
+ ok=1;
+out: OPENSSL_cleanse(key,sizeof(key)); OPENSSL_cleanse(recovered,sizeof(recovered));
+ EVP_CIPHER_CTX_free(ctx); EVP_CIPHER_free(cipher); ERR_clear_error(); return ok;
+}
+
 static int test_aes_wrap(void) {
  static const unsigned char kek[16]={0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
  static const unsigned char plain[16]={0,0x11,0x22,0x33,0x44,0x55,0x66,0x77,0x88,0x99,0xaa,0xbb,0xcc,0xdd,0xee,0xff};
@@ -22,6 +41,8 @@ static int test_aes_wrap(void) {
  CHECK(EVP_EncryptInit_ex2(ctx,cipher,kek,NULL,NULL)>0); CHECK(EVP_EncryptUpdate(ctx,wrapped,&n,plain,sizeof(plain))>0); total=n;
  CHECK(EVP_EncryptFinal_ex(ctx,wrapped+total,&tail)>0); total+=tail;
  CHECK(total==(int)sizeof(expected)&&memcmp(wrapped,expected,sizeof(expected))==0);
+ CHECK(aes_wrap_key_size_roundtrip("AES-192-WRAP",plain));
+ CHECK(aes_wrap_key_size_roundtrip("AES-256-WRAP",plain));
  EVP_CIPHER_CTX_reset(ctx); EVP_CIPHER_CTX_set_flags(ctx,EVP_CIPHER_CTX_FLAG_WRAP_ALLOW);
  CHECK(EVP_DecryptInit_ex2(ctx,cipher,kek,NULL,NULL)>0); CHECK(EVP_DecryptUpdate(ctx,recovered,&n,wrapped,total)>0); total=n;
  CHECK(EVP_DecryptFinal_ex(ctx,recovered+total,&tail)>0); total+=tail;
@@ -47,6 +68,11 @@ static int test_des_legacy(void) {
  CHECK(EVP_EncryptInit_ex2(ctx,cipher,key,NULL,NULL)>0); CHECK(EVP_CIPHER_CTX_set_padding(ctx,0)>0);
  CHECK(EVP_EncryptUpdate(ctx,out,&n,plain,sizeof(plain))>0); total=n; CHECK(EVP_EncryptFinal_ex(ctx,out+total,&tail)>0); total+=tail;
  CHECK(total==(int)sizeof(expected)&&memcmp(out,expected,sizeof(expected))==0);
+ CHECK(EVP_CIPHER_CTX_reset(ctx)>0);
+ CHECK(EVP_DecryptInit_ex2(ctx,cipher,key,NULL,NULL)>0); CHECK(EVP_CIPHER_CTX_set_padding(ctx,0)>0);
+ CHECK(EVP_DecryptUpdate(ctx,out,&n,expected,sizeof(expected))>0); total=n;
+ CHECK(EVP_DecryptFinal_ex(ctx,out+total,&tail)>0); total+=tail;
+ CHECK(total==(int)sizeof(plain)&&memcmp(out,plain,sizeof(plain))==0);
  ok=1; PASS("des_7byte_key_expansion_and_legacy_provider_known_answer");
 out: EVP_CIPHER_CTX_free(ctx); EVP_CIPHER_free(cipher); if(legacy) OSSL_PROVIDER_unload(legacy); OPENSSL_cleanse(key,sizeof(key)); ERR_clear_error(); return ok;
 }
