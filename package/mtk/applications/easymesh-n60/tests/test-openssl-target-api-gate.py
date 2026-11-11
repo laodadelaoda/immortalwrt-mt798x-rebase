@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import importlib.util,tempfile
+import csv,importlib.util,tempfile
 from pathlib import Path
 p=Path(__file__).parents[1]/"scripts/enforce-openssl-target-api-gate.py"
 spec=importlib.util.spec_from_file_location("target_api_gate",p)
@@ -212,4 +212,14 @@ assert m.validate_scope_manifest(scope,scope_summary,scope_map)==[]
 assert m.validate_scope_manifest({**scope,"primary_components":["wappd"]},scope_summary,scope_map)
 assert m.validate_scope_manifest({**scope,"global_baseline":{"expected_rows":68,"role":"MIGRATION_APPROVAL","is_migration_approval":True}},scope_summary,scope_map)
 
+# The semantic review is a separate, non-approval record: preserve all 40
+# target-active APIs and their 348 baseline callsites without pre-approving them.
+review_path=Path(__file__).with_name("openssl-40-active-api-semantic-review.csv")
+with review_path.open(encoding="utf-8",newline="") as f:
+ review_rows=list(csv.DictReader(f))
+assert len(review_rows)==40
+assert len({x["api"] for x in review_rows})==40
+assert sum(int(x["active_call_sites"]) for x in review_rows)==348
+assert all(x["review_status"]=="REVIEWED_PENDING_IMPLEMENTATION" for x in review_rows)
+assert all(x["approval"].lower()=="false" for x in review_rows)
 print("PASS: exact target reachability excludes inactive APIs and declarations; active, unknown, missing, stale, unapproved and token-paste macro exclusions are handled fail-closed.")
