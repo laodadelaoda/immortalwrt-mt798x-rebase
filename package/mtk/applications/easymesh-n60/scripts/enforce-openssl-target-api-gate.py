@@ -101,7 +101,11 @@ def build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migra
   elif x["active_call_sites"] or x["macro_active"]: status="ACTIVE"
   elif x["prepared_call_count"]==0 and (x["pristine_call_count"] or 0)>0 and delta:
    status="NO_LONGER_PRESENT_AFTER_PATCH"
-  elif x["prepared_call_count"] and (x["excluded_call_sites"] or x["macro_excluded"] or x["declaration_references"] or x["other_non_call_references"]):
+  elif (x["prepared_call_count"] or x["excluded_call_sites"] or x["macro_excluded"] or x["declaration_references"] or x["other_non_call_references"]) and (x["excluded_call_sites"] or x["macro_excluded"] or x["declaration_references"] or x["other_non_call_references"]):
+   # An API represented only by macro-body references can legitimately have
+   # zero prepared direct calls when every macro definition is independently
+   # proven unreachable by the target preprocessor. Do not turn that complete
+   # negative evidence into UNKNOWN merely because prepared_call_count is zero.
    status="EXCLUDED_WITH_EVIDENCE"
   else: status="UNKNOWN_FAIL_CLOSED"
   x.update({"components":sorted(x["components"]),"scope_status":status,
@@ -263,7 +267,7 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
   if mr.get("source_reachability_status") in {"UNREFERENCED_MACRO_DEFINITION","OPENSSL_NO_ENGINE_GUARD_REQUIRES_PREPROCESSOR"}:
    failures.append("target preprocessor contradicts the migration map's exclusion claim: "+api)
   if mr.get("migration_status")!="APPROVED" or str(mr.get("approval","")).lower()!="true":
-   failures.append("active deprecated API has no completed semantic review/approval: "+api)
+   failures.append("active deprecated API remains unapproved; source migration and approval evidence are required before passing the gate: "+api)
    continue
   rule=policy.get("api_rules",{}).get(api)
   if not isinstance(rule,dict):
