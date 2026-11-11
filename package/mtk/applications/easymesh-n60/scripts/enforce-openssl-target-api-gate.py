@@ -181,6 +181,21 @@ def validate_semantic_review(review_rows,subset,expected_git_sha):
    failures.append(api+": active EasyMesh API is missing from the 40-API semantic review CSV")
  return failures
 
+
+def build_callsite_migration_map(callsites,review_map):
+ fields=("component","path","line","api","reference_kind","reachability_status","source_sha256",
+         "review_status","approval","review_decision","semantic_invariants","review_basis")
+ out=[]
+ for call in callsites:
+  if call.get("reachability_status")!="ACTIVE" or call.get("reference_kind") in {"DECLARATION_OR_DEFINITION","UNKNOWN_REFERENCE_KIND"}:
+   continue
+  api=normalize_api_name(call.get("api"))
+  review=review_map.get(api,{})
+  row={k:call.get(k,"") for k in fields[:7]}
+  row.update({k:review.get(k,"") for k in fields[7:]})
+  out.append(row)
+ return sorted(out,key=lambda x:(x["component"],x["path"],int(x["line"]),x["api"]))
+
 def validate_removed_api_reviews(subset,migration_map,policy,review_map=None):
  failures=[]
  for row in subset:
@@ -393,6 +408,16 @@ def main():
  report["semantic_review_sha256"]=sha256(a.review)
  if len(review_map)!=len(review_rows): report["failures"].append("40-API semantic review contains duplicate API records")
  report["active_apis_unreviewed"]=[api for api in report["target_active_apis"] if api not in review_map or review_map[api].get("review_status")!="APPROVED" or str(review_map[api].get("approval","")).lower()!="true"]
+ callsite_map=build_callsite_migration_map(load_json(a.callsites),review_map)
+ callsite_map_path=a.output.parent/"openssl-40-api-callsite-migration-map.csv"
+ callsite_fields=["component","path","line","api","reference_kind","reachability_status","source_sha256",
+  "review_status","approval","review_decision","semantic_invariants","review_basis"]
+ with callsite_map_path.open("w",encoding="utf-8",newline="") as f:
+  writer=csv.DictWriter(f,fieldnames=callsite_fields); writer.writeheader(); writer.writerows(callsite_map)
+ if len(callsite_map)!=report["target_active_call_sites"]:
+  report["failures"].append("40-API callsite migration map row count differs from active target callsite count")
+ report["callsite_migration_map_rows"]=len(callsite_map)
+ report["callsite_migration_map_sha256"]=sha256(callsite_map_path)
  report["scope"]={"scope_id":scope.get("scope_id"),"openssl_version":scope.get("openssl_version"),
   "primary_components":scope.get("primary_components"),"supporting_dependencies":scope.get("supporting_dependencies"),
   "global_baseline":{"path":scope.get("global_baseline",{}).get("path"),"rows":len(migration_rows),
