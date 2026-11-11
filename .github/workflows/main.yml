@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: n60-pro-full-${{ github.ref }}
@@ -56,6 +57,32 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 package/mtk/applications/easymesh-n60/scripts/verify-vendor-audit-attestation.py verify --repo "$GITHUB_WORKSPACE" --attestation .audit-attestation/vendor-audit-attestation.json --expected-run-id "$GITHUB_RUN_ID" --expected-run-attempt "$GITHUB_RUN_ATTEMPT"
+
+      - name: Download OpenSSL API evidence and exact-run migration attestation
+        uses: actions/download-artifact@v6
+        with:
+          name: n60-openssl-3.5.9-api-and-provider-audit
+          path: .openssl-api-evidence
+      - name: Download 40-API OpenSSL migration attestation
+        uses: actions/download-artifact@v6
+        with:
+          name: n60-openssl-api-migration-attestation
+          path: .openssl-api-attestation
+      - name: Verify exact 40-API OpenSSL migration credential and evidence artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          python3 package/mtk/applications/easymesh-n60/scripts/verify-openssl-api-migration-attestation.py verify \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --attestation .openssl-api-attestation/openssl-api-migration-attestation.json \
+            --evidence-dir .openssl-api-evidence \
+            --vendor-attestation .audit-attestation/vendor-audit-attestation.json \
+            --expected-run-id "$GITHUB_RUN_ID" \
+            --expected-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --repository "$GITHUB_REPOSITORY" \
+            --verify-remote-artifact
 
       - name: Download kernel patch stack attestation from same-run Prepare audit
         uses: actions/download-artifact@v6
