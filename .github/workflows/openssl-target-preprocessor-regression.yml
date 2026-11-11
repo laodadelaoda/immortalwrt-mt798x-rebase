@@ -3,7 +3,6 @@ name: OpenSSL target preprocessor audit regressions
 on:
   push:
     branches:
-      - audit/openssl-target-preprocessor-failclosed
       - n60pro-mtk-closed-driver
     paths:
       - ".github/workflows/openssl-target-preprocessor-regression.yml"
