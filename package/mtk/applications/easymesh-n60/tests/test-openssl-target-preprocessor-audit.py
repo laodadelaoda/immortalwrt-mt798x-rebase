@@ -183,7 +183,7 @@ with tempfile.TemporaryDirectory() as d:
  # Same member name with different bytes is not accepted as archive evidence.
  changed_dir=comp/"different"; changed_dir.mkdir()
  changed_obj=changed_dir/"vendor_algo.o"; changed_obj.write_bytes(b"different vendor object payload")
- mismatch=m.map_preexisting_objects([changed_obj],[],[link_log],changed_dir)
+ mismatch=m.map_preexisting_objects([changed_obj],[],[link_log],comp)
  assert mismatch["unmapped_object_artifacts"]
  # Multiple adjacent source candidates are not silently selected.
  ambiguous_obj=comp/"ambiguous.o"; ambiguous_obj.write_bytes(b"object")
