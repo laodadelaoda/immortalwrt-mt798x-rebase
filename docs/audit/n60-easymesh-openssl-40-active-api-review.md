@@ -81,3 +81,15 @@ The 40 entries have been reviewed at API-contract level against the exact observ
 - The review status in this document means only that the semantic migration decision and its blockers have been documented.
 - A provider redesign, a Legacy Provider dependency, or a behavior-changing removal requires explicit implementation evidence; none is approved by this review.
 - Firmware compilation remains frozen. This review does not authorize Quick package compilation or Full firmware compilation.
+
+## Exact callsite evidence
+
+The per-API counts and source contexts are grounded in the immutable artifact from [Quick run 42962336945](https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/actions/runs/42962336945), artifact `n60-openssl-3.5.9-api-and-provider-audit` (artifact ID `13832651114`, SHA256 `de97c2e8bff7f1e0a60578fbc9c78e78c1ba9ec7106a34a37ee0a7bd2249869a`):
+
+- `easymesh-openssl-api-audit/openssl-target-api-gate.json`: exact active API set, per-API counts and source-location inventory.
+- `easymesh-openssl-api-audit/openssl-api-callsite-context.json`: lexical source contexts and preprocessor guards for each inventoried reference.
+- `easymesh-openssl-api-audit/openssl-api-inventory.csv`: source path, line and deprecated-header provenance.
+- `easymesh-openssl-preprocessor-audit/callsite-reachability.json`: target-preprocessor classification for each callsite.
+- `easymesh-openssl-preprocessor-audit/openssl-target-preprocessor-summary.json`: compiler/configuration/target evidence and component completeness.
+
+The API table above is therefore traceable to exact callsites rather than inferred from a symbol-name search. The corrected full-translation-unit negative-proof schema is being exercised in later runs; this older artifact remains the baseline for the 40-API review and is not silently rewritten.
