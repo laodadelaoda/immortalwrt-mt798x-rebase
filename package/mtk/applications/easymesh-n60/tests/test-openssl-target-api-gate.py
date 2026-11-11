@@ -220,7 +220,11 @@ with review_path.open(encoding="utf-8",newline="") as f:
 assert len(review_rows)==40
 assert len({x["api"] for x in review_rows})==40
 assert sum(int(x["active_call_sites"]) for x in review_rows)==348
-assert all(x["review_status"]=="REVIEWED_PENDING_IMPLEMENTATION" for x in review_rows)
+allowed_review_statuses={"REVIEWED_PENDING_IMPLEMENTATION","IMPLEMENTED_PENDING_VALIDATION"}
+assert all(x["review_status"] in allowed_review_statuses for x in review_rows)
+assert any(x["review_status"]=="IMPLEMENTED_PENDING_VALIDATION" for x in review_rows)
+assert all(x["review_status"]!="IMPLEMENTED_PENDING_VALIDATION" or
+           "Patch " in x["review_basis"] for x in review_rows)
 assert all(x["approval"].lower()=="false" for x in review_rows)
 
 # A macro-only API with complete negative target evidence is excluded even
