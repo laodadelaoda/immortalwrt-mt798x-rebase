@@ -6,6 +6,15 @@ spec=importlib.util.spec_from_file_location("target_api_gate",p)
 m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 with tempfile.TemporaryDirectory() as d:
  root=Path(d); src=root/"wappd"/"x.c"; src.parent.mkdir(); src.write_text('#if 0\nEVP_PKEY_cmp(a,b);\n#endif\nint f(void) { return 0; }\n')
+ # GCC may emit relative #line filenames for sources under the component cwd.
+ # Independent gate verification must resolve those markers against the exact TU cwd.
+ relative_root=root/"relative-build"/"wappd"; (relative_root/"src").mkdir(parents=True)
+ relative_source=relative_root/"src"/"relative.c"
+ relative_source.write_text("EVP_PKEY_cmp(a,b);\n")
+ relative_pp=root/"relative.i"
+ relative_pp.write_text('# 1 "src/relative.c"\nEVP_PKEY_cmp(a,b);\n')
+ assert m.observe_preprocessed_output(relative_pp,relative_source.resolve(),1,"EVP_PKEY_cmp",relative_root)==(True,True)
+ assert m.observe_preprocessed_output(relative_pp,relative_source.resolve(),1,"EVP_PKEY_cmp",root)==(False,False)
  digest=m.sha256(src); git="a"*40
  inv=[{"component":"wappd","path":"wappd/x.c","line":"2","api":"EVP_PKEY_cmp","deprecated_macro":"OSSL_DEPRECATEDIN_3_0"}]
  call=[{"component":"wappd","path":"wappd/x.c","line":2,"api":"EVP_PKEY_cmp","reference_kind":"CALL_EXPRESSION","reachability_status":"ACTIVE","source_sha256":digest,"conditional_branch_path":[]}]
