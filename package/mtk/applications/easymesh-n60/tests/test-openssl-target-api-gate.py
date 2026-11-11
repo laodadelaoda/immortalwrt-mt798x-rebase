@@ -288,4 +288,18 @@ candidate["approval"]="true"
 candidate["review_basis"]="approved"
 assert any("lacks current-SHA/run/regression evidence" in x for x in m.validate_semantic_review(forged_approved,subset_rows,git))
 
+
+# Each live target callsite must be joined to its 40-API semantic decision.
+sample_call={"component":"wappd","path":"wappd/dpp/dpp.c","line":123,"api":"EVP_PKEY_cmp",
+             "reference_kind":"CALL_EXPRESSION","reachability_status":"ACTIVE","source_sha256":digest}
+sample_review={"EVP_PKEY_cmp":{"review_status":"REVIEWED_PENDING_IMPLEMENTATION","approval":"false",
+ "review_decision":"Migrate key comparison to EVP_PKEY_eq.",
+ "semantic_invariants":"Preserve key equality semantics.",
+ "review_basis":"source audit"}}
+mapped=m.build_callsite_migration_map([sample_call],sample_review)
+assert len(mapped)==1 and mapped[0]["path"]=="wappd/dpp/dpp.c"
+assert mapped[0]["review_status"]=="REVIEWED_PENDING_IMPLEMENTATION"
+assert mapped[0]["source_sha256"]==digest
+assert m.build_callsite_migration_map([sample_call],{})[0]["review_status"]==""
+
 print("PASS: exact target reachability excludes inactive APIs and declarations; active, unknown, missing, stale, unapproved and token-paste macro exclusions are handled fail-closed.")
