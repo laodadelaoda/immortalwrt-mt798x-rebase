@@ -354,7 +354,7 @@ def cpp_argv(cmd,out):
   elif t.startswith("-o") and len(t)>2 and (Path(t[2:]).suffix.lower() in (".o",".lo",".a",".so",".d") or "/" in t[2:]): pass
   elif t in ("-MF","-MT","-MQ","-L","-l","-Xlinker","-T","-u"): i+=1
   elif t in ("-MMD","-MD","-MP","-MG","-shared","-static","-rdynamic","-s") or t.startswith(("-Wp,-MD,","-Wp,-MMD,","-Wl,","-L","-l")): pass
-  elif Path(t).suffix.lower() in (".a",".o",".lo") or re.search(r"\\.so(?:\\.\\d+)*$",t): pass
+  elif Path(t).suffix.lower() in (".a",".o",".lo") or re.search(r"\.so(?:\.\d+)*$",t): pass
   else: dst.append(t)
   i+=1
  dst.extend(["-dD","-o",str(out)]); return dst
