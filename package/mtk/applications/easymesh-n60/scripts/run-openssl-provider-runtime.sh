@@ -50,4 +50,4 @@ out_path.write_text(json.dumps(result,indent=2)+"\n")
 print("PASS: all 40 EasyMesh API entries are covered by the provider-native migration regression suite.")
 PY
 sha256sum "$test_c" "$REGRESSION_C" "$out/provider-runtime-test" "$out/api-migration-regression-test" > "$out/SHA256SUMS"
-printf '{"openssl_version":"3.5.9","provider":"default","result":"PASS"}\n' > "$out/provider-runtime-result.json"
+printf '{"openssl_version":"3.5.9","providers":["default","legacy"],"legacy_provider_scope":"regression-test-only","result":"PASS"}\n' > "$out/provider-runtime-result.json"
