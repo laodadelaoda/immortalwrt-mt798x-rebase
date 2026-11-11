@@ -1,0 +1,25 @@
+name: N60 Pro OpenSSL target-preprocessor Quick regression
+
+on:
+  push:
+    branches:
+      - n60pro-mtk-closed-driver
+    paths:
+      - package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py
+      - package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py
+      - .github/workflows/quick-prepare-audit.yml
+      - .github/workflows/openssl-quick-regression.yml
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  vendor_source_patch_audit:
+    name: Fixed vendor source and patch audit
+    uses: ./.github/workflows/vendor-source-patch-audit.yml
+
+  quick_prepare_audit:
+    name: Native Prepare and OpenSSL 3.5.9 target-preprocessor regression
+    needs: vendor_source_patch_audit
+    uses: ./.github/workflows/quick-prepare-audit.yml
