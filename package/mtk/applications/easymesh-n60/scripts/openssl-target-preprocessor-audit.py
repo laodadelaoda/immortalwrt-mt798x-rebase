@@ -169,13 +169,32 @@ def parse_libtool_objects(path):
    found.append(canon(m.group(1),Path(path).parent))
  return sorted(set(found)) if found else None
 
-def map_preexisting_objects(preexisting,compile_commands):
- """Map existing .o/.lo artifacts to real -o outputs and source files."""
+def map_preexisting_objects(preexisting,compile_commands,build_logs=None,component_root=None):
+ """Map objects to compiler outputs or exact members of the target's static archives."""
  by_output={}
  for cmd in compile_commands:
   output=cmd.get("object_output")
   if output: by_output.setdefault(output,[]).append(cmd["source"])
+ logs=[Path(x) for x in (build_logs or [])]
+ root=Path(component_root).resolve() if component_root else None
+ log_tokens=set()
+ for log in logs:
+  if not log.is_file(): continue
+  for line in log.read_text(encoding="utf-8",errors="replace").splitlines():
+   try: tokens=shlex.split(line)
+   except ValueError: continue
+   for token in tokens:
+    log_tokens.add(token)
+    log_tokens.add(token.removeprefix("./"))
+ archives=sorted(root.rglob("*.a")) if root and root.is_dir() else []
+ active_archives=set()
+ for archive in archives:
+  rel=archive.resolve().relative_to(root).as_posix()
+  if (archive.name in log_tokens or rel in log_tokens or "./"+rel in log_tokens or
+      str(archive.resolve()) in log_tokens):
+   active_archives.add(str(archive.resolve()))
  uncompiled=[]; ambiguous=[]; unmapped=[]; mapped=[]
+ archive_member_mappings=[]; inactive_prebuilt_archive_members=[]
  for artifact in preexisting:
   suffix=artifact.suffix.lower()
   if suffix not in (".o",".lo"): continue
@@ -197,11 +216,39 @@ def map_preexisting_objects(preexisting,compile_commands):
   if len(set(matched))>1:
    ambiguous.append({"artifact":artifact_path,"sources":sorted(set(matched))}); continue
   candidates=[artifact.with_suffix(ext).resolve() for ext in EXT if artifact.with_suffix(ext).is_file()]
-  if len(candidates)==1: uncompiled.append(str(candidates[0]))
-  elif len(candidates)>1:
-   ambiguous.append({"artifact":artifact_path,"source_candidates":[str(x) for x in sorted(candidates)]})
-  else: unmapped.append(artifact_path)
- return {"mapped":mapped,"uncompiled_source_artifacts":sorted(set(uncompiled)),
+  if len(candidates)==1:
+   uncompiled.append(str(candidates[0])); continue
+  if len(candidates)>1:
+   ambiguous.append({"artifact":artifact_path,"source_candidates":[str(x) for x in sorted(candidates)]}); continue
+  # Some fixed vendor archives ship duplicate .o files beside static .a files.
+  # Accept this only when ar can extract a same-named member whose bytes hash
+  # exactly to the loose object. The archive itself is separately symbol-scanned.
+  member_matches=[]
+  if suffix==".o":
+   for archive in archives:
+    listing=subprocess.run(["ar","t",str(archive)],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    if listing.returncode: continue
+    members=[x.strip() for x in listing.stdout.splitlines() if x.strip()==artifact.name]
+    if len(members)!=1: continue
+    extracted=subprocess.run(["ar","p",str(archive),artifact.name],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    if extracted.returncode: continue
+    member_sha=hashlib.sha256(extracted.stdout).hexdigest()
+    if member_sha==sha(artifact):
+     member_matches.append({"archive":str(archive.resolve()),"archive_sha256":sha(archive),
+       "member":artifact.name,"member_sha256":member_sha,
+       "active_in_build_graph":str(archive.resolve()) in active_archives})
+  if member_matches:
+   row={"artifact":artifact_path,"artifact_sha256":sha(artifact),"archives":member_matches,
+        "method":"exact-static-archive-member"}
+   if any(x["active_in_build_graph"] for x in member_matches):
+    archive_member_mappings.append(row)
+   else:
+    inactive_prebuilt_archive_members.append(row)
+   continue
+  unmapped.append(artifact_path)
+ return {"mapped":mapped,"archive_member_mappings":archive_member_mappings,
+         "inactive_prebuilt_archive_members":inactive_prebuilt_archive_members,
+         "uncompiled_source_artifacts":sorted(set(uncompiled)),
          "ambiguous_object_mappings":ambiguous,"unmapped_object_artifacts":unmapped}
 
 def source_reachability_is_complete(make_ok,parse_errors,preprocess_errors,
@@ -471,7 +518,7 @@ def main():
    cmds,perrors=parse_commands(run.stdout,spec["cwd"],compiler,{comp: (build/comp).resolve()})
    parse_errors.extend(perrors[comp]); compile_commands.extend(cmds)
   preexisting=[p for p in (build/comp).rglob("*") if p.is_file() and p.suffix.lower() in (".o",".lo",".a",".so")]
-  object_mapping=map_preexisting_objects(preexisting,compile_commands)
+  object_mapping=map_preexisting_objects(preexisting,compile_commands,logs,build/comp)
   uncompiled_source_artifacts=object_mapping["uncompiled_source_artifacts"]
   for i,cmd in enumerate(compile_commands):
    key=hashlib.sha256((comp+cmd["source"]+str(i)).encode()).hexdigest()[:16]
@@ -508,6 +555,8 @@ def main():
   results[comp]={"make_returncodes":run_codes,"logs":logs,"compile_commands":len(compile_commands),
     "parse_errors":parse_errors,"preexisting_binary_inputs":[str(p.relative_to(build/comp)) for p in preexisting],
     "object_output_mappings":object_mapping["mapped"],
+    "archive_member_mappings":object_mapping["archive_member_mappings"],
+    "inactive_prebuilt_archive_members":object_mapping["inactive_prebuilt_archive_members"],
     "uncompiled_source_artifacts":uncompiled_source_artifacts,
     "ambiguous_object_mappings":object_mapping["ambiguous_object_mappings"],
     "unmapped_object_artifacts":object_mapping["unmapped_object_artifacts"],"preprocess_failures":pp_errors,
