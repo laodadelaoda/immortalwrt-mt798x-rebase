@@ -98,7 +98,7 @@ with (Path(__file__).with_name("openssl-111-to-359-migration-map.csv")).open(enc
  rows=list(__import__("csv").DictReader(f))
  assert len(rows)==68, len(rows)
  assert len({r["api"] for r in rows})==68
- expected_pending={"AES_set_decrypt_key","AES_set_encrypt_key","AES_unwrap_key","AES_wrap_key","DES_set_key","DES_ecb_encrypt"}
+ expected_pending={"AES_set_decrypt_key","AES_set_encrypt_key","AES_unwrap_key","AES_wrap_key","DES_set_key","DES_ecb_encrypt","HMAC_CTX_free","HMAC_CTX_new","HMAC_Final","HMAC_Init_ex","HMAC_Update"}
  assert {r["api"] for r in rows if r["migration_status"]=="IMPLEMENTED_PENDING_VALIDATION"}==expected_pending
  assert all(r["migration_status"] in {"UNREVIEWED","IMPLEMENTED_PENDING_VALIDATION"} and r["approval"]=="false" for r in rows)
  assert all(r["official_mapping_kind"] and r["official_mapping_section"] for r in rows)

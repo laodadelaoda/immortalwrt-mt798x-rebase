@@ -62,8 +62,44 @@ if not failures:
                 failures.append(f"{component}: AES-WRAP semantic guard missing: {token}")
         if "#include <limits.h>" not in source:
             failures.append(f"{component}: INT_MAX header missing")
+        hmac_helper = re.search(
+            r"static EVP_MAC_CTX \* openssl_hmac_ctx_new\(.*?\n\}\n",
+            source,
+            flags=re.S,
+        )
+        if not hmac_helper:
+            failures.append(component + ": provider-backed EVP_MAC HMAC helper missing")
+        else:
+            for token in (
+                'EVP_MAC_fetch(NULL, "HMAC", "provider=default")',
+                "EVP_MAC_CTX_new", "EVP_MD_get0_name", "OSSL_MAC_PARAM_DIGEST",
+                "EVP_MAC_init", "EVP_MAC_CTX_free",
+            ):
+                if token not in hmac_helper.group(0):
+                    failures.append(component + ": EVP_MAC HMAC helper invariant missing: " + token)
+        if "#include <openssl/core_names.h>" not in source or "#include <openssl/params.h>" not in source:
+            failures.append(component + ": OpenSSL core_names/params headers missing")
+        if "struct crypto_hash" not in source:
+            failures.append(component + ": crypto_hash context missing")
+        else:
+            active_crypto_region = source[source.index("struct crypto_hash"):]
+            for api in ("HMAC_CTX_new", "HMAC_CTX_free", "HMAC_Init_ex", "HMAC_Update", "HMAC_Final"):
+                if re.search(r"\b" + api + r"\s*\(", active_crypto_region):
+                    failures.append(component + ": deprecated HMAC call remains in target crypto path: " + api)
+            if "EVP_MAC_CTX *ctx;" not in active_crypto_region or "EVP_MAC_CTX_get_mac_size" not in active_crypto_region:
+                failures.append(component + ": crypto_hash context/final output-size semantics not migrated")
+            if "EVP_MAC_update" not in active_crypto_region or "EVP_MAC_final" not in active_crypto_region:
+                failures.append(component + ": HMAC update/final lifecycle not migrated")
     if len(helpers) == 2 and helpers["wappd"] != helpers["1905daemon"]:
         failures.append("WAPP and 1905daemon AES-WRAP helpers diverge")
+
+    hmac_helpers = {}
+    for component, source in backends.items():
+        match = re.search(r"static EVP_MAC_CTX \* openssl_hmac_ctx_new\(.*?\n\}\n", source, flags=re.S)
+        if match:
+            hmac_helpers[component] = match.group(0)
+    if len(hmac_helpers) == 2 and hmac_helpers["wappd"] != hmac_helpers["1905daemon"]:
+        failures.append("WAPP and 1905daemon EVP_MAC HMAC helpers diverge")
 
     wapp_header = paths["wapp_crypto_header"].read_text(encoding="utf-8")
     if re.search(r"^\s*(?:int|long)\s+des_encrypt\s*\(", wapp_header, re.M):
@@ -96,7 +132,8 @@ result = {
     "schema_version": 1,
     "scope": "n60-easymesh-openssl-3.5.9",
     "batch": ["AES_set_decrypt_key", "AES_set_encrypt_key", "AES_unwrap_key",
-              "AES_wrap_key", "DES_set_key", "DES_ecb_encrypt"],
+              "AES_wrap_key", "DES_set_key", "DES_ecb_encrypt", "HMAC_CTX_new",
+              "HMAC_CTX_free", "HMAC_Init_ex", "HMAC_Update", "HMAC_Final"],
     "source_root": str(root),
     "result": "PASS" if not failures else "FAIL",
     "failures": failures,

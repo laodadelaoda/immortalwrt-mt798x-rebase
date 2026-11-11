@@ -1,0 +1,286 @@
+--- a/wappd/crypto/crypto_openssl.c
++++ b/wappd/crypto/crypto_openssl.c
+@@ -12,6 +12,8 @@
+ #include <openssl/err.h>
+ #include <openssl/bn.h>
+ #include <openssl/evp.h>
++#include <openssl/core_names.h>
++#include <openssl/params.h>
+ #include <openssl/dh.h>
+ #include <openssl/hmac.h>
+ #include <openssl/rand.h>
+@@ -1003,8 +1005,42 @@
+ }
+ 
+ 
++static EVP_MAC_CTX * openssl_hmac_ctx_new(const EVP_MD *md, const u8 *key,
++					 size_t key_len)
++{
++	EVP_MAC *mac = NULL;
++	EVP_MAC_CTX *ctx = NULL;
++	OSSL_PARAM params[2];
++	const char *md_name;
++
++	/* HMAC_Init_ex on a new context rejects a NULL key; preserve that rule. */
++	if (!md || !key)
++		return NULL;
++	md_name = EVP_MD_get0_name(md);
++	if (!md_name)
++		return NULL;
++
++	mac = EVP_MAC_fetch(NULL, "HMAC", "provider=default");
++	if (!mac)
++		return NULL;
++	ctx = EVP_MAC_CTX_new(mac);
++	EVP_MAC_free(mac);
++	if (!ctx)
++		return NULL;
++
++	params[0] = OSSL_PARAM_construct_utf8_string(OSSL_MAC_PARAM_DIGEST,
++						      (char *) md_name, 0);
++	params[1] = OSSL_PARAM_construct_end();
++	if (EVP_MAC_init(ctx, key, key_len, params) != 1) {
++		EVP_MAC_CTX_free(ctx);
++		return NULL;
++	}
++	return ctx;
++}
++
++
+ struct crypto_hash {
+-	HMAC_CTX *ctx;
++	EVP_MAC_CTX *ctx;
+ };
+ 
+ 
+@@ -1039,14 +1075,8 @@
+ 	ctx = os_zalloc(sizeof(*ctx));
+ 	if (ctx == NULL)
+ 		return NULL;
+-	ctx->ctx = HMAC_CTX_new();
++	ctx->ctx = openssl_hmac_ctx_new(md, key, key_len);
+ 	if (!ctx->ctx) {
+-		os_free(ctx);
+-		return NULL;
+-	}
+-
+-	if (HMAC_Init_ex(ctx->ctx, key, key_len, md, NULL) != 1) {
+-		HMAC_CTX_free(ctx->ctx);
+ 		bin_clear_free(ctx, sizeof(*ctx));
+ 		return NULL;
+ 	}
+@@ -1059,27 +1089,27 @@
+ {
+ 	if (ctx == NULL)
+ 		return;
+-	HMAC_Update(ctx->ctx, data, len);
++	EVP_MAC_update(ctx->ctx, data, len);
+ }
+ 
+ 
+ int crypto_hash_finish(struct crypto_hash *ctx, u8 *mac, size_t *len)
+ {
+-	unsigned int mdlen;
++	size_t mdlen = 0;
+ 	int res;
+ 
+ 	if (ctx == NULL)
+ 		return -2;
+ 
+ 	if (mac == NULL || len == NULL) {
+-		HMAC_CTX_free(ctx->ctx);
++		EVP_MAC_CTX_free(ctx->ctx);
+ 		bin_clear_free(ctx, sizeof(*ctx));
+ 		return 0;
+ 	}
+ 
+-	mdlen = *len;
+-	res = HMAC_Final(ctx->ctx, mac, &mdlen);
+-	HMAC_CTX_free(ctx->ctx);
++	res = EVP_MAC_final(ctx->ctx, mac, &mdlen,
++			    EVP_MAC_CTX_get_mac_size(ctx->ctx));
++	EVP_MAC_CTX_free(ctx->ctx);
+ 	bin_clear_free(ctx, sizeof(*ctx));
+ 
+ 	if (res == 1) {
+@@ -1096,28 +1126,24 @@
+ 			       const u8 *addr[], const size_t *len, u8 *mac,
+ 			       unsigned int mdlen)
+ {
+-	HMAC_CTX *ctx;
+-	size_t i;
++	EVP_MAC_CTX *ctx;
++	size_t i, out_len = 0;
+ 	int res;
+ 
+ 	if (TEST_FAIL())
+ 		return -1;
+ 
+-	ctx = HMAC_CTX_new();
++	ctx = openssl_hmac_ctx_new(type, key, key_len);
+ 	if (!ctx)
+ 		return -1;
+-	res = HMAC_Init_ex(ctx, key, key_len, type, NULL);
+-	if (res != 1)
+-		goto done;
+ 
+ 	for (i = 0; i < num_elem; i++)
+-		HMAC_Update(ctx, addr[i], len[i]);
+-
+-	res = HMAC_Final(ctx, mac, &mdlen);
+-done:
+-	HMAC_CTX_free(ctx);
+-
+-	return res == 1 ? 0 : -1;
++		EVP_MAC_update(ctx, addr[i], len[i]);
++
++	res = EVP_MAC_final(ctx, mac, &out_len, mdlen);
++	EVP_MAC_CTX_free(ctx);
++
++	return res == 1 && out_len == mdlen ? 0 : -1;
+ }
+ 
+ 
+--- a/1905daemon/src/crypto_openssl.c
++++ b/1905daemon/src/crypto_openssl.c
+@@ -12,6 +12,8 @@
+ #include <openssl/err.h>
+ #include <openssl/bn.h>
+ #include <openssl/evp.h>
++#include <openssl/core_names.h>
++#include <openssl/params.h>
+ #include <openssl/dh.h>
+ #include <openssl/hmac.h>
+ #include <openssl/rand.h>
+@@ -944,8 +946,42 @@
+ }
+ 
+ 
++static EVP_MAC_CTX * openssl_hmac_ctx_new(const EVP_MD *md, const u8 *key,
++					 size_t key_len)
++{
++	EVP_MAC *mac = NULL;
++	EVP_MAC_CTX *ctx = NULL;
++	OSSL_PARAM params[2];
++	const char *md_name;
++
++	/* HMAC_Init_ex on a new context rejects a NULL key; preserve that rule. */
++	if (!md || !key)
++		return NULL;
++	md_name = EVP_MD_get0_name(md);
++	if (!md_name)
++		return NULL;
++
++	mac = EVP_MAC_fetch(NULL, "HMAC", "provider=default");
++	if (!mac)
++		return NULL;
++	ctx = EVP_MAC_CTX_new(mac);
++	EVP_MAC_free(mac);
++	if (!ctx)
++		return NULL;
++
++	params[0] = OSSL_PARAM_construct_utf8_string(OSSL_MAC_PARAM_DIGEST,
++						      (char *) md_name, 0);
++	params[1] = OSSL_PARAM_construct_end();
++	if (EVP_MAC_init(ctx, key, key_len, params) != 1) {
++		EVP_MAC_CTX_free(ctx);
++		return NULL;
++	}
++	return ctx;
++}
++
++
+ struct crypto_hash {
+-	HMAC_CTX *ctx;
++	EVP_MAC_CTX *ctx;
+ };
+ 
+ 
+@@ -980,14 +1016,8 @@
+ 	ctx = os_zalloc(sizeof(*ctx));
+ 	if (ctx == NULL)
+ 		return NULL;
+-	ctx->ctx = HMAC_CTX_new();
++	ctx->ctx = openssl_hmac_ctx_new(md, key, key_len);
+ 	if (!ctx->ctx) {
+-		os_free(ctx);
+-		return NULL;
+-	}
+-
+-	if (HMAC_Init_ex(ctx->ctx, key, key_len, md, NULL) != 1) {
+-		HMAC_CTX_free(ctx->ctx);
+ 		bin_clear_free(ctx, sizeof(*ctx));
+ 		return NULL;
+ 	}
+@@ -1000,27 +1030,27 @@
+ {
+ 	if (ctx == NULL)
+ 		return;
+-	HMAC_Update(ctx->ctx, data, len);
++	EVP_MAC_update(ctx->ctx, data, len);
+ }
+ 
+ 
+ int crypto_hash_finish(struct crypto_hash *ctx, u8 *mac, size_t *len)
+ {
+-	unsigned int mdlen;
++	size_t mdlen = 0;
+ 	int res;
+ 
+ 	if (ctx == NULL)
+ 		return -2;
+ 
+ 	if (mac == NULL || len == NULL) {
+-		HMAC_CTX_free(ctx->ctx);
++		EVP_MAC_CTX_free(ctx->ctx);
+ 		bin_clear_free(ctx, sizeof(*ctx));
+ 		return 0;
+ 	}
+ 
+-	mdlen = *len;
+-	res = HMAC_Final(ctx->ctx, mac, &mdlen);
+-	HMAC_CTX_free(ctx->ctx);
++	res = EVP_MAC_final(ctx->ctx, mac, &mdlen,
++			    EVP_MAC_CTX_get_mac_size(ctx->ctx));
++	EVP_MAC_CTX_free(ctx->ctx);
+ 	bin_clear_free(ctx, sizeof(*ctx));
+ 
+ 	if (res == 1) {
+@@ -1037,28 +1067,24 @@
+ 			       const u8 *addr[], const size_t *len, u8 *mac,
+ 			       unsigned int mdlen)
+ {
+-	HMAC_CTX *ctx;
+-	size_t i;
++	EVP_MAC_CTX *ctx;
++	size_t i, out_len = 0;
+ 	int res;
+ 
+ 	if (TEST_FAIL())
+ 		return -1;
+ 
+-	ctx = HMAC_CTX_new();
++	ctx = openssl_hmac_ctx_new(type, key, key_len);
+ 	if (!ctx)
+ 		return -1;
+-	res = HMAC_Init_ex(ctx, key, key_len, type, NULL);
+-	if (res != 1)
+-		goto done;
+ 
+ 	for (i = 0; i < num_elem; i++)
+-		HMAC_Update(ctx, addr[i], len[i]);
+-
+-	res = HMAC_Final(ctx, mac, &mdlen);
+-done:
+-	HMAC_CTX_free(ctx);
+-
+-	return res == 1 ? 0 : -1;
++		EVP_MAC_update(ctx, addr[i], len[i]);
++
++	res = EVP_MAC_final(ctx, mac, &out_len, mdlen);
++	EVP_MAC_CTX_free(ctx);
++
++	return res == 1 && out_len == mdlen ? 0 : -1;
+ }
+ 
+ 

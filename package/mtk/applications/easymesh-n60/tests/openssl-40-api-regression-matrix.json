@@ -11,7 +11,8 @@
     "dh_provider_keygen_derive_params_ownership_size",
     "ec_provider_key_lifecycle_params_point_encoding_sec1_der",
     "ec_group_curve_and_point_affine_compressed_compatibility",
-    "hmac_evp_mac_lifecycle_reinit_update_final"
+    "hmac_evp_mac_lifecycle_reinit_update_final",
+    "hmac_evp_mac_production_digest_key_vector"
   ],
   "api_test_coverage": [
     {
@@ -209,31 +210,36 @@
     {
       "api": "HMAC_CTX_free",
       "test_ids": [
-        "hmac_evp_mac_lifecycle_reinit_update_final"
+        "hmac_evp_mac_lifecycle_reinit_update_final",
+        "hmac_evp_mac_production_digest_key_vector"
       ]
     },
     {
       "api": "HMAC_CTX_new",
       "test_ids": [
-        "hmac_evp_mac_lifecycle_reinit_update_final"
+        "hmac_evp_mac_lifecycle_reinit_update_final",
+        "hmac_evp_mac_production_digest_key_vector"
       ]
     },
     {
       "api": "HMAC_Final",
       "test_ids": [
-        "hmac_evp_mac_lifecycle_reinit_update_final"
+        "hmac_evp_mac_lifecycle_reinit_update_final",
+        "hmac_evp_mac_production_digest_key_vector"
       ]
     },
     {
       "api": "HMAC_Init_ex",
       "test_ids": [
-        "hmac_evp_mac_lifecycle_reinit_update_final"
+        "hmac_evp_mac_lifecycle_reinit_update_final",
+        "hmac_evp_mac_production_digest_key_vector"
       ]
     },
     {
       "api": "HMAC_Update",
       "test_ids": [
-        "hmac_evp_mac_lifecycle_reinit_update_final"
+        "hmac_evp_mac_lifecycle_reinit_update_final",
+        "hmac_evp_mac_production_digest_key_vector"
       ]
     },
     {

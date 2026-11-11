@@ -22,7 +22,8 @@ LD_LIBRARY_PATH="$build/openssl-src${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" OPENSS
 REGRESSION_C="$repo/package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regressions.c"
 REGRESSION_MATRIX="$repo/package/mtk/applications/easymesh-n60/tests/openssl-40-api-regression-matrix.json"
 DES_INTERNAL_TEST_C="$repo/package/mtk/applications/easymesh-n60/tests/test-openssl-des-internal-regression.c"
-test -s "$REGRESSION_C" && test -s "$REGRESSION_MATRIX" && test -s "$DES_INTERNAL_TEST_C"
+HMAC_TEST_C="$repo/package/mtk/applications/easymesh-n60/tests/test-openssl-hmac-production-regression.c"
+test -s "$REGRESSION_C" && test -s "$REGRESSION_MATRIX" && test -s "$DES_INTERNAL_TEST_C" && test -s "$HMAC_TEST_C"
 cc -std=c11 -Wall -Wextra -Werror -I"$build/openssl-src/include" "$REGRESSION_C" -L"$build/openssl-src" -Wl,-rpath,"$build/openssl-src" -lcrypto -ldl -pthread -lresolv -o "$out/api-migration-regression-test"
 LD_LIBRARY_PATH="$build/openssl-src${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" OPENSSL_MODULES="$build/openssl-src/providers" OPENSSL_CONF=/dev/null "$out/api-migration-regression-test" | tee "$out/api-migration-regressions.log"
 mapfile -t DES_INTERNAL_SOURCES < <(find "$repo/build_dir" -type f -path '*/easymesh-n60-7.6.7.3/1905daemon/src/crypto/des-internal.c' ! -path '*-openssl-pristine/*' -print | sort)
@@ -36,10 +37,13 @@ DES_SOURCE_ROOT="${DES_INTERNAL_SOURCE%/src/crypto/des-internal.c}"
 cc -std=gnu11 -Wall -Wextra -Werror -I"$DES_SOURCE_ROOT/inc" -I"$DES_SOURCE_ROOT/src/crypto" "$DES_INTERNAL_TEST_C" "$DES_INTERNAL_SOURCE" -o "$out/des-internal-regression-test"
 "$out/des-internal-regression-test" | tee "$out/des-internal-regressions.log"
 cat "$out/des-internal-regressions.log" >> "$out/api-migration-regressions.log"
-python3 - "$REGRESSION_MATRIX" "$REGRESSION_C" "$out/api-migration-regressions.log" "$out/openssl-api-regression-results.json" "$DES_INTERNAL_TEST_C" <<'PY'
+cc -std=c11 -Wall -Wextra -Werror -I"$build/openssl-src/include" "$HMAC_TEST_C" -L"$build/openssl-src" -Wl,-rpath,"$build/openssl-src" -lcrypto -ldl -pthread -lresolv -o "$out/hmac-production-regression-test"
+LD_LIBRARY_PATH="$build/openssl-src${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" OPENSSL_MODULES="$build/openssl-src/providers" OPENSSL_CONF=/dev/null "$out/hmac-production-regression-test" | tee "$out/hmac-production-regressions.log"
+cat "$out/hmac-production-regressions.log" >> "$out/api-migration-regressions.log"
+python3 - "$REGRESSION_MATRIX" "$REGRESSION_C" "$out/api-migration-regressions.log" "$out/openssl-api-regression-results.json" "$DES_INTERNAL_TEST_C" "$HMAC_TEST_C" <<'PY'
 import hashlib,json,sys
 from pathlib import Path
-matrix_path,source_path,log_path,out_path,des_test_source_path=map(Path,sys.argv[1:])
+matrix_path,source_path,log_path,out_path,des_test_source_path,hmac_test_source_path=map(Path,sys.argv[1:])
 matrix=json.loads(matrix_path.read_text())
 passed={line.split("PASS_TEST_ID:",1)[1].strip() for line in log_path.read_text().splitlines() if "PASS_TEST_ID:" in line}
 required=set(matrix.get("required_test_ids",[]))
@@ -57,9 +61,9 @@ def sha(p): return hashlib.sha256(p.read_bytes()).hexdigest()
 result={"schema_version":1,"scope_id":matrix["scope_id"],"openssl_version":"3.5.9","status":"PASS",
         "api_count":len(coverage),"required_test_ids":sorted(required),
         "passed_test_ids":sorted(passed),"api_coverage":coverage,
-        "inputs":{"matrix_sha256":sha(matrix_path),"test_source_sha256":sha(source_path),"des_internal_test_source_sha256":sha(des_test_source_path),"test_log_sha256":sha(log_path)}}
+        "inputs":{"matrix_sha256":sha(matrix_path),"test_source_sha256":sha(source_path),"des_internal_test_source_sha256":sha(des_test_source_path),"hmac_test_source_sha256":sha(hmac_test_source_path),"test_log_sha256":sha(log_path)}}
 out_path.write_text(json.dumps(result,indent=2)+"\n")
 print("PASS: all 40 EasyMesh API entries are covered by the provider-native migration regression suite.")
 PY
-sha256sum "$test_c" "$REGRESSION_C" "$DES_INTERNAL_TEST_C" "$DES_INTERNAL_SOURCE" "$out/provider-runtime-test" "$out/api-migration-regression-test" "$out/des-internal-regression-test" > "$out/SHA256SUMS"
+sha256sum "$test_c" "$REGRESSION_C" "$DES_INTERNAL_TEST_C" "$DES_INTERNAL_SOURCE" "$HMAC_TEST_C" "$out/provider-runtime-test" "$out/api-migration-regression-test" "$out/des-internal-regression-test" "$out/hmac-production-regression-test" > "$out/SHA256SUMS"
 printf '{"openssl_version":"3.5.9","providers":["default","legacy"],"legacy_provider_scope":"regression-test-only","result":"PASS"}\n' > "$out/provider-runtime-result.json"
