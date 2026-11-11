@@ -84,6 +84,10 @@ def validate_ready(a):
         failures.append("target API gate still has unreviewed active deprecated APIs")
     subset = {x.get("api"): x for x in gate.get("easymesh_api_subset", [])}
     active = set(gate.get("target_active_apis", []))
+    if not active.issubset(set(review_by)):
+        failures.append("target active API set contains APIs outside the pinned 40-item migration scope")
+    if set(gate.get("easymesh_api_migration_required", [])) != active:
+        failures.append("target API migration-required set differs from the actual active API set")
     for api, row in review_by.items():
         mr = migration_by.get(api, {})
         item = subset.get(api, {})
