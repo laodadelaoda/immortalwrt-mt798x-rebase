@@ -183,6 +183,20 @@ assert [x["api"] for x in subset if x["needs_migration_review"]]==["EVP_PKEY_cmp
 assert next(x for x in subset if x["api"]=="ENGINE_by_id")["scope_status"]=="EXCLUDED_WITH_EVIDENCE"
 assert next(x for x in subset if x["api"]=="EC_KEY_new")["needs_migration_review"] is False
 
+# A forged approval in the 68-row traceability map must never authorize the
+# separate 40-row migration review, and the reverse must remain possible.
+trace_map={"EVP_PKEY_cmp":{"migration_status":"APPROVED","approval":"true"}}
+pending_review={"EVP_PKEY_cmp":{"review_status":"REVIEWED_PENDING_IMPLEMENTATION","approval":"false"}}
+authority_subset=m.build_easymesh_api_subset(
+ [{"component":"wappd","path":"wappd/a.c","line":10,"api":"EVP_PKEY_cmp","deprecated_macro":"OSSL_DEPRECATEDIN_3_0"}],
+ [{"component":"wappd","path":"wappd/a.c","line":10,"api":"EVP_PKEY_cmp","reference_kind":"CALL_EXPRESSION","reachability_status":"ACTIVE"}],
+ [],[],trace_map,review_map=pending_review)
+authority_row=authority_subset[0]
+assert authority_row["traceability_migration_status"]=="APPROVED"
+assert authority_row["review_status"]=="REVIEWED_PENDING_IMPLEMENTATION"
+assert authority_row["approval"]=="false"
+
+
 removed=m.build_easymesh_api_subset([],[],[],[],
  {"EVP_MD_CTX_md":{"observed_lexical_occurrences":"2","observed_components":"wappd;1905daemon","migration_status":"UNREVIEWED","approval":"false"}},
  [{"api":"EVP_MD_CTX_md","pristine_calls":"2","prepared_calls":"0","delta":"-2","deprecated":"True"}])
