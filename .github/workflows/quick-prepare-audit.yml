@@ -509,6 +509,111 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Capture exact native EasyMesh source trees for 40-API migration
+        id: openssl_source_capture
+        if: success()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mapfile -t BUILD_DIRS < <(find "$GITHUB_WORKSPACE/build_dir" -mindepth 2 -maxdepth 2 -type d -name 'easymesh-n60-7.6.7.3' -print | sort)
+          [[ "${#BUILD_DIRS[@]}" -eq 1 ]] || {
+            echo "::error::Expected exactly one native EasyMesh Prepare tree for source capture; found ${#BUILD_DIRS[@]}."
+            printf '%s\n' "${BUILD_DIRS[@]}"
+            exit 1
+          }
+          BUILD_DIR="${BUILD_DIRS[0]}"
+          PRISTINE_DIR="${BUILD_DIR}-openssl-pristine"
+          OUT="artifacts/easymesh-openssl-production-source"
+          mkdir -p "$OUT/prepared" "$OUT/pristine"
+          for component in wappd 1905daemon; do
+            test -d "$BUILD_DIR/$component" || {
+              echo "::error::Native prepared source is missing: $BUILD_DIR/$component"; exit 1;
+            }
+            test -d "$PRISTINE_DIR/$component" || {
+              echo "::error::Pristine source snapshot is missing: $PRISTINE_DIR/$component"; exit 1;
+            }
+            cp -a "$BUILD_DIR/$component" "$OUT/prepared/$component"
+            cp -a "$PRISTINE_DIR/$component" "$OUT/pristine/$component"
+          done
+          python3 - "$GITHUB_WORKSPACE" "$OUT" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          repo, out, git_sha, run_id, attempt = map(str, sys.argv[1:])
+          repo, out = Path(repo), Path(out)
+          lock_path = repo / "package/mtk/vendor-sources.lock.json"
+          lock = json.loads(lock_path.read_text(encoding="utf-8"))
+          def sha256(path):
+              h = hashlib.sha256()
+              with path.open("rb") as f:
+                  for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                      h.update(chunk)
+              return h.hexdigest()
+          def tree_digest(root):
+              h = hashlib.sha256()
+              files = 0
+              for p in sorted(root.rglob("*")):
+                  rel = p.relative_to(root).as_posix()
+                  if p.is_symlink():
+                      h.update(b"L\0" + rel.encode() + b"\0" + str(p.readlink()).encode() + b"\n")
+                      files += 1
+                  elif p.is_file():
+                      h.update(b"F\0" + rel.encode() + b"\0" + bytes.fromhex(sha256(p)) + b"\n")
+                      files += 1
+              return {"sha256": h.hexdigest(), "entries": files}
+          sources = {x["id"]: x for x in lock["sources"] if x["id"] in {"wappd", "1905daemon"}}
+          if set(sources) != {"wappd", "1905daemon"}:
+              raise SystemExit("vendor Lock does not contain both EasyMesh source archives")
+          patchset = next(x for x in lock["patch_sets"] if x["id"] == "easymesh")
+          ordered = patchset["application_order"] + patchset.get("post_normalize_order", [])
+          patch_dir = repo / patchset["directory"]
+          patches = []
+          for name in ordered:
+              p = patch_dir / name
+              if not p.is_file():
+                  raise SystemExit(f"Lock-ordered EasyMesh patch is missing: {p}")
+              patches.append({"name": name, "sha256": sha256(p)})
+          manifest = {
+              "schema_version": 1,
+              "purpose": "source evidence only; no firmware or EasyMesh component compile",
+              "git_sha": git_sha,
+              "run": {"id": int(run_id), "attempt": int(attempt)},
+              "native_openwrt_build_prepare": True,
+              "firmware_compile_invoked": False,
+              "vendor_lock": {
+                  "path": "package/mtk/vendor-sources.lock.json",
+                  "sha256": sha256(lock_path),
+                  "release": lock.get("release")
+              },
+              "source_archives": {
+                  k: {"archive": v["archive"], "sha256": v["sha256"]}
+                  for k, v in sorted(sources.items())
+              },
+              "patch_set": {
+                  "id": "easymesh",
+                  "directory": patchset["directory"],
+                  "ordered_patch_sha256": patches
+              },
+              "source_trees": {
+                  kind: {
+                      component: tree_digest(out / kind / component)
+                      for component in ("wappd", "1905daemon")
+                  }
+                  for kind in ("prepared", "pristine")
+              }
+          }
+          (out / "source-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+          print(json.dumps(manifest, indent=2))
+          PY
+
+      - name: Upload native EasyMesh production source evidence
+        if: steps.openssl_source_capture.outcome == 'success'
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-easymesh-openssl-production-sources
+          path: artifacts/easymesh-openssl-production-source/
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Generate exact N60 target preprocessor evidence (no firmware build)
         id: target_preprocessor
         continue-on-error: true
@@ -661,111 +766,6 @@ jobs:
             --openssl-pkg-hash "$PKG_HASH" --openssl-options "$OPENSSL_OPTIONS" \
             --target-config "$GITHUB_WORKSPACE/.config" \
             --package-compile-recipe "$OUT/easymesh-Build-Compile.expanded.txt"
-
-      - name: Capture exact native EasyMesh source trees for 40-API migration
-        id: openssl_source_capture
-        if: success()
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          mapfile -t BUILD_DIRS < <(find "$GITHUB_WORKSPACE/build_dir" -mindepth 2 -maxdepth 2 -type d -name 'easymesh-n60-7.6.7.3' -print | sort)
-          [[ "${#BUILD_DIRS[@]}" -eq 1 ]] || {
-            echo "::error::Expected exactly one native EasyMesh Prepare tree for source capture; found ${#BUILD_DIRS[@]}."
-            printf '%s\n' "${BUILD_DIRS[@]}"
-            exit 1
-          }
-          BUILD_DIR="${BUILD_DIRS[0]}"
-          PRISTINE_DIR="${BUILD_DIR}-openssl-pristine"
-          OUT="artifacts/easymesh-openssl-production-source"
-          mkdir -p "$OUT/prepared" "$OUT/pristine"
-          for component in wappd 1905daemon; do
-            test -d "$BUILD_DIR/$component" || {
-              echo "::error::Native prepared source is missing: $BUILD_DIR/$component"; exit 1;
-            }
-            test -d "$PRISTINE_DIR/$component" || {
-              echo "::error::Pristine source snapshot is missing: $PRISTINE_DIR/$component"; exit 1;
-            }
-            cp -a "$BUILD_DIR/$component" "$OUT/prepared/$component"
-            cp -a "$PRISTINE_DIR/$component" "$OUT/pristine/$component"
-          done
-          python3 - "$GITHUB_WORKSPACE" "$OUT" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" <<'PY'
-          import hashlib, json, sys
-          from pathlib import Path
-          repo, out, git_sha, run_id, attempt = map(str, sys.argv[1:])
-          repo, out = Path(repo), Path(out)
-          lock_path = repo / "package/mtk/vendor-sources.lock.json"
-          lock = json.loads(lock_path.read_text(encoding="utf-8"))
-          def sha256(path):
-              h = hashlib.sha256()
-              with path.open("rb") as f:
-                  for chunk in iter(lambda: f.read(1024 * 1024), b""):
-                      h.update(chunk)
-              return h.hexdigest()
-          def tree_digest(root):
-              h = hashlib.sha256()
-              files = 0
-              for p in sorted(root.rglob("*")):
-                  rel = p.relative_to(root).as_posix()
-                  if p.is_symlink():
-                      h.update(b"L\0" + rel.encode() + b"\0" + str(p.readlink()).encode() + b"\n")
-                      files += 1
-                  elif p.is_file():
-                      h.update(b"F\0" + rel.encode() + b"\0" + bytes.fromhex(sha256(p)) + b"\n")
-                      files += 1
-              return {"sha256": h.hexdigest(), "entries": files}
-          sources = {x["id"]: x for x in lock["sources"] if x["id"] in {"wappd", "1905daemon"}}
-          if set(sources) != {"wappd", "1905daemon"}:
-              raise SystemExit("vendor Lock does not contain both EasyMesh source archives")
-          patchset = next(x for x in lock["patch_sets"] if x["id"] == "easymesh")
-          ordered = patchset["application_order"] + patchset.get("post_normalize_order", [])
-          patch_dir = repo / patchset["directory"]
-          patches = []
-          for name in ordered:
-              p = patch_dir / name
-              if not p.is_file():
-                  raise SystemExit(f"Lock-ordered EasyMesh patch is missing: {p}")
-              patches.append({"name": name, "sha256": sha256(p)})
-          manifest = {
-              "schema_version": 1,
-              "purpose": "source evidence only; no firmware or EasyMesh component compile",
-              "git_sha": git_sha,
-              "run": {"id": int(run_id), "attempt": int(attempt)},
-              "native_openwrt_build_prepare": True,
-              "firmware_compile_invoked": False,
-              "vendor_lock": {
-                  "path": "package/mtk/vendor-sources.lock.json",
-                  "sha256": sha256(lock_path),
-                  "release": lock.get("release")
-              },
-              "source_archives": {
-                  k: {"archive": v["archive"], "sha256": v["sha256"]}
-                  for k, v in sorted(sources.items())
-              },
-              "patch_set": {
-                  "id": "easymesh",
-                  "directory": patchset["directory"],
-                  "ordered_patch_sha256": patches
-              },
-              "source_trees": {
-                  kind: {
-                      component: tree_digest(out / kind / component)
-                      for component in ("wappd", "1905daemon")
-                  }
-                  for kind in ("prepared", "pristine")
-              }
-          }
-          (out / "source-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-          print(json.dumps(manifest, indent=2))
-          PY
-
-      - name: Upload native EasyMesh production source evidence
-        if: steps.openssl_source_capture.outcome == 'success'
-        uses: actions/upload-artifact@v6
-        with:
-          name: n60-easymesh-openssl-production-sources
-          path: artifacts/easymesh-openssl-production-source/
-          if-no-files-found: error
-          retention-days: 14
 
       - name: Preflight OpenSSL audit implementation inputs after MT Wi-Fi 026
         shell: bash
