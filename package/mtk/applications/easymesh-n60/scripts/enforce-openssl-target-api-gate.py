@@ -118,13 +118,81 @@ def build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migra
  return out
 
 
-def validate_removed_api_reviews(subset,migration_map,policy):
+
+def normalize_api_name(value):
+ return str(value or "").strip().strip(chr(96)).strip()
+
+def validate_semantic_review(review_rows,subset,expected_git_sha):
+ failures=[]
+ by_api={}
+ for row in review_rows:
+  api=normalize_api_name(row.get("api"))
+  if not api:
+   failures.append("40-API semantic review contains an empty API name"); continue
+  if api in by_api:
+   failures.append("40-API semantic review contains a duplicate API record: "+api); continue
+  by_api[api]=row
+ if len(review_rows)!=40 or len(by_api)!=40:
+  failures.append("40-API semantic review must contain exactly 40 unique API records")
+ try:
+  baseline_sites=sum(int(x.get("active_call_sites","")) for x in review_rows)
+ except (TypeError,ValueError):
+  baseline_sites=-1
+ if baseline_sites!=348:
+  failures.append("40-API semantic review baseline must retain exactly 348 historical callsites")
+ subset_by_api={normalize_api_name(x.get("api")):x for x in subset}
+ allowed={"REVIEWED_PENDING_IMPLEMENTATION","IMPLEMENTED_PENDING_VALIDATION","APPROVED"}
+ for api,row in by_api.items():
+  for field in ("components","review_decision","semantic_invariants","review_basis"):
+   if not str(row.get(field,"")).strip():
+    failures.append(api+": semantic review missing "+field)
+  approval=str(row.get("approval","")).strip().lower()
+  status=str(row.get("review_status","")).strip()
+  if approval not in {"true","false"}:
+   failures.append(api+": approval must be an explicit true/false value")
+  if status not in allowed:
+   failures.append(api+": unsupported semantic review status: "+status)
+  if status!="APPROVED" and approval=="true":
+   failures.append(api+": false approval: pending review status cannot carry approval=true")
+  if status=="APPROVED" and approval!="true":
+   failures.append(api+": APPROVED status requires approval=true")
+  actual=subset_by_api.get(api)
+  if actual is None:
+   failures.append(api+": 40-API review record has no matching target audit inventory record")
+   continue
+  try: active=int(actual.get("active_call_sites",0))
+  except (TypeError,ValueError): active=-1
+  if status=="REVIEWED_PENDING_IMPLEMENTATION" and active<=0:
+   failures.append(api+": status/source inconsistency; pending implementation but no active target callsite")
+  if status=="IMPLEMENTED_PENDING_VALIDATION":
+   if active!=0:
+    failures.append(api+": status/source inconsistency; implementation-pending-validation still has active target callsites")
+   if "patch" not in str(row.get("review_basis","")).lower():
+    failures.append(api+": implemented-pending-validation lacks patch/source evidence")
+  if status=="APPROVED":
+   basis=str(row.get("review_basis",""))
+   for token in ("git_sha="+expected_git_sha,"run_id=","attestation_sha256="):
+    if token not in basis:
+     failures.append(api+": approval lacks current-SHA/run/attestation evidence: "+token)
+   if active!=0:
+    failures.append(api+": approved migration still has active deprecated target callsites")
+ for api,row in subset_by_api.items():
+  if int(row.get("active_call_sites",0) or 0)>0 and api not in by_api:
+   failures.append(api+": active EasyMesh API is missing from the 40-API semantic review CSV")
+ return failures
+
+def validate_removed_api_reviews(subset,migration_map,policy,review_map=None):
  failures=[]
  for row in subset:
   if not row.get("requires_patch_semantic_review"): continue
-  api=row["api"]; mr=migration_map.get(api,{})
-  if mr.get("migration_status")!="APPROVED" or str(mr.get("approval","")).lower()!="true":
-   failures.append("deprecated API removed from prepared source lacks semantic review/approval: "+api)
+  api=row["api"]; mr=(review_map or migration_map).get(api,{})
+  status=mr.get("review_status") or mr.get("migration_status")
+  if status=="IMPLEMENTED_PENDING_VALIDATION" and str(mr.get("approval","")).lower()=="false":
+   if not str(mr.get("review_decision","")).strip() or not str(mr.get("semantic_invariants","")).strip():
+    failures.append("removed API has incomplete 40-API semantic review: "+api)
+   continue
+  if status!="APPROVED" or str(mr.get("approval","")).lower()!="true":
+   failures.append("deprecated API removed from prepared source lacks 40-API semantic review/approval: "+api)
    continue
   rule=policy.get("api_rules",{}).get(api)
   if (not isinstance(rule,dict) or rule.get("status") not in {"DIRECT_REPLACEMENT","SEMANTIC_ADAPTATION"}
@@ -150,7 +218,7 @@ def validate_scope_manifest(scope,summary,migration_map):
   failures.append("EasyMesh supporting dependency boundary list must explicitly retain datconf/libkvcutil and libnl-tiny")
  return failures
 
-def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,policy,source_root,expected_git_sha,delta_rows=None):
+def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,policy,source_root,expected_git_sha,delta_rows=None,review_map=None):
  failures=[]
  if summary.get("git_sha")!=expected_git_sha: failures.append("target preprocessor evidence Git SHA mismatch")
  if summary.get("firmware_compile_invoked") is not False: failures.append("firmware compilation was invoked or not disproven")
@@ -260,14 +328,13 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
 
  active_apis=sorted({x["api"] for x in active})
  for api in active_apis:
-  mr=migration_map.get(api)
+  mr=(review_map or migration_map).get(api)
   if mr is None:
-   failures.append("active deprecated API is missing from the migration map: "+api)
+   failures.append("active deprecated API is missing from the 40-API semantic review CSV: "+api)
    continue
-  if mr.get("source_reachability_status") in {"UNREFERENCED_MACRO_DEFINITION","OPENSSL_NO_ENGINE_GUARD_REQUIRES_PREPROCESSOR"}:
-   failures.append("target preprocessor contradicts the migration map's exclusion claim: "+api)
-  if mr.get("migration_status")!="APPROVED" or str(mr.get("approval","")).lower()!="true":
-   failures.append("active deprecated API remains unapproved; source migration and approval evidence are required before passing the gate: "+api)
+  status=mr.get("review_status") or mr.get("migration_status")
+  if status!="APPROVED" or str(mr.get("approval","")).lower()!="true":
+   failures.append("active deprecated API remains unimplemented/unapproved in the 40-API semantic review: "+api)
    continue
   rule=policy.get("api_rules",{}).get(api)
   if not isinstance(rule,dict):
@@ -293,7 +360,7 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
   "target_active_apis":active_apis,"target_active_api_counts":dict(sorted(counts.items())),
   "excluded_with_evidence":excluded,"declarations_or_definitions":declarations,
   "unknown_fail_closed":unknown,"macro_reference_count":len(macro_rows),
-  "migration_map_rows":len(migration_map),
+  "migration_map_rows":len(migration_map),"semantic_review_rows":len(review_rows),"semantic_review_sha256":sha256(a.review),
   "easymesh_api_candidate_count":len(subset),
   "easymesh_api_migration_required_count":len(active_subset),
   "easymesh_api_migration_required":active_subset,"easymesh_api_subset":subset,
@@ -317,7 +384,7 @@ def main():
  scope=load_json(a.scope_manifest)
  with a.delta.open(encoding="utf-8",newline="") as f: delta_rows=list(csv.DictReader(f))
  report=evaluate(inventory,load_json(a.callsites),load_json(a.noncalls),summary,
-                 load_json(a.macros),migration_map,load_json(a.policy),a.source_root,git.stdout.strip(),delta_rows)
+                 load_json(a.macros),migration_map,load_json(a.policy),a.source_root,git.stdout.strip(),delta_rows,review_map)
  report["failures"].extend(validate_scope_manifest(scope,summary,migration_map))
  report["scope"]={"scope_id":scope.get("scope_id"),"openssl_version":scope.get("openssl_version"),
   "primary_components":scope.get("primary_components"),"supporting_dependencies":scope.get("supporting_dependencies"),
