@@ -43,6 +43,10 @@ with tempfile.TemporaryDirectory() as d:
                "lib1905_interface.a","libvendor.so.1"):
   assert token not in clean_argv and token not in joined, (token,clean_argv)
  assert "-pthread" in clean_argv and "-DOPENSSL_TARGET=1" in clean_argv
+ assert "-openmp" in m.cpp_argv({"argv":["cc","-c","x.c","-openmp","-o","x.o"]},root/"openmp.i")
+ separated=m.cpp_argv({"argv":["cc","-c","x.c","-L","stage/lib","-l","ssl",
+                             "-Xlinker","--as-needed","-T","linker.ld","-u","symbol"]},root/"separated.i")
+ assert not any(x in separated for x in ("-L","stage/lib","-l","ssl","-Xlinker","--as-needed","-T","linker.ld","-u","symbol"))
  assert m.preprocessor_env(root/"target-staging",{})["STAGING_DIR"]==str((root/"target-staging").resolve())
  macrofile=root/"macros.txt"
  macrofile.write_text("#define OPENSSL_NO_ENGINE 1\n#define CONFIG_SUITEB\n")
