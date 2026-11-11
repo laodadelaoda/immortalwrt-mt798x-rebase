@@ -18,6 +18,8 @@ REPO_INPUTS = [
     "package/mtk/vendor-sources.lock.json",
     REVIEW, MATRIX, MIGRATION_MAP, POLICY, SCOPE_MANIFEST,
     "package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regressions.c",
+    "package/mtk/applications/easymesh-n60/tests/test-openssl-des-internal-regression.c",
+    "package/mtk/applications/easymesh-n60/tests/test-openssl-production-source-migration.py",
     "package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regression-matrix.py",
     "package/mtk/applications/easymesh-n60/scripts/run-openssl-provider-runtime.sh",
     "package/mtk/applications/easymesh-n60/scripts/enforce-openssl-target-api-gate.py",
@@ -121,6 +123,8 @@ def validate_ready(a):
         failures.append("40-API regression result was generated from a different test matrix")
     if regression_inputs.get("test_source_sha256") != sha256(repo / "package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regressions.c"):
         failures.append("40-API regression result was generated from a different C test source")
+    if regression_inputs.get("des_internal_test_source_sha256") != sha256(repo / "package/mtk/applications/easymesh-n60/tests/test-openssl-des-internal-regression.c"):
+        failures.append("40-API regression result was generated from a different internal DES test source")
     if not re.fullmatch(r"[0-9a-f]{64}", str(regression_inputs.get("test_log_sha256", ""))):
         failures.append("40-API regression test log hash is missing or invalid")
     if any(x.get("status") != "PASS" for x in regression.get("api_coverage", [])) or len(regression.get("api_coverage", [])) != 40:

@@ -798,6 +798,8 @@ jobs:
             package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regressions.c \
             package/mtk/applications/easymesh-n60/tests/openssl-40-api-regression-matrix.json \
             package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regression-matrix.py \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-des-internal-regression.c \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-production-source-migration.py \
             package/mtk/applications/easymesh-n60/scripts/verify-openssl-api-migration-attestation.py; do
             test -s "$input" || {
               echo "::error::Required OpenSSL audit input is missing or empty: $input"
@@ -808,7 +810,8 @@ jobs:
           python3 package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regression-matrix.py \
             --review package/mtk/applications/easymesh-n60/tests/openssl-40-active-api-semantic-review.csv \
             --matrix package/mtk/applications/easymesh-n60/tests/openssl-40-api-regression-matrix.json \
-            --test-source package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regressions.c
+            --test-source package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regressions.c \
+            --additional-test-source package/mtk/applications/easymesh-n60/tests/test-openssl-des-internal-regression.c
           python3 -m py_compile package/mtk/applications/easymesh-n60/scripts/verify-openssl-api-migration-attestation.py
           ruby -e 'require "yaml"; %w[.github/workflows/quick-prepare-audit.yml .github/workflows/main.yml].each { |p| YAML.parse_file(p); puts "PASS: YAML parsed: #{p}" }'
           echo "PASS: OpenSSL inventory, preprocessor audit, exact 40-API regression matrix and workflow YAML inputs are valid after native Prepare and MT Wi-Fi 026 evidence."

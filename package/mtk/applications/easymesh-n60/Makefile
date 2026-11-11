@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=easymesh-n60
 PKG_VERSION:=7.6.7.3
-PKG_RELEASE:=28
+PKG_RELEASE:=29
 PKG_BUILD_DEPENDS:=datconf openssl libnl-tiny
 PKG_BUILD_PARALLEL:=1
 
@@ -78,7 +78,8 @@ define Build/Prepare
 	python3 ./tests/test-easymesh-static-contract.py $(PKG_BUILD_DIR) $(TOPDIR); \
 	python3 ./tests/test-wapp-map-buffer-contract.py $(PKG_BUILD_DIR); \
 	python3 ./tests/test-wapp-wireless-mode-contract.py $(PKG_BUILD_DIR) $(TOPDIR); \
-	python3 ./tests/test-vendor-artifact-inventory.py $(PKG_BUILD_DIR) $(TOPDIR)
+	python3 ./tests/test-vendor-artifact-inventory.py $(PKG_BUILD_DIR) $(TOPDIR); \
+	python3 ./tests/test-openssl-production-source-migration.py $(PKG_BUILD_DIR)
 endef
 
 define Build/Compile

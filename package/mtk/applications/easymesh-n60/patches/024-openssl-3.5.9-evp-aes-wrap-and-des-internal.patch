@@ -1,0 +1,325 @@
+--- a/wappd/crypto/crypto_openssl.c
++++ b/wappd/crypto/crypto_openssl.c
+@@ -8,9 +8,8 @@
+ 
+ //#include "includes.h"
+ #include <openssl/opensslv.h>
++#include <limits.h>
+ #include <openssl/err.h>
+-#include <openssl/des.h>
+-#include <openssl/aes.h>
+ #include <openssl/bn.h>
+ #include <openssl/evp.h>
+ #include <openssl/dh.h>
+@@ -185,28 +184,6 @@
+ #endif /* CONFIG_FIPS */
+ 
+ 
+-int des_encrypt(const u8 *clear, const u8 *key, u8 *cypher)
+-{
+-	u8 pkey[8], next, tmp;
+-	int i;
+-	DES_key_schedule ks;
+-
+-	/* Add parity bits to the key */
+-	next = 0;
+-	for (i = 0; i < 7; i++) {
+-		tmp = key[i];
+-		pkey[i] = (tmp >> i) | next | 1;
+-		next = tmp << (7 - i);
+-	}
+-	pkey[i] = next | 1;
+-
+-	DES_set_key((DES_cblock *) &pkey, &ks);
+-	DES_ecb_encrypt((DES_cblock *) clear, (DES_cblock *) cypher, &ks,
+-			DES_ENCRYPT);
+-	return 0;
+-}
+-
+-
+ #ifndef CONFIG_NO_RC4
+ int rc4_skip(const u8 *key, size_t keylen, size_t skip,
+ 	     u8 *data, size_t data_len)
+@@ -421,34 +398,88 @@
+ #ifndef CONFIG_FIPS
+ #ifndef CONFIG_OPENSSL_INTERNAL_AES_WRAP
+ 
++static int openssl_aes_wrap_crypt(const u8 *kek, size_t kek_len, int n,
++				  const u8 *in, u8 *out, int encrypt)
++{
++	const char *cipher_name;
++	EVP_CIPHER *cipher = NULL;
++	EVP_CIPHER_CTX *ctx = NULL;
++	unsigned char *tmp = NULL;
++	size_t tmp_len;
++	int in_len, out_len, outl = 0, finl = 0;
++	int ret = -1;
++
++	if (!kek || !in || !out || n < 2 || n > INT_MAX / 8 - 1)
++		return -1;
++
++	switch (kek_len) {
++	case 16:
++		cipher_name = "AES-128-WRAP";
++		break;
++	case 24:
++		cipher_name = "AES-192-WRAP";
++		break;
++	case 32:
++		cipher_name = "AES-256-WRAP";
++		break;
++	default:
++		return -1;
++	}
++
++	in_len = (n + (encrypt ? 0 : 1)) * 8;
++	out_len = (n + (encrypt ? 1 : 0)) * 8;
++	tmp_len = (size_t) in_len + EVP_MAX_BLOCK_LENGTH;
++	tmp = OPENSSL_malloc(tmp_len);
++	cipher = EVP_CIPHER_fetch(NULL, cipher_name, "provider=default");
++	ctx = EVP_CIPHER_CTX_new();
++	if (!tmp || !cipher || !ctx)
++		goto done;
++
++	EVP_CIPHER_CTX_set_flags(ctx, EVP_CIPHER_CTX_FLAG_WRAP_ALLOW);
++	if (encrypt) {
++		if (EVP_EncryptInit_ex2(ctx, cipher, kek, NULL, NULL) != 1 ||
++		    EVP_EncryptUpdate(ctx, tmp, &outl, in, in_len) != 1 ||
++		    outl < 0 || (size_t) outl > tmp_len ||
++		    EVP_EncryptFinal_ex(ctx, tmp + outl, &finl) != 1)
++			goto done;
++	} else {
++		if (EVP_DecryptInit_ex2(ctx, cipher, kek, NULL, NULL) != 1 ||
++		    EVP_DecryptUpdate(ctx, tmp, &outl, in, in_len) != 1 ||
++		    outl < 0 || (size_t) outl > tmp_len ||
++		    EVP_DecryptFinal_ex(ctx, tmp + outl, &finl) != 1)
++			goto done;
++	}
++
++	if (finl < 0 || (size_t) finl > tmp_len - (size_t) outl ||
++	    outl + finl != out_len)
++		goto done;
++	os_memcpy(out, tmp, out_len);
++	ret = 0;
++
++done:
++	if (ret < 0)
++		OPENSSL_cleanse(out, out_len);
++	OPENSSL_clear_free(tmp, tmp_len);
++	EVP_CIPHER_CTX_free(ctx);
++	EVP_CIPHER_free(cipher);
++	return ret;
++}
++
++
+ int aes_wrap(const u8 *kek, size_t kek_len, int n, const u8 *plain, u8 *cipher)
+ {
+-	AES_KEY actx;
+-	int res;
+-
+-	if (TEST_FAIL())
+-		return -1;
+-	if (AES_set_encrypt_key(kek, kek_len << 3, &actx))
+-		return -1;
+-	res = AES_wrap_key(&actx, NULL, cipher, plain, n * 8);
+-	OPENSSL_cleanse(&actx, sizeof(actx));
+-	return res <= 0 ? -1 : 0;
++	if (TEST_FAIL())
++		return -1;
++	return openssl_aes_wrap_crypt(kek, kek_len, n, plain, cipher, 1);
+ }
+ 
+ 
+ int aes_unwrap(const u8 *kek, size_t kek_len, int n, const u8 *cipher,
+ 	       u8 *plain)
+ {
+-	AES_KEY actx;
+-	int res;
+-
+-	if (TEST_FAIL())
+-		return -1;
+-	if (AES_set_decrypt_key(kek, kek_len << 3, &actx))
+-		return -1;
+-	res = AES_unwrap_key(&actx, NULL, plain, cipher, (n + 1) * 8);
+-	OPENSSL_cleanse(&actx, sizeof(actx));
+-	return res <= 0 ? -1 : 0;
++	if (TEST_FAIL())
++		return -1;
++	return openssl_aes_wrap_crypt(kek, kek_len, n, cipher, plain, 0);
+ }
+ 
+ #endif /* CONFIG_OPENSSL_INTERNAL_AES_WRAP */
+--- a/1905daemon/src/crypto_openssl.c
++++ b/1905daemon/src/crypto_openssl.c
+@@ -8,9 +8,8 @@
+ 
+ #include "includes.h"
+ #include <openssl/opensslv.h>
++#include <limits.h>
+ #include <openssl/err.h>
+-#include <openssl/des.h>
+-#include <openssl/aes.h>
+ #include <openssl/bn.h>
+ #include <openssl/evp.h>
+ #include <openssl/dh.h>
+@@ -166,28 +165,11 @@
+ #endif /* CONFIG_FIPS */
+ 
+ 
+-int des_encrypt(const u8 *clear, const u8 *key, u8 *cypher)
+-{
+-	u8 pkey[8], next, tmp;
+-	int i;
+-	DES_key_schedule ks;
+-
+-	/* Add parity bits to the key */
+-	next = 0;
+-	for (i = 0; i < 7; i++) {
+-		tmp = key[i];
+-		pkey[i] = (tmp >> i) | next | 1;
+-		next = tmp << (7 - i);
+-	}
+-	pkey[i] = next | 1;
+-
+-	DES_set_key((DES_cblock *) &pkey, &ks);
+-	DES_ecb_encrypt((DES_cblock *) clear, (DES_cblock *) cypher, &ks,
+-			DES_ENCRYPT);
+-	return 0;
+-}
+-
+-
++/*
++ * DES is intentionally supplied by src/crypto/des-internal.c. Do not add an
++ * OpenSSL backend definition here: it would shadow the internal implementation
++ * and reintroduce deprecated low-level DES APIs / a Legacy Provider dependency.
++ */
+ #ifndef CONFIG_NO_RC4
+ int rc4_skip(const u8 *key, size_t keylen, size_t skip,
+ 	     u8 *data, size_t data_len)
+@@ -402,34 +384,88 @@
+ #ifndef CONFIG_FIPS
+ #ifndef CONFIG_OPENSSL_INTERNAL_AES_WRAP
+ 
++static int openssl_aes_wrap_crypt(const u8 *kek, size_t kek_len, int n,
++				  const u8 *in, u8 *out, int encrypt)
++{
++	const char *cipher_name;
++	EVP_CIPHER *cipher = NULL;
++	EVP_CIPHER_CTX *ctx = NULL;
++	unsigned char *tmp = NULL;
++	size_t tmp_len;
++	int in_len, out_len, outl = 0, finl = 0;
++	int ret = -1;
++
++	if (!kek || !in || !out || n < 2 || n > INT_MAX / 8 - 1)
++		return -1;
++
++	switch (kek_len) {
++	case 16:
++		cipher_name = "AES-128-WRAP";
++		break;
++	case 24:
++		cipher_name = "AES-192-WRAP";
++		break;
++	case 32:
++		cipher_name = "AES-256-WRAP";
++		break;
++	default:
++		return -1;
++	}
++
++	in_len = (n + (encrypt ? 0 : 1)) * 8;
++	out_len = (n + (encrypt ? 1 : 0)) * 8;
++	tmp_len = (size_t) in_len + EVP_MAX_BLOCK_LENGTH;
++	tmp = OPENSSL_malloc(tmp_len);
++	cipher = EVP_CIPHER_fetch(NULL, cipher_name, "provider=default");
++	ctx = EVP_CIPHER_CTX_new();
++	if (!tmp || !cipher || !ctx)
++		goto done;
++
++	EVP_CIPHER_CTX_set_flags(ctx, EVP_CIPHER_CTX_FLAG_WRAP_ALLOW);
++	if (encrypt) {
++		if (EVP_EncryptInit_ex2(ctx, cipher, kek, NULL, NULL) != 1 ||
++		    EVP_EncryptUpdate(ctx, tmp, &outl, in, in_len) != 1 ||
++		    outl < 0 || (size_t) outl > tmp_len ||
++		    EVP_EncryptFinal_ex(ctx, tmp + outl, &finl) != 1)
++			goto done;
++	} else {
++		if (EVP_DecryptInit_ex2(ctx, cipher, kek, NULL, NULL) != 1 ||
++		    EVP_DecryptUpdate(ctx, tmp, &outl, in, in_len) != 1 ||
++		    outl < 0 || (size_t) outl > tmp_len ||
++		    EVP_DecryptFinal_ex(ctx, tmp + outl, &finl) != 1)
++			goto done;
++	}
++
++	if (finl < 0 || (size_t) finl > tmp_len - (size_t) outl ||
++	    outl + finl != out_len)
++		goto done;
++	os_memcpy(out, tmp, out_len);
++	ret = 0;
++
++done:
++	if (ret < 0)
++		OPENSSL_cleanse(out, out_len);
++	OPENSSL_clear_free(tmp, tmp_len);
++	EVP_CIPHER_CTX_free(ctx);
++	EVP_CIPHER_free(cipher);
++	return ret;
++}
++
++
+ int aes_wrap(const u8 *kek, size_t kek_len, int n, const u8 *plain, u8 *cipher)
+ {
+-	AES_KEY actx;
+-	int res;
+-
+-	if (TEST_FAIL())
+-		return -1;
+-	if (AES_set_encrypt_key(kek, kek_len << 3, &actx))
+-		return -1;
+-	res = AES_wrap_key(&actx, NULL, cipher, plain, n * 8);
+-	OPENSSL_cleanse(&actx, sizeof(actx));
+-	return res <= 0 ? -1 : 0;
++	if (TEST_FAIL())
++		return -1;
++	return openssl_aes_wrap_crypt(kek, kek_len, n, plain, cipher, 1);
+ }
+ 
+ 
+ int aes_unwrap(const u8 *kek, size_t kek_len, int n, const u8 *cipher,
+ 	       u8 *plain)
+ {
+-	AES_KEY actx;
+-	int res;
+-
+-	if (TEST_FAIL())
+-		return -1;
+-	if (AES_set_decrypt_key(kek, kek_len << 3, &actx))
+-		return -1;
+-	res = AES_unwrap_key(&actx, NULL, plain, cipher, (n + 1) * 8);
+-	OPENSSL_cleanse(&actx, sizeof(actx));
+-	return res <= 0 ? -1 : 0;
++	if (TEST_FAIL())
++		return -1;
++	return openssl_aes_wrap_crypt(kek, kek_len, n, cipher, plain, 0);
+ }
+ 
+ #endif /* CONFIG_OPENSSL_INTERNAL_AES_WRAP */
+--- a/wappd/crypto/crypto.h
++++ b/wappd/crypto/crypto.h
+@@ -104,15 +104,6 @@
+  */
+ int sha512_vector(size_t num_elem, const u8 *addr[], const size_t *len,
+ 		  u8 *mac);
+-
+-/**
+- * des_encrypt - Encrypt one block with DES
+- * @clear: 8 octets (in)
+- * @key: 7 octets (in) (no parity bits included)
+- * @cypher: 8 octets (out)
+- * Returns: 0 on success, -1 on failure
+- */
+-int des_encrypt(const u8 *clear, const u8 *key, u8 *cypher);
+ 
+ /**
+  * aes_encrypt_init - Initialize AES for encryption
