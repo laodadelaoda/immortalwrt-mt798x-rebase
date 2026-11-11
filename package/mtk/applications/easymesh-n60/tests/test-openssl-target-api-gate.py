@@ -24,21 +24,43 @@ with tempfile.TemporaryDirectory() as d:
  # target translation unit, and the negative observation must bind its hashes.
  report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
  assert not report["complete"] and any("negative target-preprocessor proof" in x for x in report["failures"])
- ppout=root/"unit.i"
- ppout.write_text(f'# 2 "{src.resolve()}"\nint f(void) {{ return 0; }}\n')
- pp_digest=m.sha256(ppout)
- tu={"source":str(src.resolve()),"returncode":0,"preprocessed_sha256":pp_digest,"preprocessed_output":str(ppout.resolve())}
- summary["components"]={"wappd":{"source_reachability_complete":True,"translation_units":[tu]}}
+ # The referenced file is an included-source candidate, not a top-level TU.
+ # Every TU in the completed component graph must be inspected; one TU that
+ # emits the source line invalidates the negative proof.
+ main1=root/"wappd"/"main1.c"; main1.write_text('#include "x.c"\\n')
+ main2=root/"wappd"/"main2.c"; main2.write_text("int other(void) { return 0; }\\n")
+ ppout=root/"unit1.i"; ppout.write_text(f'# 2 "{src.resolve()}"\\nint f(void) {{ return 0; }}\\n')
+ ppout2=root/"unit2.i"; ppout2.write_text(f'# 1 "{main2.resolve()}"\\nint other(void) {{ return 0; }}\\n')
+ pp_digest=m.sha256(ppout); pp_digest2=m.sha256(ppout2)
+ tu={"source":str(main1.resolve()),"returncode":0,"preprocessed_sha256":pp_digest,"preprocessed_output":str(ppout.resolve())}
+ tu2={"source":str(main2.resolve()),"returncode":0,"preprocessed_sha256":pp_digest2,"preprocessed_output":str(ppout2.resolve())}
+ summary["components"]={"wappd":{"source_reachability_complete":True,"translation_units":[tu,tu2]}}
  summary["evidence_output_dir"]=str(root)
  call[0]["conditional_branch_path"]=[]
  call[0]["preprocessor_negative_evidence"]={
-  "source_translation_unit":True,"component_complete":True,"api_hit_absent":True,
-  "source_line_absent":True,"preprocessed_sha256":[pp_digest],
+  "source_is_direct_translation_unit":False,"component_compile_graph_complete":True,"api_hit_absent":True,
+  "source_line_absent_from_all_target_preprocessing":True,
+  "preprocessed_translation_units":[{"source":str(main1.resolve()),"preprocessed_sha256":pp_digest},
+                                    {"source":str(main2.resolve()),"preprocessed_sha256":pp_digest2}],
   "target_compiler_sha256":"2"*64,"target_config_sha256":"3"*64,
   "source_sha256":digest,"conditional_branch_path":[]}
  summary["target_compiler_sha256"]="2"*64; summary["target_config_sha256"]="3"*64
  report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
  assert report["complete"] and report["excluded_with_evidence"]==1,report["failures"]
+ # Omitting a component TU from the signed negative evidence must fail.
+ call[0]["preprocessor_negative_evidence"]["preprocessed_translation_units"].pop()
+ report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
+ assert not report["complete"] and any("negative target-preprocessor proof" in x for x in report["failures"])
+ call[0]["preprocessor_negative_evidence"]["preprocessed_translation_units"].append({"source":str(main2.resolve()),"preprocessed_sha256":pp_digest2})
+ # If any TU emits the exact source line, the source cannot be excluded.
+ ppout2.write_text(f'# 1 "{src.resolve()}"\\nEVP_PKEY_cmp(a,b);\\n')
+ active_digest=m.sha256(ppout2); tu2["preprocessed_sha256"]=active_digest
+ call[0]["preprocessor_negative_evidence"]["preprocessed_translation_units"][1]["preprocessed_sha256"]=active_digest
+ report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
+ assert not report["complete"] and any("negative target-preprocessor proof" in x for x in report["failures"])
+ ppout2.write_text(f'# 1 "{main2.resolve()}"\\nint other(void) {{ return 0; }}\\n')
+ pp_digest2=m.sha256(ppout2); tu2["preprocessed_sha256"]=pp_digest2
+ call[0]["preprocessor_negative_evidence"]["preprocessed_translation_units"][1]["preprocessed_sha256"]=pp_digest2
  # A mismatched conditional path must revoke the exclusion proof.
  call[0]["preprocessor_negative_evidence"]["conditional_branch_path"]=["#if 0"]
  report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
@@ -53,13 +75,13 @@ with tempfile.TemporaryDirectory() as d:
  ppout.write_text(f'# 1 "{src.resolve()}"\nEVP_PKEY_cmp(a,b);\n')
  forged_digest=m.sha256(ppout)
  tu["preprocessed_sha256"]=forged_digest
- call[0]["preprocessor_negative_evidence"]["preprocessed_sha256"]=[forged_digest]
+ call[0]["preprocessor_negative_evidence"]["preprocessed_translation_units"][0]["preprocessed_sha256"]=forged_digest
  report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
  assert not report["complete"] and any("negative target-preprocessor proof" in x for x in report["failures"])
  ppout.write_text(f'# 2 "{src.resolve()}"\nint f(void) {{ return 0; }}\n')
  restored_digest=m.sha256(ppout)
  tu["preprocessed_sha256"]=restored_digest
- call[0]["preprocessor_negative_evidence"]["preprocessed_sha256"]=[restored_digest]
+ call[0]["preprocessor_negative_evidence"]["preprocessed_translation_units"][0]["preprocessed_sha256"]=restored_digest
 
  # A declaration/definition is inventoried but is not treated as an API invocation.
  call[0]["reference_kind"]="DECLARATION_OR_DEFINITION"
