@@ -125,8 +125,10 @@ def validate_ready(a):
         failures.append("40-API regression test log hash is missing or invalid")
     if any(x.get("status") != "PASS" for x in regression.get("api_coverage", [])) or len(regression.get("api_coverage", [])) != 40:
         failures.append("not all 40 APIs have passing regression coverage")
-    if provider.get("openssl_version") != "3.5.9" or provider.get("result") != "PASS":
-        failures.append("Provider-native OpenSSL runtime regression did not pass")
+    if (provider.get("openssl_version") != "3.5.9" or provider.get("result") != "PASS"
+        or not {"default", "legacy"}.issubset(set(provider.get("providers", [])))
+        or provider.get("legacy_provider_scope") != "regression-test-only"):
+        failures.append("Provider-native OpenSSL runtime or isolated Legacy Provider regression did not pass")
     baseline_run = baseline.get("run", {})
     baseline_artifact = baseline.get("artifact", {})
     if (baseline.get("status") != "VERIFIED" or baseline_run.get("git_sha") != current_sha
