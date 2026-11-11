@@ -72,13 +72,13 @@ with tempfile.TemporaryDirectory() as d:
  assert not report["complete"] and any("negative target-preprocessor proof" in x for x in report["failures"])
  call[0]["preprocessor_negative_evidence"]["api_hit_absent"]=True
  # A self-consistent forged proof cannot hide an API call present in the actual .i file.
- ppout.write_text(f'# 1 "{src.resolve()}"\nEVP_PKEY_cmp(a,b);\n')
+ ppout.write_text(f'# 2 "{src.resolve()}"\nEVP_PKEY_cmp(a,b);\n')
  forged_digest=m.sha256(ppout)
  tu["preprocessed_sha256"]=forged_digest
  call[0]["preprocessor_negative_evidence"]["preprocessed_translation_units"][0]["preprocessed_sha256"]=forged_digest
  report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
  assert not report["complete"] and any("negative target-preprocessor proof" in x for x in report["failures"])
- ppout.write_text(f'# 2 "{src.resolve()}"\nint f(void) {{ return 0; }}\n')
+ ppout.write_text(f'# 4 "{src.resolve()}"\nint f(void) {{ return 0; }}\n')
  restored_digest=m.sha256(ppout)
  tu["preprocessed_sha256"]=restored_digest
  call[0]["preprocessor_negative_evidence"]["preprocessed_translation_units"][0]["preprocessed_sha256"]=restored_digest
