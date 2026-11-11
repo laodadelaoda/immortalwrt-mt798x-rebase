@@ -27,10 +27,10 @@ with tempfile.TemporaryDirectory() as d:
  # The referenced file is an included-source candidate, not a top-level TU.
  # Every TU in the completed component graph must be inspected; one TU that
  # emits the source line invalidates the negative proof.
- main1=root/"wappd"/"main1.c"; main1.write_text('#include "x.c"\\n')
- main2=root/"wappd"/"main2.c"; main2.write_text("int other(void) { return 0; }\\n")
- ppout=root/"unit1.i"; ppout.write_text(f'# 4 "{src.resolve()}"\\nint f(void) {{ return 0; }}\\n')
- ppout2=root/"unit2.i"; ppout2.write_text(f'# 1 "{main2.resolve()}"\\nint other(void) {{ return 0; }}\\n')
+ main1=root/"wappd"/"main1.c"; main1.write_text('#include "x.c"\n')
+ main2=root/"wappd"/"main2.c"; main2.write_text("int other(void) { return 0; }\n")
+ ppout=root/"unit1.i"; ppout.write_text(f'# 4 "{src.resolve()}"\nint f(void) {{ return 0; }}\n')
+ ppout2=root/"unit2.i"; ppout2.write_text(f'# 1 "{main2.resolve()}"\nint other(void) {{ return 0; }}\n')
  pp_digest=m.sha256(ppout); pp_digest2=m.sha256(ppout2)
  tu={"source":str(main1.resolve()),"returncode":0,"preprocessed_sha256":pp_digest,"preprocessed_output":str(ppout.resolve())}
  tu2={"source":str(main2.resolve()),"returncode":0,"preprocessed_sha256":pp_digest2,"preprocessed_output":str(ppout2.resolve())}
@@ -53,12 +53,12 @@ with tempfile.TemporaryDirectory() as d:
  assert not report["complete"] and any("negative target-preprocessor proof" in x for x in report["failures"])
  call[0]["preprocessor_negative_evidence"]["preprocessed_translation_units"].append({"source":str(main2.resolve()),"preprocessed_sha256":pp_digest2})
  # If any TU emits the exact source line, the source cannot be excluded.
- ppout2.write_text(f'# 1 "{src.resolve()}"\\nEVP_PKEY_cmp(a,b);\\n')
+ ppout2.write_text(f'# 2 "{src.resolve()}"\nEVP_PKEY_cmp(a,b);\n')
  active_digest=m.sha256(ppout2); tu2["preprocessed_sha256"]=active_digest
  call[0]["preprocessor_negative_evidence"]["preprocessed_translation_units"][1]["preprocessed_sha256"]=active_digest
  report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
  assert not report["complete"] and any("negative target-preprocessor proof" in x for x in report["failures"])
- ppout2.write_text(f'# 1 "{main2.resolve()}"\\nint other(void) {{ return 0; }}\\n')
+ ppout2.write_text(f'# 1 "{main2.resolve()}"\nint other(void) {{ return 0; }}\n')
  pp_digest2=m.sha256(ppout2); tu2["preprocessed_sha256"]=pp_digest2
  call[0]["preprocessor_negative_evidence"]["preprocessed_translation_units"][1]["preprocessed_sha256"]=pp_digest2
  # A mismatched conditional path must revoke the exclusion proof.
