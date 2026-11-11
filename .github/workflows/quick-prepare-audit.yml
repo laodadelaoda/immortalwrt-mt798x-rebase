@@ -674,6 +674,7 @@ jobs:
             package/mtk/applications/easymesh-n60/scripts/enforce-openssl-target-api-gate.py \
             package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py \
             package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json \
+            package/mtk/applications/easymesh-n60/tests/openssl-40-active-api-semantic-review.csv \
             package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv \
             package/mtk/applications/easymesh-n60/tests/openssl-easymesh-scope.json \
             package/mtk/applications/easymesh-n60/tests/openssl-migration-baseline.lock.json \
