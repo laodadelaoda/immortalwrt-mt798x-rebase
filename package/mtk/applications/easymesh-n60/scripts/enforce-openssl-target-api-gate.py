@@ -171,7 +171,7 @@ def validate_semantic_review(review_rows,subset,expected_git_sha):
     failures.append(api+": implemented-pending-validation lacks patch/source evidence")
   if status=="APPROVED":
    basis=str(row.get("review_basis",""))
-   for token in ("git_sha="+expected_git_sha,"run_id=","attestation_sha256="):
+   for token in ("git_sha="+expected_git_sha,"run_id=","regression_sha256="):
     if token not in basis:
      failures.append(api+": approval lacks current-SHA/run/attestation evidence: "+token)
    if active!=0:
@@ -389,6 +389,8 @@ def main():
  report=evaluate(inventory,load_json(a.callsites),load_json(a.noncalls),summary,
                  load_json(a.macros),migration_map,load_json(a.policy),a.source_root,git.stdout.strip(),delta_rows,review_map)
  report["failures"].extend(validate_scope_manifest(scope,summary,migration_map))
+ report["semantic_review_rows"]=len(review_rows)
+ report["semantic_review_sha256"]=sha256(a.review)
  if len(review_map)!=len(review_rows): report["failures"].append("40-API semantic review contains duplicate API records")
  report["active_apis_unreviewed"]=[api for api in report["target_active_apis"] if api not in review_map or review_map[api].get("review_status")!="APPROVED" or str(review_map[api].get("approval","")).lower()!="true"]
  report["scope"]={"scope_id":scope.get("scope_id"),"openssl_version":scope.get("openssl_version"),
