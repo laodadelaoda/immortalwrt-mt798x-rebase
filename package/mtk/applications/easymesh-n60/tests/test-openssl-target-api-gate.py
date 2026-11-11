@@ -251,4 +251,41 @@ macro_only_unknown=m.build_easymesh_api_subset(
    "migration_status":"UNREVIEWED","approval":"false"}},[])
 assert macro_only_unknown[0]["scope_status"]=="UNKNOWN_FAIL_CLOSED"
 
+
+# The 40-row EasyMesh semantic review, not the 68-row global baseline, is the
+# authority for migration state. Exercise consistency, missing rows and forgery.
+review_path=Path(__file__).with_name("openssl-40-active-api-semantic-review.csv")
+with review_path.open(encoding="utf-8",newline="") as f:
+ review_rows=list(csv.DictReader(f))
+subset_rows=[]
+for row in review_rows:
+ api=m.normalize_api_name(row["api"])
+ active=int(row["active_call_sites"]) if row["review_status"]=="REVIEWED_PENDING_IMPLEMENTATION" else 0
+ subset_rows.append({"api":api,"active_call_sites":active})
+assert m.validate_semantic_review(review_rows,subset_rows,git)==[]
+
+missing_review=review_rows[:-1]
+assert any("exactly 40 unique" in x for x in m.validate_semantic_review(missing_review,subset_rows,git))
+
+inconsistent=[dict(x) for x in subset_rows]
+implemented_api=next(m.normalize_api_name(x["api"]) for x in review_rows if x["review_status"]=="IMPLEMENTED_PENDING_VALIDATION")
+next(x for x in inconsistent if x["api"]==implemented_api)["active_call_sites"]=1
+assert any("status/source inconsistency" in x for x in m.validate_semantic_review(review_rows,inconsistent,git))
+
+forged=[dict(x) for x in review_rows]
+pending=next(x for x in forged if x["review_status"]=="REVIEWED_PENDING_IMPLEMENTATION")
+pending["approval"]="true"
+assert any("false approval" in x for x in m.validate_semantic_review(forged,subset_rows,git))
+
+missing_evidence=[dict(x) for x in review_rows]
+missing_evidence[0]["semantic_invariants"]=""
+assert any("missing semantic_invariants" in x for x in m.validate_semantic_review(missing_evidence,subset_rows,git))
+
+forged_approved=[dict(x) for x in review_rows]
+candidate=next(x for x in forged_approved if x["review_status"]=="IMPLEMENTED_PENDING_VALIDATION")
+candidate["review_status"]="APPROVED"
+candidate["approval"]="true"
+candidate["review_basis"]="approved"
+assert any("lacks current-SHA/run/attestation evidence" in x for x in m.validate_semantic_review(forged_approved,subset_rows,git))
+
 print("PASS: exact target reachability excludes inactive APIs and declarations; active, unknown, missing, stale, unapproved and token-paste macro exclusions are handled fail-closed.")
