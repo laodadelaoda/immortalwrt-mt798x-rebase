@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import importlib.util,tempfile
+import importlib.util,tempfile,subprocess
 from pathlib import Path
 p=Path(__file__).parents[1]/"scripts/openssl-target-preprocessor-audit.py"
 spec=importlib.util.spec_from_file_location("target_audit",p)
@@ -166,6 +166,25 @@ with tempfile.TemporaryDirectory() as d:
  partial_lo.write_text("# libtool object file\npic_object='.libs/not-built.o'\nnon_pic_object='none'\n")
  partial=m.map_preexisting_objects([partial_lo],[])
  assert partial["unmapped_object_artifacts"]
+ # A loose vendor .o is mapped only when an archive member is byte-identical.
+ # Whether that archive is linked is derived from the actual Make dry-run log.
+ vendor_obj=comp/"vendor_algo.o"; vendor_obj.write_bytes(b"fixed vendor object payload")
+ vendor_archive=comp/"libvendor_algo.a"
+ subprocess.run(["ar","rcs",vendor_archive.name,vendor_obj.name],cwd=comp,check=True)
+ inactive=m.map_preexisting_objects([vendor_obj],[],[],comp)
+ assert not inactive["unmapped_object_artifacts"]
+ assert len(inactive["inactive_prebuilt_archive_members"])==1
+ assert inactive["inactive_prebuilt_archive_members"][0]["archives"][0]["active_in_build_graph"] is False
+ link_log=comp/"link.log"; link_log.write_text("ld -o target libvendor_algo.a\n",encoding="utf-8")
+ active=m.map_preexisting_objects([vendor_obj],[],[link_log],comp)
+ assert not active["unmapped_object_artifacts"]
+ assert len(active["archive_member_mappings"])==1
+ assert active["archive_member_mappings"][0]["archives"][0]["active_in_build_graph"] is True
+ # Same member name with different bytes is not accepted as archive evidence.
+ changed_dir=comp/"different"; changed_dir.mkdir()
+ changed_obj=changed_dir/"vendor_algo.o"; changed_obj.write_bytes(b"different vendor object payload")
+ mismatch=m.map_preexisting_objects([changed_obj],[],[link_log],changed_dir)
+ assert mismatch["unmapped_object_artifacts"]
  # Multiple adjacent source candidates are not silently selected.
  ambiguous_obj=comp/"ambiguous.o"; ambiguous_obj.write_bytes(b"object")
  (comp/"ambiguous.c").write_text("int c;\n")
