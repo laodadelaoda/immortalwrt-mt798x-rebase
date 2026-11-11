@@ -26,7 +26,7 @@ with tempfile.TemporaryDirectory() as d:
  unreviewed={"api":"EVP_PKEY_cmp","migration_status":"UNREVIEWED","approval":"false"}
  policy={"api_rules":{}}
  report=m.evaluate(inv,call,non,summary,macros,{"EVP_PKEY_cmp":unreviewed},policy,root,git)
- assert not report["complete"] and any("semantic review/approval" in x for x in report["failures"])
+ assert not report["complete"] and any("remains unapproved" in x for x in report["failures"])
  # A source occurrence excluded by the exact N60 preprocessor is not an active API defect.
  call[0]["reachability_status"]="EXCLUDED_WITH_EVIDENCE"
  # A bare status label is not evidence: the exact source must be a successful
@@ -222,4 +222,29 @@ assert len({x["api"] for x in review_rows})==40
 assert sum(int(x["active_call_sites"]) for x in review_rows)==348
 assert all(x["review_status"]=="REVIEWED_PENDING_IMPLEMENTATION" for x in review_rows)
 assert all(x["approval"].lower()=="false" for x in review_rows)
+
+# A macro-only API with complete negative target evidence is excluded even
+# when no direct prepared call remains and the pristine lexical count is nonzero.
+macro_only=m.build_easymesh_api_subset(
+ [],[],[],
+ [{"component":"wappd","path":"wappd/crypto/evp.h","line":10,"api":"EVP_CIPHER_CTX_iv_noconst",
+   "macro":"BLOCK_CIPHER_func_ofb","reachability_status":"EXCLUDED_WITH_EVIDENCE"},
+  {"component":"wappd","path":"wappd/crypto/evp.h","line":20,"api":"EVP_CIPHER_CTX_iv_noconst",
+   "macro":"BLOCK_CIPHER_func_cbc","reachability_status":"EXCLUDED_WITH_EVIDENCE"}],
+ {"EVP_CIPHER_CTX_iv_noconst":{"observed_lexical_occurrences":"5","observed_components":"wappd",
+   "migration_status":"UNREVIEWED","approval":"false"}},[])
+assert len(macro_only)==1
+assert macro_only[0]["prepared_call_count"]==0
+assert macro_only[0]["macro_excluded"]==2
+assert macro_only[0]["scope_status"]=="EXCLUDED_WITH_EVIDENCE"
+assert macro_only[0]["needs_migration_review"] is False
+# A single unknown macro reference must still fail closed.
+macro_only_unknown=m.build_easymesh_api_subset(
+ [],[],[],
+ [{"component":"wappd","path":"wappd/crypto/evp.h","line":10,"api":"EVP_CIPHER_CTX_iv_noconst",
+   "macro":"BLOCK_CIPHER_func_ofb","reachability_status":"UNKNOWN_FAIL_CLOSED"}],
+ {"EVP_CIPHER_CTX_iv_noconst":{"observed_lexical_occurrences":"5","observed_components":"wappd",
+   "migration_status":"UNREVIEWED","approval":"false"}},[])
+assert macro_only_unknown[0]["scope_status"]=="UNKNOWN_FAIL_CLOSED"
+
 print("PASS: exact target reachability excludes inactive APIs and declarations; active, unknown, missing, stale, unapproved and token-paste macro exclusions are handled fail-closed.")
