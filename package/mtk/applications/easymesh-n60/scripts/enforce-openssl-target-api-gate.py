@@ -353,14 +353,15 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
  counts=Counter(x["api"] for x in active)
  subset=build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migration_map,delta_rows)
  active_subset=[x["api"] for x in subset if x["needs_migration_review"]]
- failures.extend(validate_removed_api_reviews(subset,migration_map,policy))
+ failures.extend(validate_removed_api_reviews(subset,migration_map,policy,review_map))
+ if review_map is not None: failures.extend(validate_semantic_review(list(review_map.values()),subset,expected_git_sha))
  return {
   "schema_version":2,"git_sha":expected_git_sha,"firmware_compile_invoked":False,
   "inventory_deprecated_references":len(inventory),"target_active_call_sites":len(active),
   "target_active_apis":active_apis,"target_active_api_counts":dict(sorted(counts.items())),
   "excluded_with_evidence":excluded,"declarations_or_definitions":declarations,
   "unknown_fail_closed":unknown,"macro_reference_count":len(macro_rows),
-  "migration_map_rows":len(migration_map),"semantic_review_rows":len(review_rows),"semantic_review_sha256":sha256(a.review),
+  "migration_map_rows":len(migration_map),
   "easymesh_api_candidate_count":len(subset),
   "easymesh_api_migration_required_count":len(active_subset),
   "easymesh_api_migration_required":active_subset,"easymesh_api_subset":subset,
@@ -371,7 +372,7 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
 
 def main():
  ap=argparse.ArgumentParser()
- for name in ("inventory","callsites","noncalls","summary","macros","migration-map","delta","policy","source-root","repo-root","output","scope-manifest"):
+ for name in ("inventory","callsites","noncalls","summary","macros","migration-map","review","delta","policy","source-root","repo-root","output","scope-manifest"):
   ap.add_argument("--"+name,type=Path,required=True)
  a=ap.parse_args()
  repo=a.repo_root.resolve()
@@ -380,12 +381,16 @@ def main():
  with a.inventory.open(encoding="utf-8",newline="") as f: inventory=list(csv.DictReader(f))
  with a.migration_map.open(encoding="utf-8",newline="") as f: migration_rows=list(csv.DictReader(f))
  migration_map={x["api"]:x for x in migration_rows}
+ with a.review.open(encoding="utf-8",newline="") as f: review_rows=list(csv.DictReader(f))
+ review_map={normalize_api_name(x.get("api")):x for x in review_rows}
  summary=load_json(a.summary)
  scope=load_json(a.scope_manifest)
  with a.delta.open(encoding="utf-8",newline="") as f: delta_rows=list(csv.DictReader(f))
  report=evaluate(inventory,load_json(a.callsites),load_json(a.noncalls),summary,
                  load_json(a.macros),migration_map,load_json(a.policy),a.source_root,git.stdout.strip(),delta_rows,review_map)
  report["failures"].extend(validate_scope_manifest(scope,summary,migration_map))
+ if len(review_map)!=len(review_rows): report["failures"].append("40-API semantic review contains duplicate API records")
+ report["active_apis_unreviewed"]=[api for api in report["target_active_apis"] if api not in review_map or review_map[api].get("review_status")!="APPROVED" or str(review_map[api].get("approval","")).lower()!="true"]
  report["scope"]={"scope_id":scope.get("scope_id"),"openssl_version":scope.get("openssl_version"),
   "primary_components":scope.get("primary_components"),"supporting_dependencies":scope.get("supporting_dependencies"),
   "global_baseline":{"path":scope.get("global_baseline",{}).get("path"),"rows":len(migration_rows),
