@@ -59,6 +59,7 @@ with tempfile.TemporaryDirectory() as d:
  assert (str(source.resolve()),2) in pemitted and (str(source.resolve()),4) not in pemitted
  specs=m.make_specs(root,root/"build",args)
  assert len(specs["1905daemon"])==3
+ assert all(spec["env"].get("STAGING_DIR")==str(args.staging) for group in specs.values() for spec in group)
  main_1905=specs["1905daemon"][0]["argv"]
  assert main_1905[main_1905.index("-o")+1]=="eth_ops_lib"
  assert specs["1905daemon"][1]["name"]=="1905daemon-ethernet"

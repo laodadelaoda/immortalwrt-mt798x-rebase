@@ -86,32 +86,32 @@ def make_specs(repo,build,a):
  easy=f"{cpp} {cflags}  -DCONFIG_SUPPORT_OPENWRT"
  staging=str(a.staging); linux_rel=os.path.relpath(a.linux,repo)
  return {
-  "libmapd":[{"name":"libmapd","cwd":build/"libmapd","env":{},"argv":["make","-n","-w","-C",str(build/"libmapd"),"V=s",
+  "libmapd":[{"name":"libmapd","cwd":build/"libmapd","env":{"STAGING_DIR":staging},"argv":["make","-n","-w","-C",str(build/"libmapd"),"V=s",
     f"CC={a.cc}",f"CFLAGS={cpp} {cflags} -Werror -g",f"LDFLAGS={ld}","all"]}],
-  "wappd":[{"name":"wappd","cwd":build/"wappd","env":{},"argv":["make","-n","-w","-C",str(build/"wappd"),"V=s",
+  "wappd":[{"name":"wappd","cwd":build/"wappd","env":{"STAGING_DIR":staging},"argv":["make","-n","-w","-C",str(build/"wappd"),"V=s",
     f"TOPDIR={repo}",f"UAPD_INCLUDE_PATH={a.linux}/include/uapi/linux/wapp -I{staging}/usr/include",
     "CONFIG_SUPPORT_OPENWRT=y","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y",f"CC={a.cc}",
     f"EXTRA_CFLAGS={cpp} {cflags} -I{a.linux}/include/uapi/linux/wapp",
     f"LDFLAGS={ld} -L{staging}/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto","all"]}],
   "1905daemon":[
-   {"name":"1905daemon-main","cwd":build/"1905daemon","env":{"EXTRA_CFLAGS":easy},
+   {"name":"1905daemon-main","cwd":build/"1905daemon","env":{"STAGING_DIR":staging,"EXTRA_CFLAGS":easy},
     "argv":["make","-n","-w","-o","eth_ops_lib","-C",str(build/"1905daemon"),"V=s",f"TOPDIR={repo}",f"ROOTDIR={repo}",
     f"LINUXDIR={linux_rel}",f"STAGING_DIR={staging}","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y",
     "MAP_R3_SUPPORT=y","SWTICH_DSA_ARCH=y",f"CC={a.cc}",f"AR={a.ar}",f"RANLIB={a.ranlib}",
     f"LDFLAGS={ld} -L{staging}/usr/lib -Wl,--no-as-needed -lpthread -lnl-tiny -lssl -lcrypto","all"]},
-   {"name":"1905daemon-ethernet","cwd":build/"1905daemon"/"ethernet","env":{"EXTRA_CFLAGS":easy},
+   {"name":"1905daemon-ethernet","cwd":build/"1905daemon"/"ethernet","env":{"STAGING_DIR":staging,"EXTRA_CFLAGS":easy},
     "argv":["make","-n","-w","-C",str(build/"1905daemon"/"ethernet"),"V=s",f"TOPDIR={repo}",f"ROOTDIR={repo}",
     f"LINUXDIR={linux_rel}",f"STAGING_DIR={staging}","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y",
     "MAP_R3_SUPPORT=y","SWTICH_DSA_ARCH=y",f"CC={a.cc}",f"AR={a.ar}",f"RANLIB={a.ranlib}",
     f"LDFLAGS={ld} -L{staging}/usr/lib -Wl,--no-as-needed -lpthread -lnl-tiny -lssl -lcrypto","all"]},
-   {"name":"1905daemon-libbridge","cwd":build/"1905daemon"/"ethernet"/"mediatek_DSA"/"libbridge","env":{"EXTRA_CFLAGS":easy},
+   {"name":"1905daemon-libbridge","cwd":build/"1905daemon"/"ethernet"/"mediatek_DSA"/"libbridge","env":{"STAGING_DIR":staging,"EXTRA_CFLAGS":easy},
     "argv":["make","-n","-w","-C",str(build/"1905daemon"/"ethernet"/"mediatek_DSA"/"libbridge"),"V=s",
     f"TOPDIR={repo}",f"ROOTDIR={repo}",f"LINUXDIR={linux_rel}",f"STAGING_DIR={staging}",
     "CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y","MAP_R3_SUPPORT=y","SWTICH_DSA_ARCH=y",
     f"CC={a.cc}",f"AR={a.ar}",f"RANLIB={a.ranlib}",
     f"LDFLAGS={ld} -L{staging}/usr/lib -Wl,--no-as-needed -lpthread -lnl-tiny -lssl -lcrypto","all"]}
   ],
-  "mapd":[{"name":"mapd","cwd":build/"mapd","env":{"EXTRA_CFLAGS":easy},"argv":["make","-n","-w","-C",str(build/"mapd"),"V=s",f"TOPDIR={repo}",
+  "mapd":[{"name":"mapd","cwd":build/"mapd","env":{"STAGING_DIR":staging,"EXTRA_CFLAGS":easy},"argv":["make","-n","-w","-C",str(build/"mapd"),"V=s",f"TOPDIR={repo}",
     "CONFIG_SUPPORT_OPENWRT=y","CONFIG_MAP_R2_SUPPORT=y","CONFIG_MAP_R3_SUPPORT=y",f"CC={a.cc}",
     f"LDO={a.cc}",f"LDFLAGS={ld} -L{staging}/usr/lib","version","mapd"]}]
  }
