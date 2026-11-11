@@ -205,7 +205,7 @@ def main():
   for mr in reader:
    api=mr["api"].strip()
    if not api or api in migration_map: ap.error("empty or duplicate API in migration map: "+api)
-   if mr["migration_status"] not in {"UNREVIEWED","REVIEWED_NOT_APPROVED","APPROVED"}: ap.error("invalid migration status for "+api)
+   if mr["migration_status"] not in {"UNREVIEWED","REVIEWED_NOT_APPROVED","IMPLEMENTED_PENDING_VALIDATION","APPROVED"}: ap.error("invalid migration status for "+api)
    if mr["official_mapping_kind"] not in {"HIGH_LEVEL_API_MIGRATION","LEGACY_ALGORITHM_REVIEW","HIGH_LEVEL_OBJECT_MIGRATION","DIRECT_API_FAMILY_MAPPING","PARAMETER_GETTER_MIGRATION","PARAMETER_SETTER_MIGRATION","DIRECT_FUNCTION_MAPPING","READ_ONLY_PARAMETER_MIGRATION","PROVIDER_REDESIGN","REMOVE_REDUNDANT_CALL","KEY_IMPORT_MIGRATION","SEMANTIC_REDESIGN_REQUIRED","ENCODING_MIGRATION"}: ap.error("invalid official mapping kind for "+api)
    if not mr["official_mapping_section"].strip(): ap.error("missing official migration section for "+api)
    for field in ("official_migration_guide_url","official_target_manual_url"):
@@ -233,6 +233,8 @@ def main():
   if r["deprecated_macro"]:
    if mr is None:
     x["classification"]="MIGRATION_MAP_MISSING"; x["policy_reason"]=""; failures.append("missing migration reference row for "+r["api"]+" at "+r["path"]+":"+str(r["line"]))
+   elif mr["migration_status"]=="IMPLEMENTED_PENDING_VALIDATION":
+    x["classification"]="IMPLEMENTED_PENDING_VALIDATION"; x["policy_reason"]=mr["proposed_replacement"]
    elif mr["migration_status"]!="APPROVED" or mr["approval"].lower()!="true":
     x["classification"]="MAPPED_UNREVIEWED"; x["policy_reason"]=mr["proposed_replacement"]
    elif not isinstance(rule,dict):
