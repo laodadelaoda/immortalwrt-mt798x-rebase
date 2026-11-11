@@ -334,7 +334,7 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
    continue
   status=mr.get("review_status") or mr.get("migration_status")
   if status!="APPROVED" or str(mr.get("approval","")).lower()!="true":
-   failures.append("active deprecated API remains unimplemented/unapproved in the 40-API semantic review: "+api)
+   failures.append("active deprecated API remains unapproved or unimplemented in the 40-API semantic review: "+api)
    continue
   rule=policy.get("api_rules",{}).get(api)
   if not isinstance(rule,dict):
