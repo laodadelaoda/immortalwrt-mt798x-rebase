@@ -286,6 +286,6 @@ candidate=next(x for x in forged_approved if x["review_status"]=="IMPLEMENTED_PE
 candidate["review_status"]="APPROVED"
 candidate["approval"]="true"
 candidate["review_basis"]="approved"
-assert any("lacks current-SHA/run/attestation evidence" in x for x in m.validate_semantic_review(forged_approved,subset_rows,git))
+assert any("lacks current-SHA/run/regression evidence" in x for x in m.validate_semantic_review(forged_approved,subset_rows,git))
 
 print("PASS: exact target reachability excludes inactive APIs and declarations; active, unknown, missing, stale, unapproved and token-paste macro exclusions are handled fail-closed.")
