@@ -36,11 +36,12 @@ with tempfile.TemporaryDirectory() as d:
  # outputs as preprocessing failures.
  link_cmd={"argv":["cc","-c","x.c","-o","x.o","-Lstage/lib","-lssl","-lcrypto",
                   "-Wl,--no-as-needed","-Xlinker","--as-needed","../../lib_export/lib1905_interface.a",
-                  "libvendor.so.1","-pthread","-DOPENSSL_TARGET=1"]}
+                  "libvendor.so","libvendor.so.1","libvendor.so.1.2.3",
+                  "-pthread","-DOPENSSL_TARGET=1"]}
  clean_argv=m.cpp_argv(link_cmd,root/"link.i")
  joined=" ".join(clean_argv)
  for token in ("-Lstage/lib","-lssl","-lcrypto","-Wl,--no-as-needed","--as-needed",
-               "lib1905_interface.a","libvendor.so.1"):
+               "lib1905_interface.a","libvendor.so","libvendor.so.1","libvendor.so.1.2.3"):
   assert token not in clean_argv and token not in joined, (token,clean_argv)
  assert "-pthread" in clean_argv and "-DOPENSSL_TARGET=1" in clean_argv
  assert "-openmp" in m.cpp_argv({"argv":["cc","-c","x.c","-openmp","-o","x.o"]},root/"openmp.i")
