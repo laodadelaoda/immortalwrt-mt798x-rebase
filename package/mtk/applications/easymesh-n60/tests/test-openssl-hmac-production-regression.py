@@ -4,6 +4,7 @@ import argparse
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -147,8 +148,14 @@ static void bin_clear_free(void *ptr, size_t size)
         ]
         subprocess.run(cmd, check=True)
         log = out / f"{name}-hmac-production-regressions.log"
-        with log.open("w", encoding="utf-8") as stream:
-            subprocess.run([str(binary)], check=True, env=run_env, stdout=stream, stderr=subprocess.STDOUT)
+        try:
+            with log.open("w", encoding="utf-8") as stream:
+                subprocess.run([str(binary)], check=True, env=run_env, stdout=stream, stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError:
+            print(f"FAIL: prepared {name} HMAC regression details:", file=sys.stderr)
+            if log.is_file():
+                print(log.read_text(encoding="utf-8", errors="replace"), file=sys.stderr, end="")
+            raise
         print(f"PASS: actual prepared {name} HMAC functions compiled and passed the production regression harness")
     print("PASS_TEST_ID:hmac_evp_mac_production_digest_key_vector")
     return 0
