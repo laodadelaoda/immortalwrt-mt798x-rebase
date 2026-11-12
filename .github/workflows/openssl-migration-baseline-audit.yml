@@ -104,7 +104,7 @@ jobs:
           retention-days: 90
 
   target-preprocessor-regressions:
-    name: Target preprocessor and 40-API gate positive/negative regressions
+    name: Target preprocessor and candidate-scope API gate regressions
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 10

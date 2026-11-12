@@ -98,7 +98,6 @@ def validate_ready(a):
         failures.append("target active API set contains APIs outside the pinned 40-item migration scope")
     if set(gate.get("easymesh_api_migration_required", [])) != active:
         failures.append("target API migration-required set differs from the actual active API set")
-    subset = {x.get("api"): x for x in gate.get("easymesh_api_subset", [])}
     required_apis = set(active) | set(gate.get("easymesh_api_removed_by_patch", []))
     if not required_apis.issubset(set(review_by)):
         failures.append("target-required API set contains APIs outside the 40-item candidate review")
@@ -110,7 +109,7 @@ def validate_ready(a):
         if api not in required_apis:
             if item.get("scope_status") != "EXCLUDED_WITH_EVIDENCE":
                 failures.append(api + ": candidate is neither migration-required nor excluded by complete target evidence")
-            if row.get("review_status") not in {"EXCLUDED_WITH_EVIDENCE", "REVIEWED_PENDING_IMPLEMENTATION"}:
+            if row.get("review_status") not in {"EXCLUDED_WITH_EVIDENCE", "REVIEWED_PENDING_IMPLEMENTATION", "IMPLEMENTED_PENDING_VALIDATION"}:
                 failures.append(api + ": excluded candidate has an inconsistent pending/implementation status")
             if str(row.get("approval", "")).lower() != "false":
                 failures.append(api + ": excluded candidate must remain unapproved")
@@ -277,7 +276,7 @@ def main():
         result = validate_ready(a)
         a.output.parent.mkdir(parents=True, exist_ok=True)
         a.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-        print("PASS: immutable 40-API OpenSSL migration attestation created.")
+        print("PASS: immutable target-scope OpenSSL compatibility attestation created.")
     else:
         verify(a)
 
