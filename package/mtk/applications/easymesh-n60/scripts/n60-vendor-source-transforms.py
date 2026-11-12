@@ -309,7 +309,6 @@ def verify_lock(repo: Path, downloads: Path | None = None) -> None:
         "005-wapp-hotspot-realloc-pointer-arithmetic.patch",
         "007-openssl3-use-native-evp-pkey-get0-ec-key.patch",
         "008-dpp-parser-bounds-and-secret-redaction.patch",
-        "009-dpp-null-guard-and-unused-cred-length.patch",
         "010-dpp-wdev-config-allocation-rollback.patch",
         "011-wapp-wts-security.patch",
     }
