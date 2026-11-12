@@ -869,6 +869,7 @@ jobs:
             exit 1
           }
           BUILD_DIR="${BUILD_DIRS[0]}"
+          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-production-source-migration.py "$BUILD_DIR"
           for component in wappd mapd 1905daemon libmapd; do
             test -d "$BUILD_DIR/$component" || {
               echo "::error::Prepared EasyMesh component is missing: $BUILD_DIR/$component"; exit 1;
