@@ -87,8 +87,8 @@ for entry,build_job in (("easymesh-quick.yml","quick"),("main.yml","build")):
  build=jobs.get(build_job,{})
  if set(build.get("needs",[]))!={"vendor_source_patch_audit","quick_prepare_audit"}:
   bad(entry+" build must hard-depend on both canonical gates")
- if entry=="main.yml" and str(build.get("if","")).strip().lower()!="false":
-  bad("Full build must remain frozen")
+ if entry in {"main.yml","easymesh-quick.yml"} and str(build.get("if","")).strip().lower()!="false":
+  bad(entry+" firmware build must remain hard-frozen until audit closure")
  entry_steps=list(steps(D[entry]))
  entry_text="\\n".join(str(x.get("run",""))+" "+str(x.get("name",""))+" "+str(x.get("with","")) for x in entry_steps)
  for token in ("n60-openssl-3.5.9-api-and-provider-audit","n60-openssl-api-migration-attestation",
