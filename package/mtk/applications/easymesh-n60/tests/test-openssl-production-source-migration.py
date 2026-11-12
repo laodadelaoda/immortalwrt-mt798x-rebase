@@ -147,12 +147,83 @@ if not failures:
     if des_uses != 5:
         failures.append(f"1905daemon MSCHAPv2 internal DES call-site count changed: {des_uses}, expected 5")
 
+
+    dh5_contracts = {}
+    for component, source in backends.items():
+        helper = re.search(
+            r"static EVP_PKEY \* dh5_fromdata\(.*?\n\}\n",
+            source,
+            flags=re.S,
+        )
+        generator = re.search(
+            r"static EVP_PKEY \* dh5_generate_key\(.*?\n\}\n",
+            source,
+            flags=re.S,
+        )
+        if not helper or not generator:
+            failures.append(component + ": provider-backed DH5 import/generation helpers missing")
+            continue
+        helper_text = helper.group(0)
+        generator_text = generator.group(0)
+        expected_type = '"DHX"' if component == "wappd" else '"DH"'
+        for token in (
+            "EVP_PKEY_CTX_new_from_name(NULL, " + expected_type + ", NULL)",
+            "OSSL_PARAM_BLD_push_BN", "OSSL_PKEY_PARAM_FFC_P",
+            "OSSL_PKEY_PARAM_FFC_G", "EVP_PKEY_fromdata_init",
+            "EVP_PKEY_fromdata(ctx, &pkey, selection, params)",
+            "OSSL_PARAM_BLD_free", "EVP_PKEY_CTX_free",
+        ):
+            if token not in helper_text:
+                failures.append(component + ": DH5 EVP_PKEY fromdata invariant missing: " + token)
+        if component == "wappd":
+            if "get_group5_order()" not in helper_text or "OSSL_PKEY_PARAM_FFC_Q" not in helper_text:
+                failures.append("WAPP DHX migration lost the existing RFC3526 group-5 q parameter")
+        elif "OSSL_PKEY_PARAM_FFC_Q" in helper_text:
+            failures.append("1905daemon DH migration unexpectedly adds a q parameter absent from its original DH object")
+        for token in (
+            "EVP_PKEY_KEY_PARAMETERS", "EVP_PKEY_CTX_new_from_pkey",
+            "EVP_PKEY_keygen_init", "EVP_PKEY_generate",
+        ):
+            if token not in generator_text:
+                failures.append(component + ": DH5 EVP_PKEY generation invariant missing: " + token)
+        init_body = re.search(r"void \* dh5_init\(.*?\n\}", source, flags=re.S)
+        fixed_body = re.search(r"void \* dh5_init_fixed\(.*?\n\}", source, flags=re.S)
+        derive_body = re.search(r"struct wpabuf \* dh5_derive_shared\(.*?\n\}", source, flags=re.S)
+        free_body = re.search(r"void dh5_free\(.*?\n\}", source, flags=re.S)
+        if not all((init_body, fixed_body, derive_body, free_body)):
+            failures.append(component + ": one or more DH5 production lifecycle functions are missing")
+            continue
+        init_text, fixed_text = init_body.group(0), fixed_body.group(0)
+        derive_text, free_text = derive_body.group(0), free_body.group(0)
+        for token in ("EVP_PKEY_get_bn_param", "BN_clear_free(priv_bn)", "wpabuf_clear_free(privkey)"):
+            if token not in init_text:
+                failures.append(component + ": DH5 generated-key export/cleanup invariant missing: " + token)
+        for token in ("INT_MAX", "EVP_PKEY_KEYPAIR", "BN_clear_free(priv_bn)"):
+            if token not in fixed_text:
+                failures.append(component + ": DH5 fixed-key import/bounds invariant missing: " + token)
+        for token in (
+            "EVP_PKEY_derive_init", "EVP_PKEY_derive_set_peer",
+            "OSSL_EXCHANGE_PARAM_PAD", "unsigned int pad = 0",
+            "EVP_PKEY_derive(dctx, NULL, &keylen)",
+            "EVP_PKEY_derive(dctx, wpabuf_mhead(res), &keylen)",
+            "EVP_PKEY_free(peer)", "EVP_PKEY_CTX_free(dctx)",
+        ):
+            if token not in derive_text:
+                failures.append(component + ": DH5 EVP derive/variable-length output invariant missing: " + token)
+        if "EVP_PKEY_free((EVP_PKEY *) ctx)" not in free_text:
+            failures.append(component + ": DH5 context ownership is not released with EVP_PKEY_free")
+        dh5_contracts[component] = helper_text
+    if set(dh5_contracts) != {"wappd", "1905daemon"}:
+        failures.append("Both WAPP DHX and 1905daemon DH provider paths must be present")
+
 result = {
     "schema_version": 1,
     "scope": "n60-easymesh-openssl-3.5.9",
     "batch": ["AES_set_decrypt_key", "AES_set_encrypt_key", "AES_unwrap_key",
               "AES_wrap_key", "DES_set_key", "DES_ecb_encrypt", "HMAC_CTX_new",
-              "HMAC_CTX_free", "HMAC_Init_ex", "HMAC_Update", "HMAC_Final"],
+              "HMAC_CTX_free", "HMAC_Init_ex", "HMAC_Update", "HMAC_Final", "DH_new",
+              "DH_generate_key", "DH_set0_pqg", "DH_set0_key", "DH_get0_key",
+              "DH_size", "DH_compute_key", "DH_free"],
     "source_root": str(root),
     "result": "PASS" if not failures else "FAIL",
     "failures": failures,

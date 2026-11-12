@@ -192,7 +192,8 @@
         "024-openssl-3.5.9-evp-aes-wrap-and-des-internal.patch",
         "025-openssl-3.5.9-evp-mac-hmac-migration.patch",
         "026-openssl-hmac-finish-buffer-and-update-failure.patch",
-        "027-openssl-ec-group-point-api-renames.patch"
+        "027-openssl-ec-group-point-api-renames.patch",
+        "028-openssl-dh-dhx-evp-pkey-migration.patch"
       ],
       "scope": "EasyMesh Build/Prepare ordered vendor patch series",
       "post_normalize_order": [
