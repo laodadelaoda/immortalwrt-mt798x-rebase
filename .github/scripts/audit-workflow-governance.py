@@ -118,6 +118,8 @@ if set(baseline)!={"push","workflow_dispatch"}:
  bad("OpenSSL 68-item traceability baseline must run for every branch revision and remain manually dispatchable")
 if baseline["push"].get("branches")!=["n60pro-mtk-closed-driver"] or baseline["push"].get("paths") is not None:
  bad("OpenSSL baseline must produce exact-SHA evidence on every maintenance-branch push")
+if D["openssl-migration-baseline-audit.yml"].get("concurrency",{}).get("cancel-in-progress")!="true":
+ bad("stale OpenSSL baseline runs must be cancelled when a newer SHA supersedes them")
 if set(tr("workflow-governance-audit.yml"))!={"push"} or not tr("workflow-governance-audit.yml")["push"].get("paths"): bad("governance trigger mismatch")
 preprocessor=tr("openssl-target-preprocessor-regression.yml")
 if set(preprocessor)!={"push","pull_request","workflow_dispatch"}: bad("OpenSSL target preprocessor regression trigger mismatch")
