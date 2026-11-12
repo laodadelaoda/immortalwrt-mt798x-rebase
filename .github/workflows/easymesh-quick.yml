@@ -13,6 +13,7 @@ on:
       - "package/mtk/**"
       # Audit manifests are executable inputs to the canonical Lock regression gate.
       - "docs/audit/**"
+      - "docs/easymesh-patch-maintenance-groups.csv"
       # Quick's precompile gate also validates the selected kernel patch stack.
       - "target/linux/**"
       - "config/n60pro-1001.config"
