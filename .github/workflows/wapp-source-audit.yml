@@ -1,12 +1,7 @@
 name: Audit WAPP 7.6.7.3 source
 
+# DPP/WAPP source capture and deep diagnostics are on-demand; canonical patch gating remains automatic.
 on:
-  push:
-    branches: ["n60pro-mtk-closed-driver"]
-    paths:
-      - ".github/workflows/wapp-source-audit.yml"
-      - "package/mtk/applications/easymesh-n60/**"
-      - "package/mtk/vendor-sources.lock.json"
   workflow_dispatch:
 
 permissions:
