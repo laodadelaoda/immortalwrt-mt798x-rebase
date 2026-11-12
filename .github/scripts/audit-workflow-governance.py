@@ -147,6 +147,7 @@ qw=qc[0].get("with",{})
 if "n60pro-quick-openwrt-" not in qw.get("key","") or ".github/actions/easymesh-quick/action.yml" not in qw.get("key","") or qw.get("restore-keys"): bad("Quick cache isolation/hash mismatch")
 ver=(R/"package/mtk/applications/easymesh-n60/scripts/verify-vendor-audit-attestation.py").read_text()
 for path in (".github/workflows/workflow-governance-audit.yml",
+             ".github/workflows/openssl-migration-baseline-audit.yml",
              ".github/scripts/audit-workflow-governance.py",
              ".github/scripts/check-package-dependency-closure.py",
              "package/mtk/applications/easymesh-n60/scripts/verify-vendor-audit-attestation.py"):
