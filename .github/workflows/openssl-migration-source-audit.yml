@@ -1,0 +1,33 @@
+name: N60 EasyMesh OpenSSL migration source audit (no firmware compile)
+
+on:
+  push:
+    branches:
+      - n60pro-mtk-closed-driver
+    paths:
+      - ".github/workflows/openssl-migration-source-audit.yml"
+      - ".github/workflows/quick-prepare-audit.yml"
+      - "package/mtk/vendor-sources.lock.json"
+      - "package/mtk/applications/easymesh-n60/patches/024-openssl-3.5.9-evp-aes-wrap-and-des-internal.patch"
+      - "package/mtk/applications/easymesh-n60/patches/025-openssl-3.5.9-evp-mac-hmac-migration.patch"
+      - "package/mtk/applications/easymesh-n60/patches/026-openssl-hmac-finish-buffer-and-update-failure.patch"
+      - "package/mtk/applications/easymesh-n60/tests/test-openssl-production-source-migration.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: n60-openssl-source-audit-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  vendor_source_patch_audit:
+    name: Fixed vendor source patch audit
+    uses: ./.github/workflows/vendor-source-patch-audit.yml
+
+  quick_prepare_audit:
+    name: Native Prepare and OpenSSL migration gate (no firmware compile)
+    needs: vendor_source_patch_audit
+    uses: ./.github/workflows/quick-prepare-audit.yml

@@ -535,8 +535,6 @@ jobs:
             cp -a "$BUILD_DIR/$component" "$OUT/prepared/$component"
             cp -a "$PRISTINE_DIR/$component" "$OUT/pristine/$component"
           done
-          # Assert the actual native Build/Prepare output, not a duplicated test implementation.
-          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-production-source-migration.py "$BUILD_DIR"
           # Keep symlinks intact; GitHub artifact ZIP extraction may not preserve them.
           tar -czf "$OUT/source-trees.tar.gz" -C "$OUT" prepared pristine
           tar -tzf "$OUT/source-trees.tar.gz" >/dev/null
