@@ -285,6 +285,18 @@ unknown_absent={"api":"TLSv1_method","scope_status":"UNKNOWN_FAIL_CLOSED","sourc
 m.prove_absent_review_candidates([unknown_absent],{**complete_summary,"complete":False},{"TLSv1_method":{}})
 assert unknown_absent["scope_status"]=="UNKNOWN_FAIL_CLOSED"
 
+# The 40-row EasyMesh semantic review, not historical traceability metadata, is the
+# authority for migration state. Exercise consistency, missing rows and forgery.
+review_path=Path(__file__).with_name("openssl-40-active-api-semantic-review.csv")
+with review_path.open(encoding="utf-8",newline="") as f:
+ review_rows=list(csv.DictReader(f))
+subset_rows=[]
+for row in review_rows:
+ api=m.normalize_api_name(row["api"])
+ active=int(row["active_call_sites"]) if row["review_status"]=="REVIEWED_PENDING_IMPLEMENTATION" else 0
+ subset_rows.append({"api":api,"active_call_sites":active})
+assert m.validate_semantic_review(review_rows,subset_rows,git)==[]
+
 # EXCLUDED_WITH_EVIDENCE is a valid non-approval disposition only when the
 # target audit itself carries exact-SHA complete negative proof.
 excluded_review=[dict(x) for x in review_rows]
@@ -303,17 +315,6 @@ for row in excluded_subset:
   row["exclusion_evidence"]["git_sha"]="f"*40
 assert any("EXCLUDED_WITH_EVIDENCE lacks" in x for x in m.validate_semantic_review(excluded_review,excluded_subset,git))
 
-# The 40-row EasyMesh semantic review, not historical traceability metadata, is the
-# authority for migration state. Exercise consistency, missing rows and forgery.
-review_path=Path(__file__).with_name("openssl-40-active-api-semantic-review.csv")
-with review_path.open(encoding="utf-8",newline="") as f:
- review_rows=list(csv.DictReader(f))
-subset_rows=[]
-for row in review_rows:
- api=m.normalize_api_name(row["api"])
- active=int(row["active_call_sites"]) if row["review_status"]=="REVIEWED_PENDING_IMPLEMENTATION" else 0
- subset_rows.append({"api":api,"active_call_sites":active})
-assert m.validate_semantic_review(review_rows,subset_rows,git)==[]
 
 missing_review=review_rows[:-1]
 assert any("exactly 40 unique" in x for x in m.validate_semantic_review(missing_review,subset_rows,git))
