@@ -7,6 +7,7 @@
 
 typedef unsigned char u8;
 #define PASS(id) puts("PASS_TEST_ID:" id)
+#define FAIL_CASE(name) do { fprintf(stderr, "FAIL_CASE: %s\\n", name); ok = 0; } while (0)
 
 /* Deterministic fault injection for the EVP_MAC_update error paths. */
 static int test_fail_next_mac_update;
@@ -218,22 +219,22 @@ int main(void)
     if (!check_vector(EVP_sha256(), key, sizeof(key) - 1,
                       message, sizeof(message) - 1,
                       sha256_expected, sizeof(sha256_expected)))
-        ok = 0;
+        FAIL_CASE("SHA256 RFC 4231 vector");
     if (!check_vector(EVP_sha1(), sha1_key, sizeof(sha1_key),
                       hi_there, sizeof(hi_there) - 1,
                       sha1_expected, sizeof(sha1_expected)))
-        ok = 0;
+        FAIL_CASE("SHA1 RFC 2202 vector");
     if (!check_vector(EVP_md5(), md5_key, sizeof(md5_key),
                       hi_there, sizeof(hi_there) - 1,
                       md5_expected, sizeof(md5_expected)))
-        ok = 0;
+        FAIL_CASE("MD5 RFC 2202 vector");
     if (openssl_hmac_ctx_new(EVP_sha256(), NULL, 0) != NULL)
-        ok = 0;
+        FAIL_CASE("NULL key rejection");
     if (openssl_hmac_vector(EVP_sha256(), &empty_key, 0, 1,
                             empty_parts, empty_lengths, empty_out,
                             sizeof(empty_out)) != 0 ||
         memcmp(empty_out, empty_sha256, sizeof(empty_sha256)) != 0)
-        ok = 0;
+        FAIL_CASE("zero-length key and empty-message vector");
 
     {
         struct crypto_hash *ctx = crypto_hash_init(CRYPTO_HASH_ALG_HMAC_SHA256,
@@ -241,31 +242,31 @@ int main(void)
         u8 wrapped[32] = {0};
         size_t wrapped_len = 0;
         if (!ctx) {
-            ok = 0;
+            FAIL_CASE("production crypto_hash split-update/final vector");
         } else {
             crypto_hash_update(ctx, message, 10);
             crypto_hash_update(ctx, message + 10, sizeof(message) - 1 - 10);
             if (crypto_hash_finish(ctx, wrapped, &wrapped_len) != 0 ||
                 wrapped_len != sizeof(sha256_expected) ||
                 memcmp(wrapped, sha256_expected, sizeof(sha256_expected)) != 0)
-                ok = 0;
+                FAIL_CASE("production crypto_hash NULL key rejection");
         }
         OPENSSL_cleanse(wrapped, sizeof(wrapped));
     }
     if (crypto_hash_init(CRYPTO_HASH_ALG_HMAC_SHA256, NULL, 0) != NULL)
-        ok = 0;
+        FAIL_CASE("production crypto_hash update-error propagation");
     {
         struct crypto_hash *ctx = crypto_hash_init(CRYPTO_HASH_ALG_HMAC_SHA256,
                                                    key, sizeof(key) - 1);
         u8 failed_out[32] = {0};
         size_t failed_len = sizeof(failed_out);
         if (!ctx) {
-            ok = 0;
+            FAIL_CASE("vector update-error propagation");
         } else {
             test_fail_next_mac_update = 1;
             crypto_hash_update(ctx, message, sizeof(message) - 1);
             if (crypto_hash_finish(ctx, failed_out, &failed_len) != -2)
-                ok = 0;
+                FAIL_CASE("production crypto_hash short-output sizing");
         }
         OPENSSL_cleanse(failed_out, sizeof(failed_out));
     }
@@ -276,7 +277,7 @@ int main(void)
                                 1, (const u8 *[]) { message },
                                 (const size_t[]) { sizeof(message) - 1 },
                                 failed_out, sizeof(failed_out)) != -1)
-            ok = 0;
+            FAIL_CASE("production crypto_hash NULL-output cleanup");
         OPENSSL_cleanse(failed_out, sizeof(failed_out));
     }
     {
