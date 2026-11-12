@@ -65,6 +65,7 @@ enum crypto_hash_alg {
 
 struct crypto_hash {
     EVP_MAC_CTX *ctx;
+    int failed;
 };
 
 static struct crypto_hash *crypto_hash_init(enum crypto_hash_alg alg,
@@ -102,12 +103,13 @@ static void crypto_hash_update(struct crypto_hash *ctx, const u8 *data,
 {
     if (ctx == NULL)
         return;
-    EVP_MAC_update(ctx->ctx, data, len);
+    if (EVP_MAC_update(ctx->ctx, data, len) != 1)
+        ctx->failed = 1;
 }
 
 static int crypto_hash_finish(struct crypto_hash *ctx, u8 *mac, size_t *len)
 {
-    size_t mdlen = 0;
+    size_t mdlen = 0, required;
     int res;
 
     if (ctx == NULL)
@@ -117,15 +119,31 @@ static int crypto_hash_finish(struct crypto_hash *ctx, u8 *mac, size_t *len)
         OPENSSL_clear_free(ctx, sizeof(*ctx));
         return 0;
     }
-    res = EVP_MAC_final(ctx->ctx, mac, &mdlen,
-                        EVP_MAC_CTX_get_mac_size(ctx->ctx));
+    if (ctx->failed) {
+        EVP_MAC_CTX_free(ctx->ctx);
+        OPENSSL_clear_free(ctx, sizeof(*ctx));
+        return -2;
+    }
+    required = EVP_MAC_CTX_get_mac_size(ctx->ctx);
+    if (required == 0) {
+        EVP_MAC_CTX_free(ctx->ctx);
+        OPENSSL_clear_free(ctx, sizeof(*ctx));
+        return -2;
+    }
+    if (*len < required) {
+        *len = required;
+        EVP_MAC_CTX_free(ctx->ctx);
+        OPENSSL_clear_free(ctx, sizeof(*ctx));
+        return -1;
+    }
+    res = EVP_MAC_final(ctx->ctx, mac, &mdlen, *len);
     EVP_MAC_CTX_free(ctx->ctx);
     OPENSSL_clear_free(ctx, sizeof(*ctx));
     if (res == 1) {
         *len = mdlen;
         return 0;
     }
-    return -1;
+    return -2;
 }
 
 static int check_vector(const EVP_MD *md, const u8 *key, size_t key_len,
@@ -220,6 +238,16 @@ int main(void)
     }
     if (crypto_hash_init(CRYPTO_HASH_ALG_HMAC_SHA256, NULL, 0) != NULL)
         ok = 0;
+    {
+        struct crypto_hash *ctx = crypto_hash_init(CRYPTO_HASH_ALG_HMAC_SHA256,
+                                                   key, sizeof(key) - 1);
+        u8 short_out[16] = {0};
+        size_t short_len = sizeof(short_out);
+        if (!ctx || crypto_hash_finish(ctx, short_out, &short_len) != -1 ||
+            short_len != sizeof(sha256_expected))
+            ok = 0;
+        OPENSSL_cleanse(short_out, sizeof(short_out));
+    }
     {
         struct crypto_hash *ctx = crypto_hash_init(CRYPTO_HASH_ALG_HMAC_SHA256,
                                                    &empty_key, 0);
