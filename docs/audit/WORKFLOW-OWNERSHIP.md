@@ -44,6 +44,7 @@ existing owner. Do not weaken a gate to make a workflow pass.
   approval gates. Their core patch and source acceptance remains in the canonical vendor gate.
 - The 68-item OpenSSL baseline is traceability evidence, not the active 40-item migration verdict.
   Its exact-SHA attestation is an input to Quick Prepare, not a replacement for the 40-item gate.
+  Baseline runs for superseded commits are cancelled; the latest branch SHA retains its own credential.
 - The preprocessor regression workflow is a focused fast negative-test lane; the authoritative
   production source/API decision remains in Quick Prepare.
 - Upstream compatibility is manual-only advisory impact assessment; it must not schedule a vendor replay and cannot approve a changed vendor Lock,
