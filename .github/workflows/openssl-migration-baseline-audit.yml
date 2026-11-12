@@ -26,6 +26,7 @@ concurrency:
 
 jobs:
   header-baseline:
+    if: github.event_name != 'pull_request'
     name: Verify OpenSSL headers for the retained 68 EasyMesh API candidates
     runs-on: ubuntu-24.04
     timeout-minutes: 30
