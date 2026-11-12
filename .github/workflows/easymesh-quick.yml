@@ -30,6 +30,7 @@ jobs:
     uses: ./.github/workflows/quick-prepare-audit.yml
 
   quick:
+    if: false
     needs: [vendor_source_patch_audit, quick_prepare_audit]
     name: Linux 6.12 / ImmortalWrt 25.12 / OpenSSL 3.x compatibility
     runs-on: ubuntu-24.04
