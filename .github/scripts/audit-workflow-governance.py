@@ -102,7 +102,7 @@ for entry,build_job in (("easymesh-quick.yml","quick"),("main.yml","build"),("qu
 prepare_text=(W/"quick-prepare-audit.yml").read_text(encoding="utf-8")
 for token in ('--commit "$GITHUB_SHA"','BASELINE_RUN_ID','gh run download',
               'get("git_sha") != os.environ["GITHUB_SHA"]',
-              'get("attempt")','artifact[\'id\']','artifact[\'sha256\']',
+              'get("attempt")','artifact[\\'id\\']','artifact.get("sha256"',
               'remote_json.get("workflow_run",{}).get("id")','remote != artifact["sha256"]'):
  if token not in prepare_text: bad("Quick Prepare OpenSSL baseline provenance check missing: "+token)
 if set(vendor)!={"workflow_call","workflow_dispatch","push"}:
