@@ -1,14 +1,26 @@
 --- a/wappd/common/main.c
 +++ b/wappd/common/main.c
-@@ -805,6 +805,7 @@
- 	u16 cred_len = 0, is_1905_conn = 0, is_normal = 0;
+@@ -805,6 +805,6 @@
+-	u16 cred_len = 0, is_1905_conn = 0, is_normal = 0;
++	u16 is_1905_conn = 0, is_normal = 0;
  	struct dl_list *dev_list;
- 	dev_list = &wapp->dev_list;
+-	dev_list = &wapp->dev_list;
 +	os_memset(&auth, 0, sizeof(auth));
  	//char all_zero_mac[MAC_ADDR_LEN]={0};
  #endif
  
-@@ -821,7 +822,8 @@
+@@ -813,6 +813,9 @@
+ 	if (!wapp) {
+ 		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"\033[1;31m %s, %u \033[0m\n", __FUNCTION__, __LINE__);  /* Haipin Debug Print (R)*/
+ 		return WAPP_INVALID_ARG;
+ 	}
+ 
++#ifdef MAP_R3
++	dev_list = &wapp->dev_list;
++#endif
+ 	os_memset(config, 0, 3 * sizeof(struct dpp_config));
+
+@@ -821,7 +824,8 @@
  		DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
  		return -1;
  	}
@@ -18,7 +30,7 @@
  	if (os_strcmp(value, "1"))
  		is_normal = 0;
  	else
-@@ -833,10 +835,11 @@
+@@ -833,10 +837,11 @@
  		DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
  		return -1;
  	}
@@ -32,7 +44,7 @@
  	is_1905_conn = 1;
  	if (is_normal) {
  		NdisZeroMemory(value, 1024);
-@@ -846,7 +849,8 @@
+@@ -846,7 +851,8 @@
  			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
  			return -1;
  		}
@@ -42,7 +54,7 @@
  		config[k].ssid_len = os_strlen(value);
  		config[k].ssid = os_zalloc(config[k].ssid_len + 1);
  		if (!config[k].ssid)
-@@ -860,7 +864,8 @@
+@@ -860,7 +866,8 @@
  			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
  			goto error;
  		}
@@ -52,7 +64,7 @@
  		config[k].akm = atoi(value);
  		NdisZeroMemory(value, 1024);
  		NdisZeroMemory(param, 64);
-@@ -869,7 +874,8 @@
+@@ -869,7 +876,8 @@
  			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
  			goto error;
  		}
@@ -62,7 +74,7 @@
  		os_memcpy(config[k].psk, value, 32);
  		NdisZeroMemory(value, 1024);
  		NdisZeroMemory(param, 64);
-@@ -878,14 +884,22 @@
+@@ -878,14 +886,22 @@
  			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
  			goto error;
  		}
@@ -88,7 +100,7 @@
  		NdisZeroMemory(value, 1024);
  		NdisZeroMemory(param, 64);
  		ret = os_snprintf(param, sizeof(param), "_netAccessKey");
-@@ -893,14 +907,22 @@
+@@ -893,14 +909,22 @@
  			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
  			goto error;
  		}
@@ -114,7 +126,7 @@
  		NdisZeroMemory(value, 1024);
  		NdisZeroMemory(param, 64);
  		ret = os_snprintf(param, sizeof(param), "_connector");
-@@ -908,7 +930,8 @@
+@@ -908,7 +932,8 @@
  			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
  			goto error;
  		}
@@ -124,7 +136,7 @@
  		config[k].dpp_connector = os_zalloc(os_strlen(value) + 1);
  		if (!config[k].dpp_connector) {
  			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_zalloc fail\n", __func__);
-@@ -920,13 +943,13 @@
+@@ -920,13 +945,13 @@
  	if (is_1905_conn) {
  		NdisZeroMemory(value, 1024);
  		NdisZeroMemory(param, 64);
@@ -140,7 +152,7 @@
  		auth.net_access_key_expiry = atol(value);
  		NdisZeroMemory(value, 1024);
  		NdisZeroMemory(param, 64);
-@@ -935,7 +958,8 @@
+@@ -935,7 +960,8 @@
  			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
  			goto error;
  		}
@@ -150,7 +162,7 @@
  		auth.decrypt_thresold = atoi(value);
  		NdisZeroMemory(value, 1024);
  		NdisZeroMemory(param, 64);
-@@ -944,7 +968,8 @@
+@@ -944,7 +970,8 @@
  			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
  			goto error;
  		}
@@ -160,7 +172,7 @@
  		auth.connector = os_zalloc(os_strlen(value)+1);
  		if (!auth.connector) {
  			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
-@@ -959,15 +984,24 @@
+@@ -959,15 +986,24 @@
  			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
  			goto error;
  		}
@@ -192,7 +204,7 @@
  		NdisZeroMemory(buf_temp, 1024);
  		NdisZeroMemory(value, 1024);
  		NdisZeroMemory(param, 64);
-@@ -976,18 +1010,24 @@
+@@ -976,18 +1012,24 @@
  			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
  			goto error;
  		}
@@ -227,7 +239,13 @@
  		cred = wapp_dpp_save_dpp_cred(&auth);
  		if (!cred) {
  			DBGPRINT(RT_DEBUG_ERROR, "[%s] wapp_dpp_save_dpp_cred fail\n", __func__);
-@@ -1008,14 +1048,19 @@
+@@ -996,4 +1038,3 @@
+-		cred_len = sizeof(*cred) + cred->payload_len;
+ 		wpabuf_clear_free(auth.net_access_key);
+ 		wpabuf_clear_free(auth.c_sign_key);
+ 		os_free(auth.connector);
+
+@@ -1008,14 +1049,19 @@
  		DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
  		goto error;
  	}
@@ -253,7 +271,7 @@
  #endif
  #endif
  	dl_list_for_each_safe(wdev, wdev_temp, dev_list, struct wapp_dev, list) {
-@@ -1187,6 +1232,10 @@
+@@ -1187,6 +1233,10 @@
  		os_free(config[k].dpp_csign);
  	if (config[k].ssid)
  		os_free(config[k].ssid);
