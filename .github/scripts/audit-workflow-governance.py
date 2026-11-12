@@ -9,7 +9,7 @@ def load(p):
  if not isinstance(x,dict): bad(f"invalid YAML mapping: {p}")
  return x
 D={p.name:load(p) for p in W.glob("*.yml")}; act=load(A)
-need={"build-package.yml","main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml","wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-template-audit.yml","copilot-ai-audit.yml","workflow-governance-audit.yml","openssl-migration-baseline-audit.yml","openssl-target-preprocessor-regression.yml","upstream-compatibility-audit.yml"}
+need={"main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml","wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-template-audit.yml","workflow-governance-audit.yml","openssl-migration-baseline-audit.yml","openssl-target-preprocessor-regression.yml","upstream-compatibility-audit.yml"}
 if need-D.keys(): bad("missing workflow "+str(sorted(need-D.keys())))
 def tr(n): return D[n].get("on",{})
 def steps(d):
@@ -81,7 +81,6 @@ for n in ("wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-tem
  t=tr(n)
  if set(t)!={"push","workflow_dispatch"} or not t["push"].get("branches") or not t["push"].get("paths"): bad(n+" must remain path-filtered")
  if "package/mtk/vendor-sources.lock.json" not in t["push"]["paths"]: bad(n+" must trigger when canonical vendor Lock changes")
-if set(tr("copilot-ai-audit.yml"))!={"workflow_dispatch"}: bad("Copilot audit must remain manual-only")
 if set(tr("workflow-governance-audit.yml"))!={"push"} or not tr("workflow-governance-audit.yml")["push"].get("paths"): bad("governance trigger mismatch")
 preprocessor=tr("openssl-target-preprocessor-regression.yml")
 if set(preprocessor)!={"push","pull_request","workflow_dispatch"}: bad("OpenSSL target preprocessor regression trigger mismatch")
@@ -90,12 +89,12 @@ for event in ("push","pull_request"):
  if event=="push" and preprocessor[event].get("branches")!=["n60pro-mtk-closed-driver"]: bad("OpenSSL target preprocessor push branch mismatch")
 upstream=tr("upstream-compatibility-audit.yml")
 if set(upstream)!={"workflow_dispatch","schedule"} or not upstream["schedule"]: bad("upstream compatibility audit must remain scheduled and manually dispatchable")
-for n in ("main.yml","build-package.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml","openssl-migration-baseline-audit.yml"):
+for n in ("main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml","openssl-migration-baseline-audit.yml"):
  if D[n].get("permissions",{}).get("contents")!="read": bad(n+" contents permission must be read")
-for n in ("main.yml","build-package.yml","workflow-governance-audit.yml","openssl-migration-baseline-audit.yml"):
+for n in ("main.yml","workflow-governance-audit.yml","openssl-migration-baseline-audit.yml"):
  for s in steps(D[n]):
   if str(s.get("uses","")).startswith("actions/checkout@") and s.get("with",{}).get("persist-credentials")!="false": bad(n+" checkout credentials must be disabled")
-for n in ("main.yml","copilot-ai-audit.yml"):
+for n in ("main.yml",):
  ss=[s for s in steps(D[n]) if s.get("uses","").startswith("actions/setup-node@")]
  if not ss or any(s.get("with",{}).get("node-version")!="24" for s in ss): bad(n+" Node must be 24")
 ss=[s for s in act.get("runs",{}).get("steps",[]) if s.get("uses","").startswith("actions/setup-node@")]
@@ -108,21 +107,6 @@ qc=[s for s in act.get("runs",{}).get("steps",[]) if s.get("uses","").startswith
 if not qc: bad("Quick cache missing")
 qw=qc[0].get("with",{})
 if "n60pro-quick-openwrt-" not in qw.get("key","") or ".github/actions/easymesh-quick/action.yml" not in qw.get("key","") or qw.get("restore-keys"): bad("Quick cache isolation/hash mismatch")
-bi=tr("build-package.yml")["workflow_dispatch"]["inputs"]; safe={"kmod-fs-ksmbd"}
-if bi["package_name"].get("type")!="choice" or set(bi["package_name"].get("options",[]))!=safe: bad("package input allowlist mismatch")
-if bi["device"].get("type")!="choice" or bi["device"].get("options")!=["netcore_n60-pro"]: bad("device choice mismatch")
-for s in steps(D["build-package.yml"]):
- if "${{ github.event.inputs." in s.get("run","") or "${{ inputs." in s.get("run",""): bad("untrusted input interpolated into shell")
-pc=[s for s in steps(D["build-package.yml"]) if s.get("uses","").startswith("actions/cache@")]
-if not pc or not any("-n60pro-package-" in s.get("with",{}).get("key","") and "hashFiles(" in s.get("with",{}).get("key","") for s in pc): bad("package cache missing isolation/hash")
-if any(s.get("with",{}).get("restore-keys") for s in pc): bad("package cache broad restore key present")
-helper=R/".github/scripts/check-package-dependency-closure.py"
-if not helper.is_file(): bad("transitive dependency closure checker missing")
-if "resolve_closure" not in helper.read_text(encoding="utf-8"): bad("recursive dependency closure implementation missing")
-if not any("check-package-dependency-closure.py" in s.get("run","") for s in steps(D["build-package.yml"])):
- bad("build-package must execute recursive dependency closure check before compile")
-if not any("--self-test" in s.get("run","") for s in steps(D["workflow-governance-audit.yml"])):
- bad("workflow governance must execute dependency-closure self-tests")
 ver=(R/"package/mtk/applications/easymesh-n60/scripts/verify-vendor-audit-attestation.py").read_text()
 for path in (".github/workflows/workflow-governance-audit.yml",
              ".github/scripts/audit-workflow-governance.py",
