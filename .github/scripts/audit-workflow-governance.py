@@ -9,7 +9,7 @@ def load(p):
  if not isinstance(x,dict): bad(f"invalid YAML mapping: {p}")
  return x
 D={p.name:load(p) for p in W.glob("*.yml")}; act=load(A)
-need={"build-package.yml","main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml","wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-template-audit.yml","copilot-ai-audit.yml","workflow-governance-audit.yml","openssl-migration-baseline-audit.yml"}
+need={"build-package.yml","main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml","wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-template-audit.yml","copilot-ai-audit.yml","workflow-governance-audit.yml","openssl-migration-baseline-audit.yml","openssl-target-preprocessor-regression.yml","upstream-compatibility-audit.yml"}
 if need-D.keys(): bad("missing workflow "+str(sorted(need-D.keys())))
 def tr(n): return D[n].get("on",{})
 def steps(d):
@@ -83,6 +83,13 @@ for n in ("wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-tem
  if "package/mtk/vendor-sources.lock.json" not in t["push"]["paths"]: bad(n+" must trigger when canonical vendor Lock changes")
 if set(tr("copilot-ai-audit.yml"))!={"workflow_dispatch"}: bad("Copilot audit must remain manual-only")
 if set(tr("workflow-governance-audit.yml"))!={"push"} or not tr("workflow-governance-audit.yml")["push"].get("paths"): bad("governance trigger mismatch")
+preprocessor=tr("openssl-target-preprocessor-regression.yml")
+if set(preprocessor)!={"push","pull_request","workflow_dispatch"}: bad("OpenSSL target preprocessor regression trigger mismatch")
+for event in ("push","pull_request"):
+ if not preprocessor[event].get("paths"): bad("OpenSSL target preprocessor regression must remain path-filtered")
+ if event=="push" and preprocessor[event].get("branches")!=["n60pro-mtk-closed-driver"]: bad("OpenSSL target preprocessor push branch mismatch")
+upstream=tr("upstream-compatibility-audit.yml")
+if set(upstream)!={"workflow_dispatch","schedule"} or not upstream["schedule"]: bad("upstream compatibility audit must remain scheduled and manually dispatchable")
 for n in ("main.yml","build-package.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml","openssl-migration-baseline-audit.yml"):
  if D[n].get("permissions",{}).get("contents")!="read": bad(n+" contents permission must be read")
 for n in ("main.yml","build-package.yml","workflow-governance-audit.yml","openssl-migration-baseline-audit.yml"):
