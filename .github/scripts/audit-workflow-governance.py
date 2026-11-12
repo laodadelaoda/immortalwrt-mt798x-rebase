@@ -12,6 +12,11 @@ D={p.name:load(p) for p in W.glob("*.yml")}; act=load(A)
 need={"main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml","wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-template-audit.yml","workflow-governance-audit.yml","openssl-migration-baseline-audit.yml","openssl-target-preprocessor-regression.yml","upstream-compatibility-audit.yml"}
 if D.keys()!=need:
  bad("workflow set mismatch; missing="+str(sorted(need-D.keys()))+" extra="+str(sorted(D.keys()-need)))
+ownership=(R/"docs/audit/WORKFLOW-OWNERSHIP.md")
+if not ownership.is_file(): bad("frozen workflow ownership matrix is missing")
+ownership_text=ownership.read_text(encoding="utf-8")
+for n in sorted(need):
+ if "`"+n+"`" not in ownership_text: bad("ownership matrix does not register "+n)
 def tr(n): return D[n].get("on",{})
 def steps(d):
  for j in d.get("jobs",{}).values():
