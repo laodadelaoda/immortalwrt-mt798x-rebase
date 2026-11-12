@@ -4,7 +4,7 @@ Status: frozen responsibility matrix
 Maintenance branch: `n60pro-mtk-closed-driver`
 Scope: N60 Pro MT798x / ImmortalWrt 25.12 / Linux 6.12 / OpenSSL 3.5.9
 
-This file is the authoritative ownership boundary for the 12 retained GitHub Actions workflows.
+This file is the authoritative ownership boundary for the 10 retained GitHub Actions workflows.
 A workflow may be changed or removed only when its owned checks, evidence, triggers, and callers
 have been transferred and verified. Do not add a new workflow for a check that belongs to an
 existing owner. Do not weaken a gate to make a workflow pass.
@@ -23,7 +23,7 @@ existing owner. Do not weaken a gate to make a workflow pass.
 4. `main.yml` calls the same two canonical gates in the same order. Full build remains frozen
    with `if: false`; no workflow cleanup may unfreeze it.
 
-## Frozen 12-workflow responsibility matrix
+## Frozen 10-workflow responsibility matrix
 
 | Workflow | Sole responsibility | Trigger / invocation |
 |---|---|---|
@@ -35,14 +35,12 @@ existing owner. Do not weaken a gate to make a workflow pass.
 | `openssl-migration-baseline-audit.yml` | 68-item OpenSSL header/API traceability baseline and exact-SHA credential | every maintenance-branch push, manual |
 | `openssl-target-preprocessor-regression.yml` | Isolated target-preprocessor parser and fail-closed negative regression tests | path-filtered push/PR, manual |
 | `upstream-compatibility-audit.yml` | On-demand upstream impact assessment against pinned vendor sources | manual only; no scheduled vendor replay |
-| `wapp-source-audit.yml` | Deep WAPP/DPP source diagnostics and retained source evidence | manual only |
-| `conninfra-source-audit.yml` | Deep Conninfra/WARP source diagnostics | manual only |
-| `easymesh-wts-template-audit.yml` | Deep WTS template/runtime MAC semantic diagnostics | manual only |
+| `component-source-diagnostics.yml` | Consolidated WAPP/DPP, Conninfra/WARP, and WTS source diagnostics; retains the three original job bodies and artifacts | manual only; choose one component or all |
 | `workflow-governance-audit.yml` | YAML/trigger/call graph/permissions/attestation/cache governance checks | workflow/action/governance-script path changes |
 
 ## Non-duplication rules
 
-- The three component diagnostics are on-demand evidence tools, not independent automatic
+- The three component diagnostics are on-demand jobs inside one workflow, not independent automatic
   approval gates. Their core patch and source acceptance remains in the canonical vendor gate.
 - The 68-item OpenSSL baseline is traceability evidence, not the active 40-item migration verdict.
   Its exact-SHA attestation is an input to Quick Prepare, not a replacement for the 40-item gate.
