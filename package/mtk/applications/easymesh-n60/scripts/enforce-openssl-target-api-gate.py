@@ -235,7 +235,7 @@ def validate_scope_manifest(scope,summary,migration_map):
  baseline=scope.get("global_baseline",{})
  if baseline and (baseline.get("role")!="TRACEABILITY_ONLY" or baseline.get("is_migration_approval") is not False):
   failures.append("global OpenSSL reference metadata must remain TRACEABILITY_ONLY and non-approving")
-supporting={x.get("name") for x in scope.get("supporting_dependencies",[]) if isinstance(x,dict)}
+ supporting={x.get("name") for x in scope.get("supporting_dependencies",[]) if isinstance(x,dict)}
  if supporting!={"datconf","libnl-tiny"}:
   failures.append("EasyMesh supporting dependency boundary list must explicitly retain datconf/libkvcutil and libnl-tiny")
  return failures
