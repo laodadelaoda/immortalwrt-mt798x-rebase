@@ -60,6 +60,7 @@ for row in rows:
     if row["merge_decision"] not in {
         "keep-atomic", "keep-atomic-stage-bound",
         "candidate-target-for-009", "candidate-merge-into-002",
+        "merged-009-into-002",
         "candidate-target-for-013", "candidate-merge-into-011",
     }:
         fail(f"unknown merge decision for {row['patch_file']}: {row['merge_decision']}")
