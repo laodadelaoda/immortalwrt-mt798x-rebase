@@ -9,7 +9,7 @@ def load(p):
  if not isinstance(x,dict): bad(f"invalid YAML mapping: {p}")
  return x
 D={p.name:load(p) for p in W.glob("*.yml")}; act=load(A)
-need={"main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml","component-source-diagnostics.yml","workflow-governance-audit.yml","openssl-migration-baseline-audit.yml","openssl-target-preprocessor-regression.yml","upstream-compatibility-audit.yml"}
+need={"main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","component-source-diagnostics.yml","workflow-governance-audit.yml","openssl-migration-baseline-audit.yml","openssl-target-preprocessor-regression.yml"}
 if D.keys()!=need:
  bad("workflow set mismatch; missing="+str(sorted(need-D.keys()))+" extra="+str(sorted(D.keys()-need)))
 ownership=(R/"docs/audit/WORKFLOW-OWNERSHIP.md")
@@ -72,13 +72,9 @@ vendor_paths=[
 # The canonical vendor audit is reusable, manually dispatchable, and
 # independently triggerable by the preserved documentation trigger. The
 # complete three-event contract is validated immediately below.
-prepare_only=tr("quick-prepare-only.yml")
-if set(prepare_only)!={"workflow_dispatch"}:
- bad("Prepare-only diagnostic entry must remain manual-only to avoid duplicate vendor replay")
 if set(tr("quick-prepare-audit.yml"))!={"workflow_call"}: bad("Prepare must be reusable-only")
-# Freeze the canonical call graph: Quick and Full must call the same vendor and
-# Prepare workflows, in that order, with both jobs as hard dependencies.
-for entry,build_job in (("easymesh-quick.yml","quick"),("main.yml","build"),("quick-prepare-only.yml",None)):
+# Quick and Full share the same canonical vendor and Prepare gates, in that order.
+for entry,build_job in (("easymesh-quick.yml","quick"),("main.yml","build")):
  jobs=D[entry].get("jobs",{})
  vendor_job=jobs.get("vendor_source_patch_audit",{})
  prepare_job=jobs.get("quick_prepare_audit",{})
@@ -88,11 +84,10 @@ for entry,build_job in (("easymesh-quick.yml","quick"),("main.yml","build"),("qu
   bad(entry+" must call the canonical reusable Prepare audit")
  if prepare_job.get("needs")!="vendor_source_patch_audit":
   bad(entry+" Prepare must depend on the vendor audit")
- if build_job:
-  build=jobs.get(build_job,{})
-  if set(build.get("needs",[]))!={"vendor_source_patch_audit","quick_prepare_audit"}:
-   bad(entry+" build must hard-depend on both canonical gates")
- if entry=="main.yml" and str(jobs.get("build",{}).get("if","")).strip().lower()!="false":
+ build=jobs.get(build_job,{})
+ if set(build.get("needs",[]))!={"vendor_source_patch_audit","quick_prepare_audit"}:
+  bad(entry+" build must hard-depend on both canonical gates")
+ if entry=="main.yml" and str(build.get("if","")).strip().lower()!="false":
   bad("Full build must remain frozen")
 # Quick Prepare must retrieve the baseline from a successful run for this exact
 # SHA and verify the run-bound artifact ID and remote GitHub artifact digest.
@@ -111,7 +106,7 @@ if vendor["push"].get("branches")!=["n60pro-mtk-closed-driver"] or vendor["push"
 if set(tr("component-source-diagnostics.yml"))!={"workflow_dispatch"}:
  bad("component diagnostics must be manual-only")
 component_text=(W/"component-source-diagnostics.yml").read_text(encoding="utf-8")
-for token in ("inputs.component == 'wapp'","inputs.component == 'conninfra'","inputs.component == 'wts'","inputs.component == 'all'"):
+for token in ("inputs.component == 'wapp'","inputs.component == 'conninfra'","inputs.component == 'wts'","inputs.component == 'upstream'","inputs.component == 'all'"):
  if token not in component_text: bad("consolidated component diagnostics missing selector: "+token)
 baseline=tr("openssl-migration-baseline-audit.yml")
 if set(baseline)!={"push","workflow_dispatch"}:
@@ -126,9 +121,22 @@ if set(preprocessor)!={"push","pull_request","workflow_dispatch"}: bad("OpenSSL 
 for event in ("push","pull_request"):
  if not preprocessor[event].get("paths"): bad("OpenSSL target preprocessor regression must remain path-filtered")
  if event=="push" and preprocessor[event].get("branches")!=["n60pro-mtk-closed-driver"]: bad("OpenSSL target preprocessor push branch mismatch")
-upstream=tr("upstream-compatibility-audit.yml")
-if set(upstream)!={"workflow_dispatch"}: bad("upstream compatibility audit must be manual-only; it must not schedule vendor replay")
-for n in ("main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml","openssl-migration-baseline-audit.yml"):
+upstream_vendor=D["component-source-diagnostics.yml"].get("jobs",{}).get("upstream_vendor_audit",{})
+upstream_impact=D["component-source-diagnostics.yml"].get("jobs",{}).get("upstream_impact",{})
+if upstream_vendor.get("uses")!="./.github/workflows/vendor-source-patch-audit.yml":
+ bad("upstream diagnostic must reuse the canonical vendor audit")
+if upstream_impact.get("needs")!="upstream_vendor_audit":
+ bad("upstream impact report must depend on the same-run vendor attestation producer")
+if str(upstream_impact.get("if","")).replace(" ","")!="inputs.component=='upstream'||inputs.component=='all'":
+ bad("upstream diagnostic selector/dependency condition mismatch")
+upstream_steps=list(steps({"jobs":{"upstream_impact":upstream_impact}}))
+upstream_text="\n".join(str(s.get("run",""))+" "+str(s.get("with","")) for s in upstream_steps)
+for token in ("n60-upstream-compat-audit.py","verify-vendor-audit-attestation.py",
+              "--expected-run-id","--expected-run-attempt","n60-upstream-compatibility-evidence"):
+ if token not in upstream_text: bad("upstream diagnostic lost required evidence/report step: "+token)
+if not any(s.get("with",{}).get("retention-days")=="90" for s in upstream_steps if s.get("uses","").startswith("actions/upload-artifact@")):
+ bad("upstream compatibility evidence retention must remain 90 days")
+for n in ("main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","component-source-diagnostics.yml","openssl-migration-baseline-audit.yml"):
  if D[n].get("permissions",{}).get("contents")!="read": bad(n+" contents permission must be read")
 for n in ("main.yml","workflow-governance-audit.yml","openssl-migration-baseline-audit.yml"):
  for s in steps(D[n]):
