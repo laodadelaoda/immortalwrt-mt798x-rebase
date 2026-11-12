@@ -152,7 +152,7 @@
  #if OPENSSL_VERSION_NUMBER < 0x10100000L || \
  	(defined(LIBRESSL_VERSION_NUMBER) && \
  	 LIBRESSL_VERSION_NUMBER < 0x20700000L)
-@@ -955,12 +1081,58 @@
+@@ -955,12 +1081,60 @@
  	DH_free(dh);
  	return NULL;
  #endif
@@ -213,7 +213,7 @@
  	BIGNUM *pub_key;
  	struct wpabuf *res = NULL;
  	size_t rlen;
-@@ -992,16 +1164,19 @@
+@@ -992,17 +1164,20 @@
  	BN_clear_free(pub_key);
  	wpabuf_clear_free(res);
  	return NULL;
@@ -452,7 +452,7 @@
  	BIGNUM *pub_key;
  	struct wpabuf *res = NULL;
  	size_t rlen;
-@@ -933,16 +1108,19 @@
+@@ -933,14 +1108,17 @@
  	BN_clear_free(pub_key);
  	wpabuf_clear_free(res);
  	return NULL;
@@ -472,4 +472,4 @@
 +#else
 +	DH_free((DH *) ctx);
 +#endif
-}
+ }
