@@ -125,6 +125,6 @@ for n,d in D.items():
   if s.get("uses","").startswith("actions/upload-artifact@") and not s.get("with",{}).get("retention-days"): bad(n+" artifact retention missing")
 print(f"PASS: YAML syntax parsed for {len(D)} workflows and EasyMesh composite action")
 print("PASS: trigger/call matrix, permissions, checkout credentials, Node.js 24")
-print("PASS: Quick/Full/package cache isolation and cache-key policy")
+print("PASS: Quick/Full cache isolation and cache-key policy")
 print("PASS: same-run artifact provenance, attestation identity and retention")
-print("PASS: package allowlist, shell injection prevention and vendor bypass boundary")
+print("PASS: vendor bypass boundary and attestation input binding")
