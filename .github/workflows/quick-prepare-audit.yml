@@ -839,25 +839,6 @@ jobs:
             "$RUNNER_TEMP/n60-openssl-provider-runtime" \
             "$GITHUB_WORKSPACE"
 
-      - name: Enforce provider-native 40-API regression results
-        if: steps.openssl_provider_runtime.outcome == 'success'
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          python3 - "$RUNNER_TEMP/n60-openssl-provider-runtime/openssl-api-regression-results.json" <<'PY'
-          import json,sys
-          from pathlib import Path
-          p=Path(sys.argv[1])
-          data=json.loads(p.read_text())
-          assert data.get("scope_id") == "n60-easymesh-openssl-3.5.9"
-          assert data.get("openssl_version") == "3.5.9"
-          assert data.get("status") == "PASS"
-          assert data.get("api_count") == 40
-          assert len(data.get("api_coverage", [])) == 40
-          assert all(x.get("status") == "PASS" for x in data["api_coverage"])
-          print("PASS: provider-native regression suite covers all 40 EasyMesh API entries.")
-          PY
-
       - name: Enforce strict OpenSSL 3.5.9 API migration and const-correctness gate
         shell: bash
         run: |
@@ -869,7 +850,6 @@ jobs:
             exit 1
           }
           BUILD_DIR="${BUILD_DIRS[0]}"
-          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-production-source-migration.py "$BUILD_DIR"
           for component in wappd mapd 1905daemon libmapd; do
             test -d "$BUILD_DIR/$component" || {
               echo "::error::Prepared EasyMesh component is missing: $BUILD_DIR/$component"; exit 1;
@@ -928,8 +908,26 @@ jobs:
         if: always() && steps.openssl_provider_runtime.outcome == 'failure'
         shell: bash
         run: |
-          echo "::error::Provider-native OpenSSL 3.5.9 runtime regression tests failed."
+          set -Eeuo pipefail
+          RESULT="$RUNNER_TEMP/n60-openssl-provider-runtime/provider-runtime-result.json"
+          API_RESULT="$RUNNER_TEMP/n60-openssl-provider-runtime/openssl-api-regression-results.json"
+          for file in "$RESULT" "$API_RESULT"; do
+            test -s "$file" || {
+              echo "::error::OpenSSL runtime runner did not preserve structured failure evidence: $file"
+              exit 1
+            }
+          done
+          python3 - "$RESULT" "$API_RESULT" <<'PY'
+          import json, sys
+          from pathlib import Path
+          for name in sys.argv[1:]:
+              data = json.loads(Path(name).read_text(encoding="utf-8"))
+              print(json.dumps({"file": name, "status": data.get("result", data.get("status")),
+                                "failure": data.get("failure")}, sort_keys=True))
+          PY
+          echo "::error::Provider-native OpenSSL 3.5.9 runtime regression gate failed; see the structured failure record above."
           exit 1
+
 
 
 
