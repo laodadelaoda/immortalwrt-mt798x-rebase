@@ -118,7 +118,7 @@ if D["openssl-migration-baseline-audit.yml"].get("concurrency",{}).get("cancel-i
 if set(tr("workflow-governance-audit.yml"))!={"push"} or not tr("workflow-governance-audit.yml")["push"].get("paths"): bad("governance trigger mismatch")
 openssl_jobs=D["openssl-migration-baseline-audit.yml"].get("jobs",{})
 regression=openssl_jobs.get("target-preprocessor-regressions",{})
-regression_text="\\n".join(str(s.get("run","")) for s in regression.get("steps",[]))
+regression_text="\n".join(str(s.get("run","")) for s in regression.get("steps",[]))
 for token in ("openssl-target-preprocessor-audit.py","test-openssl-target-preprocessor-audit.py","enforce-openssl-target-api-gate.py","test-openssl-target-api-gate.py"):
  if token not in regression_text: bad("canonical OpenSSL workflow missing merged regression check: "+token)
 if not regression.get("steps"): bad("canonical OpenSSL workflow regression job is empty")
