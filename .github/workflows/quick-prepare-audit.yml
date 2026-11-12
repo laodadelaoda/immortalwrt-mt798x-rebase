@@ -811,6 +811,7 @@ jobs:
             }
           done
           python3 package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py
+          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py
           python3 package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regression-matrix.py \
             --review package/mtk/applications/easymesh-n60/tests/openssl-40-active-api-semantic-review.csv \
             --matrix package/mtk/applications/easymesh-n60/tests/openssl-40-api-regression-matrix.json \
