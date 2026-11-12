@@ -254,7 +254,7 @@ int main(void)
         OPENSSL_cleanse(wrapped, sizeof(wrapped));
     }
     if (crypto_hash_init(CRYPTO_HASH_ALG_HMAC_SHA256, NULL, 0) != NULL)
-        FAIL_CASE("production crypto_hash update-error propagation");
+        FAIL_CASE("production crypto_hash NULL key rejection");
     {
         struct crypto_hash *ctx = crypto_hash_init(CRYPTO_HASH_ALG_HMAC_SHA256,
                                                    key, sizeof(key) - 1);
@@ -266,7 +266,7 @@ int main(void)
             test_fail_next_mac_update = 1;
             crypto_hash_update(ctx, message, sizeof(message) - 1);
             if (crypto_hash_finish(ctx, failed_out, &failed_len) != -2)
-                FAIL_CASE("production crypto_hash short-output sizing");
+                FAIL_CASE("production crypto_hash update-error propagation");
         }
         OPENSSL_cleanse(failed_out, sizeof(failed_out));
     }
