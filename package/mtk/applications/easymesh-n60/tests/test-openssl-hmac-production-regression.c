@@ -8,6 +8,18 @@
 typedef unsigned char u8;
 #define PASS(id) puts("PASS_TEST_ID:" id)
 
+/* Deterministic fault injection for the EVP_MAC_update error paths. */
+static int test_fail_next_mac_update;
+
+static int testable_mac_update(EVP_MAC_CTX *ctx, const u8 *data, size_t len)
+{
+    if (test_fail_next_mac_update) {
+        test_fail_next_mac_update = 0;
+        return 0;
+    }
+    return EVP_MAC_update(ctx, data, len);
+}
+
 static EVP_MAC_CTX * openssl_hmac_ctx_new(const EVP_MD *md, const u8 *key,
                                          size_t key_len)
 {
@@ -50,8 +62,12 @@ static int openssl_hmac_vector(const EVP_MD *md, const u8 *key,
     ctx = openssl_hmac_ctx_new(md, key, key_len);
     if (!ctx)
         return -1;
-    for (i = 0; i < num_elem; i++)
-        EVP_MAC_update(ctx, addr[i], len[i]);
+    for (i = 0; i < num_elem; i++) {
+        if (testable_mac_update(ctx, addr[i], len[i]) != 1) {
+            EVP_MAC_CTX_free(ctx);
+            return -1;
+        }
+    }
     res = EVP_MAC_final(ctx, out, &out_len, out_size);
     EVP_MAC_CTX_free(ctx);
     return res == 1 && out_len == out_size ? 0 : -1;
@@ -103,7 +119,7 @@ static void crypto_hash_update(struct crypto_hash *ctx, const u8 *data,
 {
     if (ctx == NULL)
         return;
-    if (EVP_MAC_update(ctx->ctx, data, len) != 1)
+    if (testable_mac_update(ctx->ctx, data, len) != 1)
         ctx->failed = 1;
 }
 
@@ -238,6 +254,31 @@ int main(void)
     }
     if (crypto_hash_init(CRYPTO_HASH_ALG_HMAC_SHA256, NULL, 0) != NULL)
         ok = 0;
+    {
+        struct crypto_hash *ctx = crypto_hash_init(CRYPTO_HASH_ALG_HMAC_SHA256,
+                                                   key, sizeof(key) - 1);
+        u8 failed_out[32] = {0};
+        size_t failed_len = sizeof(failed_out);
+        if (!ctx) {
+            ok = 0;
+        } else {
+            test_fail_next_mac_update = 1;
+            crypto_hash_update(ctx, message, sizeof(message) - 1);
+            if (crypto_hash_finish(ctx, failed_out, &failed_len) != -2)
+                ok = 0;
+        }
+        OPENSSL_cleanse(failed_out, sizeof(failed_out));
+    }
+    {
+        u8 failed_out[32] = {0};
+        test_fail_next_mac_update = 1;
+        if (openssl_hmac_vector(EVP_sha256(), key, sizeof(key) - 1,
+                                1, (const u8 *[]) { message },
+                                (const size_t[]) { sizeof(message) - 1 },
+                                failed_out, sizeof(failed_out)) != -1)
+            ok = 0;
+        OPENSSL_cleanse(failed_out, sizeof(failed_out));
+    }
     {
         struct crypto_hash *ctx = crypto_hash_init(CRYPTO_HASH_ALG_HMAC_SHA256,
                                                    key, sizeof(key) - 1);
