@@ -17,7 +17,6 @@ FIXED = [
     ".github/workflows/wapp-source-audit.yml",
     ".github/workflows/conninfra-source-audit.yml",
     ".github/workflows/easymesh-wts-template-audit.yml",
-    ".github/workflows/build-package.yml",
     ".github/workflows/quick-prepare-audit.yml",
     ".github/workflows/workflow-governance-audit.yml",
     ".github/scripts/audit-workflow-governance.py",
