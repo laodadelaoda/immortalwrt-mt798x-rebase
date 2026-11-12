@@ -3,6 +3,8 @@
 import argparse
 import json
 import re
+import subprocess
+import tempfile
 from pathlib import Path
 
 p = argparse.ArgumentParser()
@@ -215,6 +217,190 @@ if not failures:
         dh5_contracts[component] = helper_text
     if set(dh5_contracts) != {"wappd", "1905daemon"}:
         failures.append("Both WAPP DHX and 1905daemon DH provider paths must be present")
+
+
+    # Compile and execute the exact DH5 production helpers/functions extracted
+    # from Native Prepare output. Only the wpabuf adapter is test scaffolding.
+    if set(dh5_contracts) == {"wappd", "1905daemon"}:
+        for component, source in backends.items():
+            extract_patterns = [
+                (r"static BIGNUM \* get_group5_prime\(void\)\n\{.*?\n\}", "get_group5_prime"),
+                (r"static EVP_PKEY \* dh5_fromdata\(.*?\n\}\n", "dh5_fromdata"),
+                (r"static EVP_PKEY \* dh5_generate_key\(.*?\n\}\n", "dh5_generate_key"),
+                (r"void \* dh5_init\(.*?\n\}", "dh5_init"),
+                (r"void \* dh5_init_fixed\(.*?\n\}", "dh5_init_fixed"),
+                (r"struct wpabuf \* dh5_derive_shared\(.*?\n\}", "dh5_derive_shared"),
+                (r"void dh5_free\(.*?\n\}", "dh5_free"),
+            ]
+            extracted = {}
+            for pattern, name in extract_patterns:
+                match = re.search(pattern, source, flags=re.S)
+                if not match:
+                    failures.append(component + ": cannot extract production " + name + " for runtime regression")
+                else:
+                    extracted[name] = match.group(0)
+            if component == "wappd":
+                match = re.search(
+                    r"static BIGNUM \* get_group5_order\(void\)\n\{.*?\n\}",
+                    source,
+                    flags=re.S,
+                )
+                if not match:
+                    failures.append("WAPP: cannot extract production get_group5_order for DHX regression")
+                else:
+                    extracted["get_group5_order"] = match.group(0)
+            if len(extracted) != (8 if component == "wappd" else 7):
+                continue
+
+            prefix = r"""
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
+#include <openssl/opensslv.h>
+#include <openssl/crypto.h>
+#include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/bn.h>
+#include <openssl/core_names.h>
+#include <openssl/param_build.h>
+#include <openssl/params.h>
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+#error OpenSSL 3 or newer is required
+#endif
+typedef unsigned char u8;
+struct wpabuf { size_t len, size; u8 *buf; };
+static struct wpabuf *wpabuf_alloc(size_t n)
+{
+    struct wpabuf *b = OPENSSL_zalloc(sizeof(*b));
+    if (!b) return NULL;
+    b->size = n;
+    b->buf = OPENSSL_malloc(n ? n : 1);
+    if (!b->buf) { OPENSSL_free(b); return NULL; }
+    return b;
+}
+static void wpabuf_free(struct wpabuf *b)
+{
+    if (b) { OPENSSL_free(b->buf); OPENSSL_free(b); }
+}
+static void wpabuf_clear_free(struct wpabuf *b)
+{
+    if (b) { OPENSSL_clear_free(b->buf, b->size); OPENSSL_clear_free(b, sizeof(*b)); }
+}
+static size_t wpabuf_len(const struct wpabuf *b) { return b ? b->len : 0; }
+static const u8 *wpabuf_head(const struct wpabuf *b) { return b ? b->buf : NULL; }
+static u8 *wpabuf_mhead(struct wpabuf *b) { return b ? b->buf : NULL; }
+static u8 *wpabuf_put(struct wpabuf *b, size_t n)
+{
+    u8 *p;
+    if (!b || n > b->size - b->len) return NULL;
+    p = b->buf + b->len;
+    b->len += n;
+    return p;
+}
+"""
+            suffix = r"""
+static int same_secret(const struct wpabuf *a, const struct wpabuf *b)
+{
+    return a && b && a->len == b->len && !memcmp(a->buf, b->buf, a->len);
+}
+int main(void)
+{
+    struct wpabuf *apriv = NULL, *apub = NULL, *bpriv = NULL, *bpub = NULL;
+    struct wpabuf *sa = NULL, *sb = NULL, *sf = NULL;
+    struct wpabuf *small_priv = NULL, *small_pub = NULL, *peer_pub = NULL;
+    struct wpabuf *short_secret = NULL;
+    void *a = NULL, *b = NULL, *fixed = NULL, *small = NULL;
+    int ret = 1;
+
+    a = dh5_init(&apriv, &apub);
+    b = dh5_init(&bpriv, &bpub);
+    if (!a || !b || !apriv || !apub || !bpriv || !bpub) goto done;
+    sa = dh5_derive_shared(a, bpub, apriv);
+    sb = dh5_derive_shared(b, apub, bpriv);
+    if (!same_secret(sa, sb)) goto done;
+
+    fixed = dh5_init_fixed(apriv, apub);
+    if (!fixed) goto done;
+    sf = dh5_derive_shared(fixed, bpub, apriv);
+    if (!same_secret(sa, sf)) goto done;
+
+    small_priv = wpabuf_alloc(1);
+    small_pub = wpabuf_alloc(1);
+    peer_pub = wpabuf_alloc(1);
+    if (!small_priv || !small_pub || !peer_pub) goto done;
+    *wpabuf_put(small_priv, 1) = 2;
+    *wpabuf_put(small_pub, 1) = 4;
+    *wpabuf_put(peer_pub, 1) = 8;
+    small = dh5_init_fixed(small_priv, small_pub);
+    if (!small) goto done;
+    short_secret = dh5_derive_shared(small, peer_pub, small_priv);
+    if (!short_secret || short_secret->len != 1 || short_secret->buf[0] != 64)
+        goto done;
+
+    printf("PASS %s generated/imported keys, reciprocal agreement and unpadded short secret\n",
+           EVP_PKEY_is_a((EVP_PKEY *) a, "DHX") ? "DHX" : "DH");
+    ret = 0;
+done:
+    if (ret) ERR_print_errors_fp(stderr);
+    dh5_free(a);
+    dh5_free(b);
+    dh5_free(fixed);
+    dh5_free(small);
+    wpabuf_clear_free(apriv);
+    wpabuf_clear_free(apub);
+    wpabuf_clear_free(bpriv);
+    wpabuf_clear_free(bpub);
+    wpabuf_clear_free(sa);
+    wpabuf_clear_free(sb);
+    wpabuf_clear_free(sf);
+    wpabuf_clear_free(small_priv);
+    wpabuf_clear_free(small_pub);
+    wpabuf_clear_free(peer_pub);
+    wpabuf_clear_free(short_secret);
+    return ret;
+}
+"""
+            ordered_names = ["get_group5_prime"]
+            if component == "wappd":
+                ordered_names.append("get_group5_order")
+            ordered_names.extend([
+                "dh5_fromdata", "dh5_generate_key", "dh5_init",
+                "dh5_init_fixed", "dh5_derive_shared", "dh5_free",
+            ])
+            c_source = prefix + "\n".join(extracted[name] for name in ordered_names) + suffix
+            try:
+                with tempfile.TemporaryDirectory(prefix="n60-dh5-regression-") as temp_dir:
+                    executable = Path(temp_dir) / "dh5-production-regression"
+                    compile_result = subprocess.run(
+                        [
+                            "cc", "-DOPENSSL_NO_DEPRECATED",
+                            "-DOPENSSL_API_COMPAT=0x30000000L",
+                            "-Wall", "-Wextra", "-Werror",
+                            "-Wno-unused-parameter", "-x", "c", "-",
+                            "-o", str(executable), "-lcrypto",
+                        ],
+                        input=c_source,
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                    )
+                    if compile_result.returncode:
+                        failures.append(
+                            component + ": extracted production DH5 compile failed: "
+                            + compile_result.stderr[-2000:]
+                        )
+                        continue
+                    runtime_result = subprocess.run(
+                        [str(executable)], text=True, capture_output=True, check=False
+                    )
+                    if runtime_result.returncode:
+                        failures.append(
+                            component + ": extracted production DH5 runtime regression failed: "
+                            + runtime_result.stdout[-1000:] + runtime_result.stderr[-2000:]
+                        )
+            except OSError as exc:
+                failures.append(component + ": cannot run extracted production DH5 regression: " + str(exc))
 
 result = {
     "schema_version": 1,
