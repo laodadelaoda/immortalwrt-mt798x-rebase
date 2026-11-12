@@ -14,6 +14,7 @@ FIXED = [
     ".github/workflows/vendor-source-patch-audit.yml",
     ".github/workflows/main.yml",
     ".github/workflows/easymesh-quick.yml",
+    ".github/workflows/openssl-migration-baseline-audit.yml",
     ".github/workflows/wapp-source-audit.yml",
     ".github/workflows/conninfra-source-audit.yml",
     ".github/workflows/easymesh-wts-template-audit.yml",
