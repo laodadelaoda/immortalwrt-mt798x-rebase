@@ -267,6 +267,24 @@ macro_only_unknown=m.build_easymesh_api_subset(
 assert macro_only_unknown[0]["scope_status"]=="UNKNOWN_FAIL_CLOSED"
 
 
+# An absent historical candidate is excluded only after the complete target
+# source/preprocessor scope has been scanned; incomplete coverage remains UNKNOWN.
+absent={"api":"TLSv1_method","scope_status":"UNKNOWN_FAIL_CLOSED","source_reference_count":0,
+ "active_call_sites":0,"excluded_call_sites":0,"unknown_call_sites":0,
+ "declaration_references":0,"other_non_call_references":0,"macro_references":0,
+ "macro_active":0,"macro_excluded":0,"macro_unknown":0,"source_locations":[]}
+complete_summary={"git_sha":git,"complete":True,"source_reachability_complete":True,
+ "components":{x:{"source_reachability_complete":True} for x in m.REQUIRED_EASYMESH_COMPONENTS}}
+m.prove_absent_review_candidates([absent],complete_summary,{"TLSv1_method":{}})
+assert absent["scope_status"]=="EXCLUDED_WITH_EVIDENCE",absent
+assert absent["exclusion_evidence"]["git_sha"]==git
+unknown_absent={"api":"TLSv1_method","scope_status":"UNKNOWN_FAIL_CLOSED","source_reference_count":0,
+ "active_call_sites":0,"excluded_call_sites":0,"unknown_call_sites":0,
+ "declaration_references":0,"other_non_call_references":0,"macro_references":0,
+ "macro_active":0,"macro_excluded":0,"macro_unknown":0,"source_locations":[]}
+m.prove_absent_review_candidates([unknown_absent],{**complete_summary,"complete":False},{"TLSv1_method":{}})
+assert unknown_absent["scope_status"]=="UNKNOWN_FAIL_CLOSED"
+
 # The 40-row EasyMesh semantic review, not historical traceability metadata, is the
 # authority for migration state. Exercise consistency, missing rows and forgery.
 review_path=Path(__file__).with_name("openssl-40-active-api-semantic-review.csv")

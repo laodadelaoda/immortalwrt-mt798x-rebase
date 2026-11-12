@@ -125,6 +125,30 @@ def build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migra
 def normalize_api_name(value):
  return str(value or "").strip().strip(chr(96)).strip()
 
+def prove_absent_review_candidates(subset,summary,review_map):
+ # A candidate with no lexical or target-preprocessor record is excluded only
+ # after every required EasyMesh component has a complete target source scan.
+ components=summary.get("components",{})
+ complete=(summary.get("complete") is True and summary.get("source_reachability_complete") is True
+  and set(components)==REQUIRED_EASYMESH_COMPONENTS
+  and all(x.get("source_reachability_complete") is True for x in components.values()))
+ if not complete:
+  return
+ for row in subset:
+  if row.get("api") not in review_map or row.get("scope_status")!="UNKNOWN_FAIL_CLOSED":
+   continue
+  empty=(row.get("source_reference_count")==0 and row.get("active_call_sites")==0
+   and row.get("excluded_call_sites")==0 and row.get("unknown_call_sites")==0
+   and row.get("declaration_references")==0 and row.get("other_non_call_references")==0
+   and row.get("macro_references")==0 and row.get("macro_active")==0
+   and row.get("macro_excluded")==0 and row.get("macro_unknown")==0
+   and not row.get("source_locations"))
+  if empty:
+   row["scope_status"]="EXCLUDED_WITH_EVIDENCE"
+   row["exclusion_evidence"]={"kind":"COMPLETE_TARGET_SOURCE_SCAN_NO_REFERENCE",
+    "git_sha":summary.get("git_sha"),"components":sorted(components)}
+
+
 def validate_semantic_review(review_rows,subset,expected_git_sha):
  failures=[]
  by_api={}
@@ -374,6 +398,7 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
 
  counts=Counter(x["api"] for x in active)
  subset=build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migration_map,delta_rows,review_map)
+ if review_map is not None: prove_absent_review_candidates(subset,summary,review_map)
  active_subset=[x["api"] for x in subset if x["needs_migration_review"]]
  failures.extend(validate_removed_api_reviews(subset,migration_map,policy,review_map))
  if review_map is not None: failures.extend(validate_semantic_review(list(review_map.values()),subset,expected_git_sha))
