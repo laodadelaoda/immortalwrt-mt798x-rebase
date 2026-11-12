@@ -15,7 +15,7 @@ requirement to create a separate workflow for every audit or helper script.
 | `quick-prepare-audit.yml` | Reusable no-firmware-build native Prepare and target compatibility checks; consumes exact-SHA evidence | Called by Quick and Full only |
 | `easymesh-quick.yml` | Quick entry point; calls vendor audit then Prepare in order | Manual only; build job remains frozen |
 | `main.yml` | Full entry point; calls the same vendor and Prepare gates; includes kernel preflight | Manual only; build job remains frozen |
-| `openssl-migration-baseline-audit.yml` | OpenSSL header/API traceability and target-preprocessor/API-gate regression tests | Maintenance-branch push, scoped PR, manual |
+| `openssl-migration-baseline-audit.yml` | Target-preprocessor/API-gate regression tests; optional manual 68-item header traceability | Push/PR regression; manual traceability only |
 | `component-source-diagnostics.yml` | On-demand WAPP/DPP, Conninfra/WARP, WTS and upstream diagnostics | Manual only; component selector |
 
 ## Ownership and safety boundaries
