@@ -29,12 +29,12 @@ existing owner. Do not weaken a gate to make a workflow pass.
 |---|---|---|
 | `vendor-source-patch-audit.yml` | Canonical fixed-vendor Lock/archive/patch/native Prepare + MT Wi-Fi 026 audit; emits vendor attestation | reusable, manual, dedicated documentation trigger |
 | `quick-prepare-audit.yml` | Reusable no-compile Prepare and OpenSSL/kernel acceptance gates | workflow_call only |
-| `quick-prepare-only.yml` | Standalone diagnostic entry for the same vendor + Prepare gates; never compiles | branch path filter, manual |
+| `quick-prepare-only.yml` | Standalone diagnostic entry for the same vendor + Prepare gates; never compiles | manual only; no automatic vendor replay |
 | `easymesh-quick.yml` | Quick entry; requires vendor then Prepare gates | exact workflow/composite-action path trigger, manual |
 | `main.yml` | Full entry; requires vendor then Prepare gates; build remains frozen | manual only |
 | `openssl-migration-baseline-audit.yml` | 68-item OpenSSL header/API traceability baseline and exact-SHA credential | every maintenance-branch push, manual |
 | `openssl-target-preprocessor-regression.yml` | Isolated target-preprocessor parser and fail-closed negative regression tests | path-filtered push/PR, manual |
-| `upstream-compatibility-audit.yml` | Scheduled/manual upstream impact assessment against pinned vendor sources | schedule, manual |
+| `upstream-compatibility-audit.yml` | On-demand upstream impact assessment against pinned vendor sources | manual only; no scheduled vendor replay |
 | `wapp-source-audit.yml` | Deep WAPP/DPP source diagnostics and retained source evidence | manual only |
 | `conninfra-source-audit.yml` | Deep Conninfra/WARP source diagnostics | manual only |
 | `easymesh-wts-template-audit.yml` | Deep WTS template/runtime MAC semantic diagnostics | manual only |
@@ -48,7 +48,7 @@ existing owner. Do not weaken a gate to make a workflow pass.
   Its exact-SHA attestation is an input to Quick Prepare, not a replacement for the 40-item gate.
 - The preprocessor regression workflow is a focused fast negative-test lane; the authoritative
   production source/API decision remains in Quick Prepare.
-- Upstream compatibility is advisory impact assessment and cannot approve a changed vendor Lock,
+- Upstream compatibility is manual-only advisory impact assessment; it must not schedule a vendor replay and cannot approve a changed vendor Lock,
   patch stack, or firmware build.
 - Governance validates the fixed workflow set. A new workflow is a governance failure until this
   matrix and its attestation/caller relationships are deliberately revised.
