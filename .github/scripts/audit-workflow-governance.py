@@ -77,10 +77,16 @@ if set(vendor)!={"workflow_call","workflow_dispatch","push"}:
  bad("vendor audit must be reusable, manually dispatchable and docs-triggerable")
 if vendor["push"].get("branches")!=["n60pro-mtk-closed-driver"] or vendor["push"].get("paths")!=["docs/vendor-patch-audit-trigger.txt"]:
  bad("standalone vendor audit docs trigger mismatch")
+# Deep component source diagnostics are deliberately manual-only. The canonical
+# vendor audit and native Prepare workflow own automatic Lock/patch gating.
 for n in ("wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-template-audit.yml"):
- t=tr(n)
- if set(t)!={"push","workflow_dispatch"} or not t["push"].get("branches") or not t["push"].get("paths"): bad(n+" must remain path-filtered")
- if "package/mtk/vendor-sources.lock.json" not in t["push"]["paths"]: bad(n+" must trigger when canonical vendor Lock changes")
+ if set(tr(n))!={"workflow_dispatch"}:
+  bad(n+" must remain an on-demand diagnostic, not a duplicate automatic gate")
+baseline=tr("openssl-migration-baseline-audit.yml")
+if set(baseline)!={"push","workflow_dispatch"}:
+ bad("OpenSSL 68-item traceability baseline must run for every branch revision and remain manually dispatchable")
+if baseline["push"].get("branches")!=["n60pro-mtk-closed-driver"] or baseline["push"].get("paths") is not None:
+ bad("OpenSSL baseline must produce exact-SHA evidence on every maintenance-branch push")
 if set(tr("workflow-governance-audit.yml"))!={"push"} or not tr("workflow-governance-audit.yml")["push"].get("paths"): bad("governance trigger mismatch")
 preprocessor=tr("openssl-target-preprocessor-regression.yml")
 if set(preprocessor)!={"push","pull_request","workflow_dispatch"}: bad("OpenSSL target preprocessor regression trigger mismatch")
