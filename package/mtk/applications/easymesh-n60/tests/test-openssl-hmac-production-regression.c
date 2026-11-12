@@ -1,11 +1,3 @@
-#include <stdio.h>
-#include <string.h>
-#include <openssl/crypto.h>
-#include <openssl/core_names.h>
-#include <openssl/evp.h>
-#include <openssl/params.h>
-
-typedef unsigned char u8;
 #define PASS(id) puts("PASS_TEST_ID:" id)
 #define FAIL_CASE(name) do { fprintf(stderr, "FAIL_CASE: %s\n", name); ok = 0; } while (0)
 
