@@ -6,6 +6,15 @@ name: N60 EasyMesh OpenSSL 1.1.1w to 3.5.9 API reference baseline
 on:
   push:
     branches: ["n60pro-mtk-closed-driver"]
+  pull_request:
+    paths:
+      - ".github/workflows/openssl-migration-baseline-audit.yml"
+      - ".github/workflows/openssl-target-preprocessor-regression.yml"
+      - "package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py"
+      - "package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py"
+      - "package/mtk/applications/easymesh-n60/scripts/enforce-openssl-target-api-gate.py"
+      - "package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py"
+      - "package/mtk/applications/easymesh-n60/tests/openssl-easymesh-scope.json"
   workflow_dispatch:
 
 permissions:
@@ -140,3 +149,35 @@ jobs:
           path: artifacts/openssl-migration-baseline-attestation/openssl-migration-baseline.attestation.json
           if-no-files-found: error
           retention-days: 90
+
+  target-preprocessor-regressions:
+    name: Target preprocessor and 40-API gate positive/negative regressions
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact audited revision
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Compile OpenSSL audit and regression scripts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python -m py_compile \\
+            package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py \\
+            package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py \\
+            package/mtk/applications/easymesh-n60/scripts/enforce-openssl-target-api-gate.py \\
+            package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py
+      - name: Run positive and negative regression cases
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py
+          python package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py
