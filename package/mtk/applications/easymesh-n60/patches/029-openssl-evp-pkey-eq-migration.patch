@@ -1,7 +1,7 @@
 diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
 --- a/wappd/dpp/dpp.c
 +++ b/wappd/dpp/dpp.c
-@@ -6914,7 +6914,11 @@
+@@ -6891,7 +6891,11 @@
  			goto fail;
  		dpp_debug_print_key("DPP: Received netAccessKey", key);
  
