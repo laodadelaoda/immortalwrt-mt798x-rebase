@@ -926,7 +926,6 @@ jobs:
             --preprocessor-summary artifacts/easymesh-openssl-preprocessor-audit/openssl-target-preprocessor-summary.json \
             --regression-results "$RUNNER_TEMP/n60-openssl-provider-runtime/openssl-api-regression-results.json" \
             --provider-result "$RUNNER_TEMP/n60-openssl-provider-runtime/provider-runtime-result.json" \
-            --baseline-attestation .openssl-baseline/attestation/openssl-migration-baseline.attestation.json \
             --vendor-attestation .audit-attestation/vendor-audit-attestation.json \
             --output artifacts/openssl-api-migration-attestation.json \
             --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \

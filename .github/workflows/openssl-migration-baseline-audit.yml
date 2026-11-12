@@ -176,10 +176,14 @@ jobs:
             package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py \
             package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py \
             package/mtk/applications/easymesh-n60/scripts/enforce-openssl-target-api-gate.py \
-            package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py
+            package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py \
+            package/mtk/applications/easymesh-n60/scripts/verify-openssl-api-migration-attestation.py
       - name: Run positive and negative regression cases
         shell: bash
         run: |
           set -Eeuo pipefail
           python package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py
           python package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py
+          python package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py
