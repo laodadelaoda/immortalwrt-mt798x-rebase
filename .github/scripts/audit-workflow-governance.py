@@ -79,6 +79,32 @@ if (set(prepare_only)!={"push","workflow_dispatch"} or
     prepare_only["push"].get("paths")!=prepare_only_paths):
  bad("standalone Quick Prepare trigger mismatch")
 if set(tr("quick-prepare-audit.yml"))!={"workflow_call"}: bad("Prepare must be reusable-only")
+# Freeze the canonical call graph: Quick and Full must call the same vendor and
+# Prepare workflows, in that order, with both jobs as hard dependencies.
+for entry,build_job in (("easymesh-quick.yml","quick"),("main.yml","build"),("quick-prepare-only.yml",None)):
+ jobs=D[entry].get("jobs",{})
+ vendor_job=jobs.get("vendor_source_patch_audit",{})
+ prepare_job=jobs.get("quick_prepare_audit",{})
+ if vendor_job.get("uses")!="./.github/workflows/vendor-source-patch-audit.yml":
+  bad(entry+" must call the canonical vendor audit")
+ if prepare_job.get("uses")!="./.github/workflows/quick-prepare-audit.yml":
+  bad(entry+" must call the canonical reusable Prepare audit")
+ if prepare_job.get("needs")!="vendor_source_patch_audit":
+  bad(entry+" Prepare must depend on the vendor audit")
+ if build_job:
+  build=jobs.get(build_job,{})
+  if set(build.get("needs",[]))!={"vendor_source_patch_audit","quick_prepare_audit"}:
+   bad(entry+" build must hard-depend on both canonical gates")
+ if entry=="main.yml" and str(jobs.get("build",{}).get("if","")).strip().lower()!="false":
+  bad("Full build must remain frozen")
+# Quick Prepare must retrieve the baseline from a successful run for this exact
+# SHA and verify the run-bound artifact ID and remote GitHub artifact digest.
+prepare_text=(W/"quick-prepare-audit.yml").read_text(encoding="utf-8")
+for token in ('--commit "$GITHUB_SHA"','BASELINE_RUN_ID','gh run download',
+              'get("git_sha") != os.environ["GITHUB_SHA"]',
+              'get("attempt")','artifact[\'id\']','artifact[\'sha256\']',
+              'remote_json.get("workflow_run",{}).get("id")','remote != artifact["sha256"]'):
+ if token not in prepare_text: bad("Quick Prepare OpenSSL baseline provenance check missing: "+token)
 if set(vendor)!={"workflow_call","workflow_dispatch","push"}:
  bad("vendor audit must be reusable, manually dispatchable and docs-triggerable")
 if vendor["push"].get("branches")!=["n60pro-mtk-closed-driver"] or vendor["push"].get("paths")!=["docs/vendor-patch-audit-trigger.txt"]:
