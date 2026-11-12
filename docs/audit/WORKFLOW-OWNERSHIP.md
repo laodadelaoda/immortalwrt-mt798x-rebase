@@ -29,7 +29,7 @@ existing owner. Do not weaken a gate to make a workflow pass.
 |---|---|---|
 | `vendor-source-patch-audit.yml` | Canonical fixed-vendor Lock/archive/patch/native Prepare + MT Wi-Fi 026 audit; emits vendor attestation | reusable, manual, dedicated documentation trigger |
 | `quick-prepare-audit.yml` | Reusable no-compile Prepare and OpenSSL/kernel acceptance gates | workflow_call only |
-| `easymesh-quick.yml` | Quick entry; requires vendor then Prepare gates | exact workflow/composite-action path trigger, manual |
+| `easymesh-quick.yml` | Quick entry; requires vendor then Prepare gates | manual only (automatic trigger disabled while firmware compilation is frozen) |
 | `main.yml` | Full entry; requires vendor then Prepare gates; build remains frozen | manual only |
 | `openssl-migration-baseline-audit.yml` | Single OpenSSL audit owner: 68-item header/API traceability plus target-preprocessor and 40-API gate positive/negative regression suite | every maintenance-branch push, path-filtered PR, manual |
 | `component-source-diagnostics.yml` | Consolidated WAPP/DPP, Conninfra/WARP, WTS, and upstream delta/closed-component compatibility diagnostics; preserves the upstream report, same-run vendor attestation, and 90-day evidence artifact | manual only; choose one component, upstream, or all |
@@ -52,7 +52,9 @@ existing owner. Do not weaken a gate to make a workflow pass.
 - Governance validates the fixed workflow set. A new workflow is a governance failure until this
   matrix and its attestation/caller relationships are deliberately revised.
 - Quick and Full must call the exact same reusable vendor and Prepare workflows in that order.
-  Both must consume evidence from their own run and verify run ID/attempt and exact Git SHA.
+  Both must download and remotely verify the same final 40-API OpenSSL credential format, binding
+  the exact Git SHA, run/attempt, vendor Lock, source hashes, and evidence artifact digest. Quick's
+  automatic push trigger is disabled while firmware compilation remains frozen.
 - Never use a cross-run vendor attestation. The OpenSSL baseline is intentionally cross-workflow
   because it is a separate exact-SHA workflow; Quick Prepare verifies its Git SHA, successful
   run identity, artifact ID, and GitHub artifact digest before consuming it.
