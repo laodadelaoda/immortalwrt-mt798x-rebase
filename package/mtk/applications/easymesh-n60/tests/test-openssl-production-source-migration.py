@@ -45,14 +45,12 @@ if not failures:
         cmp_call = "EVP_PKEY_cmp(key, auth->own_protocol_key)"
         if dpp_source.count(eq_call) != 1 or dpp_source.count(cmp_call) != 1:
             failures.append(component + ": patch 029 must retain exactly one EVP_PKEY_eq and one legacy EVP_PKEY_cmp call")
-        pattern = (
-            r"#\\s*if\\s+OPENSSL_VERSION_NUMBER\\s*>=\\s*0x30000000L\\s*"
-            r"if\\s*\\(EVP_PKEY_eq\\(key,\\s*auth->own_protocol_key\\)\\s*!=\\s*1\\)\\s*\\{\\s*"
-            r"#\\s*else\\s*"
-            r"if\\s*\\(EVP_PKEY_cmp\\(key,\\s*auth->own_protocol_key\\)\\s*!=\\s*1\\)\\s*\\{\\s*"
-            r"#\\s*endif"
-        )
-        if not re.search(pattern, dpp_source):
+        eq_pos = dpp_source.find(eq_call)
+        cmp_pos = dpp_source.find(cmp_call)
+        guard_pos = dpp_source.rfind("#if OPENSSL_VERSION_NUMBER >= 0x30000000L", 0, eq_pos)
+        else_pos = dpp_source.find("#else", eq_pos, cmp_pos)
+        endif_pos = dpp_source.find("#endif", cmp_pos)
+        if min(eq_pos, cmp_pos, guard_pos, else_pos, endif_pos) < 0 or not (guard_pos < eq_pos < else_pos < cmp_pos < endif_pos):
             failures.append(component + ": patch 029 OpenSSL 3 EVP_PKEY_eq / legacy EVP_PKEY_cmp conditional is missing")
 
     forbidden = (
