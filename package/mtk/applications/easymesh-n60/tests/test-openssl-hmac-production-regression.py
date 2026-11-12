@@ -133,30 +133,55 @@ static void bin_clear_free(void *ptr, size_t size)
     run_env["LD_LIBRARY_PATH"] = str(a.openssl_lib_dir.resolve()) + os.pathsep + run_env.get("LD_LIBRARY_PATH", "")
     run_env["OPENSSL_MODULES"] = str(a.openssl_lib_dir.resolve() / "providers")
     run_env["OPENSSL_CONF"] = "/dev/null"
+    failures = []
     for name, source, header in cases:
-        if not source.is_file() or not header.is_file():
-            raise SystemExit(f"FAIL: prepared {name} HMAC source/header missing: {source} / {header}")
-        generated = out / f"{name}-hmac-production-regression.c"
-        generated.write_text(preamble + "\n" + production_fragments(source, header) + "\n" + harness, encoding="utf-8")
-        binary = out / f"{name}-hmac-production-regression-test"
-        cmd = [
-            a.compiler, "-std=gnu11", "-Wall", "-Wextra", "-Werror",
-            "-I", str(a.openssl_include.resolve()), str(generated),
-            "-L", str(a.openssl_lib_dir.resolve()),
-            f"-Wl,-rpath,{a.openssl_lib_dir.resolve()}",
-            "-lcrypto", "-ldl", "-pthread", "-lresolv", "-o", str(binary),
-        ]
-        subprocess.run(cmd, check=True)
-        log = out / f"{name}-hmac-production-regressions.log"
         try:
-            with log.open("w", encoding="utf-8") as stream:
-                subprocess.run([str(binary)], check=True, env=run_env, stdout=stream, stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError:
-            print(f"FAIL: prepared {name} HMAC regression details:", file=sys.stderr)
-            if log.is_file():
+            if not source.is_file() or not header.is_file():
+                raise FileNotFoundError(
+                    f"prepared {name} HMAC source/header missing: {source} / {header}"
+                )
+            generated = out / f"{name}-hmac-production-regression.c"
+            generated.write_text(
+                preamble + "\n" + production_fragments(source, header) + "\n" + harness,
+                encoding="utf-8",
+            )
+            binary = out / f"{name}-hmac-production-regression-test"
+            cmd = [
+                a.compiler, "-std=gnu11", "-Wall", "-Wextra", "-Werror",
+                "-I", str(a.openssl_include.resolve()), str(generated),
+                "-L", str(a.openssl_lib_dir.resolve()),
+                f"-Wl,-rpath,{a.openssl_lib_dir.resolve()}",
+                "-lcrypto", "-ldl", "-pthread", "-lresolv", "-o", str(binary),
+            ]
+            compile_log = out / f"{name}-hmac-production-compile.log"
+            try:
+                with compile_log.open("w", encoding="utf-8") as stream:
+                    subprocess.run(cmd, check=True, stdout=stream, stderr=subprocess.STDOUT)
+            except subprocess.CalledProcessError:
+                print(f"FAIL: prepared {name} HMAC production harness compilation:", file=sys.stderr)
+                print(compile_log.read_text(encoding="utf-8", errors="replace"), file=sys.stderr, end="")
+                raise
+            log = out / f"{name}-hmac-production-regressions.log"
+            try:
+                with log.open("w", encoding="utf-8") as stream:
+                    subprocess.run([str(binary)], check=True, env=run_env, stdout=stream, stderr=subprocess.STDOUT)
+            except subprocess.CalledProcessError:
+                print(f"FAIL: prepared {name} HMAC regression details:", file=sys.stderr)
                 print(log.read_text(encoding="utf-8", errors="replace"), file=sys.stderr, end="")
-            raise
-        print(f"PASS: actual prepared {name} HMAC functions compiled and passed the production regression harness")
+                raise
+            print(f"PASS: actual prepared {name} HMAC functions compiled and passed the production regression harness")
+        except (OSError, ValueError, subprocess.CalledProcessError) as exc:
+            failures.append(f"{name}: {exc}")
+            print(f"FAIL: {name} HMAC backend: {exc}", file=sys.stderr)
+            # Continue so the other production backend always gets its own
+            # compile/run attempt and independent diagnostic log.
+            continue
+
+    if failures:
+        print("FAIL: independent HMAC backend results:", file=sys.stderr)
+        for failure in failures:
+            print(f"  - {failure}", file=sys.stderr)
+        return 1
     print("PASS_TEST_ID:hmac_evp_mac_production_digest_key_vector")
     return 0
 
