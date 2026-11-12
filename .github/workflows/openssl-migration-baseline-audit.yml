@@ -1,9 +1,16 @@
 name: N60 EasyMesh OpenSSL 1.1.1w to 3.5.9 API reference baseline
 # Header inventory includes both checked-in *.h and public *.h.in source templates.
 
+# The 68-item baseline is traceability evidence, not the active 40-item migration gate.
+# Re-run only when its inventory, parser, tests, or workflow contract changes.
 on:
   push:
     branches: ["n60pro-mtk-closed-driver"]
+    paths:
+      - ".github/workflows/openssl-migration-baseline-audit.yml"
+      - "package/mtk/applications/easymesh-n60/scripts/audit-openssl-migration-baseline.py"
+      - "package/mtk/applications/easymesh-n60/tests/test-openssl-migration-baseline-selftest.py"
+      - "package/mtk/applications/easymesh-n60/tests/openssl-easymesh-scope.json"
   workflow_dispatch:
 
 permissions:
