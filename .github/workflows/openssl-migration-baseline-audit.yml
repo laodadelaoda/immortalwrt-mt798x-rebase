@@ -171,10 +171,10 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python -m py_compile \\
-            package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py \\
-            package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py \\
-            package/mtk/applications/easymesh-n60/scripts/enforce-openssl-target-api-gate.py \\
+          python -m py_compile \
+            package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py \
+            package/mtk/applications/easymesh-n60/scripts/enforce-openssl-target-api-gate.py \
             package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py
       - name: Run positive and negative regression cases
         shell: bash
