@@ -90,7 +90,7 @@ stage="hmac-production-regression"
 mapfile -t HMAC_WAPP_SOURCES < <(find "$repo/build_dir" -type f -path '*/easymesh-n60-7.6.7.3/wappd/crypto/crypto_openssl.c' ! -path '*-openssl-pristine/*' -print | sort)
 [[ "${#HMAC_WAPP_SOURCES[@]}" -eq 1 ]] || {
   echo "FAIL: expected exactly one prepared WAPP OpenSSL backend source; found ${#HMAC_WAPP_SOURCES[@]}" >&2
-  printf '%s\\n' "${HMAC_WAPP_SOURCES[@]}" >&2
+  printf '%s\n' "${HMAC_WAPP_SOURCES[@]}" >&2
   exit 1
 }
 HMAC_SOURCE_ROOT="${HMAC_WAPP_SOURCES[0]%/wappd/crypto/crypto_openssl.c}"
