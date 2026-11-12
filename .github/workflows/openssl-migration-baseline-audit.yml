@@ -2,7 +2,7 @@ name: N60 EasyMesh OpenSSL 1.1.1w to 3.5.9 API reference baseline
 # Header inventory includes both checked-in *.h and public *.h.in source templates.
 
 # The 68-item baseline is traceability only: presence/deprecation in 3.5.9 never implies migration is required. The active source/API gate is separate.
-# It runs on every maintenance-branch revision because Quick Prepare requires an exact-SHA credential.
+# This optional header comparison is traceability only; Quick/Full do not consume its artifact.
 on:
   push:
     branches: ["n60pro-mtk-closed-driver"]
@@ -154,7 +154,7 @@ jobs:
 
   target-preprocessor-regressions:
     name: Target preprocessor and 40-API gate positive/negative regressions
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call'
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

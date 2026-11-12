@@ -168,7 +168,7 @@ def validate_semantic_review(review_rows,subset,expected_git_sha):
  if baseline_sites!=348:
   failures.append("40-API semantic review baseline must retain exactly 348 historical callsites")
  subset_by_api={normalize_api_name(x.get("api")):x for x in subset}
- allowed={"REVIEWED_PENDING_IMPLEMENTATION","IMPLEMENTED_PENDING_VALIDATION","IMPLEMENTED","MIGRATED","LEGACY_RETAINED"}
+ allowed={"REVIEWED_PENDING_IMPLEMENTATION","IMPLEMENTED_PENDING_VALIDATION","IMPLEMENTED","MIGRATED","LEGACY_RETAINED","EXCLUDED_WITH_EVIDENCE"}
  for api,row in by_api.items():
   for field in ("components","review_decision","semantic_invariants","review_basis"):
    if not str(row.get(field,"")).strip():
@@ -190,8 +190,13 @@ def validate_semantic_review(review_rows,subset,expected_git_sha):
    continue
   try: active=int(actual.get("active_call_sites",0))
   except (TypeError,ValueError): active=-1
-  if status=="REVIEWED_PENDING_IMPLEMENTATION" and active<=0:
-   failures.append(api+": status/source inconsistency; pending implementation but no active target callsite")
+  if status=="REVIEWED_PENDING_IMPLEMENTATION" and active<=0 and actual.get("scope_status")!="EXCLUDED_WITH_EVIDENCE":
+   failures.append(api+": status/source inconsistency; pending implementation but no active target callsite or complete exclusion evidence")
+  if status=="EXCLUDED_WITH_EVIDENCE":
+   proof=actual.get("exclusion_evidence",{})
+   if (active!=0 or actual.get("scope_status")!="EXCLUDED_WITH_EVIDENCE" or approval!="false"
+       or proof.get("kind")!="COMPLETE_TARGET_SOURCE_SCAN_NO_REFERENCE" or proof.get("git_sha")!=expected_git_sha):
+    failures.append(api+": EXCLUDED_WITH_EVIDENCE lacks a matching complete target-scope negative proof")
   if status=="IMPLEMENTED_PENDING_VALIDATION":
    if active!=0:
     failures.append(api+": status/source inconsistency; implementation-pending-validation still has active target callsites")

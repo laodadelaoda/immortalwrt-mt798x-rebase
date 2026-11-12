@@ -110,8 +110,10 @@ def validate_ready(a):
         if api not in required_apis:
             if item.get("scope_status") != "EXCLUDED_WITH_EVIDENCE":
                 failures.append(api + ": candidate is neither migration-required nor excluded by complete target evidence")
-            if str(row.get("approval", "")).lower() == "true":
-                failures.append(api + ": excluded candidate must not carry migration approval")
+            if row.get("review_status") not in {"EXCLUDED_WITH_EVIDENCE", "REVIEWED_PENDING_IMPLEMENTATION"}:
+                failures.append(api + ": excluded candidate has an inconsistent pending/implementation status")
+            if str(row.get("approval", "")).lower() != "false":
+                failures.append(api + ": excluded candidate must remain unapproved")
             continue
         if str(row.get("approval", "")).lower() != "true" or row.get("review_status") not in {"IMPLEMENTED", "MIGRATED", "LEGACY_RETAINED"}:
             failures.append(api + ": required API migration/retention is not approved after implementation")
