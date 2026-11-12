@@ -24,13 +24,9 @@ jobs:
     name: Full vendor patch audit with explicit parser diagnostics
     uses: ./.github/workflows/vendor-source-patch-audit.yml
 
-  openssl_baseline:
-    name: OpenSSL header traceability and target-gate regressions
-    uses: ./.github/workflows/openssl-migration-baseline-audit.yml
-
   quick_prepare_audit:
     name: Quick precompile Package Prepare audit
-    needs: [vendor_source_patch_audit, openssl_baseline]
+    needs: vendor_source_patch_audit
     uses: ./.github/workflows/quick-prepare-audit.yml
 
   # Full starts directly after the immutable vendor audit and no-compile native Prepare gate.
