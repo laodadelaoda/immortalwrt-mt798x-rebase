@@ -7,15 +7,15 @@ on:
       - ".github/workflows/easymesh-quick.yml"
       - ".github/workflows/quick-prepare-audit.yml"
       - ".github/workflows/vendor-source-patch-audit.yml"
-      - ".github/actions/easymesh-quick/action.yml"
-      - "package/mtk/applications/easymesh-n60/Makefile"
-      - "package/mtk/applications/easymesh-n60/patches/025-openssl-3.5.9-evp-mac-hmac-migration.patch"
-      - "package/mtk/applications/easymesh-n60/patches/026-openssl-hmac-finish-buffer-and-update-failure.patch"
-      - "package/mtk/applications/easymesh-n60/scripts/run-openssl-provider-runtime.sh"
-      - "package/mtk/applications/easymesh-n60/tests/test-openssl-hmac-production-regression.c"
-      - "package/mtk/applications/easymesh-n60/tests/test-openssl-hmac-production-regression.py"
-      - "package/mtk/applications/easymesh-n60/tests/openssl-40-api-regression-matrix.json"
-      - "package/mtk/applications/easymesh-n60/tests/openssl-40-active-api-semantic-review.csv"
+      - ".github/actions/easymesh-quick/**"
+      # Include the complete MTK package closure: vendor Lock, ordered patches,
+      # Package Makefiles, source-audit scripts and regression tests.
+      - "package/mtk/**"
+      # Quick's precompile gate also validates the selected kernel patch stack.
+      - "target/linux/**"
+      - "config/n60pro-1001.config"
+      - "scripts/feeds"
+      - "include/**"
   workflow_dispatch:
     inputs:
       device:
@@ -45,7 +45,6 @@ jobs:
     uses: ./.github/workflows/quick-prepare-audit.yml
 
   quick:
-    if: false
     needs: [vendor_source_patch_audit, quick_prepare_audit]
     name: Linux 6.12 / ImmortalWrt 25.12 / OpenSSL 3.x compatibility
     runs-on: ubuntu-24.04
