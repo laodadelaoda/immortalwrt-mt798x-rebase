@@ -11,6 +11,8 @@ on:
       # Include the complete MTK package closure: vendor Lock, ordered patches,
       # Package Makefiles, source-audit scripts and regression tests.
       - "package/mtk/**"
+      # Audit manifests are executable inputs to the canonical Lock regression gate.
+      - "docs/audit/**"
       # Quick's precompile gate also validates the selected kernel patch stack.
       - "target/linux/**"
       - "config/n60pro-1001.config"
