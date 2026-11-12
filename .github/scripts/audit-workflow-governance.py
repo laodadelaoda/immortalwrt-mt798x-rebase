@@ -89,6 +89,11 @@ for entry,build_job in (("easymesh-quick.yml","quick"),("main.yml","build")):
   bad(entry+" build must hard-depend on both canonical gates")
  if entry=="main.yml" and str(build.get("if","")).strip().lower()!="false":
   bad("Full build must remain frozen")
+ entry_steps=list(steps(D[entry]))
+ entry_text="\\n".join(str(x.get("run",""))+" "+str(x.get("name",""))+" "+str(x.get("with","")) for x in entry_steps)
+ for token in ("n60-openssl-3.5.9-api-and-provider-audit","n60-openssl-api-migration-attestation",
+               "verify-openssl-api-migration-attestation.py","--verify-remote-artifact"):
+  if token not in entry_text: bad(entry+" must verify the exact-run final 40-API OpenSSL credential before build")
 # Quick Prepare must retrieve the baseline from a successful run for this exact
 # SHA and verify the run-bound artifact ID and remote GitHub artifact digest.
 prepare_text=(W/"quick-prepare-audit.yml").read_text(encoding="utf-8")
