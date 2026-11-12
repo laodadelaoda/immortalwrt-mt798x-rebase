@@ -19,6 +19,7 @@ FIXED = [
     ".github/workflows/easymesh-wts-template-audit.yml",
     ".github/workflows/quick-prepare-audit.yml",
     ".github/workflows/workflow-governance-audit.yml",
+    "docs/audit/WORKFLOW-OWNERSHIP.md",
     ".github/scripts/audit-workflow-governance.py",
     ".github/scripts/check-package-dependency-closure.py",
     "package/mtk/applications/easymesh-n60/scripts/verify-vendor-audit-attestation.py",
