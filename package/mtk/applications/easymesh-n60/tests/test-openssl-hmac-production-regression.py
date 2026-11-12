@@ -93,7 +93,7 @@ def main() -> int:
         "crypto_hash_update", "crypto_hash_finish",
     )
     for symbol in production_symbols:
-        declaration = rf"(?m)^\s*(?:static\s+)?(?:[\w]+\s+|\*+\s*)*{re.escape(symbol)}\s*\("
+        declaration = rf"(?m)^\s*(?:static\s+)?(?:[\w]+\s+)+\*?\s*{re.escape(symbol)}\s*\("
         if re.search(declaration, harness):
             raise ValueError(f"test harness must not redefine prepared production symbol: {symbol}")
     if re.search(r"(?m)^\s*(?:enum\s+crypto_hash_alg|struct\s+crypto_hash)\s*\{", harness):
