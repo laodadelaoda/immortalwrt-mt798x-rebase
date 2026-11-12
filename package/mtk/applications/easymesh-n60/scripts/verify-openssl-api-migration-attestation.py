@@ -20,6 +20,7 @@ REPO_INPUTS = [
     "package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regressions.c",
     "package/mtk/applications/easymesh-n60/tests/test-openssl-des-internal-regression.c",
     "package/mtk/applications/easymesh-n60/tests/test-openssl-hmac-production-regression.c",
+    "package/mtk/applications/easymesh-n60/tests/test-openssl-hmac-production-regression.py",
     "package/mtk/applications/easymesh-n60/tests/test-openssl-production-source-migration.py",
     "package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regression-matrix.py",
     "package/mtk/applications/easymesh-n60/scripts/run-openssl-provider-runtime.sh",
@@ -134,6 +135,8 @@ def validate_ready(a):
         failures.append("40-API regression result was generated from a different internal DES test source")
     if regression_inputs.get("hmac_test_source_sha256") != sha256(repo / "package/mtk/applications/easymesh-n60/tests/test-openssl-hmac-production-regression.c"):
         failures.append("40-API regression result was generated from a different production HMAC test source")
+    if regression_inputs.get("hmac_test_runner_sha256") != sha256(repo / "package/mtk/applications/easymesh-n60/tests/test-openssl-hmac-production-regression.py"):
+        failures.append("40-API HMAC regression did not compile the exact prepared production source functions")
     if not re.fullmatch(r"[0-9a-f]{64}", str(regression_inputs.get("test_log_sha256", ""))):
         failures.append("40-API regression test log hash is missing or invalid")
     if any(x.get("status") != "PASS" for x in regression.get("api_coverage", [])) or len(regression.get("api_coverage", [])) != 40:
