@@ -1,0 +1,30 @@
+diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
+--- a/wappd/dpp/dpp.c
++++ b/wappd/dpp/dpp.c
+@@ -6914,7 +6914,11 @@
+ 			goto fail;
+ 		dpp_debug_print_key("DPP: Received netAccessKey", key);
+ 
++#if OPENSSL_VERSION_NUMBER >= 0x30000000L
++		if (EVP_PKEY_eq(key, auth->own_protocol_key) != 1) {
++#else
+ 		if (EVP_PKEY_cmp(key, auth->own_protocol_key) != 1) {
++#endif
+ 			wpa_printf(MSG_DEBUG, DPP_MAP_PREX
+ 					"DPP: netAccessKey in connector does not match own protocol key");
+ 			goto fail;
+diff --git a/1905daemon/src/dpp.c b/1905daemon/src/dpp.c
+--- a/1905daemon/src/dpp.c
++++ b/1905daemon/src/dpp.c
+@@ -6112,7 +6112,11 @@
+ 		goto fail;
+ 	dpp_debug_print_key("DPP: Received netAccessKey", key);
+ 
++#if OPENSSL_VERSION_NUMBER >= 0x30000000L
++	if (EVP_PKEY_eq(key, auth->own_protocol_key) != 1) {
++#else
+ 	if (EVP_PKEY_cmp(key, auth->own_protocol_key) != 1) {
++#endif
+ 		wpa_printf(MSG_DEBUG,
+ 			   "DPP: netAccessKey in connector does not match own protocol key");
+ 		#ifdef CONFIG_TESTING_OPTIONS
