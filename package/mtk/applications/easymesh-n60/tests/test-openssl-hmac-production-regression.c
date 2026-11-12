@@ -240,7 +240,7 @@ int main(void)
         struct crypto_hash *ctx = crypto_hash_init(CRYPTO_HASH_ALG_HMAC_SHA256,
                                                    key, sizeof(key) - 1);
         u8 wrapped[32] = {0};
-        size_t wrapped_len = 0;
+        size_t wrapped_len = sizeof(wrapped);
         if (!ctx) {
             FAIL_CASE("production crypto_hash split-update/final vector");
         } else {
@@ -249,7 +249,7 @@ int main(void)
             if (crypto_hash_finish(ctx, wrapped, &wrapped_len) != 0 ||
                 wrapped_len != sizeof(sha256_expected) ||
                 memcmp(wrapped, sha256_expected, sizeof(sha256_expected)) != 0)
-                FAIL_CASE("production crypto_hash NULL key rejection");
+                FAIL_CASE("production crypto_hash split-update/final vector");
         }
         OPENSSL_cleanse(wrapped, sizeof(wrapped));
     }
