@@ -4,7 +4,7 @@ Status: frozen responsibility matrix
 Maintenance branch: `n60pro-mtk-closed-driver`
 Scope: N60 Pro MT798x / ImmortalWrt 25.12 / Linux 6.12 / OpenSSL 3.5.9
 
-This file is the authoritative ownership boundary for the 8 retained GitHub Actions workflows.
+This file is the authoritative ownership boundary for the 7 retained GitHub Actions workflows.
 A workflow may be changed or removed only when its owned checks, evidence, triggers, and callers
 have been transferred and verified. Do not add a new workflow for a check that belongs to an
 existing owner. Do not weaken a gate to make a workflow pass.
@@ -23,7 +23,7 @@ existing owner. Do not weaken a gate to make a workflow pass.
 4. `main.yml` calls the same two canonical gates in the same order. Full build remains frozen
    with `if: false`; no workflow cleanup may unfreeze it.
 
-## Frozen 8-workflow responsibility matrix
+## Frozen 7-workflow responsibility matrix
 
 | Workflow | Sole responsibility | Trigger / invocation |
 |---|---|---|
@@ -31,8 +31,7 @@ existing owner. Do not weaken a gate to make a workflow pass.
 | `quick-prepare-audit.yml` | Reusable no-compile Prepare and OpenSSL/kernel acceptance gates | workflow_call only |
 | `easymesh-quick.yml` | Quick entry; requires vendor then Prepare gates | exact workflow/composite-action path trigger, manual |
 | `main.yml` | Full entry; requires vendor then Prepare gates; build remains frozen | manual only |
-| `openssl-migration-baseline-audit.yml` | 68-item OpenSSL header/API traceability baseline and exact-SHA credential | every maintenance-branch push, manual |
-| `openssl-target-preprocessor-regression.yml` | Isolated target-preprocessor parser and fail-closed negative regression tests | path-filtered push/PR, manual |
+| `openssl-migration-baseline-audit.yml` | Single OpenSSL audit owner: 68-item header/API traceability plus target-preprocessor and 40-API gate positive/negative regression suite | every maintenance-branch push, path-filtered PR, manual |
 | `component-source-diagnostics.yml` | Consolidated WAPP/DPP, Conninfra/WARP, WTS, and upstream delta/closed-component compatibility diagnostics; preserves the upstream report, same-run vendor attestation, and 90-day evidence artifact | manual only; choose one component, upstream, or all |
 | `workflow-governance-audit.yml` | YAML/trigger/call graph/permissions/attestation/cache governance checks | workflow/action/governance-script path changes |
 
@@ -44,8 +43,9 @@ existing owner. Do not weaken a gate to make a workflow pass.
 - The 68-item OpenSSL baseline is traceability evidence, not the active 40-item migration verdict.
   Its exact-SHA attestation is an input to Quick Prepare, not a replacement for the 40-item gate.
   Baseline runs for superseded commits are cancelled; the latest branch SHA retains its own credential.
-- The preprocessor regression workflow is a focused fast negative-test lane; the authoritative
-  production source/API decision remains in Quick Prepare.
+- OpenSSL parser, reachability, and fail-closed positive/negative regressions live inside the
+  canonical OpenSSL workflow. They are tests of the audit implementation, not approval of API
+  migrations; the 40-row semantic review remains the sole migration decision record.
 - Upstream compatibility is an upstream selector in component diagnostics. It reuses the canonical
   vendor audit, binds its report to the same-run attestation, and cannot approve a changed vendor Lock,
   patch stack, closed-binary ABI, device runtime, or firmware build.
