@@ -1,17 +1,7 @@
 name: Conninfra and WARP source audit bundle
 
+# Deep source diagnostics are on-demand; the canonical vendor audit owns automatic patch/Lock gating.
 on:
-  push:
-    branches: ["n60pro-mtk-closed-driver"]
-    paths:
-      - ".github/workflows/conninfra-source-audit.yml"
-      - "package/mtk/drivers/conninfra/Makefile"
-      - "package/mtk/drivers/conninfra/patches/**"
-      - "package/mtk/drivers/warp/Makefile"
-      - "package/mtk/drivers/warp/patches/**"
-      - "config/n60pro-1001.config"
-      - "package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py"
-      - "package/mtk/vendor-sources.lock.json"
   workflow_dispatch:
 
 permissions:
