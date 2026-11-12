@@ -514,10 +514,8 @@ def main():
  compiler_path=Path(shutil.which(cc[-1]) or cc[-1]).resolve()
  prepare_mapd_version(build,repo,out,compiler,a)
  inv=inventory_module(repo)
- with (repo/"package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv").open(encoding="utf-8",newline="") as f: mapping=list(csv.DictReader(f))
- mapped_api_names={x["api"] for x in mapping}
- if len(mapping)!=68 or len(mapped_api_names)!=68: raise SystemExit("migration map must contain 68 unique APIs")
- # Target evidence must cover every API deprecated by the exact pinned 3.5.9
+  # Historical 68-row migration references are not an input to target reachability.
+# Target evidence must cover every API deprecated by the exact pinned 3.5.9
  # public headers, not merely the 68 APIs in the 1.1.1w baseline map.
  names,depr=inv.catalog(openssl_header_root(a))
  rows=[r for r in inv.scan(build,names,depr) if r.get("deprecated_macro")]

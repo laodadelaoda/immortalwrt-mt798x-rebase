@@ -55,7 +55,7 @@ def build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migra
     "declaration_references":0,"other_non_call_references":0,
     "macro_references":0,"macro_active":0,"macro_excluded":0,"macro_unknown":0,"source_locations":[]}
   return rows[api]
- for api in migration_map: item(api)
+ for api in (review_map if review_map is not None else migration_map): item(api)
  for r in inventory_rows:
   if not r.get("deprecated_macro"): continue
   x=item(r["api"]); x["components"].add(r["component"]); x["source_reference_count"]+=1
@@ -230,11 +230,12 @@ def validate_scope_manifest(scope,summary,migration_map):
   failures.append("EasyMesh scope manifest primary component set differs from the audited DPP/WAPP/MAPD/1905 source set")
  if set(summary.get("components",{}))!=REQUIRED_EASYMESH_COMPONENTS:
   failures.append("target preprocessor component set does not cover the complete EasyMesh OpenSSL scope")
+ # Historical 68-row reference is descriptive only; its size/content never gates
+ # target-source reachability or the 40-candidate semantic review.
  baseline=scope.get("global_baseline",{})
- if baseline.get("path")!="package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv": failures.append("EasyMesh scope manifest points to an unexpected 68-row baseline path")
- if baseline.get("expected_rows")!=68 or len(migration_map)!=68 or baseline.get("role")!="TRACEABILITY_ONLY" or baseline.get("is_migration_approval") is not False:
-  failures.append("68-row global reference baseline was changed, mis-scoped or treated as migration approval")
- supporting={x.get("name") for x in scope.get("supporting_dependencies",[]) if isinstance(x,dict)}
+ if baseline and (baseline.get("role")!="TRACEABILITY_ONLY" or baseline.get("is_migration_approval") is not False):
+  failures.append("global OpenSSL reference metadata must remain TRACEABILITY_ONLY and non-approving")
+supporting={x.get("name") for x in scope.get("supporting_dependencies",[]) if isinstance(x,dict)}
  if supporting!={"datconf","libnl-tiny"}:
   failures.append("EasyMesh supporting dependency boundary list must explicitly retain datconf/libkvcutil and libnl-tiny")
  return failures
@@ -435,7 +436,7 @@ def main():
   "git_sha":git.stdout.strip(),"scope_components":scope.get("primary_components"),
   "global_baseline":report["scope"]["global_baseline"],
   "candidate_api_count":report["easymesh_api_candidate_count"],
-  "original_68_candidate_set_preserved":len(migration_map)==68,
+  "traceability_reference_rows":len(migration_map),
   "migration_required_api_count":report["easymesh_api_migration_required_count"],
   "migration_required_apis":report["easymesh_api_migration_required"],
   "removed_by_patch_requiring_semantic_review":report["easymesh_api_removed_by_patch"],

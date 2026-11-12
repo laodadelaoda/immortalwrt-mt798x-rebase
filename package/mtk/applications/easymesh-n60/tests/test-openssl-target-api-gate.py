@@ -166,7 +166,7 @@ report=m.evaluate(active_inventory,[active_call],[],macro_summary,[forged_macro]
 assert not report["complete"] and any("macro exclusion contradicts an active target-preprocessor API hit" in x for x in report["failures"]),report["failures"]
 
 
-# Preserve the 68-row global candidate map while deriving only target-ACTIVE
+# Preserve the separate semantic-review candidate set while deriving only target-ACTIVE
 # EasyMesh API calls as the migration-required subset.
 subset=m.build_easymesh_api_subset(
  [{"component":"wappd","path":"wappd/a.c","line":10,"api":"EVP_PKEY_cmp","deprecated_macro":"OSSL_DEPRECATEDIN_3_0"},
@@ -183,8 +183,8 @@ assert [x["api"] for x in subset if x["needs_migration_review"]]==["EVP_PKEY_cmp
 assert next(x for x in subset if x["api"]=="ENGINE_by_id")["scope_status"]=="EXCLUDED_WITH_EVIDENCE"
 assert next(x for x in subset if x["api"]=="EC_KEY_new")["needs_migration_review"] is False
 
-# A forged approval in the 68-row traceability map must never authorize the
-# separate 40-row migration review, and the reverse must remain possible.
+# A forged approval in the historical traceability map must never authorize the
+# separate semantic review, and the reverse must remain possible.
 trace_map={"EVP_PKEY_cmp":{"migration_status":"APPROVED","approval":"true"}}
 pending_review={"EVP_PKEY_cmp":{"review_status":"REVIEWED_PENDING_IMPLEMENTATION","approval":"false"}}
 authority_subset=m.build_easymesh_api_subset(
@@ -223,6 +223,7 @@ scope={"schema_version":1,"scope_id":"n60-easymesh-openssl-3.5.9","openssl_versi
 scope_summary={"components":{x:{} for x in scope["primary_components"]}}
 scope_map={f"api{i}":{} for i in range(68)}
 assert m.validate_scope_manifest(scope,scope_summary,scope_map)==[]
+assert m.validate_scope_manifest(scope,scope_summary,{})==[]
 assert m.validate_scope_manifest({**scope,"primary_components":["wappd"]},scope_summary,scope_map)
 assert m.validate_scope_manifest({**scope,"global_baseline":{"expected_rows":68,"role":"MIGRATION_APPROVAL","is_migration_approval":True}},scope_summary,scope_map)
 
@@ -266,7 +267,7 @@ macro_only_unknown=m.build_easymesh_api_subset(
 assert macro_only_unknown[0]["scope_status"]=="UNKNOWN_FAIL_CLOSED"
 
 
-# The 40-row EasyMesh semantic review, not the 68-row global baseline, is the
+# The 40-row EasyMesh semantic review, not historical traceability metadata, is the
 # authority for migration state. Exercise consistency, missing rows and forgery.
 review_path=Path(__file__).with_name("openssl-40-active-api-semantic-review.csv")
 with review_path.open(encoding="utf-8",newline="") as f:
