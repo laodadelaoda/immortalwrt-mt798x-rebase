@@ -83,6 +83,25 @@ if not failures:
             failures.append(component + ": crypto_hash context missing")
         else:
             active_crypto_region = source[source.index("struct crypto_hash"):]
+            context = re.search(r"struct crypto_hash\\s*\\{(.*?)\\};", source, flags=re.S)
+            if not context or "int failed;" not in context.group(1):
+                failures.append(component + ": HMAC context does not retain update failure state")
+            update_body = re.search(r"void crypto_hash_update\\(.*?\\n\\}", source, flags=re.S)
+            if not update_body or "EVP_MAC_update(ctx->ctx, data, len) != 1" not in update_body.group(0) or "ctx->failed = 1" not in update_body.group(0):
+                failures.append(component + ": HMAC update failure is not retained for finish")
+            finish_body = re.search(r"int crypto_hash_finish\\(.*?\\n\\}", source, flags=re.S)
+            if not finish_body:
+                failures.append(component + ": crypto_hash_finish implementation missing")
+            else:
+                for token in ("if (ctx->failed)", "EVP_MAC_CTX_get_mac_size(ctx->ctx)",
+                              "if (*len < required)", "*len = required",
+                              "EVP_MAC_final(ctx->ctx, mac, &mdlen, *len)",
+                              "return -2;"):
+                    if token not in finish_body.group(0):
+                        failures.append(component + ": HMAC finish contract invariant missing: " + token)
+            vector_body = re.search(r"static int openssl_hmac_vector\\(.*?\\n\\}", source, flags=re.S)
+            if not vector_body or "EVP_MAC_update(ctx, addr[i], len[i]) != 1" not in vector_body.group(0):
+                failures.append(component + ": HMAC vector update failure is not checked")
             for api in ("HMAC_CTX_new", "HMAC_CTX_free", "HMAC_Init_ex", "HMAC_Update", "HMAC_Final"):
                 if re.search(r"\b" + api + r"\s*\(", active_crypto_region):
                     failures.append(component + ": deprecated HMAC call remains in target crypto path: " + api)
