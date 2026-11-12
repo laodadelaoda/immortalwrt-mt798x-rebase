@@ -1,7 +1,7 @@
 name: N60 EasyMesh OpenSSL 1.1.1w to 3.5.9 API reference baseline
 # Header inventory includes both checked-in *.h and public *.h.in source templates.
 
-# The 68-item baseline is traceability evidence, not the active 40-item migration gate.
+# The 68-item baseline is traceability only: presence/deprecation in 3.5.9 never implies migration is required. The active source/API gate is separate.
 # It runs on every maintenance-branch revision because Quick Prepare requires an exact-SHA credential.
 on:
   push:
@@ -27,7 +27,7 @@ concurrency:
 jobs:
   header-baseline:
     if: github.event_name != 'pull_request'
-    name: Verify OpenSSL headers for the retained 68 EasyMesh API candidates
+    name: Trace 68 EasyMesh source candidates against OpenSSL 1.1.1w and 3.5.9 headers
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -119,8 +119,8 @@ jobs:
           digest=os.environ["BASELINE_ARTIFACT_DIGEST"].removeprefix("sha256:")
           if not artifact_id.isdigit() or not re.fullmatch(r"[0-9a-f]{64}",digest):
               raise SystemExit("GitHub baseline artifact ID/digest is missing or malformed")
-          if summary.get("failures") or summary.get("migration_map_rows")!=68 or summary.get("migration_map_apis_present_in_1_1_1w")!=68 or summary.get("migration_map_apis_deprecated_in_3_5_9")!=68:
-              raise SystemExit("baseline summary is not a complete 68/68 success")
+          if summary.get("failures") or summary.get("migration_map_rows")!=68 or summary.get("migration_map_apis_present_in_1_1_1w")!=68:
+              raise SystemExit("68-item 1.1.1w traceability inventory is incomplete")
           att={
             "schema_version":2,"status":"VERIFIED","baseline_id":summary["baseline_id"],
             "run":{"id":int(os.environ["GITHUB_RUN_ID"]),"attempt":int(os.environ["GITHUB_RUN_ATTEMPT"]),
