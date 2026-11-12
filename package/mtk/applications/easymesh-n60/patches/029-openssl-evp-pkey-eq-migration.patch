@@ -16,7 +16,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
 diff --git a/1905daemon/src/dpp.c b/1905daemon/src/dpp.c
 --- a/1905daemon/src/dpp.c
 +++ b/1905daemon/src/dpp.c
-@@ -6112,6 +6112,10 @@
+@@ -6112,7 +6112,11 @@
  		goto fail;
  	dpp_debug_print_key("DPP: Received netAccessKey", key);
  
@@ -27,3 +27,4 @@ diff --git a/1905daemon/src/dpp.c b/1905daemon/src/dpp.c
 +#endif
  		wpa_printf(MSG_DEBUG,
  			   "DPP: netAccessKey in connector does not match own protocol key");
+ #ifdef CONFIG_TESTING_OPTIONS
