@@ -424,14 +424,18 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
 
 def main():
  ap=argparse.ArgumentParser()
- for name in ("inventory","callsites","noncalls","summary","macros","migration-map","review","delta","policy","source-root","repo-root","output","scope-manifest"):
+ for name in ("inventory","callsites","noncalls","summary","macros","review","delta","policy","source-root","repo-root","output","scope-manifest"):
   ap.add_argument("--"+name,type=Path,required=True)
+ ap.add_argument("--migration-map",type=Path,default=None)
  a=ap.parse_args()
  repo=a.repo_root.resolve()
  git=subprocess.run(["git","rev-parse","HEAD"],cwd=repo,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
  if git.returncode: raise SystemExit("cannot resolve API audit checkout Git SHA")
  with a.inventory.open(encoding="utf-8",newline="") as f: inventory=list(csv.DictReader(f))
- with a.migration_map.open(encoding="utf-8",newline="") as f: migration_rows=list(csv.DictReader(f))
+ traceability_path=a.migration_map or (repo/"package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv")
+ migration_rows=[]
+ if traceability_path.is_file():
+  with traceability_path.open(encoding="utf-8",newline="") as f: migration_rows=list(csv.DictReader(f))
  migration_map={x["api"]:x for x in migration_rows}
  with a.review.open(encoding="utf-8",newline="") as f: review_rows=list(csv.DictReader(f))
  review_map={normalize_api_name(x.get("api")):x for x in review_rows}

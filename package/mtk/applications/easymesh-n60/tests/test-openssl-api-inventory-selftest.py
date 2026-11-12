@@ -47,7 +47,10 @@ with tempfile.TemporaryDirectory() as d:
  for c in m.COMP: (root/c).mkdir()
  (root/"wappd/x.c").write_text("EC_KEY *bad=EVP_PKEY_get0_EC_KEY(p);\nconst EC_KEY *ok=EVP_PKEY_get0_EC_KEY(p);\n")
  assert len(m.const_audit(root))==1
-with (Path(__file__).with_name("openssl-111-to-359-migration-map.csv")).open(encoding="utf-8",newline="") as f:
- traceability_rows=list(__import__("csv").DictReader(f))
-print("INFO: historical OpenSSL API traceability rows retained:",len(traceability_rows))
+traceability_path=Path(__file__).with_name("openssl-111-to-359-migration-map.csv")
+traceability_rows=[]
+if traceability_path.is_file():
+ with traceability_path.open(encoding="utf-8",newline="") as f:
+  traceability_rows=list(__import__("csv").DictReader(f))
+print("INFO: optional historical OpenSSL API traceability rows:",len(traceability_rows))
 print("PASS: inventory parser masks comments/literals, preserves call-site lines, excludes C type keywords, detects deprecated declarations/const loss, distinguishes active/unreferenced macro expansions and validates OpenSSL 3.5.9 package pinning independently of the optional historical traceability map.")

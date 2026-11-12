@@ -15,6 +15,16 @@ on:
       - "package/mtk/applications/easymesh-n60/scripts/enforce-openssl-target-api-gate.py"
       - "package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py"
       - "package/mtk/applications/easymesh-n60/tests/openssl-easymesh-scope.json"
+      - "package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py"
+      - "package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py"
+      - "package/mtk/applications/easymesh-n60/scripts/verify-openssl-api-migration-attestation.py"
+      - "package/mtk/applications/easymesh-n60/tests/openssl-40-active-api-semantic-review.csv"
+      - "package/mtk/applications/easymesh-n60/tests/openssl-40-api-regression-matrix.json"
+      - "package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json"
+      - "package/libs/openssl/Makefile"
+      - ".github/workflows/quick-prepare-audit.yml"
+      - ".github/workflows/easymesh-quick.yml"
+      - ".github/workflows/main.yml"
   workflow_dispatch:
 
 permissions:
