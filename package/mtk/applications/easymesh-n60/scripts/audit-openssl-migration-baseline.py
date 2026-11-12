@@ -21,6 +21,10 @@ def header_files(root):
         raise SystemExit("missing OpenSSL public header directory: "+str(base))
     return sorted(p for p in base.rglob("*") if p.is_file() and (p.name.endswith(".h") or p.name.endswith(".h.in")))
 
+def header_status_359(present,deprecated):
+    if not present: return "NOT_PRESENT"
+    return "PRESENT_DEPRECATED" if deprecated else "PRESENT_NOT_DEPRECATED"
+
 def token_present(files, api):
     rx=re.compile(r"\b"+re.escape(api)+r"\b")
     return any(rx.search(p.read_text(encoding="utf-8",errors="replace")) for p in files)
@@ -112,8 +116,7 @@ def main():
             "deprecation_annotation_1_1_1w":deprecated1111,
             "present_in_3_5_9_headers":str(present359).lower(),
             "deprecated_in_3_5_9_headers":str(deprecated359).lower(),
-            "header_status_3_5_9":("NOT_PRESENT" if not present359 else
-                                   "PRESENT_DEPRECATED" if deprecated359 else "PRESENT_NOT_DEPRECATED"),
+            "header_status_3_5_9":header_status_359(present359,deprecated359),
             "deprecation_macro_3_5_9":depr359.get(api,""),
             "migration_status":item["migration_status"],
             "approval":item["approval"],
