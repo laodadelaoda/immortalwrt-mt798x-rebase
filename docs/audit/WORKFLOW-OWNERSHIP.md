@@ -20,6 +20,10 @@ requirement to create a separate workflow for every audit or helper script.
 
 ## Ownership and safety boundaries
 
+- The OpenSSL header-baseline workflow is a reusable prerequisite of both Quick and Full. Its
+  artifacts are produced and consumed in the same Actions run; no polling or cross-run lookup is
+  required. It also retains push/PR regression coverage as a standalone workflow.
+
 - The vendor audit is the sole owner of vendor Lock, archive integrity, patch order and
   vendor patch replay evidence. Do not duplicate these checks in another workflow.
 - Quick Prepare is the sole reusable no-compile acceptance chain. It retains native OpenWrt

@@ -25,42 +25,49 @@ jobs:
           name: n60-vendor-audit-attestation
           path: .audit-attestation
 
-      - name: Retrieve exact-SHA EasyMesh OpenSSL header-reference credential
+      - name: Download exact-SHA OpenSSL header baseline evidence
+        uses: actions/download-artifact@v6
+        with:
+          name: n60-openssl-1111w-to-359-header-baseline
+          path: .openssl-baseline/evidence
+
+      - name: Download exact-SHA OpenSSL baseline attestation
+        uses: actions/download-artifact@v6
+        with:
+          name: n60-openssl-baseline-attestation
+          path: .openssl-baseline/attestation
+
+      - name: Verify same-run OpenSSL baseline artifact and attestation
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
-          BASELINE_RUN_ID=""
-          for attempt in $(seq 1 90); do
-            BASELINE_RUN_ID="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow openssl-migration-baseline-audit.yml --commit "$GITHUB_SHA" --json databaseId,status,conclusion --jq '[.[] | select(.status == "completed" and .conclusion == "success")][0].databaseId // empty')"
-            if [[ -n "$BASELINE_RUN_ID" ]]; then break; fi
-            sleep 20
-          done
-          [[ -n "$BASELINE_RUN_ID" ]] || { echo "::error::No successful OpenSSL baseline audit exists for exact SHA $GITHUB_SHA."; exit 1; }
-          export BASELINE_RUN_ID
-          mkdir -p .openssl-baseline/evidence .openssl-baseline/attestation
-          gh run download "$BASELINE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name n60-openssl-1111w-to-359-header-baseline --dir .openssl-baseline/evidence
-          gh run download "$BASELINE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name n60-openssl-baseline-attestation --dir .openssl-baseline/attestation
           python3 - <<'PY'
-          import json, os, subprocess
+          import json, os, re, subprocess
           from pathlib import Path
           p=Path(".openssl-baseline/attestation/openssl-migration-baseline.attestation.json")
           a=json.loads(p.read_text())
-          if a.get("run",{}).get("id") != int(os.environ["BASELINE_RUN_ID"]):
-              raise SystemExit("baseline credential does not belong to the downloaded workflow run")
-          if a.get("run",{}).get("git_sha") != os.environ["GITHUB_SHA"]:
-              raise SystemExit("baseline credential Git SHA does not match this Quick Prepare revision")
-          if a.get("run",{}).get("id") <= 0 or a.get("run",{}).get("attempt") <= 0:
-              raise SystemExit("baseline credential run/attempt identity is invalid")
+          run=a.get("run",{})
+          if run.get("id") != int(os.environ["GITHUB_RUN_ID"]):
+              raise SystemExit("OpenSSL baseline credential does not belong to this workflow run")
+          if run.get("attempt") != int(os.environ["GITHUB_RUN_ATTEMPT"]):
+              raise SystemExit("OpenSSL baseline credential attempt does not match this workflow run")
+          if run.get("git_sha") != os.environ["GITHUB_SHA"]:
+              raise SystemExit("OpenSSL baseline credential Git SHA does not match Quick Prepare")
           artifact=a.get("artifact",{})
-          if not str(artifact.get("id","")).isdigit() or len(artifact.get("sha256","")) != 64:
-              raise SystemExit("baseline credential artifact identity is invalid")
-          remote_json=json.loads(subprocess.run(["gh","api",f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/artifacts/{artifact['id']}"],text=True,capture_output=True,check=True).stdout)
+          if not str(artifact.get("id","")).isdigit() or not re.fullmatch(r"[0-9a-f]{64}",str(artifact.get("sha256",""))):
+              raise SystemExit("OpenSSL baseline artifact identity or digest is invalid")
+          if artifact.get("name") != "n60-openssl-1111w-to-359-header-baseline":
+              raise SystemExit("OpenSSL baseline artifact name is invalid")
+          remote_json=json.loads(subprocess.run(
+              ["gh","api",f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/artifacts/{artifact['id']}"],
+              text=True,capture_output=True,check=True).stdout)
           remote=remote_json.get("digest","").removeprefix("sha256:")
-          if remote_json.get("workflow_run",{}).get("id") != int(os.environ["BASELINE_RUN_ID"]) or remote != artifact["sha256"]:
-              raise SystemExit("baseline GitHub artifact digest differs from signed-off credential")
-          print("PASS: exact-SHA baseline artifact ID, digest, run and attempt verified.")
+          workflow=remote_json.get("workflow_run",{})
+          if workflow.get("id") != int(os.environ["GITHUB_RUN_ID"]) or workflow.get("head_sha") != os.environ["GITHUB_SHA"] or remote != artifact["sha256"]:
+              raise SystemExit("OpenSSL baseline GitHub artifact is not bound to this run/SHA/digest")
+          print("PASS: same-run OpenSSL baseline artifact ID, digest, run, attempt and Git SHA verified.")
           PY
 
       - name: Enforce exact audited source revision and Lock
