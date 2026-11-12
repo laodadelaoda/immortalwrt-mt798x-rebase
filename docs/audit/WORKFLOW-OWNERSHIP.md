@@ -18,8 +18,8 @@ existing owner. Do not weaken a gate to make a workflow pass.
    retrieves the successful OpenSSL 68-item baseline for the exact Git SHA, validates the
    baseline artifact ID/digest/run/attempt, and performs native Prepare plus OpenSSL target/API,
    kernel patch-stack, and source regression gates. It does not compile firmware.
-3. `easymesh-quick.yml` calls the two canonical gates in order and permits Quick only after both
-   succeed. Its source build uses the shared composite action.
+3. `easymesh-quick.yml` calls the two canonical gates in order, but its Quick build job is hard-frozen
+   with `if: false` until audit closure. Its source build uses the shared composite action.
 4. `main.yml` calls the same two canonical gates in the same order. Full build remains frozen
    with `if: false`; no workflow cleanup may unfreeze it.
 
