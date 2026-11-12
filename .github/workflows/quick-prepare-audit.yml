@@ -840,6 +840,7 @@ jobs:
             "$GITHUB_WORKSPACE"
 
       - name: Enforce provider-native 40-API regression results
+        if: steps.openssl_provider_runtime.outcome == 'success'
         shell: bash
         run: |
           set -Eeuo pipefail
