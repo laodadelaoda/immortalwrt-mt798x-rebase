@@ -7,7 +7,7 @@
 
 typedef unsigned char u8;
 #define PASS(id) puts("PASS_TEST_ID:" id)
-#define FAIL_CASE(name) do { fprintf(stderr, "FAIL_CASE: %s\\n", name); ok = 0; } while (0)
+#define FAIL_CASE(name) do { fprintf(stderr, "FAIL_CASE: %s\n", name); ok = 0; } while (0)
 
 /* Deterministic fault injection for the EVP_MAC_update error paths. */
 static int test_fail_next_mac_update;
