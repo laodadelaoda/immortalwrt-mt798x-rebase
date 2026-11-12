@@ -9,7 +9,7 @@ def load(p):
  if not isinstance(x,dict): bad(f"invalid YAML mapping: {p}")
  return x
 D={p.name:load(p) for p in W.glob("*.yml")}; act=load(A)
-need={"main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml","wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-template-audit.yml","workflow-governance-audit.yml","openssl-migration-baseline-audit.yml","openssl-target-preprocessor-regression.yml","upstream-compatibility-audit.yml"}
+need={"main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml","component-source-diagnostics.yml","workflow-governance-audit.yml","openssl-migration-baseline-audit.yml","openssl-target-preprocessor-regression.yml","upstream-compatibility-audit.yml"}
 if D.keys()!=need:
  bad("workflow set mismatch; missing="+str(sorted(need-D.keys()))+" extra="+str(sorted(D.keys()-need)))
 ownership=(R/"docs/audit/WORKFLOW-OWNERSHIP.md")
@@ -108,9 +108,11 @@ if vendor["push"].get("branches")!=["n60pro-mtk-closed-driver"] or vendor["push"
  bad("standalone vendor audit docs trigger mismatch")
 # Deep component source diagnostics are deliberately manual-only. The canonical
 # vendor audit and native Prepare workflow own automatic Lock/patch gating.
-for n in ("wapp-source-audit.yml","conninfra-source-audit.yml","easymesh-wts-template-audit.yml"):
- if set(tr(n))!={"workflow_dispatch"}:
-  bad(n+" must remain an on-demand diagnostic, not a duplicate automatic gate")
+if set(tr("component-source-diagnostics.yml"))!={"workflow_dispatch"}:
+ bad("component diagnostics must be manual-only")
+component_text=(W/"component-source-diagnostics.yml").read_text(encoding="utf-8")
+for token in ("inputs.component == 'wapp'","inputs.component == 'conninfra'","inputs.component == 'wts'","inputs.component == 'all'"):
+ if token not in component_text: bad("consolidated component diagnostics missing selector: "+token)
 baseline=tr("openssl-migration-baseline-audit.yml")
 if set(baseline)!={"push","workflow_dispatch"}:
  bad("OpenSSL 68-item traceability baseline must run for every branch revision and remain manually dispatchable")
