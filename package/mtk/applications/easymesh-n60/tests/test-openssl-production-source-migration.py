@@ -22,6 +22,8 @@ paths = {
     "p1905_crypto_makefile": root / "1905daemon/src/crypto/Makefile",
     "p1905_main_makefile": root / "1905daemon/Makefile",
     "p1905_ms_funcs": root / "1905daemon/src/crypto/ms_funcs.c",
+    "wapp_dpp_source": root / "wappd/dpp/dpp.c",
+    "p1905_dpp_source": root / "1905daemon/src/dpp.c",
 }
 for name, path in paths.items():
     if not path.is_file():
@@ -32,6 +34,27 @@ if not failures:
         "wappd": paths["wapp_backend"].read_text(encoding="utf-8"),
         "1905daemon": paths["p1905_backend"].read_text(encoding="utf-8"),
     }
+    # Patch 029 is applied after 028 in the same locked Native Prepare series.
+    # Check the actual DPP production comparison in both vendor backends.
+    for component, dpp_path in (
+        ("WAPP", paths["wapp_dpp_source"]),
+        ("1905daemon", paths["p1905_dpp_source"]),
+    ):
+        dpp_source = dpp_path.read_text(encoding="utf-8")
+        eq_call = "EVP_PKEY_eq(key, auth->own_protocol_key)"
+        cmp_call = "EVP_PKEY_cmp(key, auth->own_protocol_key)"
+        if dpp_source.count(eq_call) != 1 or dpp_source.count(cmp_call) != 1:
+            failures.append(component + ": patch 029 must retain exactly one EVP_PKEY_eq and one legacy EVP_PKEY_cmp call")
+        pattern = (
+            r"#\\s*if\\s+OPENSSL_VERSION_NUMBER\\s*>=\\s*0x30000000L\\s*"
+            r"if\\s*\\(EVP_PKEY_eq\\(key,\\s*auth->own_protocol_key\\)\\s*!=\\s*1\\)\\s*\\{\\s*"
+            r"#\\s*else\\s*"
+            r"if\\s*\\(EVP_PKEY_cmp\\(key,\\s*auth->own_protocol_key\\)\\s*!=\\s*1\\)\\s*\\{\\s*"
+            r"#\\s*endif"
+        )
+        if not re.search(pattern, dpp_source):
+            failures.append(component + ": patch 029 OpenSSL 3 EVP_PKEY_eq / legacy EVP_PKEY_cmp conditional is missing")
+
     forbidden = (
         "AES_set_decrypt_key", "AES_set_encrypt_key", "AES_unwrap_key",
         "AES_wrap_key", "DES_set_key", "DES_ecb_encrypt",
@@ -409,7 +432,7 @@ result = {
               "AES_wrap_key", "DES_set_key", "DES_ecb_encrypt", "HMAC_CTX_new",
               "HMAC_CTX_free", "HMAC_Init_ex", "HMAC_Update", "HMAC_Final", "DH_new",
               "DH_generate_key", "DH_set0_pqg", "DH_set0_key", "DH_get0_key",
-              "DH_size", "DH_compute_key", "DH_free"],
+              "DH_size", "DH_compute_key", "DH_free", "EVP_PKEY_cmp"],
     "source_root": str(root),
     "result": "PASS" if not failures else "FAIL",
     "failures": failures,
