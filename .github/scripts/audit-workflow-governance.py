@@ -73,11 +73,8 @@ vendor_paths=[
 # independently triggerable by the preserved documentation trigger. The
 # complete three-event contract is validated immediately below.
 prepare_only=tr("quick-prepare-only.yml")
-prepare_only_paths=vendor_paths+[".github/workflows/quick-prepare-only.yml"]
-if (set(prepare_only)!={"push","workflow_dispatch"} or
-    prepare_only["push"].get("branches")!=["n60pro-mtk-closed-driver"] or
-    prepare_only["push"].get("paths")!=prepare_only_paths):
- bad("standalone Quick Prepare trigger mismatch")
+if set(prepare_only)!={"workflow_dispatch"}:
+ bad("Prepare-only diagnostic entry must remain manual-only to avoid duplicate vendor replay")
 if set(tr("quick-prepare-audit.yml"))!={"workflow_call"}: bad("Prepare must be reusable-only")
 # Freeze the canonical call graph: Quick and Full must call the same vendor and
 # Prepare workflows, in that order, with both jobs as hard dependencies.
@@ -126,7 +123,7 @@ for event in ("push","pull_request"):
  if not preprocessor[event].get("paths"): bad("OpenSSL target preprocessor regression must remain path-filtered")
  if event=="push" and preprocessor[event].get("branches")!=["n60pro-mtk-closed-driver"]: bad("OpenSSL target preprocessor push branch mismatch")
 upstream=tr("upstream-compatibility-audit.yml")
-if set(upstream)!={"workflow_dispatch","schedule"} or not upstream["schedule"]: bad("upstream compatibility audit must remain scheduled and manually dispatchable")
+if set(upstream)!={"workflow_dispatch"}: bad("upstream compatibility audit must be manual-only; it must not schedule vendor replay")
 for n in ("main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","quick-prepare-only.yml","openssl-migration-baseline-audit.yml"):
  if D[n].get("permissions",{}).get("contents")!="read": bad(n+" contents permission must be read")
 for n in ("main.yml","workflow-governance-audit.yml","openssl-migration-baseline-audit.yml"):
