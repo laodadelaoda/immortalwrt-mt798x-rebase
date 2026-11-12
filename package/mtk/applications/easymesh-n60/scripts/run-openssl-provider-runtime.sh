@@ -69,7 +69,8 @@ REGRESSION_C="$repo/package/mtk/applications/easymesh-n60/tests/test-openssl-api
 REGRESSION_MATRIX="$repo/package/mtk/applications/easymesh-n60/tests/openssl-40-api-regression-matrix.json"
 DES_INTERNAL_TEST_C="$repo/package/mtk/applications/easymesh-n60/tests/test-openssl-des-internal-regression.c"
 HMAC_TEST_C="$repo/package/mtk/applications/easymesh-n60/tests/test-openssl-hmac-production-regression.c"
-test -s "$REGRESSION_C" && test -s "$REGRESSION_MATRIX" && test -s "$DES_INTERNAL_TEST_C" && test -s "$HMAC_TEST_C"
+HMAC_TEST_PY="$repo/package/mtk/applications/easymesh-n60/tests/test-openssl-hmac-production-regression.py"
+test -s "$REGRESSION_C" && test -s "$REGRESSION_MATRIX" && test -s "$DES_INTERNAL_TEST_C" && test -s "$HMAC_TEST_C" && test -s "$HMAC_TEST_PY"
 stage="api-family-regressions"
 cc -std=c11 -Wall -Wextra -Werror -I"$build/openssl-src/include" "$REGRESSION_C" -L"$build/openssl-src" -Wl,-rpath,"$build/openssl-src" -lcrypto -ldl -pthread -lresolv -o "$out/api-migration-regression-test"
 LD_LIBRARY_PATH="$build/openssl-src${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" OPENSSL_MODULES="$build/openssl-src/providers" OPENSSL_CONF=/dev/null "$out/api-migration-regression-test" | tee "$out/api-migration-regressions.log"
@@ -86,14 +87,28 @@ cc -std=gnu11 -Wall -Wextra -Werror -I"$DES_SOURCE_ROOT/inc" -I"$DES_SOURCE_ROOT
 "$out/des-internal-regression-test" | tee "$out/des-internal-regressions.log"
 cat "$out/des-internal-regressions.log" >> "$out/api-migration-regressions.log"
 stage="hmac-production-regression"
-cc -std=c11 -Wall -Wextra -Werror -I"$build/openssl-src/include" "$HMAC_TEST_C" -L"$build/openssl-src" -Wl,-rpath,"$build/openssl-src" -lcrypto -ldl -pthread -lresolv -o "$out/hmac-production-regression-test"
-LD_LIBRARY_PATH="$build/openssl-src${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" OPENSSL_MODULES="$build/openssl-src/providers" OPENSSL_CONF=/dev/null "$out/hmac-production-regression-test" | tee "$out/hmac-production-regressions.log"
+mapfile -t HMAC_WAPP_SOURCES < <(find "$repo/build_dir" -type f -path '*/easymesh-n60-7.6.7.3/wappd/crypto/crypto_openssl.c' ! -path '*-openssl-pristine/*' -print | sort)
+[[ "${#HMAC_WAPP_SOURCES[@]}" -eq 1 ]] || {
+  echo "FAIL: expected exactly one prepared WAPP OpenSSL backend source; found ${#HMAC_WAPP_SOURCES[@]}" >&2
+  printf '%s\\n' "${HMAC_WAPP_SOURCES[@]}" >&2
+  exit 1
+}
+HMAC_SOURCE_ROOT="${HMAC_WAPP_SOURCES[0]%/wappd/crypto/crypto_openssl.c}"
+test -s "$HMAC_SOURCE_ROOT/1905daemon/src/crypto_openssl.c"
+test -s "$HMAC_SOURCE_ROOT/1905daemon/src/crypto/crypto.h"
+python3 "$HMAC_TEST_PY" \
+  --source-root "$HMAC_SOURCE_ROOT" \
+  --openssl-include "$build/openssl-src/include" \
+  --openssl-lib-dir "$build/openssl-src" \
+  --test-harness "$HMAC_TEST_C" \
+  --output-dir "$out/hmac-production" \
+  --compiler "${CC:-cc}" | tee "$out/hmac-production-regressions.log"
 cat "$out/hmac-production-regressions.log" >> "$out/api-migration-regressions.log"
 stage="regression-result-aggregation"
-python3 - "$REGRESSION_MATRIX" "$REGRESSION_C" "$out/api-migration-regressions.log" "$out/openssl-api-regression-results.json" "$DES_INTERNAL_TEST_C" "$HMAC_TEST_C" <<'PY'
+python3 - "$REGRESSION_MATRIX" "$REGRESSION_C" "$out/api-migration-regressions.log" "$out/openssl-api-regression-results.json" "$DES_INTERNAL_TEST_C" "$HMAC_TEST_C" "$HMAC_TEST_PY" <<'PY'
 import hashlib,json,sys
 from pathlib import Path
-matrix_path,source_path,log_path,out_path,des_test_source_path,hmac_test_source_path=map(Path,sys.argv[1:])
+matrix_path,source_path,log_path,out_path,des_test_source_path,hmac_test_source_path,hmac_test_runner_path=map(Path,sys.argv[1:])
 matrix=json.loads(matrix_path.read_text())
 passed={line.split("PASS_TEST_ID:",1)[1].strip() for line in log_path.read_text().splitlines() if "PASS_TEST_ID:" in line}
 required=set(matrix.get("required_test_ids",[]))
@@ -111,10 +126,10 @@ def sha(p): return hashlib.sha256(p.read_bytes()).hexdigest()
 result={"schema_version":1,"scope_id":matrix["scope_id"],"openssl_version":"3.5.9","status":"PASS",
         "api_count":len(coverage),"required_test_ids":sorted(required),
         "passed_test_ids":sorted(passed),"api_coverage":coverage,
-        "inputs":{"matrix_sha256":sha(matrix_path),"test_source_sha256":sha(source_path),"des_internal_test_source_sha256":sha(des_test_source_path),"hmac_test_source_sha256":sha(hmac_test_source_path),"test_log_sha256":sha(log_path)}}
+        "inputs":{"matrix_sha256":sha(matrix_path),"test_source_sha256":sha(source_path),"des_internal_test_source_sha256":sha(des_test_source_path),"hmac_test_source_sha256":sha(hmac_test_source_path),"hmac_test_runner_sha256":sha(hmac_test_runner_path),"test_log_sha256":sha(log_path)}}
 out_path.write_text(json.dumps(result,indent=2)+"\n")
 print("PASS: all 40 EasyMesh API entries are covered by the provider-native migration regression suite.")
 PY
 stage="evidence-checksums"
-sha256sum "$test_c" "$REGRESSION_C" "$DES_INTERNAL_TEST_C" "$DES_INTERNAL_SOURCE" "$HMAC_TEST_C" "$out/provider-runtime-test" "$out/api-migration-regression-test" "$out/des-internal-regression-test" "$out/hmac-production-regression-test" > "$out/SHA256SUMS"
+sha256sum "$test_c" "$REGRESSION_C" "$DES_INTERNAL_TEST_C" "$DES_INTERNAL_SOURCE" "$HMAC_TEST_C" "$HMAC_TEST_PY" "$out/hmac-production/wappd-hmac-production-regression.c" "$out/hmac-production/1905daemon-hmac-production-regression.c" "$out/hmac-production/wappd-hmac-production-regression-test" "$out/hmac-production/1905daemon-hmac-production-regression-test" "$out/provider-runtime-test" "$out/api-migration-regression-test" "$out/des-internal-regression-test" > "$out/SHA256SUMS"
 printf '{"openssl_version":"3.5.9","providers":["default","legacy"],"legacy_provider_scope":"regression-test-only","result":"PASS"}\n' > "$out/provider-runtime-result.json"
