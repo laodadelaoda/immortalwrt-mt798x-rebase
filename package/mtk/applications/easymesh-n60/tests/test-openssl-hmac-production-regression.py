@@ -85,6 +85,19 @@ def main() -> int:
     out = a.output_dir.resolve()
     out.mkdir(parents=True, exist_ok=True)
     harness = a.test_harness.read_text(encoding="utf-8")
+    # The harness is test logic only. Production definitions are extracted from
+    # the exact native-Prepare source tree below; duplicating them here would
+    # compile a parallel implementation instead of testing production code.
+    production_symbols = (
+        "openssl_hmac_ctx_new", "openssl_hmac_vector", "crypto_hash_init",
+        "crypto_hash_update", "crypto_hash_finish",
+    )
+    for symbol in production_symbols:
+        declaration = rf"(?m)^\\s*(?:static\\s+)?(?:[\\w]+\\s+|\\*+\\s*)*{re.escape(symbol)}\\s*\\("
+        if re.search(declaration, harness):
+            raise ValueError(f"test harness must not redefine prepared production symbol: {symbol}")
+    if re.search(r"(?m)^\\s*(?:enum\\s+crypto_hash_alg|struct\\s+crypto_hash)\\s*\\{", harness):
+        raise ValueError("test harness must not redefine production HMAC types")
     preamble = r'''#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
