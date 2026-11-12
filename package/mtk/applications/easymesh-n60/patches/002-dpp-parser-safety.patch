@@ -19,7 +19,6 @@
  	os_memset(config, 0, 3 * sizeof(struct dpp_config));
  	ret = os_snprintf(param, sizeof(param), "_valid");
  	if (os_snprintf_error(sizeof(param), ret)) {
-
 @@ -821,7 +824,8 @@
  		DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
  		return -1;
@@ -244,7 +243,6 @@
  		wpabuf_clear_free(auth.net_access_key);
  		wpabuf_clear_free(auth.c_sign_key);
  		os_free(auth.connector);
-
 @@ -1008,14 +1049,19 @@
  		DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
  		goto error;
