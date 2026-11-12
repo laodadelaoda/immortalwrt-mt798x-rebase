@@ -34,4 +34,7 @@ with tempfile.TemporaryDirectory() as td:
     assert mod.token_present(public,"SSL_use_RSAPrivateKey")
     assert mod.deprecation_annotation(public,"SSL_use_RSAPrivateKey")=="OSSL_DEPRECATEDIN_3_0"
 
-print("PASS: OpenSSL 1.1.1 DEPRECATEDIN and 3.x OSSL_DEPRECATEDIN annotations are detected.")
+assert mod.header_status_359(False,False)=="NOT_PRESENT"
+assert mod.header_status_359(True,False)=="PRESENT_NOT_DEPRECATED"
+assert mod.header_status_359(True,True)=="PRESENT_DEPRECATED"
+print("PASS: OpenSSL deprecation annotations are detected and 3.5.9 presence/deprecation is classified without assuming every candidate requires migration.")
