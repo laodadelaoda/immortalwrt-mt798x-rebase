@@ -1,12 +1,7 @@
 name: Audit EasyMesh WTS template and runtime MAC binding
 
+# Detailed WTS/MAC semantic inspection is on-demand; core patch gating remains in vendor/Prepare audits.
 on:
-  push:
-    branches: ["n60pro-mtk-closed-driver"]
-    paths:
-      - ".github/workflows/easymesh-wts-template-audit.yml"
-      - "package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py"
-      - "package/mtk/vendor-sources.lock.json"
   workflow_dispatch:
 
 permissions:
