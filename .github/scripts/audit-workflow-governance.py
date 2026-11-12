@@ -9,7 +9,7 @@ def load(p):
  if not isinstance(x,dict): bad(f"invalid YAML mapping: {p}")
  return x
 D={p.name:load(p) for p in W.glob("*.yml")}; act=load(A)
-need={"main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","component-source-diagnostics.yml","workflow-governance-audit.yml","openssl-migration-baseline-audit.yml","openssl-target-preprocessor-regression.yml"}
+need={"main.yml","easymesh-quick.yml","vendor-source-patch-audit.yml","quick-prepare-audit.yml","component-source-diagnostics.yml","workflow-governance-audit.yml","openssl-migration-baseline-audit.yml"}
 if D.keys()!=need:
  bad("workflow set mismatch; missing="+str(sorted(need-D.keys()))+" extra="+str(sorted(D.keys()-need)))
 ownership=(R/"docs/audit/WORKFLOW-OWNERSHIP.md")
@@ -116,11 +116,13 @@ if baseline["push"].get("branches")!=["n60pro-mtk-closed-driver"] or baseline["p
 if D["openssl-migration-baseline-audit.yml"].get("concurrency",{}).get("cancel-in-progress")!="true":
  bad("stale OpenSSL baseline runs must be cancelled when a newer SHA supersedes them")
 if set(tr("workflow-governance-audit.yml"))!={"push"} or not tr("workflow-governance-audit.yml")["push"].get("paths"): bad("governance trigger mismatch")
-preprocessor=tr("openssl-target-preprocessor-regression.yml")
-if set(preprocessor)!={"push","pull_request","workflow_dispatch"}: bad("OpenSSL target preprocessor regression trigger mismatch")
-for event in ("push","pull_request"):
- if not preprocessor[event].get("paths"): bad("OpenSSL target preprocessor regression must remain path-filtered")
- if event=="push" and preprocessor[event].get("branches")!=["n60pro-mtk-closed-driver"]: bad("OpenSSL target preprocessor push branch mismatch")
+openssl_jobs=D["openssl-migration-baseline-audit.yml"].get("jobs",{})
+regression=openssl_jobs.get("target-preprocessor-regressions",{})
+regression_text="\\n".join(str(s.get("run","")) for s in regression.get("steps",[]))
+for token in ("openssl-target-preprocessor-audit.py","test-openssl-target-preprocessor-audit.py","enforce-openssl-target-api-gate.py","test-openssl-target-api-gate.py"):
+ if token not in regression_text: bad("canonical OpenSSL workflow missing merged regression check: "+token)
+if not regression.get("steps"): bad("canonical OpenSSL workflow regression job is empty")
+if not D["openssl-migration-baseline-audit.yml"].get("on",{}).get("pull_request",{}).get("paths"): bad("OpenSSL regression coverage must remain path-filtered on pull requests")
 upstream_vendor=D["component-source-diagnostics.yml"].get("jobs",{}).get("upstream_vendor_audit",{})
 upstream_impact=D["component-source-diagnostics.yml"].get("jobs",{}).get("upstream_impact",{})
 if upstream_vendor.get("uses")!="./.github/workflows/vendor-source-patch-audit.yml":
