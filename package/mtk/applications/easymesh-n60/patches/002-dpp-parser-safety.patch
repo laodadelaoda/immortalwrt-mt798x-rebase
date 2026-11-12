@@ -9,16 +9,14 @@
  	//char all_zero_mac[MAC_ADDR_LEN]={0};
  #endif
  
-@@ -813,6 +813,9 @@
- 	if (!wapp) {
- 		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"\033[1;31m %s, %u \033[0m\n", __FUNCTION__, __LINE__);  /* Haipin Debug Print (R)*/
+@@ -815,4 +815,7 @@
  		return WAPP_INVALID_ARG;
  	}
  
 +#ifdef MAP_R3
 +	dev_list = &wapp->dev_list;
 +#endif
- 	os_memset(config, 0, 3 * sizeof(struct dpp_config));
+ 		os_memset(config, 0, 3 * sizeof(struct dpp_config));
 
 @@ -821,7 +824,8 @@
  		DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
