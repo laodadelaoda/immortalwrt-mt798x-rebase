@@ -393,9 +393,13 @@ def pp_hits(path,cwd,names):
   if m: lineno=int(m.group(1)); current=canon(m.group(2),cwd); continue
   if line.lstrip().startswith("#"): continue
   if current:
-   emitted_lines.add((current,lineno))
-   for m in CALL.finditer(line):
-    if m.group(1) in names: hits.add((current,lineno,m.group(1)))
+   # GCC preserves blank source-line placeholders for inactive #if/#else
+   # branches in preprocessor output. They maintain line numbering but are
+   # not emitted C tokens and must not make an inactive API call UNKNOWN.
+   if line.strip():
+    emitted_lines.add((current,lineno))
+    for m in CALL.finditer(line):
+     if m.group(1) in names: hits.add((current,lineno,m.group(1)))
    lineno+=1
  return hits,emitted_lines
 
