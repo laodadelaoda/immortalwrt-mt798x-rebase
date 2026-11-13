@@ -1,0 +1,108 @@
+From: N60 Pro OpenSSL migration
+Subject: [PATCH] easymesh: decode DPP private keys into EVP_PKEY
+
+Use the EVP_PKEY decoder as the owner of decoded private-key objects on
+OpenSSL 3. Keep the legacy EC decoder for older OpenSSL versions. Validate
+the decoded key type and retain the existing DPP curve allow-list check.
+
+--- a/wappd/dpp/dpp.c
++++ b/wappd/dpp/dpp.c
+@@ -1297,42 +1297,47 @@
+ EVP_PKEY * dpp_set_keypair(const struct dpp_curve_params **curve,
+ 				  const u8 *privkey, size_t privkey_len)
+ {
+-	EVP_PKEY *pkey;
++	EVP_PKEY *pkey = NULL;
++	const char *group_name = NULL;
+ 	EC_KEY *eckey;
+ 	const EC_GROUP *group;
+ 	int nid;
+ 
+-	pkey = EVP_PKEY_new();
+-	if (!pkey)
++	if (!curve || !privkey || !privkey_len || privkey_len > LONG_MAX)
+ 		return NULL;
++#if OPENSSL_VERSION_NUMBER >= 0x30000000L
++	{
++		const unsigned char *pos = privkey;
++		pkey = d2i_AutoPrivateKey(NULL, &pos, (long) privkey_len);
++		if (!pkey || pos != privkey + privkey_len ||
++		    !EVP_PKEY_is_a(pkey, "EC") ||
++		    EVP_PKEY_get_group_name(pkey, &group_name,
++					    sizeof(group_name), NULL) != 1)
++			goto fail;
++		nid = OBJ_txt2nid(group_name);
++		*curve = dpp_get_curve_nid(nid);
++		OPENSSL_free((void *) group_name);
++		if (!*curve)
++			goto fail;
++		return pkey;
++	}
++#else
++	pkey = EVP_PKEY_new();
++	if (!pkey)
++		return NULL;
+ 	eckey = d2i_ECPrivateKey(NULL, &privkey, privkey_len);
+ 	if (!eckey) {
+ 		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+@@ -1343,6 +1348,8 @@
+ 		return NULL;
+ 	}
+ 	return pkey;
++#endif
++fail:
++	OPENSSL_free((void *) group_name);
++	EVP_PKEY_free(pkey);
++	return NULL;
+ }
+ 
+--- a/1905daemon/src/dpp.c
++++ b/1905daemon/src/dpp.c
+@@ -1128,42 +1128,47 @@
+ static EVP_PKEY * dpp_set_keypair(const struct dpp_curve_params **curve,
+ 				  const u8 *privkey, size_t privkey_len)
+ {
+-	EVP_PKEY *pkey;
++	EVP_PKEY *pkey = NULL;
++	const char *group_name = NULL;
+ 	EC_KEY *eckey;
+ 	const EC_GROUP *group;
+ 	int nid;
+ 
+-	pkey = EVP_PKEY_new();
+-	if (!pkey)
++	if (!curve || !privkey || !privkey_len || privkey_len > LONG_MAX)
+ 		return NULL;
++#if OPENSSL_VERSION_NUMBER >= 0x30000000L
++	{
++		const unsigned char *pos = privkey;
++		pkey = d2i_AutoPrivateKey(NULL, &pos, (long) privkey_len);
++		if (!pkey || pos != privkey + privkey_len ||
++		    !EVP_PKEY_is_a(pkey, "EC") ||
++		    EVP_PKEY_get_group_name(pkey, &group_name,
++					    sizeof(group_name), NULL) != 1)
++			goto fail;
++		nid = OBJ_txt2nid(group_name);
++		*curve = dpp_get_curve_nid(nid);
++		OPENSSL_free((void *) group_name);
++		if (!*curve)
++			goto fail;
++		return pkey;
++	}
++#else
++	pkey = EVP_PKEY_new();
++	if (!pkey)
++		return NULL;
+ 	eckey = d2i_ECPrivateKey(NULL, &privkey, privkey_len);
+ 	if (!eckey) {
+ 		wpa_printf(MSG_ERROR,
+@@ -1174,6 +1179,8 @@
+ 		return NULL;
+ 	}
+ 	return pkey;
++#endif
++fail:
++	OPENSSL_free((void *) group_name);
++	EVP_PKEY_free(pkey);
++	return NULL;
+ }
