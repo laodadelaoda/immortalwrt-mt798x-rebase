@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       device:
-        description: Router model for EasyMesh compatibility validation
+        description: N60 Pro build target
         required: true
         type: choice
         default: netcore_n60-pro
@@ -41,10 +41,7 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
 
-      # Quick now owns the practical gate: native OpenWrt Prepare, source
-      # compilation and link checks. Independent audit workflows and their
-      # cross-run attestations are not prerequisites for a build.
-      - name: Run Quick compatibility and EasyMesh source-build gate
+      - name: Build EasyMesh from source
         uses: ./.github/actions/easymesh-quick
         with:
           device: ${{ github.event.inputs.device || 'netcore_n60-pro' }}
