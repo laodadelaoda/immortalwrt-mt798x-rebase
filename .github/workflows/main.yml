@@ -56,10 +56,13 @@ jobs:
         run: |
           set -euo pipefail
           cp config/n60pro-1001.config .config
+          # Select the N60 Pro device explicitly; the shared config fragment
+          # intentionally contains only the platform baseline.
+          echo 'CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_netcore_n60-pro=y' >> .config
           make defconfig
           echo "Build revision: $(git rev-parse HEAD)"
           echo "Target profile:"
-          grep '^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_' .config
+          grep -Fx 'CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_netcore_n60-pro=y' .config
 
       - name: Download package sources
         shell: bash
