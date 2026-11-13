@@ -57,7 +57,7 @@ define Build/Prepare
 		printf "LOCK POST-NORMALIZE ROOT: %s -> %s\n" "$$$$patch_name" "$$$$patch_root"; \
 		apply_patch_strict "./patches/$$$$patch_name" "$$$$patch_root"; \
 	done; \
-	python3 ./scripts/n60-vendor-source-transforms.py finalize "$(PKG_BUILD_DIR)"; \
+	python3 ./scripts/n60-vendor-source-transforms.py finalize "$(PKG_BUILD_DIR)"
 endef
 
 define Build/Compile
