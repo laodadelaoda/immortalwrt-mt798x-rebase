@@ -1,1 +1,1 @@
-Vendor patch audit trigger: 6228a9317a54 corrected WAPP WTS main.c hunk coordinates.
+Vendor patch audit trigger: WAPP WTS contiguous parser hunks regenerated from the staged pre-011 source; strict local replay passed.

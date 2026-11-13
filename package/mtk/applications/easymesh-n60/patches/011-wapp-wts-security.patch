@@ -290,7 +290,12 @@
  			}
  			pos2++;
  			pos1 = pos2;
-@@ -543,6 +562,6 @@
+@@ -538,23 +538,23 @@
+ 			pos2++;
+ 			pos1 = pos2;
+
+ 			/*hidden ssid*/
+ 			pos2 = strchr(pos1, '\n');
  			if (pos2 == NULL) {
  				DBGPRINT(RT_DEBUG_TRACE, "hidden ssid not found\n");
 -				break;
@@ -298,7 +303,7 @@
  			}
  			*pos2 = '\0';
  			if (sscanf(pos1, "hidden-%c", &hidden_ssid) == 1) {
-@@ -552,7 +569,7 @@
+ 				pos2++;
  				pos1 = pos2;
  			} else {
  				DBGPRINT(RT_DEBUG_TRACE, "wrong format hidden ssid\n");
@@ -307,7 +312,17 @@
  			}
  		}
  		bss_info[i].authmode = authmode;
-@@ -570,12 +587,7 @@
+ 		bss_info[i].encryptype = encrytype;
+ 		memcpy(bss_info[i].mac, mac, 6);
+ 		memcpy(bss_info[i].key, key, sizeof(key));
+ 		memcpy(bss_info[i].oper_class, op_class, sizeof(op_class));
+@@ -564,32 +564,31 @@
+ 		if (hidden_ssid == 'Y')
+ 			bss_info[i].hidden_ssid = 1;
+ 		else if (hidden_ssid == 'N')
+ 			bss_info[i].hidden_ssid = 0;
+ 		else
+ 			bss_info[i].hidden_ssid = 0;
  		DBGPRINT(RT_DEBUG_OFF, "set bss index=%d, mac="MACSTR
 -				", opclass=%s, ssid=%s, authmode=%04x, encrytype=%04x, key=%s, "
 +				", opclass=%s, ssid=%s, authmode=%04x, encrytype=%04x, key is configured, "
@@ -322,10 +337,10 @@
 -			i--;
 -			break;
 -		}
-@@ -582,11 +599,15 @@
- 		}
- 	}
- 
+-	}
+-
++	}
++
 +	if (i == 0)
 +		goto err;
  	*config_bss_num = i;
@@ -338,6 +353,7 @@
  		DBGPRINT(RT_DEBUG_ERROR, "[%s] fclose fail\n", __func__);
  		return -1;
  	}
+
 @@ -645,6 +666,8 @@
  	}
  	return 0;
