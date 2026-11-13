@@ -18,9 +18,9 @@ with tempfile.TemporaryDirectory() as d:
  # Source line numbers may be shifted by preprocessing; scan the entire
  # emitted region belonging to the exact source file instead.
  shifted_pp=root/"shifted.i"
- shifted_pp.write_text(f'# 500 "{src.resolve()}"\\nint f(void) {{ return 0; }}\\n')
+ shifted_pp.write_text(f'# 500 "{src.resolve()}"\nint f(void) {{ return 0; }}\n')
  assert m.observe_preprocessed_source(shifted_pp,src.resolve(),"EVP_PKEY_cmp",root)==(True,False)
- shifted_pp.write_text(f'# 500 "{src.resolve()}"\\nEVP_PKEY_cmp(a,b);\\n')
+ shifted_pp.write_text(f'# 500 "{src.resolve()}"\nEVP_PKEY_cmp(a,b);\n')
  assert m.observe_preprocessed_source(shifted_pp,src.resolve(),"EVP_PKEY_cmp",root)==(True,True)
  digest=m.sha256(src); git="a"*40
  inv=[{"component":"wappd","path":"wappd/x.c","line":"2","api":"EVP_PKEY_cmp","deprecated_macro":"OSSL_DEPRECATEDIN_3_0"}]
