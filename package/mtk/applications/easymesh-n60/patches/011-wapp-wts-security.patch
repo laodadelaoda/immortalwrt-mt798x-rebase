@@ -293,7 +293,7 @@
 @@ -538,23 +538,23 @@
  			pos2++;
  			pos1 = pos2;
-
+ 
  			/*hidden ssid*/
  			pos2 = strchr(pos1, '\n');
  			if (pos2 == NULL) {
@@ -353,7 +353,10 @@
  		DBGPRINT(RT_DEBUG_ERROR, "[%s] fclose fail\n", __func__);
  		return -1;
  	}
-
+ 
+ 
+ 	if (0 == op_8x) {
+ 		DBGPRINT(RT_DEBUG_TRACE, RED("!!!2G Band BSS Configuration is missing!!!\n"));
 @@ -645,6 +666,8 @@
  	}
  	return 0;

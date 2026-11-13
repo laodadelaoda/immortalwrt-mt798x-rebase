@@ -1,1 +1,1 @@
-Vendor patch audit trigger: WAPP WTS contiguous parser hunks regenerated from the staged pre-011 source; strict local replay passed.
+Vendor patch audit trigger: restore omitted blank/context lines in generated WAPP WTS unified hunks; exact hunk counts validated.
