@@ -252,7 +252,7 @@ jobs:
                 mkdir -p "$stage_root/$(dirname "$rel")"
                 cp -a "$patch_root/$rel" "$stage_root/$rel"
               fi
-            done < <(sed -n -e 's/^--- a\///p' -e 's/^+++ b\\///p' "$patch_file" | sort -u)
+            done < <(sed -n -e 's/^--- a\///p' -e 's/^+++ b\///p' "$patch_file" | sort -u)
 
             if patch --verbose --batch --forward --fuzz=0 -p1 -d "$stage_root" < "$patch_file" > "$dry_log" 2>&1; then
               cat "$dry_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
@@ -262,12 +262,12 @@ jobs:
               fail "zero-fuzz staged preflight failed: $patch_file"
               return 1
             fi
-            if grep -Eiq 'Hunk #[0-9]+ succeeded at .*\\(offset [+-]?[1-9][0-9]* lines?\\)' "$dry_log"; then
-              grep -Ei 'Hunk #[0-9]+ succeeded at .*\\(offset [+-]?[1-9][0-9]* lines?\\)' "$dry_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+            if grep -Eiq 'Hunk #[0-9]+ succeeded at .*\(offset [+-]?[1-9][0-9]* lines?\\)' "$dry_log"; then
+              grep -Ei 'Hunk #[0-9]+ succeeded at .*\(offset [+-]?[1-9][0-9]* lines?\\)' "$dry_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
               fail "non-zero line offset detected in staged preflight: $patch_file"
               return 1
             fi
-            if grep -Eiq 'with fuzz [1-9]|Skipping patch|Reversed \\(or previously applied\\)|Ignoring previously applied' "$dry_log"; then
+            if grep -Eiq 'with fuzz [1-9]|Skipping patch|Reversed \(or previously applied\)|Ignoring previously applied' "$dry_log"; then
               fail "staged preflight used fuzz, skipped, or treated patch as already applied: $patch_file"
               return 1
             fi
