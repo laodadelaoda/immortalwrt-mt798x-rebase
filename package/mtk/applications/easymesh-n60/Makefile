@@ -28,7 +28,7 @@ define Build/Prepare
 	apply_patch_strict() { \
 		patch_file="$$$$1"; patch_root="$$$$2"; \
 		test -s "$$$$patch_file" || { echo "Missing patch: $$$$patch_file" >&2; exit 1; }; \
-		patch --batch --forward --fuzz=0 -d "$$patch_root" -p1 < "$$patch_file"; \
+		patch --batch --forward --fuzz=0 -d "$$$$patch_root" -p1 < "$$$$patch_file"; \
 	}; \
 	printf '%s\n' 'Checking N60 MT Wi-Fi / EasyMesh 7.6.7.3 compatibility lock'; \
 	grep -qx 'CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y' $(TOPDIR)/.config || { echo "N60 EasyMesh requires MT Wi-Fi driver 7.6.7.3" >&2; exit 1; }; \

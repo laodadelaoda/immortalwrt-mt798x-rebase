@@ -1,1 +1,1 @@
-Vendor audit trigger: correct Make escaping for patch_root/patch_file in native zero-fuzz Prepare.
+Vendor audit trigger: restore Make variable escaping in native strict patch command.
