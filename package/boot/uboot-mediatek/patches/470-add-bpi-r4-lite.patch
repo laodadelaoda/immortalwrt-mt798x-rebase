@@ -1015,7 +1015,7 @@
 +};
 --- a/arch/arm/dts/Makefile
 +++ b/arch/arm/dts/Makefile
-@@ -1131,4 +1131,7 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += \
+@@ -1134,4 +1134,7 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += \
  	mt7987a-emmc-rfb.dtb \
  	mt7987a-rfb.dtb \
  	mt7987a-sd-rfb.dtb \
