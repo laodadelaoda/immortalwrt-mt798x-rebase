@@ -1,1 +1,1 @@
-Vendor patch audit trigger: restore omitted blank/context lines in generated WAPP WTS unified hunks; exact hunk counts validated.
+Vendor patch audit trigger: rebuild 025 1905daemon EVP_MAC vector hunks with complete staged-source context.

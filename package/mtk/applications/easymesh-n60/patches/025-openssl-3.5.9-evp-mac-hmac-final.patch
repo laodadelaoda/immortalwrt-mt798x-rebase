@@ -246,7 +246,9 @@
  	bin_clear_free(ctx, sizeof(*ctx));
  
  	if (res == 1) {
-@@ -1037,26 +1067,22 @@
+@@ -1035,32 +1065,28 @@
+ static int openssl_hmac_vector(const EVP_MD *type, const u8 *key,
+ 			       size_t key_len, size_t num_elem,
  			       const u8 *addr[], const size_t *len, u8 *mac,
  			       unsigned int mdlen)
  {
@@ -282,6 +284,10 @@
 +
 +	return res == 1 && out_len == mdlen ? 0 : -1;
  }
+ 
+ 
+ #ifndef CONFIG_FIPS
+ 
 --- a/wappd/crypto/crypto_openssl.c
 +++ b/wappd/crypto/crypto_openssl.c
 @@ -1041,6 +1041,7 @@
@@ -427,7 +433,8 @@
  }
  
  
-@@ -1078,8 +1099,12 @@
+@@ -1076,12 +1097,16 @@
+ 	ctx = openssl_hmac_ctx_new(type, key, key_len);
  	if (!ctx)
  		return -1;
  
@@ -442,3 +449,6 @@
  
  	res = EVP_MAC_final(ctx, mac, &out_len, mdlen);
  	EVP_MAC_CTX_free(ctx);
+ 
+ 	return res == 1 && out_len == mdlen ? 0 : -1;
+ 
