@@ -1,149 +1,43 @@
 name: N60 OpenSSL target regressions and optional historical API traceability
-# Header inventory includes both checked-in *.h and public *.h.in source templates.
+# Manual diagnostics only. Production compatibility is verified by the Quick
+# source build and Full firmware build; this workflow does not gate either.
 
-# The 68-item baseline is traceability only: presence/deprecation in 3.5.9 never implies migration is required. The active source/API gate is separate.
-# This optional header comparison is traceability only; Quick/Full do not consume its artifact.
 on:
-  # Historical header traceability remains manual. Active target regressions run
-  # only when their source, tests, patches, or this workflow change.
   workflow_dispatch:
-  push:
-    branches: ["n60pro-mtk-closed-driver"]
-    paths:
-      - ".github/workflows/openssl-migration-baseline-audit.yml"
-      - "package/mtk/applications/easymesh-n60/files/**"
-      - "package/mtk/applications/easymesh-n60/patches/**"
-      - "package/mtk/applications/easymesh-n60/scripts/openssl-*"
-      - "package/mtk/applications/easymesh-n60/scripts/enforce-openssl-*"
-      - "package/mtk/applications/easymesh-n60/scripts/verify-openssl-*"
-      - "package/mtk/applications/easymesh-n60/tests/test-openssl-*"
-  pull_request:
-    paths:
-      - ".github/workflows/openssl-migration-baseline-audit.yml"
-      - "package/mtk/applications/easymesh-n60/files/**"
-      - "package/mtk/applications/easymesh-n60/patches/**"
-      - "package/mtk/applications/easymesh-n60/scripts/openssl-*"
-      - "package/mtk/applications/easymesh-n60/scripts/enforce-openssl-*"
-      - "package/mtk/applications/easymesh-n60/scripts/verify-openssl-*"
-      - "package/mtk/applications/easymesh-n60/tests/test-openssl-*"
 
 permissions:
   contents: read
 
 concurrency:
-  group: n60-openssl-migration-baseline-${{ github.ref }}
+  group: n60-openssl-diagnostics
   cancel-in-progress: true
 
 jobs:
   header-baseline:
     continue-on-error: true
     if: github.event_name == 'workflow_dispatch'
-    name: Trace 68 EasyMesh source candidates against OpenSSL 1.1.1w and 3.5.9 headers
+    name: Optional historical OpenSSL header traceability
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - name: Checkout audited revision
+      - name: Checkout selected revision
         uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Validate baseline auditor syntax and deprecation parser
+      - name: Validate baseline auditor and regression tests
         shell: bash
         run: |
           set -Eeuo pipefail
           python3 -m py_compile package/mtk/applications/easymesh-n60/scripts/audit-openssl-migration-baseline.py
           python3 package/mtk/applications/easymesh-n60/tests/test-openssl-migration-baseline-selftest.py
-
-      - name: Download immutable OpenSSL 1.1.1w reference archive
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          mkdir -p "$RUNNER_TEMP/openssl-migration"
-          archive="$RUNNER_TEMP/openssl-migration/openssl-1.1.1w.tar.gz"
-          if ! curl -fL --retry 3 --retry-all-errors --connect-timeout 20 --max-time 600 \
-            https://www.openssl.org/source/old/1.1.1/openssl-1.1.1w.tar.gz -o "$archive"; then
-            echo "::warning::Primary OpenSSL 1.1.1w archive endpoint failed; retrying the official mirror."
-            curl -fL --retry 3 --retry-all-errors --connect-timeout 20 --max-time 600 \
-              https://mirror.openssl-library.org/source/old/1.1.1/openssl-1.1.1w.tar.gz -o "$archive"
-          fi
-          echo "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8  $archive" | sha256sum -c -
-          mkdir -p "$RUNNER_TEMP/openssl-migration/1.1.1w"
-          tar -xzf "$archive" -C "$RUNNER_TEMP/openssl-migration/1.1.1w" --strip-components=1
-
-      - name: Download exact OpenSSL 3.5.9 target archive
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          archive="$RUNNER_TEMP/openssl-migration/openssl-3.5.9.tar.gz"
-          if ! curl -fL --retry 3 --retry-all-errors --connect-timeout 20 --max-time 900 \
-            https://www.openssl.org/source/openssl-3.5.9.tar.gz -o "$archive"; then
-            echo "::warning::Primary OpenSSL 3.5.9 archive endpoint failed; retrying the official GitHub release asset."
-            curl -fL --retry 3 --retry-all-errors --connect-timeout 20 --max-time 900 \
-              https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz -o "$archive"
-          fi
-          echo "603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a  $archive" | sha256sum -c -
-          mkdir -p "$RUNNER_TEMP/openssl-migration/3.5.9"
-          tar -xzf "$archive" -C "$RUNNER_TEMP/openssl-migration/3.5.9" --strip-components=1
-
-      - name: Compare retained EasyMesh API candidates against the complete OpenSSL headers
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          python3 package/mtk/applications/easymesh-n60/scripts/audit-openssl-migration-baseline.py \
-            --repo-root "$GITHUB_WORKSPACE" \
-            --openssl-1111-source "$RUNNER_TEMP/openssl-migration/1.1.1w" \
-            --openssl-359-source "$RUNNER_TEMP/openssl-migration/3.5.9" \
-            --archive-1111 "$RUNNER_TEMP/openssl-migration/openssl-1.1.1w.tar.gz" \
-            --archive-359 "$RUNNER_TEMP/openssl-migration/openssl-3.5.9.tar.gz" \
-            --git-sha "$GITHUB_SHA" \
-            --run-id "$GITHUB_RUN_ID" \
-            --run-attempt "$GITHUB_RUN_ATTEMPT" \
-            --output-dir "$GITHUB_WORKSPACE/artifacts/openssl-migration-baseline"
-
-      - name: Upload immutable OpenSSL migration baseline evidence
-        id: baseline_evidence
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: n60-openssl-1111w-to-359-header-baseline
-          path: artifacts/openssl-migration-baseline/
-          if-no-files-found: warn
-          retention-days: 90
-
-  target-preprocessor-regressions:
-    name: Target preprocessor and candidate-scope API gate regressions
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - name: Checkout exact audited revision
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 1
-          persist-credentials: false
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - name: Compile OpenSSL audit and regression scripts
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          python -m py_compile \
+          python3 -m py_compile \
             package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py \
-            package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py \
             package/mtk/applications/easymesh-n60/scripts/enforce-openssl-target-api-gate.py \
-            package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py \
-            package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py \
-            package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py \
-            package/mtk/applications/easymesh-n60/scripts/verify-openssl-api-migration-attestation.py
-      - name: Run positive and negative regression cases
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          python package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py
-          python package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py
-          python package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py
+            package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py
+          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py
+          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py
+          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py
