@@ -2,6 +2,7 @@ name: N60 Pro Quick precompile Package Prepare audit
 
 on:
   workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
