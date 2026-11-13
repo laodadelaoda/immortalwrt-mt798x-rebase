@@ -62,6 +62,7 @@ for row in rows:
         "candidate-target-for-009", "candidate-merge-into-002",
         "merged-009-into-002",
         "candidate-target-for-013", "candidate-merge-into-011",
+        "merge-017-and-018", "merge-025-and-026",
     }:
         fail(f"unknown merge decision for {row['patch_file']}: {row['merge_decision']}")
 

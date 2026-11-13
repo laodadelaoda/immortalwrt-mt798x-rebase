@@ -1,27 +1,26 @@
 lock_phase,lock_order,patch_id,patch_file,maintenance_group,overlap_or_relation,merge_decision
 application,1,002,002-dpp-parser-safety.patch,dpp-config-read,same main.c DPP config read path; absorbs former 009 MAP_R3 dev_list/cred_len cleanup,merged-009-into-002
-application,2,007,007-openssl3-use-native-evp-pkey-get0-ec-key.patch,openssl3-api,"native EVP_PKEY API compatibility",keep-atomic
-application,3,008,008-dpp-parser-bounds-and-secret-redaction.patch,dpp-parameter-bounds,"parameter reader plus credential log redaction across DPP files",keep-atomic
-application,4,010,010-dpp-wdev-config-allocation-rollback.patch,dpp-config-ownership,"allocation/copy rollback; overlaps ownership area later hardened by 017/018",keep-atomic
-application,5,015,015-dpp-config-lookup-null-and-error-guard.patch,dpp-config-lookup,"separate dpp_wdev.c config lookup API",keep-atomic
-application,6,016,016-dpp-qr-count-boundaries-and-error-propagation.patch,dpp-qr-state,"QR count parsing and multi-key update/rollback transaction",keep-atomic
+application,2,007,007-openssl3-use-native-evp-pkey-get0-ec-key.patch,openssl3-api,native EVP_PKEY API compatibility,keep-atomic
+application,3,008,008-dpp-parser-bounds-and-secret-redaction.patch,dpp-parameter-bounds,parameter reader plus credential log redaction across DPP files,keep-atomic
+application,4,010,010-dpp-wdev-config-allocation-rollback.patch,dpp-config-ownership,allocation/copy rollback; overlaps ownership area later hardened by 017/018,keep-atomic
+application,5,015,015-dpp-config-lookup-null-and-error-guard.patch,dpp-config-lookup,separate dpp_wdev.c config lookup API,keep-atomic
+application,6,016,016-dpp-qr-count-boundaries-and-error-propagation.patch,dpp-qr-state,QR count parsing and multi-key update/rollback transaction,keep-atomic
 application,7,017,017-dpp-credential-security-lifecycle.patch,dpp-security-lifecycle,Sequential 017/018 transformations consolidated into one ordered patch; retain both change sets and their exact application sequence.,merge-017-and-018
-application,9,023,023-dpp-unused-set-variables-werror.patch,dpp-compiler-diagnostic,"remove MAP_R3 DPP bootstrap-list assigned-but-unused flag; independent compiler warning cleanup",keep-atomic
-application,10,011,011-wapp-wts-security.patch,wapp-wts-parser,"WAPP WTS parser and fail-closed validation",candidate-target-for-013
-application,11,014,014-wapp-wps-key-log-redaction.patch,wapp-secret-logging,"independent WPS event key log in common/wdev.c",keep-atomic
-application,12,012,012-p1905-wts-hardening.patch,p1905-wts-parser,"separate 1905daemon WTS parser implementation",keep-atomic
-application,13,013,013-wapp-wts-parser-fail-closed.patch,wapp-wts-parser,"same WAPP WTS parser function as 011; hidden-SSID fail-closed and redundant guard removal",candidate-merge-into-011
-application,14,003,003-wapp-gcc14-copy-semantics.patch,wapp-gcc14,"venue/operator/friendly-name allocation and copy semantics",keep-atomic
-application,15,004,004-libmapd-target-flags.patch,libmapd-build,"libmapd Makefile target compiler flags",keep-atomic
-application,16,005,005-wapp-hotspot-realloc-pointer-arithmetic.patch,wapp-hotspot-memory,"hotspot realloc pointer arithmetic and buffer initialization",keep-atomic
-application,17,019,019-wapp-map-buffer-safety.patch,wapp-map-buffer-safety,"MAP report/notification buffer and field bounds",keep-atomic
-application,18,020,020-wapp-map-packed-member-gcc14.patch,wapp-map-packed-alignment,"packed member alignment and unaligned access",keep-atomic
-application,19,021,021-wapp-wireless-mode-capability-macros.patch,wapp-wireless-mode,"wireless mode capability macro compatibility",keep-atomic
-application,20,022,022-wapp-qos-list-node-alignment.patch,wapp-qos-list-alignment,"MSCS/SCS/DSCP heap-backed intrusive-list containers; same native-alignment principle as 020 but separate qos.h types",keep-atomic
-application,21,024,024-openssl-3.5.9-evp-aes-wrap-and-des-internal.patch,openssl-3.5.9-crypto-api,"AES-WRAP provider-backed conversion and removal of the OpenSSL DES backend; 1905daemon retains the existing internal DES implementation. Distinct functions from patch 007; one atomic cross-component migration batch.",keep-atomic-stage-bound
-application,22,025,025-openssl-3.5.9-evp-mac-hmac-final.patch,openssl-3.5.9-hmac-lifecycle,Sequential EVP_MAC migration and its update/final/output-capacity corrections are one atomic HMAC lifecycle change; retain the original 025 then 026 hunk order.,merge-025-and-026
-application,24,027,027-openssl-ec-group-point-api-renames.patch,openssl-3.5.9-crypto-api,"WAPP and 1905daemon EC group/point coordinate accessors use generic OpenSSL APIs; independent compatibility rename batch following EVP_MAC migration.",keep-atomic-stage-bound
-application,25,028,028-openssl-dh-dhx-evp-pkey-migration.patch,openssl-3.5.9-crypto-api,"Migrate WAPP DHX and 1905daemon DH5 key generation/import/shared-secret derivation to provider-backed EVP_PKEY; preserve RFC3526 group 5 parameters, WAPP q, variable-length DH_compute_key output and pre-3.0 compatibility branches.",keep-atomic-stage-bound
-application,26,029,029-openssl-evp-pkey-eq-migration.patch,openssl-3.5.9-crypto-api,"Replace deprecated EVP_PKEY_cmp with EVP_PKEY_eq in WAPP and 1905daemon DPP netAccessKey comparison; preserve pre-3.0 fallback and comparison result semantics.",keep-atomic-stage-bound
-post_normalize,1,006,006-p1905-libbridge-tool-propagation.patch,p1905-build,"1905daemon and ethernet sub-Make tool propagation; post-normalize root",keep-atomic-stage-bound
-post_normalize,2,001,001-dsa-use-linux-mii-ioctl.patch,dsa-mii-api,"DSA Linux MII ioctl adaptation; post-normalize root 1905daemon",keep-atomic-stage-bound
+application,8,023,023-dpp-unused-set-variables-werror.patch,dpp-compiler-diagnostic,remove MAP_R3 DPP bootstrap-list assigned-but-unused flag; independent compiler warning cleanup,keep-atomic
+application,9,011,011-wapp-wts-security.patch,wapp-wts-parser,WAPP WTS parser and fail-closed validation,candidate-target-for-013
+application,10,014,014-wapp-wps-key-log-redaction.patch,wapp-secret-logging,independent WPS event key log in common/wdev.c,keep-atomic
+application,11,012,012-p1905-wts-hardening.patch,p1905-wts-parser,separate 1905daemon WTS parser implementation,keep-atomic
+application,12,003,003-wapp-gcc14-copy-semantics.patch,wapp-gcc14,venue/operator/friendly-name allocation and copy semantics,keep-atomic
+application,13,004,004-libmapd-target-flags.patch,libmapd-build,libmapd Makefile target compiler flags,keep-atomic
+application,14,005,005-wapp-hotspot-realloc-pointer-arithmetic.patch,wapp-hotspot-memory,hotspot realloc pointer arithmetic and buffer initialization,keep-atomic
+application,15,019,019-wapp-map-buffer-safety.patch,wapp-map-buffer-safety,MAP report/notification buffer and field bounds,keep-atomic
+application,16,020,020-wapp-map-packed-member-gcc14.patch,wapp-map-packed-alignment,packed member alignment and unaligned access,keep-atomic
+application,17,021,021-wapp-wireless-mode-capability-macros.patch,wapp-wireless-mode,wireless mode capability macro compatibility,keep-atomic
+application,18,022,022-wapp-qos-list-node-alignment.patch,wapp-qos-list-alignment,MSCS/SCS/DSCP heap-backed intrusive-list containers; same native-alignment principle as 020 but separate qos.h types,keep-atomic
+application,19,024,024-openssl-3.5.9-evp-aes-wrap-and-des-internal.patch,openssl-3.5.9-crypto-api,AES-WRAP provider-backed conversion and removal of the OpenSSL DES backend; 1905daemon retains the existing internal DES implementation. Distinct functions from patch 007; one atomic cross-component migration batch.,keep-atomic-stage-bound
+application,20,025,025-openssl-3.5.9-evp-mac-hmac-final.patch,openssl-3.5.9-hmac-lifecycle,Sequential EVP_MAC migration and its update/final/output-capacity corrections are one atomic HMAC lifecycle change; retain the original 025 then 026 hunk order.,merge-025-and-026
+application,21,027,027-openssl-ec-group-point-api-renames.patch,openssl-3.5.9-crypto-api,WAPP and 1905daemon EC group/point coordinate accessors use generic OpenSSL APIs; independent compatibility rename batch following EVP_MAC migration.,keep-atomic-stage-bound
+application,22,028,028-openssl-dh-dhx-evp-pkey-migration.patch,openssl-3.5.9-crypto-api,"Migrate WAPP DHX and 1905daemon DH5 key generation/import/shared-secret derivation to provider-backed EVP_PKEY; preserve RFC3526 group 5 parameters, WAPP q, variable-length DH_compute_key output and pre-3.0 compatibility branches.",keep-atomic-stage-bound
+application,23,029,029-openssl-evp-pkey-eq-migration.patch,openssl-3.5.9-crypto-api,Replace deprecated EVP_PKEY_cmp with EVP_PKEY_eq in WAPP and 1905daemon DPP netAccessKey comparison; preserve pre-3.0 fallback and comparison result semantics.,keep-atomic-stage-bound
+post_normalize,1,006,006-p1905-libbridge-tool-propagation.patch,p1905-build,1905daemon and ethernet sub-Make tool propagation; post-normalize root,keep-atomic-stage-bound
+post_normalize,2,001,001-dsa-use-linux-mii-ioctl.patch,dsa-mii-api,DSA Linux MII ioctl adaptation; post-normalize root 1905daemon,keep-atomic-stage-bound

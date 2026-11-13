@@ -322,7 +322,7 @@ jobs:
                 nl -ba "$patch_root/wappd/common/main.c" > "$OUT/failed-context/009/main.c.before-009.numbered"
                 sha256sum "$OUT/failed-context/009/"* > "$OUT/failed-context/009/SHA256SUMS"
               fi
-              if [ "$set_id" = "easymesh" ] && [ "$name" = "017-dpp-credential-bounds-zeroization-and-log-redaction.patch" ]; then
+              if [ "$set_id" = "easymesh" ] && [ "$name" = "017-dpp-credential-security-lifecycle.patch" ]; then
                 mkdir -p "$OUT/pre017"
                 cp "$patch_root/wappd/common/main.c" "$OUT/pre017/main.c"
                 cp "$patch_root/wappd/dpp/dpp_wdev.c" "$OUT/pre017/dpp_wdev.c"
@@ -423,10 +423,9 @@ jobs:
           {
             echo "Repository revision: $(git rev-parse HEAD)"
             echo "WAPP archive SHA256: $(python3 -c 'import json; from pathlib import Path; d=json.loads(Path("package/mtk/vendor-sources.lock.json").read_text()); print(next(x["sha256"] for x in d["sources"] if x["id"]=="wappd"))')"
-            echo "DPP patch series: 017-dpp-credential-bounds-zeroization-and-log-redaction.patch -> 018-dpp-security-logging-and-credential-lifecycle.patch"
+            echo "DPP patch series: 017-dpp-credential-security-lifecycle.patch -> 017-dpp-credential-security-lifecycle.patch"
             sha256sum \
-              package/mtk/applications/easymesh-n60/patches/017-dpp-credential-bounds-zeroization-and-log-redaction.patch \
-              package/mtk/applications/easymesh-n60/patches/018-dpp-security-logging-and-credential-lifecycle.patch \
+              package/mtk/applications/easymesh-n60/patches/017-dpp-credential-security-lifecycle.patch \
               "$OUT/dpp-audit/pristine/common/main.c" \
               "$OUT/dpp-audit/pristine/common/wdev.c" \
               "$OUT/dpp-audit/pristine/dpp/dpp.c" \
