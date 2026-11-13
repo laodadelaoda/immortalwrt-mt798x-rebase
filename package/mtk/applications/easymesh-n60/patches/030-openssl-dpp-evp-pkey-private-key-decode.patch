@@ -8,7 +8,7 @@ EC_KEY decoder compatibility path.
 
 --- a/wappd/dpp/dpp.c
 +++ b/wappd/dpp/dpp.c
-@@ -1297,6 +1297,7 @@
+@@ -1297,6 +1297,30 @@
  EVP_PKEY * dpp_set_keypair(const struct dpp_curve_params **curve,
  				  const u8 *privkey, size_t privkey_len)
  {
@@ -39,7 +39,7 @@ EC_KEY decoder compatibility path.
  	EVP_PKEY *pkey;
  	EC_KEY *eckey;
  	const EC_GROUP *group;
-@@ -1342,6 +1366,7 @@
+@@ -1342,4 +1366,5 @@
  	}
  	return pkey;
 +#endif
@@ -47,7 +47,7 @@ EC_KEY decoder compatibility path.
  
 --- a/1905daemon/src/dpp.c
 +++ b/1905daemon/src/dpp.c
-@@ -1128,6 +1128,7 @@
+@@ -1128,6 +1128,30 @@
  static EVP_PKEY * dpp_set_keypair(const struct dpp_curve_params **curve,
  				  const u8 *privkey, size_t privkey_len)
  {
@@ -78,7 +78,7 @@ EC_KEY decoder compatibility path.
  	EVP_PKEY *pkey;
  	EC_KEY *eckey;
  	const EC_GROUP *group;
-@@ -1173,6 +1214,7 @@
+@@ -1173,3 +1214,4 @@
  	}
  	return pkey;
 +#endif
