@@ -40,8 +40,8 @@ def observe_preprocessed_output(path,source_path,line_number,api,working_directo
 
 def observe_preprocessed_source(path,source_path,api,working_directory=None):
  """Check a complete emitted source-file region, independent of stale line numbers."""
- marker=re.compile(r'^#\\s*(\\d+)\\s+"([^"]+)"')
- call=re.compile(r"\\b"+re.escape(api)+r"\\s*\\(")
+ marker=re.compile(r'^#\s*(\d+)\s+"([^"]+)"')
+ call=re.compile(r"\b"+re.escape(api)+r"\s*\(")
  base=Path(working_directory or Path.cwd()).resolve()
  current=None; source_emitted=False; hit=False
  for text in Path(path).read_text(encoding="utf-8",errors="replace").splitlines():
