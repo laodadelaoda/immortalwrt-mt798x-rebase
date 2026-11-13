@@ -5,7 +5,6 @@ on:
     branches: ["n60pro-mtk-closed-driver"]
     paths:
       - ".github/workflows/easymesh-quick.yml"
-      - ".github/workflows/quick-prepare-audit.yml"
       - ".github/workflows/vendor-source-patch-audit.yml"
       - ".github/actions/easymesh-quick/**"
       # Include the complete MTK package closure: vendor Lock, ordered patches,
