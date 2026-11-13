@@ -39,7 +39,7 @@ EC_KEY decoder compatibility path.
  	EVP_PKEY *pkey;
  	EC_KEY *eckey;
  	const EC_GROUP *group;
-@@ -1344,7 +1368,8 @@
+@@ -1344,6 +1368,7 @@
  		return NULL;
  	}
  	return pkey;
