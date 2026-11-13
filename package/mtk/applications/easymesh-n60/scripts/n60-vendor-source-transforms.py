@@ -4,7 +4,7 @@
 The normalize phase is intentionally split out because two CRLF-normalized
 files are patch preconditions for patches 006 and 001. The finalize phase runs
 after the complete ordered patch series and mirrors the remaining Build/Prepare
-mutations. This script is shared by the package Makefile and vendor audit.
+mutations. This script is used directly by the production package Makefile.
 """
 from __future__ import annotations
 
