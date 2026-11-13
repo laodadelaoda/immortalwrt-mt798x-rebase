@@ -4,42 +4,7 @@ name: N60 OpenSSL target regressions and optional historical API traceability
 # The 68-item baseline is traceability only: presence/deprecation in 3.5.9 never implies migration is required. The active source/API gate is separate.
 # This optional header comparison is traceability only; Quick/Full do not consume its artifact.
 on:
-  push:
-    branches: ["n60pro-mtk-closed-driver"]
-    paths:
-      - ".github/workflows/openssl-migration-baseline-audit.yml"
-      - ".github/workflows/openssl-target-preprocessor-regression.yml"
-      - "package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py"
-      - "package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py"
-      - "package/mtk/applications/easymesh-n60/scripts/enforce-openssl-target-api-gate.py"
-      - "package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py"
-      - "package/mtk/applications/easymesh-n60/tests/openssl-easymesh-scope.json"
-      - "package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py"
-      - "package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py"
-      - "package/mtk/applications/easymesh-n60/scripts/verify-openssl-api-migration-attestation.py"
-      - "package/mtk/applications/easymesh-n60/tests/openssl-40-active-api-semantic-review.csv"
-      - "package/mtk/applications/easymesh-n60/tests/openssl-40-api-regression-matrix.json"
-      - "package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json"
-      - "package/libs/openssl/Makefile"
-  pull_request:
-    paths:
-      - ".github/workflows/openssl-migration-baseline-audit.yml"
-      - ".github/workflows/openssl-target-preprocessor-regression.yml"
-      - "package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py"
-      - "package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py"
-      - "package/mtk/applications/easymesh-n60/scripts/enforce-openssl-target-api-gate.py"
-      - "package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py"
-      - "package/mtk/applications/easymesh-n60/tests/openssl-easymesh-scope.json"
-      - "package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py"
-      - "package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py"
-      - "package/mtk/applications/easymesh-n60/scripts/verify-openssl-api-migration-attestation.py"
-      - "package/mtk/applications/easymesh-n60/tests/openssl-40-active-api-semantic-review.csv"
-      - "package/mtk/applications/easymesh-n60/tests/openssl-40-api-regression-matrix.json"
-      - "package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json"
-      - "package/libs/openssl/Makefile"
-      - ".github/workflows/quick-prepare-audit.yml"
-      - ".github/workflows/easymesh-quick.yml"
-      - ".github/workflows/main.yml"
+  # Optional deep traceability/regression workflow; run only on demand.
   workflow_dispatch:
 
 permissions:
