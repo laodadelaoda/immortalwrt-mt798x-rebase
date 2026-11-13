@@ -1015,7 +1015,7 @@
 +};
 --- a/arch/arm/dts/Makefile
 +++ b/arch/arm/dts/Makefile
-@@ -1131,6 +1131,9 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += \
+@@ -1131,4 +1131,7 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += \
  	mt7986b-sd-rfb.dtb \
  	mt7986a-emmc-rfb.dtb \
  	mt7986b-emmc-rfb.dtb \
@@ -1023,8 +1023,6 @@
 +	mt7987a-bpi-r4-lite-emmc.dtb \
 +	mt7987a-bpi-r4-lite-sd.dtb \
  	mt7987a-emmc-rfb.dtb \
- 	mt7987a-rfb.dtb \
- 	mt7987a-sd-rfb.dtb \
 --- /dev/null
 +++ b/arch/arm/dts/mt7987a-bpi-r4-lite-emmc-u-boot.dtsi
 @@ -0,0 +1,123 @@
