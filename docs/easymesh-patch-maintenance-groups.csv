@@ -5,8 +5,7 @@ application,3,008,008-dpp-parser-bounds-and-secret-redaction.patch,dpp-parameter
 application,4,010,010-dpp-wdev-config-allocation-rollback.patch,dpp-config-ownership,"allocation/copy rollback; overlaps ownership area later hardened by 017/018",keep-atomic
 application,5,015,015-dpp-config-lookup-null-and-error-guard.patch,dpp-config-lookup,"separate dpp_wdev.c config lookup API",keep-atomic
 application,6,016,016-dpp-qr-count-boundaries-and-error-propagation.patch,dpp-qr-state,"QR count parsing and multi-key update/rollback transaction",keep-atomic
-application,7,017,017-dpp-credential-bounds-zeroization-and-log-redaction.patch,dpp-credential-lifecycle,"credential bounds, ownership and zeroization; overlaps 010/018 areas",keep-atomic
-application,8,018,018-dpp-security-logging-and-credential-lifecycle.patch,dpp-security-lifecycle,"cross-file DPP log redaction, secret cleanup and error handling; overlaps 010/017 areas",keep-atomic
+application,7,017,017-dpp-credential-security-lifecycle.patch,dpp-security-lifecycle,Sequential 017/018 transformations consolidated into one ordered patch; retain both change sets and their exact application sequence.,merge-017-and-018
 application,9,023,023-dpp-unused-set-variables-werror.patch,dpp-compiler-diagnostic,"remove MAP_R3 DPP bootstrap-list assigned-but-unused flag; independent compiler warning cleanup",keep-atomic
 application,10,011,011-wapp-wts-security.patch,wapp-wts-parser,"WAPP WTS parser and fail-closed validation",candidate-target-for-013
 application,11,014,014-wapp-wps-key-log-redaction.patch,wapp-secret-logging,"independent WPS event key log in common/wdev.c",keep-atomic
