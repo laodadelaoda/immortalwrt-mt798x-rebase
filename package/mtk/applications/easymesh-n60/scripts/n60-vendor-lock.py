@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Canonical vendor lock: downloads, real GNU Make evaluation and patch order."""
 from __future__ import annotations
-import argparse, hashlib, json, subprocess, time, urllib.error, urllib.request
+import argparse, hashlib, json, time, urllib.error, urllib.request
 from pathlib import Path
 LOCK="package/mtk/vendor-sources.lock.json"
 
