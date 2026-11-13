@@ -423,7 +423,7 @@ jobs:
           {
             echo "Repository revision: $(git rev-parse HEAD)"
             echo "WAPP archive SHA256: $(python3 -c 'import json; from pathlib import Path; d=json.loads(Path("package/mtk/vendor-sources.lock.json").read_text()); print(next(x["sha256"] for x in d["sources"] if x["id"]=="wappd"))')"
-            echo "DPP patch series: 017-dpp-credential-security-lifecycle.patch -> 017-dpp-credential-security-lifecycle.patch"
+            echo "DPP patch series: 017-dpp-credential-security-lifecycle.patch (consolidated 017+018)"
             sha256sum \
               package/mtk/applications/easymesh-n60/patches/017-dpp-credential-security-lifecycle.patch \
               "$OUT/dpp-audit/pristine/common/main.c" \
