@@ -4,8 +4,28 @@ name: N60 OpenSSL target regressions and optional historical API traceability
 # The 68-item baseline is traceability only: presence/deprecation in 3.5.9 never implies migration is required. The active source/API gate is separate.
 # This optional header comparison is traceability only; Quick/Full do not consume its artifact.
 on:
-  # Optional deep traceability/regression workflow; run only on demand.
+  # Historical header traceability remains manual. Active target regressions run
+  # only when their source, tests, patches, or this workflow change.
   workflow_dispatch:
+  push:
+    branches: ["n60pro-mtk-closed-driver"]
+    paths:
+      - ".github/workflows/openssl-migration-baseline-audit.yml"
+      - "package/mtk/applications/easymesh-n60/files/**"
+      - "package/mtk/applications/easymesh-n60/patches/**"
+      - "package/mtk/applications/easymesh-n60/scripts/openssl-*"
+      - "package/mtk/applications/easymesh-n60/scripts/enforce-openssl-*"
+      - "package/mtk/applications/easymesh-n60/scripts/verify-openssl-*"
+      - "package/mtk/applications/easymesh-n60/tests/test-openssl-*"
+  pull_request:
+    paths:
+      - ".github/workflows/openssl-migration-baseline-audit.yml"
+      - "package/mtk/applications/easymesh-n60/files/**"
+      - "package/mtk/applications/easymesh-n60/patches/**"
+      - "package/mtk/applications/easymesh-n60/scripts/openssl-*"
+      - "package/mtk/applications/easymesh-n60/scripts/enforce-openssl-*"
+      - "package/mtk/applications/easymesh-n60/scripts/verify-openssl-*"
+      - "package/mtk/applications/easymesh-n60/tests/test-openssl-*"
 
 permissions:
   contents: read
