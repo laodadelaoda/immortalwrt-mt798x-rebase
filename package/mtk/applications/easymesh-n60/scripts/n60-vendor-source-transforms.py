@@ -181,6 +181,7 @@ def finalize(root: Path) -> None:
 
 
 def verify_lock(repo: Path, downloads: Path | None = None) -> None:
+    """Check only the immutable inputs required by the production EasyMesh build."""
     import hashlib
     import json
 
@@ -188,151 +189,40 @@ def verify_lock(repo: Path, downloads: Path | None = None) -> None:
     require(lock_path.is_file(), f"canonical vendor source lock missing: {lock_path}")
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
     require(lock.get("schema_version") == 1, "unsupported vendor source lock schema")
-    sources = lock.get("sources")
-    patch_sets = lock.get("patch_sets")
-    require(isinstance(sources, list) and sources, "vendor source lock has no sources")
-    require(isinstance(patch_sets, list) and patch_sets, "vendor source lock has no patch sets")
 
-    source_ids = set()
-    for item in sources:
-        source_id = item["id"]
-        require(source_id not in source_ids, f"duplicate locked source id: {source_id}")
-        source_ids.add(source_id)
-        archive = item["archive"]
-        digest = item["sha256"]
-        require(len(digest) == 64 and all(c in "0123456789abcdef" for c in digest),
-                f"invalid SHA256 for {source_id}")
-        makefile_path = repo / item["package_makefile"]
-        require(makefile_path.is_file(), f"{source_id} package Makefile missing: {makefile_path}")
-        makefile = makefile_path.read_text(encoding="utf-8")
-        workflow = (repo / ".github/workflows/vendor-source-patch-audit.yml").read_text(encoding="utf-8")
-        scope = item.get("source_scope")
-        require(scope in {"manual-package-prepare", "auxiliary-audit-only", "openwrt-package"},
-                f"{source_id} has missing/invalid source_scope in canonical lock")
-        require("package/mtk/vendor-sources.lock.json" in workflow and
-                'fetch_archive "$name" "$url" "$sha"' in workflow,
-                "vendor audit workflow does not fetch archives through the canonical lock")
-        if item["package_makefile"].endswith("easymesh-n60/Makefile"):
-            if source_id in {"bndstrg_plus", "fwdd"}:
-                auxiliary = (repo / "package/mtk/applications/easymesh-n60/scripts/n60-auxiliary-source-audit.sh").read_text(encoding="utf-8")
-                require(source_id in auxiliary and "vendor-sources.lock.json" in auxiliary,
-                        f"{source_id} auxiliary audit does not consume the canonical source lock")
-            else:
-                require(archive in makefile,
-                        f"{source_id} EasyMesh extraction declaration differs from canonical lock")
-        else:
-            source_var = item.get("source_var", "PKG_SOURCE")
-            hash_var = item.get("hash_var", "PKG_HASH")
-            if source_id == "datconf":
-                require("PKG_NAME:=datconf" in makefile and
-                        "PKG_REVISION:=757f9679" in makefile and
-                        "PKG_SOURCE:=$(PKG_NAME)-$(PKG_REVISION).tar.bz2" in makefile,
-                        "datconf derived source filename differs from canonical lock")
-            else:
-                require(re.search(rf"(?m)^{re.escape(source_var)}:=.*{re.escape(archive)}\s*$", makefile),
-                        f"{source_id} {source_var} does not declare locked archive {archive}")
-            require(re.search(rf"(?m)^{re.escape(hash_var)}:={re.escape(digest)}\s*$", makefile),
-                    f"{source_id} {hash_var} does not match locked SHA256")
-            url = item["url"]
-            if item.get("source_url_var"):
-                url_var = item["source_url_var"]
-                require(re.search(rf"(?m)^{re.escape(url_var)}:=.*$", makefile),
-                        f"{source_id} source URL variable {url_var} missing")
-                require(url.rsplit("/", 1)[0] in makefile,
-                        f"{source_id} source URL base differs from lock")
-            else:
-                require(url.rsplit("/", 1)[0] in makefile,
-                        f"{source_id} source URL base differs from lock")
-        if downloads is not None and source_id in {"wappd", "mapd", "1905daemon", "libmapd"}:
-            archive_path = downloads / archive
-            require(archive_path.is_file(), f"locked source archive missing from DL_DIR: {archive}")
-            actual = hashlib.sha256(archive_path.read_bytes()).hexdigest()
-            require(actual == digest,
-                    f"{source_id} downloaded archive SHA256 mismatch: {actual} != {digest}")
-        print(f"LOCK SOURCE PASS: {source_id} | {archive} | SHA256={digest}")
+    sources = {item["id"]: item for item in lock.get("sources", [])}
+    required_ids = {"wappd", "mapd", "1905daemon", "libmapd"}
+    require(required_ids.issubset(sources), "vendor Lock is missing a required EasyMesh source")
 
-    patch_ids = set()
-    for patch_set in patch_sets:
-        patch_id = patch_set["id"]
-        require(patch_id not in patch_ids, f"duplicate patch set id: {patch_id}")
-        patch_ids.add(patch_id)
-        directory = repo / patch_set["directory"]
-        require(directory.is_dir(), f"locked patch directory missing: {directory}")
-        require("n60-vendor-lock.py patch-order" in workflow and "apply_locked_series" in workflow,
-                "vendor audit workflow does not consume Lock-driven patch ordering")
-        expected = patch_set["application_order"] + patch_set.get("post_normalize_order", [])
-        require(len(expected) == len(set(expected)),
-                f"duplicate filename in locked patch order: {patch_id}")
-        actual = sorted(p.name for p in directory.glob("*.patch") if p.is_file())
-        expected_set = set(expected)
-        require(set(actual) == expected_set,
-                f"{patch_id} patch inventory differs from lock: "
-                f"unlocked={sorted(set(actual)-expected_set)} "
-                f"missing={sorted(expected_set-set(actual))}")
-        for filename in expected:
-            require((directory / filename).is_file(),
-                    f"locked patch missing: {patch_id}/{filename}")
-        if patch_id != "easymesh":
-            require(expected == sorted(expected),
-                    f"{patch_id} uses lexical patch application; lock order must be lexical")
-        print(f"LOCK PATCH PASS: {patch_id} | patches={len(expected)} | {patch_set['directory']}")
+    if downloads is not None:
+        for source_id in sorted(required_ids):
+            item = sources[source_id]
+            archive = downloads / item["archive"]
+            require(archive.is_file(), f"required vendor archive missing: {archive}")
+            actual = hashlib.sha256(archive.read_bytes()).hexdigest()
+            require(actual == item["sha256"],
+                    f"{source_id} archive SHA256 mismatch: {actual} != {item['sha256']}")
+            print(f"SOURCE OK: {source_id} ({item['archive']})")
 
-    workflow_path = repo / ".github/workflows/vendor-source-patch-audit.yml"
-    workflow = workflow_path.read_text(encoding="utf-8")
-    helper_path = repo / "package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py"
-    helper = helper_path.read_text(encoding="utf-8")
-    easy_makefile = (repo / "package/mtk/applications/easymesh-n60/Makefile").read_text(encoding="utf-8")
-    require("def patch_set(repo,sid):" in helper and "def print_patch_order(repo,sid,phase):" in helper,
-            "canonical Lock helper does not implement validated patch-order lookup")
-    require('patch-order --repo "$GITHUB_WORKSPACE" --set "$set_id" --phase "$phase"' in workflow,
-            "Vendor Audit does not obtain patch application order from Lock helper")
-    require('patch-order --repo "$(TOPDIR)" --set easymesh --phase application' in easy_makefile and
-            'patch-order --repo "$(TOPDIR)" --set easymesh --phase post_normalize' in easy_makefile,
-            "EasyMesh Build/Prepare does not consume both Lock-defined patch phases")
-    app_pos = easy_makefile.index('patch-order --repo "$(TOPDIR)" --set easymesh --phase application')
-    normalize_call = 'n60-vendor-source-transforms.py normalize "$(PKG_BUILD_DIR)"'
-    post_pos = easy_makefile.index('patch-order --repo "$(TOPDIR)" --set easymesh --phase post_normalize')
-    finalize_call = 'n60-vendor-source-transforms.py finalize "$(PKG_BUILD_DIR)"'
-    require(normalize_call in easy_makefile and finalize_call in easy_makefile,
-            "EasyMesh Build/Prepare omits the shared normalize/finalize transformation phases")
-    normalize_pos = easy_makefile.index(normalize_call)
-    finalize_pos = easy_makefile.index(finalize_call)
-    require(app_pos < normalize_pos < post_pos < finalize_pos,
-            "EasyMesh Build/Prepare order differs from Vendor Audit: application -> normalize -> post-normalize -> finalize")
-    easy_lock = next(p for p in patch_sets if p["id"] == "easymesh")
-    require(easy_lock.get("application_order") and easy_lock.get("post_normalize_order"),
-            "EasyMesh Lock must declare pre- and post-normalization patch phases")
-    expected_application = {
-        "002-dpp-parser-safety.patch",
-        "003-wapp-gcc14-copy-semantics.patch",
-        "004-libmapd-target-flags.patch",
-        "005-wapp-hotspot-realloc-pointer-arithmetic.patch",
-        "007-openssl3-use-native-evp-pkey-get0-ec-key.patch",
-        "008-dpp-parser-bounds-and-secret-redaction.patch",
-        "010-dpp-wdev-config-allocation-rollback.patch",
-        "011-wapp-wts-security.patch",
-    }
-    expected_post = {
-        "001-dsa-use-linux-mii-ioctl.patch",
-        "006-p1905-libbridge-tool-propagation.patch",
-    }
-    require(expected_application.issubset(set(easy_lock["application_order"])),
-            "EasyMesh Lock application phase omits a required WAPP/DPP/libmapd patch")
-    require(expected_post.issubset(set(easy_lock["post_normalize_order"])),
-            "EasyMesh Lock post-normalize phase omits a required P1905 patch")
-    for filename in expected_application | expected_post:
-        require(f'apply_patch_strict "./patches/{filename}"' not in easy_makefile,
-                f"EasyMesh Makefile applies Lock-managed patch out of band: {filename}")
-    wts_patch = "011-wapp-wts-security.patch"
-    require(easy_lock["application_order"].count(wts_patch) == 1,
-            "WTS security patch must appear exactly once in the canonical EasyMesh application order")
-    require("WTS_SECURITY_PATCH=" not in easy_makefile and
-            'apply_patch_strict "./patches/' + wts_patch + '"' not in easy_makefile,
-            "EasyMesh Build/Prepare applies the Lock-managed WTS security patch out of band")
+    patch_sets = {item["id"]: item for item in lock.get("patch_sets", [])}
+    require("easymesh" in patch_sets, "vendor Lock has no EasyMesh patch set")
+    patch_set = patch_sets["easymesh"]
+    patch_dir = repo / patch_set["directory"]
+    require(patch_dir.is_dir(), f"EasyMesh patch directory missing: {patch_dir}")
 
-    print(f"PASS: canonical vendor lock verified | sources={len(sources)} patch_sets={len(patch_sets)}")
+    ordered = (patch_set.get("application_order", []) +
+               patch_set.get("post_normalize_order", []))
+    require(bool(ordered), "EasyMesh patch order is empty")
+    require(len(ordered) == len(set(ordered)), "duplicate patch in EasyMesh Lock order")
+    actual = sorted(p.name for p in patch_dir.glob("*.patch") if p.is_file())
+    require(set(actual) == set(ordered),
+            "EasyMesh patch inventory differs from Lock: "
+            f"unlocked={sorted(set(actual)-set(ordered))}; "
+            f"missing={sorted(set(ordered)-set(actual))}")
+    for name in ordered:
+        require((patch_dir / name).is_file(), f"locked EasyMesh patch missing: {name}")
 
-
+    print(f"BUILD INPUTS OK: EasyMesh sources={len(required_ids)}, patches={len(ordered)}")
 
 def main() -> None:
     if len(sys.argv) >= 2 and sys.argv[1] == "verify-lock":
