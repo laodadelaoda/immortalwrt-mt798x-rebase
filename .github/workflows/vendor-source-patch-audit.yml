@@ -252,7 +252,7 @@ jobs:
                 mkdir -p "$stage_root/$(dirname "$rel")"
                 cp -a "$patch_root/$rel" "$stage_root/$rel"
               fi
-            done < <(sed -n -e 's/^--- a\\///p' -e 's/^+++ b\\///p' "$patch_file" | sort -u)
+            done < <(sed -n -e 's/^--- a\///p' -e 's/^+++ b\\///p' "$patch_file" | sort -u)
 
             if patch --verbose --batch --forward --fuzz=0 -p1 -d "$stage_root" < "$patch_file" > "$dry_log" 2>&1; then
               cat "$dry_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
