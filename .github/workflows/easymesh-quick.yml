@@ -1,16 +1,6 @@
 name: N60 Pro EasyMesh Quick Build
 
 on:
-  push:
-    branches: ["n60pro-mtk-closed-driver"]
-    paths:
-      - ".github/workflows/easymesh-quick.yml"
-      - ".github/actions/easymesh-quick/**"
-      - "package/mtk/**"
-      - "target/linux/**"
-      - "config/n60pro-1001.config"
-      - "scripts/feeds"
-      - "include/**"
   workflow_dispatch:
     inputs:
       device:
