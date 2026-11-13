@@ -434,6 +434,7 @@
  
  
 @@ -1076,12 +1097,16 @@
+ 
  	ctx = openssl_hmac_ctx_new(type, key, key_len);
  	if (!ctx)
  		return -1;
@@ -451,4 +452,3 @@
  	EVP_MAC_CTX_free(ctx);
  
  	return res == 1 && out_len == mdlen ? 0 : -1;
- 
