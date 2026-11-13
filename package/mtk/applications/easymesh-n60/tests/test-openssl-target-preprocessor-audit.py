@@ -75,6 +75,18 @@ with tempfile.TemporaryDirectory() as d:
  phits,pemitted=m.pp_hits(preprocessed,root,{"EVP_PKEY_eq","ENGINE_by_id"})
  assert (str(source.resolve()),2,"EVP_PKEY_eq") in phits
  assert (str(source.resolve()),2) in pemitted and (str(source.resolve()),4) not in pemitted
+ # GCC can preserve blank placeholders for lines in inactive conditional
+ # branches. They are not emitted source tokens and must not be classified
+ # as active/ambiguous API references.
+ inactive_source=root/"inactive-branch.c"
+ inactive_source.write_text("#if OPENSSL_VERSION_NUMBER < 0x30000000L\\nDH_free(dh);\\n#endif\\nint active(void) { return EVP_PKEY_eq(a,b); }\\n",encoding="utf-8")
+ inactive_pp=root/"inactive-branch.i"
+ inactive_pp.write_text(f'# 2 "{inactive_source}"\\n\\n# 4 "{inactive_source}"\\nint active(void) {{ return EVP_PKEY_eq(a,b); }}\\n',encoding="utf-8")
+ inactive_hits,inactive_lines=m.pp_hits(inactive_pp,root,{"DH_free","EVP_PKEY_eq"})
+ assert (str(inactive_source.resolve()),2) not in inactive_lines
+ assert not any(x[0]==str(inactive_source.resolve()) and x[1]==2 and x[2]=="DH_free" for x in inactive_hits)
+ assert (str(inactive_source.resolve()),4,"EVP_PKEY_eq") in inactive_hits
+ assert (str(inactive_source.resolve()),4) in inactive_lines
  specs=m.make_specs(root,root/"build",args)
  assert len(specs["1905daemon"])==3
  assert all(spec["env"].get("STAGING_DIR")==str(args.staging) for group in specs.values() for spec in group)
