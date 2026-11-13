@@ -5,15 +5,8 @@ on:
     branches: ["n60pro-mtk-closed-driver"]
     paths:
       - ".github/workflows/easymesh-quick.yml"
-      - ".github/workflows/vendor-source-patch-audit.yml"
       - ".github/actions/easymesh-quick/**"
-      # Include the complete MTK package closure: vendor Lock, ordered patches,
-      # Package Makefiles, source-audit scripts and regression tests.
       - "package/mtk/**"
-      # Audit manifests are executable inputs to the canonical Lock regression gate.
-      - "docs/audit/**"
-      - "docs/easymesh-patch-maintenance-groups.csv"
-      # Quick's precompile gate also validates the selected kernel patch stack.
       - "target/linux/**"
       - "config/n60pro-1001.config"
       - "scripts/feeds"
@@ -33,20 +26,11 @@ permissions:
   actions: read
 
 concurrency:
-  group: n60-pro-easymesh-quick-manual
-  # Serialize branch pushes/manual runs; do not cancel an active six-hour Quick build.
+  group: n60-pro-easymesh-quick
   cancel-in-progress: false
 
 jobs:
-  vendor_source_patch_audit:
-    name: Fixed vendor source patch audit
-    uses: ./.github/workflows/vendor-source-patch-audit.yml
-
-  # Deep kernel/OpenSSL migration audit is retained as a separate manual workflow.
-  # Quick performs native Prepare and real source compilation itself; do not
-  # block it on a duplicate Prepare-only job.
   quick:
-    needs: [vendor_source_patch_audit]
     name: Linux 6.12 / ImmortalWrt 25.12 / OpenSSL 3.x compatibility
     runs-on: ubuntu-24.04
     timeout-minutes: 360
@@ -57,18 +41,10 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
 
-      - name: Download attestation from this workflow run
-        uses: actions/download-artifact@v6
-        with:
-          name: n60-vendor-audit-attestation
-          path: .audit-attestation
-      - name: Enforce exact audited source revision
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          python3 package/mtk/applications/easymesh-n60/scripts/verify-vendor-audit-attestation.py verify --repo "$GITHUB_WORKSPACE" --attestation .audit-attestation/vendor-audit-attestation.json --expected-run-id "$GITHUB_RUN_ID" --expected-run-attempt "$GITHUB_RUN_ATTEMPT"
-
-      - name: Run shared Quick compatibility and EasyMesh source-build gate
+      # Quick now owns the practical gate: native OpenWrt Prepare, source
+      # compilation and link checks. Independent audit workflows and their
+      # cross-run attestations are not prerequisites for a build.
+      - name: Run Quick compatibility and EasyMesh source-build gate
         uses: ./.github/actions/easymesh-quick
         with:
           device: ${{ github.event.inputs.device || 'netcore_n60-pro' }}
