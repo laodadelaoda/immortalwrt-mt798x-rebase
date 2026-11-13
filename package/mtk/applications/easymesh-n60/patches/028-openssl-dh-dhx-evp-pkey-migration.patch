@@ -87,7 +87,6 @@
 +	if (!priv || !publ)
 +		return NULL;
 +	*priv = NULL;
-+	wpabuf_free(*publ);
 +	*publ = NULL;
 +
 +	key = dh5_generate_key();
@@ -327,7 +326,6 @@
 +	if (!priv || !publ)
 +		return NULL;
 +	*priv = NULL;
-+	wpabuf_free(*publ);
 +	*publ = NULL;
 +
 +	key = dh5_generate_key();
