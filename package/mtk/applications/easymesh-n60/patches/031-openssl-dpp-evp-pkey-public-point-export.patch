@@ -1,0 +1,102 @@
+From: N60 Pro OpenSSL migration
+Subject: [PATCH] easymesh: use EVP_PKEY for DPP public point export
+
+Export the existing uncompressed SEC1 public point directly from EVP_PKEY.
+Keep the DPP x||y representation when prefix is not requested.
+
+--- a/wappd/dpp/dpp.c
++++ b/wappd/dpp/dpp.c
+@@ -404,33 +404,29 @@
+ struct wpabuf * dpp_get_pubkey_point(EVP_PKEY *pkey, int prefix)
+ {
+-	int len, res;
+-	EC_KEY *eckey;
++	int len;
+ 	struct wpabuf *buf;
+-	unsigned char *pos;
++	unsigned char *encoded = NULL, *pos;
+ 
+-	eckey = EVP_PKEY_get1_EC_KEY(pkey);
+-	if (!eckey)
++	if (!pkey)
+ 		return NULL;
+-	EC_KEY_set_conv_form(eckey, POINT_CONVERSION_UNCOMPRESSED);
+-	len = i2o_ECPublicKey(eckey, NULL);
++	len = EVP_PKEY_get1_encoded_public_key(pkey, &encoded);
+ 	if (len <= 0) {
+ 		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+ 			   "DDP: Failed to determine public key encoding length");
+-		EC_KEY_free(eckey);
++		OPENSSL_free(encoded);
+ 		return NULL;
+ 	}
+ 
+ 	buf = wpabuf_alloc(len);
+ 	if (!buf) {
+-		EC_KEY_free(eckey);
++		OPENSSL_free(encoded);
+ 		return NULL;
+ 	}
+ 
+ 	pos = wpabuf_put(buf, len);
+-	res = i2o_ECPublicKey(eckey, &pos);
+-	EC_KEY_free(eckey);
+-	if (res != len) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "DDP: Failed to encode public key (res=%d/%d)",
+-			   res, len);
+-		wpabuf_free(buf);
+-		return NULL;
+-	}
++	os_memcpy(pos, encoded, len);
++	OPENSSL_free(encoded);
+ 
+ 	if (!prefix) {
+ 		/* Remove 0x04 prefix to match DPP definition */
+@@ -1128,33 +1124,29 @@
+ static struct wpabuf * dpp_get_pubkey_point(EVP_PKEY *pkey, int prefix)
+ {
+-	int len, res;
+-	EC_KEY *eckey;
++	int len;
+ 	struct wpabuf *buf;
+-	unsigned char *pos;
++	unsigned char *encoded = NULL, *pos;
+ 
+-	eckey = EVP_PKEY_get1_EC_KEY(pkey);
+-	if (!eckey)
++	if (!pkey)
+ 		return NULL;
+-	EC_KEY_set_conv_form(eckey, POINT_CONVERSION_UNCOMPRESSED);
+-	len = i2o_ECPublicKey(eckey, NULL);
++	len = EVP_PKEY_get1_encoded_public_key(pkey, &encoded);
+ 	if (len <= 0) {
+ 		wpa_printf(MSG_ERROR,
+ 			   "DDP: Failed to determine public key encoding length");
+-		EC_KEY_free(eckey);
++		OPENSSL_free(encoded);
+ 		return NULL;
+ 	}
+ 
+ 	buf = wpabuf_alloc(len);
+ 	if (!buf) {
+-		EC_KEY_free(eckey);
++		OPENSSL_free(encoded);
+ 		return NULL;
+ 	}
+ 
+ 	pos = wpabuf_put(buf, len);
+-	res = i2o_ECPublicKey(eckey, &pos);
+-	EC_KEY_free(eckey);
+-	if (res != len) {
+-		wpa_printf(MSG_ERROR,
+-			   "DDP: Failed to encode public key (res=%d/%d)",
+-			   res, len);
+-		wpabuf_free(buf);
+-		return NULL;
+-	}
++	os_memcpy(pos, encoded, len);
++	OPENSSL_free(encoded);
+ 
+ 	if (!prefix) {
+ 		/* Remove 0x04 prefix to match DPP definition */
