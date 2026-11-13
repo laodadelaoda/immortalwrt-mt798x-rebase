@@ -454,13 +454,7 @@
  	BIGNUM *pub_key;
  	struct wpabuf *res = NULL;
  	size_t rlen;
-@@ -933,14 +1108,17 @@
- 	BN_clear_free(pub_key);
- 	wpabuf_clear_free(res);
- 	return NULL;
-+#endif /* OpenSSL 3.0 */
- }
- 
+@@ -933,11 +1108,13 @@
  
  void dh5_free(void *ctx)
  {
@@ -475,5 +469,3 @@
 +	DH_free((DH *) ctx);
 +#endif
  }
-
-
