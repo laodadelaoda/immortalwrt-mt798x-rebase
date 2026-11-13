@@ -246,7 +246,7 @@
  	bin_clear_free(ctx, sizeof(*ctx));
  
  	if (res == 1) {
-@@ -1037,28 +1067,24 @@
+@@ -1037,27 +1067,23 @@
  			       const u8 *addr[], const size_t *len, u8 *mac,
  			       unsigned int mdlen)
  {
