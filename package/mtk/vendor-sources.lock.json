@@ -191,6 +191,8 @@
         "027-openssl-ec-group-point-api-renames.patch",
         "028-openssl-dh-dhx-evp-pkey-migration.patch",
         "029-openssl-evp-pkey-eq-migration.patch",
+        "030-openssl-dpp-evp-pkey-private-key-decode.patch",
+        "031-openssl-dpp-evp-pkey-public-point-export.patch",
         "032-openssl-tls-supported-groups.patch"
       ],
       "scope": "EasyMesh Build/Prepare ordered vendor patch series",
