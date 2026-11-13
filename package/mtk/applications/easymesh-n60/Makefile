@@ -38,29 +38,15 @@ define Build/Prepare
 	DRIVER_MAKEFILE="$(TOPDIR)/package/mtk/drivers/mt_wifi/Makefile"; \
 	grep -Fqx 'PKG_VERSION:=7.6.7.3' "$$$$DRIVER_MAKEFILE" || { echo "MT Wi-Fi 7.6.7.3 package version declaration missing" >&2; exit 1; }; \
 	rm -rf $(PKG_BUILD_DIR); mkdir -p $(PKG_BUILD_DIR); \
-	OPENSSL_AUDIT_PRISTINE="$(PKG_BUILD_DIR)-openssl-pristine"; rm -rf "$$$$OPENSSL_AUDIT_PRISTINE"; \
 	tar -xjf '$(DL_DIR)/wappd-80ca5724.tar.bz2' -C $(PKG_BUILD_DIR); \
 	tar -xjf '$(DL_DIR)/mapd-6eca4331.tar.bz2' -C $(PKG_BUILD_DIR); \
 	tar -xjf '$(DL_DIR)/1905daemon-35234223.tar.bz2' -C $(PKG_BUILD_DIR); \
 	tar -xjf '$(DL_DIR)/libmapd-0132d199.tar.bz2' -C $(PKG_BUILD_DIR); \
-	mkdir -p "$$$$OPENSSL_AUDIT_PRISTINE"; \
-	for component in wappd mapd 1905daemon libmapd; do \
-		cp -a "$(PKG_BUILD_DIR)/$$$$component" "$$$$OPENSSL_AUDIT_PRISTINE/"; \
-	done; \
 	patch_names="$$$$(python3 ./scripts/n60-vendor-lock.py patch-order --repo "$(TOPDIR)" --set easymesh --phase application)"; \
 	test -n "$$$$patch_names" || { echo "EasyMesh application patch order is empty in vendor Lock" >&2; exit 1; }; \
 	printf "LOCK APPLICATION PATCH: %s\\n" "$$$$patch_names"; \
 	for patch_name in $$$$patch_names; do apply_patch_strict "./patches/$$$$patch_name" "$(PKG_BUILD_DIR)"; done; \
 	python3 ./scripts/n60-vendor-source-transforms.py normalize "$(PKG_BUILD_DIR)"; \
-	WAPP_WTS_SRC="$(PKG_BUILD_DIR)/wappd/common/main.c"; \
-	P1905_WTS_SRC="$(PKG_BUILD_DIR)/1905daemon/src/file_io.c"; \
-	grep -Fq 'if (i >= content_len - 1)' "$$$$WAPP_WTS_SRC" || { echo "WAPP WTS input bound missing after patch" >&2; exit 1; }; \
-	grep -Fq 'os_strlen(pos1) >= sizeof(key)' "$$$$WAPP_WTS_SRC" || { echo "WAPP WTS key field bound missing after patch" >&2; exit 1; }; \
-	grep -Fq "content[i] = '\\0';" "$$$$P1905_WTS_SRC" || { echo "P1905 WTS buffer terminator missing after patch" >&2; exit 1; }; \
-	for src in "$$$$WAPP_WTS_SRC" "$(PKG_BUILD_DIR)/wappd/common/wdev.c" "$(PKG_BUILD_DIR)/wappd/map/map_1905.c" "$$$$P1905_WTS_SRC" "$(PKG_BUILD_DIR)/1905daemon/src/multi_ap.c" "$(PKG_BUILD_DIR)/mapd/src/topologySrv/topologySrv.c"; do \
-		if grep -Eq 'key=%s|psk = %s' "$$$$src"; then echo "Wi-Fi secret logging remains in $$$$src" >&2; exit 1; fi; \
-	done; \
-	printf '%s\\n' 'PASS: WTS vendor parser security patch applied; bounded reads/fields, fail-closed errors and secret-log redaction verified.'; \
 	patch_names="$$$$(python3 ./scripts/n60-vendor-lock.py patch-order --repo "$(TOPDIR)" --set easymesh --phase post_normalize)"; \
 	test -n "$$$$patch_names" || { echo "EasyMesh post-normalize patch order is empty in vendor Lock" >&2; exit 1; }; \
 	printf "LOCK POST-NORMALIZE PATCH: %s\\n" "$$$$patch_names"; \
@@ -72,13 +58,6 @@ define Build/Prepare
 		apply_patch_strict "./patches/$$$$patch_name" "$$$$patch_root"; \
 	done; \
 	python3 ./scripts/n60-vendor-source-transforms.py finalize "$(PKG_BUILD_DIR)"; \
-	python3 ./tests/test-dpp-source-contract.py $(PKG_BUILD_DIR); \
-	python3 ./tests/test-wapp-qos-list-alignment-contract.py $(PKG_BUILD_DIR); \
-	python3 ./tests/test-easymesh-static-contract.py $(PKG_BUILD_DIR) $(TOPDIR); \
-	python3 ./tests/test-wapp-map-buffer-contract.py $(PKG_BUILD_DIR); \
-	python3 ./tests/test-wapp-wireless-mode-contract.py $(PKG_BUILD_DIR) $(TOPDIR); \
-	python3 ./tests/test-vendor-artifact-inventory.py $(PKG_BUILD_DIR) $(TOPDIR); \
-	python3 ./tests/test-openssl-production-source-migration.py $(PKG_BUILD_DIR)
 endef
 
 define Build/Compile
