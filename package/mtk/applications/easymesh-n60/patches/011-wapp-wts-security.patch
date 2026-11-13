@@ -298,7 +298,7 @@
  			}
  			*pos2 = '\0';
  			if (sscanf(pos1, "hidden-%c", &hidden_ssid) == 1) {
-@@ -552,7 +571,7 @@
+@@ -552,7 +569,7 @@
  				pos1 = pos2;
  			} else {
  				DBGPRINT(RT_DEBUG_TRACE, "wrong format hidden ssid\n");
@@ -307,7 +307,7 @@
  			}
  		}
  		bss_info[i].authmode = authmode;
-@@ -570,12 +589,7 @@
+@@ -570,12 +587,7 @@
  		DBGPRINT(RT_DEBUG_OFF, "set bss index=%d, mac="MACSTR
 -				", opclass=%s, ssid=%s, authmode=%04x, encrytype=%04x, key=%s, "
 +				", opclass=%s, ssid=%s, authmode=%04x, encrytype=%04x, key is configured, "
@@ -322,7 +322,7 @@
 -			i--;
 -			break;
 -		}
-@@ -581,11 +600,15 @@
+@@ -582,11 +599,15 @@
  		}
  	}
  
@@ -338,7 +338,7 @@
  		DBGPRINT(RT_DEBUG_ERROR, "[%s] fclose fail\n", __func__);
  		return -1;
  	}
-@@ -645,6 +668,8 @@
+@@ -645,6 +666,8 @@
  	}
  	return 0;
  err:
@@ -347,7 +347,7 @@
  	os_free(content);
  	tmp = fclose(f);
  	if (tmp != 0)
-@@ -705,11 +730,13 @@
+@@ -705,11 +728,13 @@
  #ifdef MAP_R3
  	if (wapp->dpp->is_map) {
  		if (wapp->dpp->dpp_configurator_supported) {

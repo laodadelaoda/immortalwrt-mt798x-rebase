@@ -1,2 +1,1 @@
-This file triggers only the fixed-vendor source patch audit. It does not authorize Quick or Full compilation.
-Revision: vendor-full-audit-wapp-011-hunk-order-20261113
+Vendor patch audit trigger: 6228a9317a54 corrected WAPP WTS main.c hunk coordinates.
