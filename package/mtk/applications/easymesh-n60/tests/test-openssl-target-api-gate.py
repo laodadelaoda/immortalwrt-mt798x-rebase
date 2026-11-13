@@ -15,6 +15,13 @@ with tempfile.TemporaryDirectory() as d:
  relative_pp.write_text('# 1 "src/relative.c"\nEVP_PKEY_cmp(a,b);\n')
  assert m.observe_preprocessed_output(relative_pp,relative_source.resolve(),1,"EVP_PKEY_cmp",relative_root)==(True,True)
  assert m.observe_preprocessed_output(relative_pp,relative_source.resolve(),1,"EVP_PKEY_cmp",root)==(False,False)
+ # Source line numbers may be shifted by preprocessing; scan the entire
+ # emitted region belonging to the exact source file instead.
+ shifted_pp=root/"shifted.i"
+ shifted_pp.write_text(f'# 500 "{src.resolve()}"\\nint f(void) {{ return 0; }}\\n')
+ assert m.observe_preprocessed_source(shifted_pp,src.resolve(),"EVP_PKEY_cmp",root)==(True,False)
+ shifted_pp.write_text(f'# 500 "{src.resolve()}"\\nEVP_PKEY_cmp(a,b);\\n')
+ assert m.observe_preprocessed_source(shifted_pp,src.resolve(),"EVP_PKEY_cmp",root)==(True,True)
  digest=m.sha256(src); git="a"*40
  inv=[{"component":"wappd","path":"wappd/x.c","line":"2","api":"EVP_PKEY_cmp","deprecated_macro":"OSSL_DEPRECATEDIN_3_0"}]
  call=[{"component":"wappd","path":"wappd/x.c","line":2,"api":"EVP_PKEY_cmp","reference_kind":"CALL_EXPRESSION","reachability_status":"ACTIVE","source_sha256":digest,"conditional_branch_path":[]}]
