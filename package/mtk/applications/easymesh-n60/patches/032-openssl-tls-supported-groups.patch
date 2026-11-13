@@ -1,0 +1,44 @@
+From: N60 Pro OpenSSL migration
+Subject: [PATCH] easymesh: use TLS supported groups for Suite B ECDH
+
+Replace the deprecated temporary EC_KEY installation with the TLS supported
+group API. The negotiated ephemeral key remains selected by OpenSSL while
+retaining the Suite B secp384r1 group constraint.
+
+--- a/1905daemon/src/crypto/tls_openssl.c
++++ b/1905daemon/src/crypto/tls_openssl.c
+@@ -2540,10 +2540,8 @@
+ 			return -1;
+ 		}
+ 	} else if (flags & TLS_CONN_SUITEB) {
+-		EC_KEY *ecdh;
+ 		const char *ciphers =
+ 			"ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384";
+-		int nid[1] = { NID_secp384r1 };
+ 
+ 		if (openssl_ciphers) {
+ 			wpa_printf(MSG_DEBUG,
+@@ -2557,20 +2555,12 @@
+ 			return -1;
+ 		}
+ 
+-		if (SSL_set1_curves(ssl, nid, 1) != 1) {
++		/* Configure the supported group; OpenSSL selects the ephemeral key. */
++		if (SSL_set1_groups_list(ssl, "secp384r1") != 1) {
+ 			wpa_printf(MSG_INFO,
+-				   "OpenSSL: Failed to set Suite B curves");
++				   "OpenSSL: Failed to set Suite B groups");
+ 			return -1;
+ 		}
+-
+-		ecdh = EC_KEY_new_by_curve_name(NID_secp384r1);
+-		if (!ecdh || SSL_set_tmp_ecdh(ssl, ecdh) != 1) {
+-			EC_KEY_free(ecdh);
+-			wpa_printf(MSG_INFO,
+-				   "OpenSSL: Failed to set ECDH parameter");
+-			return -1;
+-		}
+-		EC_KEY_free(ecdh);
+ 	}
+ 	if (flags & (TLS_CONN_SUITEB | TLS_CONN_SUITEB_NO_ECDH)) {
+ #ifdef OPENSSL_IS_BORINGSSL
