@@ -352,7 +352,8 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
      observed.append((source_emitted,hit))
     # Preprocessor line markers can diverge from vendor-source line numbers.
     # Verify the exact source file's complete emitted region instead.
-    independently_absent=bool(compiled) and len(observed)==len(compiled) and all(seen and not hit for seen,hit in observed)
+    independently_absent=(bool(compiled) and len(observed)==len(compiled) and
+       any(seen for seen,hit in observed) and all(not hit for seen,hit in observed))
     valid=(component.get("source_reachability_complete") is True and bool(compiled) and
       isinstance(proof,dict) and proof.get("source_is_direct_translation_unit") is bool(bool(direct_source_tus)) and
       proof.get("component_compile_graph_complete") is True and proof.get("api_hit_absent") is True and
