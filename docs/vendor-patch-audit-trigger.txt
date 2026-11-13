@@ -1,1 +1,1 @@
-Vendor audit trigger: native EasyMesh Prepare now uses the actual zero-fuzz patch apply; staged strict preflight remains in the independent audit workflow.
+Vendor audit trigger: correct Make escaping for patch_root/patch_file in native zero-fuzz Prepare.
