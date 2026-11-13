@@ -7,7 +7,7 @@ the existing DPP x||y form is preserved when prefix is not requested.
 
 --- a/wappd/dpp/dpp.c
 +++ b/wappd/dpp/dpp.c
-@@ -404,33 +404,28 @@
+@@ -404,38 +404,29 @@
  struct wpabuf * dpp_get_pubkey_point(EVP_PKEY *pkey, int prefix)
  {
 -	int len, res;
@@ -55,7 +55,7 @@ the existing DPP x||y form is preserved when prefix is not requested.
  
  	if (!prefix) {
  		/* Remove 0x04 prefix to match DPP definition */
-@@ -1128,33 +1123,28 @@
+@@ -1128,38 +1123,29 @@
  static struct wpabuf * dpp_get_pubkey_point(EVP_PKEY *pkey, int prefix)
  {
 -	int len, res;
