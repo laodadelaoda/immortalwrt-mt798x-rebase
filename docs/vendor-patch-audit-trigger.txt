@@ -1,1 +1,1 @@
-Vendor patch audit trigger: preserve leading context in the 1905daemon EVP_MAC vector error-handling hunk.
+Vendor audit trigger: fix staged patch path extraction for timestamped unified-diff headers.
