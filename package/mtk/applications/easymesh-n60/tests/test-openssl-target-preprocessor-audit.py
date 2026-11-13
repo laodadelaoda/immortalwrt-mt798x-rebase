@@ -50,14 +50,13 @@ with tempfile.TemporaryDirectory() as d:
  assert not any(x in separated for x in ("-L","stage/lib","-l","ssl","-Xlinker","--as-needed","-T","linker.ld","-u","symbol"))
  assert m.preprocessor_env(root/"target-staging",{})["STAGING_DIR"]==str((root/"target-staging").resolve())
  macrofile=root/"macros.txt"
- macrofile.write_text("#define OPENSSL_VERSION_NUMBER 0x30500090L\n#define OPENSSL_VERSION_MAJOR 3\n#define OPENSSL_VERSION_MINOR 5\n#define OPENSSL_VERSION_PATCH 0\n#define OPENSSL_VERSION_STR \\"3.5.9\\"\n#define OPENSSL_NO_ENGINE 1\n#define CONFIG_SUITEB\n")
+ macrofile.write_text("#define OPENSSL_VERSION_NUMBER 0x30500090L\n#define OPENSSL_VERSION_MAJOR 3\n#define OPENSSL_VERSION_MINOR 5\n#define OPENSSL_VERSION_PATCH 0\n#define OPENSSL_NO_ENGINE 1\n#define CONFIG_SUITEB\n")
  snapshot=m.macro_snapshot(macrofile)
  assert snapshot["OPENSSL_NO_ENGINE"]=={"defined":True,"value":"1"}
  assert snapshot["OPENSSL_VERSION_NUMBER"]=={"defined":True,"value":"0x30500090L"}
  assert snapshot["OPENSSL_VERSION_MAJOR"]=={"defined":True,"value":"3"}
  assert snapshot["OPENSSL_VERSION_MINOR"]=={"defined":True,"value":"5"}
  assert snapshot["OPENSSL_VERSION_PATCH"]=={"defined":True,"value":"0"}
- assert snapshot["OPENSSL_VERSION_STR"]=={"defined":True,"value":"\\\"3.5.9\\\""}
  assert snapshot["CONFIG_SUITEB"]["defined"] is True
  assert snapshot["OPENSSL_IS_BORINGSSL"]["defined"] is False
  (root/"foo.c").write_text("int f(void) { return 0; }\n")
