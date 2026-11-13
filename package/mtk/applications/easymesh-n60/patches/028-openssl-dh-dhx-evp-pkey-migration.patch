@@ -454,7 +454,7 @@
  	BIGNUM *pub_key;
  	struct wpabuf *res = NULL;
  	size_t rlen;
-@@ -895,16 +1108,19 @@
+@@ -933,16 +1108,19 @@
  	BN_clear_free(pub_key);
  	wpabuf_clear_free(res);
  	return NULL;
