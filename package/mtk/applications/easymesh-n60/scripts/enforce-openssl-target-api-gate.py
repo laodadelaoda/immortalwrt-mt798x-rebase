@@ -38,6 +38,25 @@ def observe_preprocessed_output(path,source_path,line_number,api,working_directo
  return emitted,hit
 
 
+def observe_preprocessed_source(path,source_path,api,working_directory=None):
+ """Check a complete emitted source-file region, independent of stale line numbers."""
+ marker=re.compile(r'^#\\s*(\\d+)\\s+"([^"]+)"')
+ call=re.compile(r"\\b"+re.escape(api)+r"\\s*\\(")
+ base=Path(working_directory or Path.cwd()).resolve()
+ current=None; source_emitted=False; hit=False
+ for text in Path(path).read_text(encoding="utf-8",errors="replace").splitlines():
+  m=marker.match(text)
+  if m:
+   marker_path=Path(m.group(2))
+   current=(marker_path if marker_path.is_absolute() else base/marker_path).resolve()
+   continue
+  if text.lstrip().startswith("#"): continue
+  if current==source_path:
+   source_emitted=True
+   if call.search(text): hit=True
+ return source_emitted,hit
+
+
 REQUIRED_EASYMESH_COMPONENTS={"wappd","mapd","1905daemon","libmapd"}
 
 def build_easymesh_api_subset(inventory_rows,callsites,noncalls,macro_rows,migration_map,delta_rows=None,review_map=None):
@@ -329,9 +348,11 @@ def evaluate(inventory_rows,callsites,noncalls,summary,macro_rows,migration_map,
      if not output.is_relative_to(evidence_root) or not output.is_file() or sha256(output)!=tu.get("preprocessed_sha256"):
       failures.append("excluded API has missing, escaped or hash-mismatched component preprocessor output: "+repr(k))
       continue
-     emitted,hit=observe_preprocessed_output(output,source,int(k[2]),str(k[3]),tu.get("cwd"))
-     observed.append((not emitted,not hit))
-    independently_absent=bool(compiled) and len(observed)==len(compiled) and all(x==(True,True) for x in observed)
+     source_emitted,hit=observe_preprocessed_source(output,source,str(k[3]),tu.get("cwd"))
+     observed.append((source_emitted,hit))
+    # Preprocessor line markers can diverge from vendor-source line numbers.
+    # Verify the exact source file's complete emitted region instead.
+    independently_absent=bool(compiled) and len(observed)==len(compiled) and all(seen and not hit for seen,hit in observed)
     valid=(component.get("source_reachability_complete") is True and bool(compiled) and
       isinstance(proof,dict) and proof.get("source_is_direct_translation_unit") is bool(bool(direct_source_tus)) and
       proof.get("component_compile_graph_complete") is True and proof.get("api_hit_absent") is True and
