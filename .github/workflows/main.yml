@@ -20,18 +20,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Full firmware is intentionally held. Do not spend runner time on prerequisite
+  # audits while the build job is disabled; restore these jobs together with build.
   vendor_source_patch_audit:
+    if: false # Re-enable only when the Full build is ready to run
     name: Full vendor patch audit with explicit parser diagnostics
     uses: ./.github/workflows/vendor-source-patch-audit.yml
 
   quick_prepare_audit:
+    if: false # Re-enable only when the Full build is ready to run
     name: Quick precompile Package Prepare audit
     needs: vendor_source_patch_audit
     uses: ./.github/workflows/quick-prepare-audit.yml
 
-  # Full starts directly after the immutable vendor audit and no-compile native Prepare gate.
+  # Full remains held until DSA/MT7530 patch and Netlink audits are clean.
   build:
-    if: false # Hold Full until DSA/MT7530 patch and Netlink audits are clean
+    if: false # Re-enable together with both prerequisite audit jobs
     needs: [vendor_source_patch_audit, quick_prepare_audit]
     runs-on: ubuntu-24.04
     timeout-minutes: 360
