@@ -35,7 +35,8 @@ permissions:
 
 concurrency:
   group: n60-pro-easymesh-quick-manual
-  cancel-in-progress: true
+  # Serialize branch pushes/manual runs; do not cancel an active six-hour Quick build.
+  cancel-in-progress: false
 
 jobs:
   vendor_source_patch_audit:
@@ -49,7 +50,6 @@ jobs:
 
   quick:
     needs: [vendor_source_patch_audit, quick_prepare_audit]
-    if: github.event_name == 'workflow_dispatch'
     name: Linux 6.12 / ImmortalWrt 25.12 / OpenSSL 3.x compatibility
     runs-on: ubuntu-24.04
     timeout-minutes: 360
