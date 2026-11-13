@@ -1,5 +1,5 @@
 name: N60 Pro EasyMesh Quick Build
-description: Build the real EasyMesh target package through native OpenWrt Make targets; no independent audit pipeline.
+description: Build the real EasyMesh target package through native OpenWrt Make targets.
 inputs:
   device:
     description: Target router profile
