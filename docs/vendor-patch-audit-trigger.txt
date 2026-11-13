@@ -1,2 +1,2 @@
 This file triggers only the fixed-vendor source patch audit. It does not authorize Quick or Full compilation.
-Revision: vendor-full-audit-sequential-preflight-20261113
+Revision: vendor-full-audit-wapp-011-hunk-order-20261113

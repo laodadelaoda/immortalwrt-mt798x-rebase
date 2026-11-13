@@ -298,6 +298,15 @@
  			}
  			*pos2 = '\0';
  			if (sscanf(pos1, "hidden-%c", &hidden_ssid) == 1) {
+@@ -552,7 +571,7 @@
+ 				pos1 = pos2;
+ 			} else {
+ 				DBGPRINT(RT_DEBUG_TRACE, "wrong format hidden ssid\n");
+-				break;
++				goto err;
+ 			}
+ 		}
+ 		bss_info[i].authmode = authmode;
 @@ -570,12 +589,7 @@
  		DBGPRINT(RT_DEBUG_OFF, "set bss index=%d, mac="MACSTR
 -				", opclass=%s, ssid=%s, authmode=%04x, encrytype=%04x, key=%s, "
@@ -357,15 +366,6 @@
  		}
  	}
  	dl_list_init(&wapp->map_devices);
-@@ -552,7 +571,7 @@
- 				pos1 = pos2;
- 			} else {
- 				DBGPRINT(RT_DEBUG_TRACE, "wrong format hidden ssid\n");
--				break;
-+				goto err;
- 			}
- 		}
- 		bss_info[i].authmode = authmode;
 --- a/wappd/common/wdev.c
 +++ b/wappd/common/wdev.c
 @@ -4282,8 +4282,8 @@
