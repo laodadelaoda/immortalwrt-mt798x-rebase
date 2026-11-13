@@ -1,2 +1,2 @@
 This file triggers only the fixed-vendor source patch audit. It does not authorize Quick or Full compilation.
-Revision: vendor-full-audit-20261113-54c9c557
+Revision: vendor-full-audit-staged-preflight-20261113

@@ -236,26 +236,44 @@ jobs:
               return 1
             fi
 
-            if patch --verbose --dry-run --batch --forward --fuzz=0 -p1 -d "$patch_root" < "$patch_file" > "$dry_log" 2>&1; then
-              cat "$dry_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
-              if grep -Eiq 'Hunk #[0-9]+ succeeded at .*\(offset [+-]?[1-9][0-9]* lines?\)' "$dry_log"; then
-                grep -Ei 'Hunk #[0-9]+ succeeded at .*\(offset [+-]?[1-9][0-9]* lines?\)' "$dry_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
-                fail "non-zero line offset detected in dry-run: $patch_file"
-                echo "DIAGNOSTIC CONTINUE: applying this zero-fuzz patch to discover downstream context offsets." | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+            # Preflight on a disposable copy. GNU patch --dry-run does not
+            # retain earlier hunks in memory across repeated file sections;
+            # that makes a deliberately consolidated sequential patch appear
+            # to fail when later hunks depend on earlier hunks in the same file.
+            # Applying to a staged copy preserves normal patch order while
+            # leaving the real source tree untouched until preflight succeeds.
+            stage_root="$ROOT/stage-$CHECKED"
+            rm -rf "$stage_root"
+            mkdir -p "$stage_root"
+            while IFS= read -r rel; do
+              [ -n "$rel" ] || continue
+              [ "$rel" != "/dev/null" ] || continue
+              if [ -e "$patch_root/$rel" ] || [ -L "$patch_root/$rel" ]; then
+                mkdir -p "$stage_root/$(dirname "$rel")"
+                cp -a "$patch_root/$rel" "$stage_root/$rel"
               fi
+            done < <(sed -n -e 's/^--- a\\///p' -e 's/^+++ b\\///p' "$patch_file" | sort -u)
+
+            if patch --verbose --batch --forward --fuzz=0 -p1 -d "$stage_root" < "$patch_file" > "$dry_log" 2>&1; then
+              cat "$dry_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
             else
               cat "$dry_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
-              capture_failed_context "$patch_file" "$patch_root" "$ctx_tmp" "$dry_log" "dry-run"
-              fail "zero-fuzz dry-run failed: $patch_file"
+              capture_failed_context "$patch_file" "$patch_root" "$ctx_tmp" "$dry_log" "staged-preflight"
+              fail "zero-fuzz staged preflight failed: $patch_file"
               return 1
             fi
-            if grep -Eiq 'Skipping patch|Reversed \(or previously applied\)|Ignoring previously applied' "$dry_log"; then
-              fail "dry-run skipped or treated patch as already applied: $patch_file"
+            if grep -Eiq 'Hunk #[0-9]+ succeeded at .*\\(offset [+-]?[1-9][0-9]* lines?\\)' "$dry_log"; then
+              grep -Ei 'Hunk #[0-9]+ succeeded at .*\\(offset [+-]?[1-9][0-9]* lines?\\)' "$dry_log" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+              fail "non-zero line offset detected in staged preflight: $patch_file"
+              return 1
+            fi
+            if grep -Eiq 'with fuzz [1-9]|Skipping patch|Reversed \\(or previously applied\\)|Ignoring previously applied' "$dry_log"; then
+              fail "staged preflight used fuzz, skipped, or treated patch as already applied: $patch_file"
               return 1
             fi
             dry_hunks="$(grep -Ec 'Hunk #[0-9]+ succeeded' "$dry_log" || true)"
             if [ "$dry_hunks" -ne "$expected_hunks" ]; then
-              fail "dry-run applied $dry_hunks/$expected_hunks hunks: $patch_file"
+              fail "staged preflight applied $dry_hunks/$expected_hunks hunks: $patch_file"
               return 1
             fi
 
