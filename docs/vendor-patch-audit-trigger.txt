@@ -1,1 +1,1 @@
-Vendor audit trigger: fix staged patch path extraction for timestamped unified-diff headers.
+Vendor audit trigger: native EasyMesh Prepare now uses the actual zero-fuzz patch apply; staged strict preflight remains in the independent audit workflow.
