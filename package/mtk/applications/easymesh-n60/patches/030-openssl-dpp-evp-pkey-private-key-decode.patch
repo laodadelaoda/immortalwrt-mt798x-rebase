@@ -8,9 +8,9 @@ EC_KEY decoder compatibility path.
 
 --- a/wappd/dpp/dpp.c
 +++ b/wappd/dpp/dpp.c
-@@ -1305,6 +1305,30 @@
+@@ -1305,3 +1305,27 @@
  EVP_PKEY * dpp_set_keypair(const struct dpp_curve_params **curve,
-				  const u8 *privkey, size_t privkey_len)
+ 				  const u8 *privkey, size_t privkey_len)
  {
 +#if OPENSSL_VERSION_NUMBER >= 0x30000000L
 +	EVP_PKEY *pkey = NULL;
@@ -39,7 +39,7 @@ EC_KEY decoder compatibility path.
  	EVP_PKEY *pkey;
  	EC_KEY *eckey;
  	const EC_GROUP *group;
-@@ -1344,6 +1368,7 @@
+@@ -1344,3 +1368,4 @@
  		return NULL;
  	}
  	return pkey;
@@ -49,9 +49,9 @@ EC_KEY decoder compatibility path.
  
 --- a/1905daemon/src/dpp.c
 +++ b/1905daemon/src/dpp.c
-@@ -1956,6 +1956,30 @@
+@@ -1956,3 +1956,27 @@
  static EVP_PKEY * dpp_set_keypair(const struct dpp_curve_params **curve,
-				  const u8 *privkey, size_t privkey_len)
+ 				  const u8 *privkey, size_t privkey_len)
  {
 +#if OPENSSL_VERSION_NUMBER >= 0x30000000L
 +	EVP_PKEY *pkey = NULL;
@@ -80,7 +80,7 @@ EC_KEY decoder compatibility path.
  	EVP_PKEY *pkey;
  	EC_KEY *eckey;
  	const EC_GROUP *group;
-@@ -1995,6 +2019,7 @@
+@@ -1995,3 +2019,4 @@
  		return NULL;
  	}
  	return pkey;
