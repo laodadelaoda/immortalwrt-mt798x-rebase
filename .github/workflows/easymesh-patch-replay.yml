@@ -1,4 +1,5 @@
 name: N60 Pro EasyMesh Patch Replay (Prepare Only)
+# Replay uses immutable pre-consolidation patch inputs pinned by the script.
 
 on:
   workflow_dispatch:
