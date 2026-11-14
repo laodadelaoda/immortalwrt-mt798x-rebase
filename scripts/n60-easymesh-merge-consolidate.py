@@ -259,14 +259,26 @@ def integrate_033_main_config_lifecycle(root, original_patch, events):
  source = source.replace("\t//struct dpp_bss_cred *bss_cred = NULL;\n", "")
  source = source.replace("\t//char all_zero_mac[MAC_ADDR_LEN]={0};\n", "")
  source = source.replace("\t\tos_memset(&auth, '\\0', sizeof(struct dpp_authentication));\n", "")
- removed_auth_memsets = re.subn(
-  r"(?m)^[ \t]*os_memset\(&auth, 0, sizeof\(auth\)\);\r?\n", "", source
+ # Scope the removal to the actual config-loader function. A file-wide
+ # substitution can match an unrelated auth initializer elsewhere in main.c
+ # while leaving this parser's obsolete initializer untouched.
+ parser_start = source.find("int dpp_read_config_file_for_connection(")
+ if parser_start < 0:
+  raise RuntimeError("033 target DPP config-loader function is missing")
+ parser_end = source.find("\n}\n", parser_start)
+ if parser_end < 0:
+  raise RuntimeError("033 target DPP config-loader function has no closing brace")
+ parser = source[parser_start:parser_end + 3]
+ parser, removed_auth_memsets = re.subn(
+  r"(?m)^[ \t]*os_memset\(&auth, 0, sizeof\(auth\)\);[ \t]*\r?\n",
+  "", parser
  )
- if removed_auth_memsets[1] != 1:
+ if removed_auth_memsets != 1:
   raise RuntimeError(
-   "033 expected exactly one legacy auth memset removal, "
-   f"found {removed_auth_memsets[1]}"
+   "033 expected exactly one legacy auth memset removal inside "
+   f"dpp_read_config_file_for_connection(), found {removed_auth_memsets}"
   )
+ source = source[:parser_start] + parser + source[parser_end + 3:]
 
  # The old disabled reboot-BSS-credential block only references locals removed
  # above and is not executable code; remove that dead block explicitly.
