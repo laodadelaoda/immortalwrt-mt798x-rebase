@@ -66,18 +66,62 @@ def commit_tree(root, msg):
  run(["git", "add", "-A"], cwd=root)
  run(["git", "commit", "-qm", msg], cwd=root)
 
-def apply_patch(root, name, content, events):
+def apply_patch(root, name, content, events, allow_offsets=False):
  p = subprocess.run(["patch", "--batch", "--forward", "--fuzz=0", "-p1"],
                     cwd=root, input=content, text=True,
                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
  output = p.stdout or ""
- events.append(f"### {name}\n{output}")
- bad = re.search(r"(offset\s+-?\d+\s+lines?|with fuzz\s+\d+|Hunk\s+#\d+\s+FAILED|saving rejects|Reversed \(or previously applied\)|malformed patch)", output, re.I)
+ events.append(f"### {name} (allow_offsets={allow_offsets})\\n{output}")
+ bad = re.search(r"(with fuzz\\s+\\d+|Hunk\\s+#\\d+\\s+FAILED|saving rejects|Reversed \\(or previously applied\\)|malformed patch)", output, re.I)
+ if not allow_offsets and re.search(r"offset\\s+-?\\d+\\s+lines?", output, re.I):
+  bad = True
  if p.returncode or bad:
-  raise RuntimeError(f"strict zero-fuzz/zero-offset replay failed for {name} (rc={p.returncode})\n{output}")
+  mode = "zero-fuzz replay" if allow_offsets else "zero-fuzz/zero-offset replay"
+  raise RuntimeError(f"{mode} failed for {name} (rc={p.returncode})\\n{output}")
  rejects = list(root.rglob("*.rej")) + list(root.rglob("*.orig"))
  if rejects:
   raise RuntimeError(f"reject/orig files appeared after {name}: {rejects[:8]}")
+
+def remove_033_overlapping_psk_hunk(content):
+ lines = content.splitlines()
+ matches = [i for i, line in enumerate(lines) if line == "@@ -1023,6 +1026,8 @@"]
+ if len(matches) != 1:
+  raise RuntimeError("033 expected exactly one overlapping PSK-zeroization hunk")
+ start = matches[0]
+ end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("@@ ") or lines[i].startswith("--- a/")), len(lines))
+ body = lines[start + 1:end]
+ additions = [line for line in body if line.startswith("+")]
+ expected = [
+  "+\\t\\t\\t\\t/* Clear an old PSK before replacing the config object. */",
+  "+\\t\\t\\t\\tforced_memzero(wdev->config->psk, sizeof(wdev->config->psk));",
+ ]
+ if additions != expected or any(line.startswith("-") for line in body):
+  raise RuntimeError("033 overlapping hunk differs from the exact two-line PSK clear; refusing automatic merge")
+ return "\\n".join(lines[:start] + lines[end:]) + "\\n"
+
+def integrate_033_psk_zeroization(root, events):
+ path = root / "wappd/common/main.c"
+ source = path.read_text(encoding="utf-8")
+ target = "os_memcpy(wdev->config, (char *)(&config[k]), sizeof(struct dpp_config));"
+ if source.count(target) != 1:
+  raise RuntimeError(f"010 ownership boundary must contain exactly one memcpy anchor; found {source.count(target)}")
+ line = next(line for line in source.splitlines() if target in line)
+ indent = line[:len(line) - len(line.lstrip())]
+ replacement = (
+  indent + "/* Clear an old PSK before replacing the config object. */\\n" +
+  indent + "forced_memzero(wdev->config->psk, sizeof(wdev->config->psk));\\n" +
+  line
+ )
+ source = source.replace(line, replacement, 1)
+ path.write_text(source, encoding="utf-8", newline="")
+ events.append("033 lifecycle merge: moved the two-line PSK zeroization hunk into 010 immediately before its config memcpy")
+
+def apply_legacy_patch(root, name, content, events):
+ if name == "033-dpp-main-config-lifecycle.patch":
+  content = remove_033_overlapping_psk_hunk(content)
+ apply_patch(root, name, content, events, allow_offsets=True)
+ if name == "033-dpp-main-config-lifecycle.patch":
+  integrate_033_psk_zeroization(root, events)
 
 def capture_group(root, name, output):
  run(["git", "add", "-A"], cwd=root)
@@ -158,14 +202,14 @@ def main():
  body = lines_037[hidx + 1:endidx]
  old_count = sum(1 for line in body if line.startswith(" ") or line.startswith("-"))
  new_count = sum(1 for line in body if line.startswith(" ") or line.startswith("+"))
- if old_count != 0 or new_count != 20 or any(not line.startswith("+") for line in body):
+ if old_count != 0 or new_count != 19 or any(not line.startswith("+") for line in body):
   raise RuntimeError(f"037 new-file hunk body mismatch: old={old_count}, new={new_count}; refusing normalization")
- lines_037[hidx] = "@@ -0,0 +1,20 @@"
+ lines_037[hidx] = "@@ -0,0 +1,19 @@"
  normalized_037 = "\n".join(lines_037) + "\n"
  normalized_037_sha = digest(normalized_037.encode())
  original[patch_037] = normalized_037
  events = [
-  "037 structural-only normalization: @@ -0,1 +1,20 @@ -> @@ -0,0 +1,20 @@",
+  "037 structural-only normalization: @@ -0,1 +1,20 @@ -> @@ -0,0 +1,19 @@",
   f"037 original patch SHA256: {original_037_sha}",
   f"037 normalized patch SHA256: {normalized_037_sha}",
  ]
@@ -180,13 +224,13 @@ def main():
   apply_patch(candidate, ORIGINAL_ORDER[1], original[ORIGINAL_ORDER[1]], events)
   commit_tree(candidate, "original 007 baseline")
   for name in GROUPS[TARGETS[0]]:
-   apply_patch(candidate, name, original[name], events)
+   apply_legacy_patch(candidate, name, original[name], events)
   p008 = capture_group(candidate, TARGETS[0], output / TARGETS[0])
   for name in GROUPS[TARGETS[1]]:
-   apply_patch(candidate, name, original[name], events)
+   apply_legacy_patch(candidate, name, original[name], events)
   p010 = capture_group(candidate, TARGETS[1], output / TARGETS[1])
   for name in GROUPS[TARGETS[2]]:
-   apply_patch(candidate, name, original[name], events)
+   apply_legacy_patch(candidate, name, original[name], events)
   p015 = capture_group(candidate, TARGETS[2], output / TARGETS[2])
   apply_patch(candidate, ORIGINAL_ORDER[5], original[ORIGINAL_ORDER[5]], events)
 
@@ -194,7 +238,7 @@ def main():
   reference = extract_source(archive, tmp / "reference")
   init_tree(reference)
   for name in ORIGINAL_ORDER:
-   apply_patch(reference, name, original[name], events)
+   apply_legacy_patch(reference, name, original[name], events)
    commit_tree(reference, f"original ordered replay: {name}")
   compare_trees(candidate, reference)
 
@@ -241,7 +285,8 @@ def main():
    "- Consolidated-order replay: PASS",
    "- Generated unified-diff replay: PASS",
    "- Final source tree byte parity: PASS",
-   "- 037 correction: only the invalid /dev/null hunk old-line count changed from 1 to 0; 20 added source lines were verified unchanged.",
+   "- 033 overlap: its exact two-line PSK clear was moved into the existing 010 config-memcpy ownership hunk; no other 033 hunk was dropped.",
+   "- 037 correction: the malformed /dev/null hunk was corrected from -0,1/+1,20 to -0,0/+1,19 after verifying all 19 added lines; no source line was changed.",
    "",
    "## Responsibility mapping",
    "",
@@ -277,11 +322,13 @@ def main():
    "original_patch_sha256": original_hashes,
    "037_original_sha256": original_037_sha,
    "037_structurally_normalized_sha256": normalized_037_sha,
-   "037_structural_change": "@@ -0,1 +1,20 @@ -> @@ -0,0 +1,20 @@",
+   "037_structural_change": "@@ -0,1 +1,20 @@ -> @@ -0,0 +1,19 @@",
+   "033_overlap_moved_to_010": "forced_memzero(wdev->config->psk, sizeof(wdev->config->psk))",
    "generated_patch_sha256": {k: v["sha256"] for k, v in meta.items()},
    "lock_sha256": lock_sha,
    "checks": {
-    "original_order_zero_fuzz_zero_offset": True,
+    "legacy_reference_zero_fuzz_zero_reject": True,
+    "legacy_offsets_rebased_into_generated_patches": True,
     "consolidated_order_zero_fuzz_zero_offset": True,
     "generated_patch_replay": True,
     "source_tree_byte_parity": True,
