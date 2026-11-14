@@ -207,11 +207,33 @@ def main():
  if old_count != 0 or new_count != 19 or any(not line.startswith("+") for line in body):
   raise RuntimeError(f"037 new-file hunk body mismatch: old={old_count}, new={new_count}; refusing normalization")
  lines_037[hidx] = "@@ -0,0 +1,19 @@"
+
+ # The second map_1905.c hunk also has stale counts. Its body contains
+ # exactly seven old-side lines and five new-side lines (two deletions).
+ hunk2_matches = [i for i, line in enumerate(lines_037)
+                  if line == "@@ -3046,9 +3044,7 @@"]
+ if len(hunk2_matches) != 1:
+  raise RuntimeError("037 expected exactly one stale map_1905.c hunk @@ -3046,9 +3044,7 @@")
+ h2 = hunk2_matches[0]
+ end2 = next((i for i in range(h2 + 1, len(lines_037))
+              if lines_037[i].startswith("@@ ") or lines_037[i].startswith("--- a/")), len(lines_037))
+ body2 = lines_037[h2 + 1:end2]
+ while body2 and body2[-1] == "":
+  body2.pop()
+ old2 = sum(1 for line in body2 if line.startswith(" ") or line.startswith("-"))
+ new2 = sum(1 for line in body2 if line.startswith(" ") or line.startswith("+"))
+ deleted2 = [line for line in body2 if line.startswith("-")]
+ if old2 != 7 or new2 != 5 or len(deleted2) != 2:
+  raise RuntimeError(f"037 map_1905 hunk body mismatch: old={old2}, new={new2}, deletions={len(deleted2)}; refusing normalization")
+ if not any("2nd configurationObject JSON" in line for line in deleted2):
+  raise RuntimeError("037 map_1905 hunk does not target the expected second configurationObject hexdump")
+ lines_037[h2] = "@@ -3046,7 +3044,5 @@"
  normalized_037 = "\n".join(lines_037) + "\n"
  normalized_037_sha = digest(normalized_037.encode())
  original[patch_037] = normalized_037
  events = [
   "037 structural-only normalization: @@ -0,1 +1,20 @@ -> @@ -0,0 +1,19 @@",
+  "037 structural-only normalization: @@ -3046,9 +3044,7 @@ -> @@ -3046,7 +3044,5 @@",
   f"037 original patch SHA256: {original_037_sha}",
   f"037 normalized patch SHA256: {normalized_037_sha}",
  ]
@@ -288,7 +310,7 @@ def main():
    "- Generated unified-diff replay: PASS",
    "- Final source tree byte parity: PASS",
    "- 033 overlap: its exact two-line PSK clear was moved into the existing 010 config-memcpy ownership hunk; no other 033 hunk was dropped.",
-   "- 037 correction: the malformed /dev/null hunk was corrected from -0,1/+1,20 to -0,0/+1,19 after verifying all 19 added lines; no source line was changed.",
+   "- 037 correction: two stale hunk counts were corrected only after validating each body: new header -0,1/+1,20 -> -0,0/+1,19 (19 added lines); map_1905 header -3046,9/+3044,7 -> -3046,7/+3044,5 (7 old/5 new lines, two hexdump deletions). No source line was changed.",
    "",
    "## Responsibility mapping",
    "",
@@ -324,7 +346,10 @@ def main():
    "original_patch_sha256": original_hashes,
    "037_original_sha256": original_037_sha,
    "037_structurally_normalized_sha256": normalized_037_sha,
-   "037_structural_change": "@@ -0,1 +1,20 @@ -> @@ -0,0 +1,19 @@",
+   "037_structural_change": [
+    "@@ -0,1 +1,20 @@ -> @@ -0,0 +1,19 @@",
+    "@@ -3046,9 +3044,7 @@ -> @@ -3046,7 +3044,5 @@"
+   ],
    "033_overlap_moved_to_010": "forced_memzero(wdev->config->psk, sizeof(wdev->config->psk))",
    "generated_patch_sha256": {k: v["sha256"] for k, v in meta.items()},
    "lock_sha256": lock_sha,
