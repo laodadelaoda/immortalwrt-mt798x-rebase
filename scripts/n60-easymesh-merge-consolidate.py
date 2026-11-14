@@ -328,6 +328,12 @@ def integrate_033_main_config_lifecycle(root, original_patch, events):
   "#endif\n"
  )
  source = source[:ss] + success_cleanup + source[se:]
+ # Recompute the marker position after replacing a much longer source region.
+ # The old 'se' offset is no longer valid and can skip this function's QR-count
+ # block/error label, accidentally selecting a later function's error label.
+ se = source.find(success_end_marker, ss + len(success_cleanup))
+ if se < 0:
+  raise RuntimeError("033 success cleanup marker disappeared after replacement")
 
  # Replace the stale cred cleanup at successful return with bounded temporary
  # buffer and stack-PSK erasure.
