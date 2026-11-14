@@ -77,7 +77,18 @@ def apply_patch(root, name, content, events, allow_offsets=False):
   bad = True
  if p.returncode or bad:
   mode = "zero-fuzz replay" if allow_offsets else "zero-fuzz/zero-offset replay"
-  raise RuntimeError(f"{mode} failed for {name} (rc={p.returncode})\n{output}")
+  diagnostics = []
+  for reject in root.rglob("*.rej"):
+   diagnostics.append(f"--- reject: {reject.relative_to(root)} ---\\n{reject.read_text(encoding='utf-8', errors='replace')}")
+   source_path = reject.with_suffix("")
+   if source_path.is_file():
+    source_lines = source_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    for header in re.findall(r"^@@ -([0-9]+)", reject.read_text(encoding="utf-8", errors="replace"), re.M):
+     line_no = int(header)
+     lo, hi = max(1, line_no - 35), min(len(source_lines), line_no + 55)
+     diagnostics.append(f"--- source context {source_path.relative_to(root)}:{lo}-{hi} ---\\n" + "\\n".join(f"{n}: {source_lines[n-1]}" for n in range(lo, hi+1)))
+  detail = "\\n".join(diagnostics)
+  raise RuntimeError(f"{mode} failed for {name} (rc={p.returncode})\\n{output}\\n{detail}")
  rejects = list(root.rglob("*.rej")) + list(root.rglob("*.orig"))
  if rejects:
   raise RuntimeError(f"reject/orig files appeared after {name}: {rejects[:8]}")
