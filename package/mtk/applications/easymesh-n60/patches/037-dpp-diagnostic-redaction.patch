@@ -1,0 +1,79 @@
+--- /dev/null
++++ b/wappd/dpp/dpp_debug.h
+@@ -0,1 +1,20 @@
++#ifndef DPP_DEBUG_REDACT_H
++#define DPP_DEBUG_REDACT_H
++
++/* DPP hexdump payloads may include credentials or derived key material.
++ * Keep one shared redaction policy for all DPP translation units.
++ */
++#define DPP_REDACT_DUMP(level, title, data, data_len) do { \
++	(void) (data); \
++	(void) (data_len); \
++	wpa_printf((level), "%s: [REDACTED]", (title)); \
++} while (0)
++#define wpa_hexdump(level, title, buf, len) DPP_REDACT_DUMP(level, title, buf, len)
++#define wpa_hexdump_ascii(level, title, buf, len) DPP_REDACT_DUMP(level, title, buf, len)
++#define wpa_hexdump_ascii_key(level, title, buf, len) DPP_REDACT_DUMP(level, title, buf, len)
++#define wpa_hexdump_buf(level, title, buf) DPP_REDACT_DUMP(level, title, buf, 0)
++#define wpa_hexdump_key(level, title, buf, len) DPP_REDACT_DUMP(level, title, buf, len)
++#define wpa_hexdump_buf_key(level, title, buf) DPP_REDACT_DUMP(level, title, buf, 0)
++
++#endif /* DPP_DEBUG_REDACT_H */
+
+--- a/wappd/dpp/dpp_reconfig.c
++++ b/wappd/dpp/dpp_reconfig.c
+@@ -21,6 +21,7 @@
+ #include "utils/base64.h"
+ //#include "dpp_i.h"
+ 
++#include "dpp_debug.h"
+ 
+ #ifdef CONFIG_DPP2
+ 
+@@ -478,13 +479,10 @@
+ 		goto fail;
+ 	}
+ 	json_end_object(dppcon);
+-	wpa_printf(MSG_DEBUG, "DPP: dppCon: %s",
+-		   (const char *) wpabuf_head(dppcon));
+ 
+ 	conf->connector = dpp_sign_connector(conf, dppcon);
+ 	if (!conf->connector)
+ 		goto fail;
+-	wpa_printf(MSG_DEBUG, "DPP: signedConnector: %s", conf->connector);
+ 
+ 	ret = 0;
+ fail:
+--- a/wappd/dpp/dpp_wired.c
++++ b/wappd/dpp/dpp_wired.c
+@@ -20,7 +20,7 @@
+ #include "utils/wpa_debug.h"
+ #include "map.h"
+ 
+-
++#include "dpp_debug.h"
+ 
+ #ifdef CONFIG_DPP2
+ #ifdef MAP_R3
+--- a/wappd/map/map_1905.c
++++ b/wappd/map/map_1905.c
+@@ -3037,8 +3037,6 @@
+ #ifdef MAP_R3
+ 				if((wapp->map->map_version == DEV_TYPE_R3) && wapp->dpp) {
+ 					if(!wapp->dpp->onboarding_type && (psetting->AuthMode & AUTH_DPP_ONLY)) {
+-						wpa_hexdump_ascii(MSG_DEBUG, DPP_MAP_PREX "DPP: configurationObject JSON",
+-								(const u8 *)psetting->Cred, psetting->cred_len);
+ 
+ 						if(wdev_set_dpp_cred(wapp, wdev, psetting, 1) != MAP_SUCCESS) {
+ 							DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"%s error wireless setting while applying dpp conf\n", __func__);
+@@ -3046,9 +3044,7 @@
+ 						}
+ 						/* If the BSS is supporting both FH and BH go for parsing another cred */
+ 						if(wdev->i_am_fh_bss && wdev->i_am_bh_bss) {
+-							wpa_hexdump_ascii(MSG_DEBUG, DPP_MAP_PREX "DPP: 2nd configurationObject JSON",
+-									(const u8 *)(psetting->Cred + psetting->cred_len), psetting->ext_cred_len);
+ 
+ 							if(wdev_set_dpp_cred(wapp, wdev, psetting, 0) != MAP_SUCCESS) {
+ 								DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"%s error wireless setting while applying dpp conf\n", __func__);
+
