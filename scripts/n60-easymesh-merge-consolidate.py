@@ -259,7 +259,14 @@ def integrate_033_main_config_lifecycle(root, original_patch, events):
  source = source.replace("\t//struct dpp_bss_cred *bss_cred = NULL;\n", "")
  source = source.replace("\t//char all_zero_mac[MAC_ADDR_LEN]={0};\n", "")
  source = source.replace("\t\tos_memset(&auth, '\\0', sizeof(struct dpp_authentication));\n", "")
- source = source.replace("\t\tos_memset(&auth, 0, sizeof(auth));\n", "")
+ removed_auth_memsets = re.subn(
+  r"(?m)^[ \t]*os_memset\(&auth, 0, sizeof\(auth\)\);\r?\n", "", source
+ )
+ if removed_auth_memsets[1] != 1:
+  raise RuntimeError(
+   "033 expected exactly one legacy auth memset removal, "
+   f"found {removed_auth_memsets[1]}"
+  )
 
  # The old disabled reboot-BSS-credential block only references locals removed
  # above and is not executable code; remove that dead block explicitly.
