@@ -163,11 +163,6 @@ def integrate_033_main_config_lifecycle(root, original_patch, events):
   source, "\tstruct dpp_authentication auth;\n", "",
   "obsolete auth local"
  )
- source = _replace_once(
-  source, "\tu16 cred_len = 0, is_1905_conn = 0, is_normal = 0;\n",
-  "\tu16 is_1905_conn = 0, is_normal = 0;\n",
-  "obsolete cred_len local"
- )
  source = source.replace("\t//struct dpp_bss_cred *bss_cred = NULL;\n", "")
  source = source.replace("\t//char all_zero_mac[MAC_ADDR_LEN]={0};\n", "")
  source = source.replace("\t\tos_memset(&auth, '\\0', sizeof(struct dpp_authentication));\n", "")
