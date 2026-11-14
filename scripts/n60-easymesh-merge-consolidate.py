@@ -137,8 +137,9 @@ def rebase_patch_to_zero_offset(root, name, content, events):
  offsets = {}
  current_file = None
  for line in output.splitlines():
-  if line.startswith("patching file "):
-   current_file = line[len("patching file "):]
+  file_match = re.match(r"^(?:patching|checking) file (.+)$", line)
+  if file_match:
+   current_file = file_match.group(1)
   match = re.search(r"Hunk #([0-9]+) succeeded at [0-9]+(?: \(offset ([+-]?[0-9]+) lines?\))?", line)
   if match and current_file:
    offsets[(current_file, int(match.group(1)))] = int(match.group(2) or 0)
