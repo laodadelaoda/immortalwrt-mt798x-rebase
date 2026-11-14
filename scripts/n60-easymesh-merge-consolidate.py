@@ -5,6 +5,7 @@ import difflib, hashlib, json, os, re, shutil, subprocess, tempfile
 from pathlib import Path
 
 BASELINE_COMMIT = "4289d029c18ccebf8525af80f5f656f62f9dc1a2"
+LEGACY_PATCH_BASELINE = "4be17091600a8da8641c1579bf4d0963cb60d655"
 LOCK_REL = "package/mtk/vendor-sources.lock.json"
 PATCH_REL = "package/mtk/applications/easymesh-n60/patches"
 ARCHIVE_NAME = "wappd-80ca5724.tar.bz2"
@@ -52,24 +53,21 @@ def digest(data):
  return hashlib.sha256(data).hexdigest()
 
 def git_patch(repo, name):
- # Always read immutable pre-consolidation inputs from the pinned baseline.
- # The working tree is intentionally mutated by a successful run (033-037
- # removed and 008/010/015/016 regenerated), so reading it on a later run
- # would feed generated output back into the legacy-reference replay.
+ # The successful pre-consolidation input was a mixed snapshot:
+ # 002/007/008/010/015/016 came from the 4289 input tree, while 033-037
+ # had already been removed there and must be recovered from the immutable
+ # 4be split-patch commit. Never read the mutable working tree: a successful
+ # consolidation intentionally replaces 008/010/015/016 and deletes 033-037.
  path = f"{PATCH_REL}/{name}"
- data = run(["git", "show", f"{BASELINE_COMMIT}:{path}"], cwd=repo)
+ source_commit = LEGACY_PATCH_BASELINE if name in REMOVED else BASELINE_COMMIT
+ data = run(["git", "show", f"{source_commit}:{path}"], cwd=repo)
  if name == "010-dpp-wdev-config-allocation-rollback.patch":
   marker = "# BEGIN: 033-dpp-main-config-lifecycle.patch"
   marker_count = data.count(marker)
-  # The pinned pre-consolidation baseline has two valid historical layouts:
-  # (a) 033 is a standalone patch and 010 has no embedded marker; or
-  # (b) 033 was embedded into 010 by an earlier candidate revision.
-  # In either case ORIGINAL_ORDER replays 033 exactly once as its own semantic
-  # input. Strip only the embedded copy when present; reject ambiguous copies.
   if marker_count > 1:
    raise RuntimeError(
     f"pinned baseline 010 has ambiguous embedded 033 marker blocks; "
-    f"found {marker_count} at {BASELINE_COMMIT}:{path}"
+    f"found {marker_count} at {source_commit}:{path}"
    )
   if marker_count == 1:
    data = data.split(marker, 1)[0]
@@ -765,7 +763,8 @@ def main():
    "# N60 Pro EasyMesh 033-037 consolidation candidate",
    "",
    f"- Repository input commit: {os.environ.get('GITHUB_SHA', 'local')}",
-   f"- Original source baseline: {BASELINE_COMMIT}",
+   f"- Core patch input baseline (002/007/008/010/015/016): {BASELINE_COMMIT}",
+   f"- Standalone legacy patch input baseline (033-037): {LEGACY_PATCH_BASELINE}",
    f"- WAPP archive: {ARCHIVE_NAME}",
    f"- WAPP archive SHA256: {archive_sha}",
    "- Original Lock-order reference replay with the 033 overlap merged into 010 and 037 hunk counts corrected: PASS (zero fuzz/reject; historical offsets are rebased into the generated patches).",
@@ -803,6 +802,7 @@ def main():
    "branch": "runner/easymesh-patch-replay-20261114",
    "input_commit": os.environ.get("GITHUB_SHA", "local"),
    "baseline_commit": BASELINE_COMMIT,
+   "legacy_patch_baseline_commit": LEGACY_PATCH_BASELINE,
    "run_id": os.environ.get("GITHUB_RUN_ID"),
    "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
    "vendor_archive": ARCHIVE_NAME,
