@@ -11,14 +11,13 @@ from pathlib import Path
 LOCK = "package/mtk/vendor-sources.lock.json"
 TRANSFORM = "package/mtk/applications/easymesh-n60/scripts/n60-vendor-source-transforms.py"
 FIXED = [
-    ".github/workflows/vendor-source-patch-audit.yml",
+    ".github/workflows/easymesh-patch-replay.yml",
     ".github/workflows/main.yml",
     ".github/workflows/easymesh-quick.yml",
-    ".github/workflows/openssl-migration-baseline-audit.yml",
-    ".github/workflows/component-source-diagnostics.yml",
-    ".github/workflows/quick-prepare-audit.yml",
     "docs/audit/WORKFLOW-OWNERSHIP.md",
+    "docs/audit/easymesh-patch-dependencies.csv",
     "package/mtk/applications/easymesh-n60/scripts/verify-vendor-audit-attestation.py",
+    "scripts/n60-easymesh-merge-consolidate.py",
     ".github/actions/easymesh-quick/action.yml",
     "target/linux/mediatek/Makefile",
     "include/version.mk",
@@ -44,12 +43,10 @@ FIXED = [
     "include/kernel.mk",
     "include/quilt.mk",
     "include/download.mk",
-    "target/linux/mediatek/Makefile",
     "target/linux/mediatek/filogic/target.mk",
     "scripts/patch-kernel.sh",
     "config/n60pro-1001.config",
-]
-def sha(path: Path) -> str:
+]def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 def is_transient_python_artifact(path: Path) -> bool:
@@ -91,6 +88,25 @@ def inventory(root: Path) -> dict[str, str]:
         result[name] = sha(path)
     return result
 
+def source_inventory(root: Path) -> list[dict]:
+    lock = json.loads((root / LOCK).read_text(encoding="utf-8"))
+    fields = (
+        "id", "archive", "url", "sha256", "package_makefile",
+        "expected_build_dir", "extract_root", "source_scope",
+    )
+    return [{key: item[key] for key in fields if key in item} for item in lock["sources"]]
+
+REQUIRED_ACCEPTANCE = {
+    "easy_mesh_patch_consolidation": "passed",
+    "legacy_and_consolidated_replay_byte_parity": "passed",
+    "vendor_archive_lock_sha256": "passed",
+    "vendor_patch_replay_zero_fuzz_zero_offset_zero_reject": "passed",
+    "gnu_make_expanded_package_variables": "passed",
+    "native_openwrt_package_build_prepare": "passed",
+    "datconf_src_overlay_before_locked_patch_series": "passed",
+    "mtwifi_026_exact_prepare_path_patch_and_function_assertions": "passed",
+}
+
 def commit(root: Path) -> str:
     return subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=root, text=True
@@ -111,6 +127,9 @@ def main() -> None:
     files = inventory(root)
     lock_hash = sha(root / LOCK)
     if args.mode == "create":
+        sources = source_inventory(root)
+        if len(sources) != 11:
+            raise SystemExit(f"FAIL: expected 11 Lock source components, found {len(sources)}")
         data = {
             "schema_version": 1,
             "status": "passed",
@@ -122,6 +141,9 @@ def main() -> None:
             "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", ""),
             "lock_path": LOCK,
             "lock_sha256": lock_hash,
+            "source_count": len(sources),
+            "sources": sources,
+            "acceptance_checks": REQUIRED_ACCEPTANCE,
             "files": files,
         }
         if not data["run_id"] or not data["run_attempt"]:
@@ -140,6 +162,9 @@ def main() -> None:
         (data.get("lock_path") == LOCK, "attestation lock path mismatch"),
         (data.get("lock_sha256") == lock_hash, "vendor lock SHA256 differs from audited version"),
         (data.get("files") == files, "patch/source/workflow inventory differs from audited version"),
+        (data.get("source_count") == 11, "attested source component count is not 11"),
+        (data.get("sources") == source_inventory(root), "attested source matrix differs from canonical Lock"),
+        (data.get("acceptance_checks") == REQUIRED_ACCEPTANCE, "required acceptance checks are missing or not passed"),
     ]
     if args.expected_run_id is not None:
         checks.append((data.get("run_id") == args.expected_run_id, "attestation belongs to another workflow run"))
