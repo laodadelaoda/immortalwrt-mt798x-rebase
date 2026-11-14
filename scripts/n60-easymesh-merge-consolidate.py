@@ -308,7 +308,7 @@ def integrate_033_main_config_lifecycle(root, original_patch, events):
  # buffer and stack-PSK erasure.
  source = _replace_once(
   source,
-  "\t//fail:\n\tif (cred)\n\t\tos_free(cred);\n\n\treturn WAPP_SUCCESS;",
+  "//fail:\n\tif (cred)\n\t\tos_free(cred);\n\n\treturn WAPP_SUCCESS;",
   "\t//fail:\n"
   "\tforced_memzero(value, sizeof(value));\n"
   "\tforced_memzero(buf_temp, sizeof(buf_temp));\n"
