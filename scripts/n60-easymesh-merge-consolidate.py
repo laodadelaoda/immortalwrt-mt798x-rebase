@@ -112,7 +112,7 @@ def patch_file_sections(content):
  return [section for section in sections if section.startswith("--- a/")]
 
 def section_path(section):
- match = re.match(r"^--- a/([^\\n]+)", section)
+ match = re.match(r"^--- a/([^\n]+)", section)
  return match.group(1) if match else None
 
 def select_patch_section(content, path):
@@ -133,19 +133,16 @@ def rebase_patch_to_zero_offset(root, name, content, events):
  probe = subprocess.run(cmd, cwd=root, input=content, text=True,
                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
  output = probe.stdout or ""
- if probe.returncode or re.search(r"(with fuzz\\s+\\d+|Hunk\\s+#\\d+\\s+FAILED|saving rejects|malformed patch)", output, re.I):
-  raise RuntimeError(f"cannot derive exact hunk anchors for {name}\\n{output}")
+ if probe.returncode or re.search(r"(with fuzz\s+\d+|Hunk\s+#\d+\s+FAILED|saving rejects|malformed patch)", output, re.I):
+  raise RuntimeError(f"cannot derive exact hunk anchors for {name}\n{output}")
  offsets = {}
  current_file = None
- hunk_no = 0
  for line in output.splitlines():
   if line.startswith("patching file "):
    current_file = line[len("patching file "):]
-   hunk_no = 0
-  match = re.search(r"Hunk #([0-9]+) succeeded at [0-9]+(?: \\(offset ([+-]?[0-9]+) lines?\\))?", line)
+  match = re.search(r"Hunk #([0-9]+) succeeded at [0-9]+(?: \(offset ([+-]?[0-9]+) lines?\))?", line)
   if match and current_file:
-   hunk_no = int(match.group(1))
-   offsets[(current_file, hunk_no)] = int(match.group(2) or 0)
+   offsets[(current_file, int(match.group(1)))] = int(match.group(2) or 0)
  out = []
  current_file = None
  hunk_no = 0
@@ -156,20 +153,20 @@ def rebase_patch_to_zero_offset(root, name, content, events):
   if line.startswith("@@ "):
    hunk_no += 1
    delta = offsets.get((current_file, hunk_no), 0)
-   header = re.match(r"^@@ -(\\d+)(,\\d+)? \\+(\\d+)(,\\d+)? @@(.*)$", line.rstrip("\\n"))
+   header = re.match(r"^@@ -(\d+)(,\d+)? \+(\d+)(,\d+)? @@(.*)$", line.rstrip("\n"))
    if not header:
     raise RuntimeError(f"cannot parse unified hunk header in {name}: {line.rstrip()}")
    if delta:
     line = (f"@@ -{int(header.group(1)) + delta}{header.group(2) or ''} "
-            f"+{int(header.group(3)) + delta}{header.group(4) or ''} @@{header.group(5)}\\n")
+            f"+{int(header.group(3)) + delta}{header.group(4) or ''} @@{header.group(5)}\n")
   out.append(line)
  rebased = "".join(out)
  verify = subprocess.run(cmd, cwd=root, input=rebased, text=True,
                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
  verify_output = verify.stdout or ""
- if verify.returncode or re.search(r"(offset\\s+[+-]?\\d+\\s+lines?|with fuzz\\s+\\d+|Hunk\\s+#\\d+\\s+FAILED|saving rejects|malformed patch)", verify_output, re.I):
-  raise RuntimeError(f"{name} hunk-header rebase did not produce zero-offset replay\\n{verify_output}")
- events.append(f"{name}: source-anchored hunk headers rebased from dry-run offsets; strict dry-run PASS\\n{output}\\nSTRICT DRY-RUN\\n{verify_output}")
+ if verify.returncode or re.search(r"(offset\s+[+-]?\d+\s+lines?|with fuzz\s+\d+|Hunk\s+#\d+\s+FAILED|saving rejects|malformed patch)", verify_output, re.I):
+  raise RuntimeError(f"{name} hunk-header rebase did not produce zero-offset replay\n{verify_output}")
+ events.append(f"{name}: source-anchored hunk headers rebased from dry-run offsets; strict dry-run PASS\n{output}\nSTRICT DRY-RUN\n{verify_output}")
  return rebased
 
 def _replace_once(source, old, new, label):
