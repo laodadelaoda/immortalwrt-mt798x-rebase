@@ -95,7 +95,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  	l = EC_POINT_new(group);
  	if (!l ||
  	    EC_POINT_mul(group, l, NULL, BI_point, sum, bnctx) != 1 ||
--	    EC_POINT_get_affine_coordinates_GFp(group, l, lx, NULL,
+-	    EC_POINT_get_affine_coordinates(group, l, lx, NULL,
 -						bnctx) != 1) {
 +	    EC_POINT_get_affine_coordinates(group, l, lx, NULL, bnctx) != 1) {
  		wpa_printf(MSG_ERROR, DPP_MAP_PREX
@@ -181,7 +181,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  	if (!sum || !l ||
  	    EC_POINT_add(group, sum, BR_point, PR_point, bnctx) != 1 ||
  	    EC_POINT_mul(group, l, NULL, sum, bI_bn, bnctx) != 1 ||
--	    EC_POINT_get_affine_coordinates_GFp(group, l, lx, NULL,
+-	    EC_POINT_get_affine_coordinates(group, l, lx, NULL,
 -						bnctx) != 1) {
 +	    EC_POINT_get_affine_coordinates(group, l, lx, NULL, bnctx) != 1) {
  		wpa_printf(MSG_ERROR, DPP_MAP_PREX
