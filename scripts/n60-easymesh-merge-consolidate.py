@@ -52,22 +52,44 @@ def run(args, cwd=None, input_text=None, check=True):
 def digest(data):
  return hashlib.sha256(data).hexdigest()
 
+# Immutable Git blob IDs for the exact pre-consolidation inputs. Reading by
+# blob ID avoids path-resolution ambiguity in historical trees while retaining
+# the original Git objects as the sole source of patch bytes.
+PINNED_PATCH_BLOBS = {
+ "002-dpp-parser-safety.patch": "a6408eda927afb6ff29312a16cc2a921083ba791",
+ "007-openssl3-use-native-evp-pkey-get0-ec-key.patch": "17a1f0f1cd8c2afa664e3a2ed76f520a5bf29f1a",
+ "008-dpp-parser-bounds-and-secret-redaction.patch": "dc0fd14d5a756189798d8fac17825d4c39bb313e",
+ "010-dpp-wdev-config-allocation-rollback.patch": "86ee17ed6a54b8f63a9591f9f8baca7fa04c8a26",
+ "015-dpp-config-lookup-null-and-error-guard.patch": "10d63b922a6591ae3b3c035987ca97e3d6d72a72",
+ "016-dpp-qr-count-boundaries-and-error-propagation.patch": "b097395ec0844da4883618bbbf5a0d3bdb59cf33",
+ "033-dpp-main-config-lifecycle.patch": "d62591899867ccb75db06a48620ac6b63ce49eb7",
+ "034-dpp-wdev-credential-handling.patch": "d5db08d810684b7dca2036cdccbed0124e4f8872",
+ "035-dpp-auth-credential-lifecycle.patch": "58a78859a472653d391cd4cb5240c00cd4123fba",
+ "036-wapp-device-config-secret-cleanup.patch": "9ab1c64efa3c5f18c8dc65cc29a6a7510454babc",
+ "037-dpp-diagnostic-redaction.patch": "12d9505577a33c5c17b18e88d646ea1c285a85c7",
+}
+
 def git_patch(repo, name):
- # The successful pre-consolidation input was a mixed snapshot:
- # 002/007/008/010/015/016 came from the 4289 input tree, while 033-037
- # had already been removed there and must be recovered from the immutable
- # 4be split-patch commit. Never read the mutable working tree: a successful
- # consolidation intentionally replaces 008/010/015/016 and deletes 033-037.
- path = f"{PATCH_REL}/{name}"
- source_commit = LEGACY_PATCH_BASELINE if name in REMOVED else BASELINE_COMMIT
- data = run(["git", "show", f"{source_commit}:{path}"], cwd=repo)
+ # Never read the mutable working tree: consolidation intentionally replaces
+ # 008/010/015/016 and deletes 033-037. Read the exact pinned Git blob instead
+ # of resolving a historical path, then verify its Git object ID before use.
+ blob = PINNED_PATCH_BLOBS.get(name)
+ if not blob:
+  raise RuntimeError(f"no immutable source blob is pinned for {name}")
+ data = run(["git", "cat-file", "blob", blob], cwd=repo)
+ actual = run(["git", "hash-object", "--stdin"], cwd=repo, input_text=data).strip()
+ if actual != blob:
+  raise RuntimeError(
+   f"immutable source blob verification failed for {name}: "
+   f"expected={blob} actual={actual}"
+  )
  if name == "010-dpp-wdev-config-allocation-rollback.patch":
   marker = "# BEGIN: 033-dpp-main-config-lifecycle.patch"
   marker_count = data.count(marker)
   if marker_count > 1:
    raise RuntimeError(
     f"pinned baseline 010 has ambiguous embedded 033 marker blocks; "
-    f"found {marker_count} at {source_commit}:{path}"
+    f"found {marker_count} in blob {blob}"
    )
   if marker_count == 1:
    data = data.split(marker, 1)[0]
