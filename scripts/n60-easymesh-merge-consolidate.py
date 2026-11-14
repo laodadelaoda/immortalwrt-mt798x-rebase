@@ -52,16 +52,19 @@ def digest(data):
  return hashlib.sha256(data).hexdigest()
 
 def git_patch(repo, name):
+ # Always read immutable pre-consolidation inputs from the pinned baseline.
+ # The working tree is intentionally mutated by a successful run (033-037
+ # removed and 008/010/015/016 regenerated), so reading it on a later run
+ # would feed generated output back into the legacy-reference replay.
  path = f"{PATCH_REL}/{name}"
- patch_path = repo / path
- if patch_path.is_file():
-  data = patch_path.read_text(encoding="utf-8")
- else:
-  data = run(["git", "show", f"{BASELINE_COMMIT}:{path}"], cwd=repo)
+ data = run(["git", "show", f"{BASELINE_COMMIT}:{path}"], cwd=repo)
  if name == "010-dpp-wdev-config-allocation-rollback.patch":
   marker = "# BEGIN: 033-dpp-main-config-lifecycle.patch"
   if data.count(marker) != 1:
-   raise RuntimeError("010 must contain exactly one embedded 033 marker block")
+   raise RuntimeError(
+    f"pinned baseline 010 must contain exactly one embedded 033 marker block; "
+    f"found {data.count(marker)} at {BASELINE_COMMIT}:{path}"
+   )
   data = data.split(marker, 1)[0]
  return data
 
