@@ -683,6 +683,8 @@ def main():
                      original[GROUPS[TARGETS[1]][0]], events, merge_metadata)
   qr_main_section = select_patch_section(
    original[ORIGINAL_ORDER[5]], "wappd/common/main.c")
+  qr_main_section = rebase_patch_to_zero_offset(
+   candidate, ORIGINAL_ORDER[5] + " [main.c hunk folded into 010]", qr_main_section, events)
   apply_patch(candidate, ORIGINAL_ORDER[5] + " [main.c hunk folded into 010]",
               qr_main_section, events)
   for name in GROUPS[TARGETS[1]][1:]:
