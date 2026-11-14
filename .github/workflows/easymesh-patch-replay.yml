@@ -75,9 +75,9 @@ jobs:
           collect_replay_diagnostics() {
             rc=$?
             set +e
-            printf 'exit_code=%s\\nrun_id=%s\\nrun_attempt=%s\\ncommit=%s\\n' "$rc" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_SHA" > "$DIAG/metadata.txt"
+            printf 'exit_code=%s\nrun_id=%s\nrun_attempt=%s\ncommit=%s\n' "$rc" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_SHA" > "$DIAG/metadata.txt"
             if [ -d build_dir ]; then
-              find build_dir -type f \\( -name '*.rej' -o -name '*.orig' \\) -print > "$DIAG/reject-file-list.txt"
+              find build_dir -type f \( -name '*.rej' -o -name '*.orig' \) -print > "$DIAG/reject-file-list.txt"
               while IFS= read -r reject; do
                 [ -n "$reject" ] || continue
                 rel="${reject#build_dir/}"
@@ -104,7 +104,7 @@ jobs:
           }
           trap collect_replay_diagnostics EXIT
           make package/mtk/applications/easymesh-n60/prepare V=s 2>&1 | tee "$LOG"
-          if grep -Eiq 'Hunk #[0-9]+ succeeded.*(offset|fuzz)|offset [0-9]+ lines|with fuzz [0-9]+|Hunk #[0-9]+ FAILED|saving rejects|Reversed \\(or previously applied\\) patch' "$LOG"; then
+          if grep -Eiq 'Hunk #[0-9]+ succeeded.*(offset|fuzz)|offset [0-9]+ lines|with fuzz [0-9]+|Hunk #[0-9]+ FAILED|saving rejects|Reversed \(or previously applied\) patch' "$LOG"; then
             echo "Strict patch replay violation detected." >&2
             exit 1
           fi
