@@ -82,39 +82,306 @@ def apply_patch(root, name, content, events, allow_offsets=False):
  if rejects:
   raise RuntimeError(f"reject/orig files appeared after {name}: {rejects[:8]}")
 
-def remove_033_overlapping_psk_hunk(content):
- lines = content.splitlines()
- matches = [i for i, line in enumerate(lines) if line == "@@ -1023,6 +1026,8 @@"]
- if len(matches) != 1:
-  raise RuntimeError("033 expected exactly one overlapping PSK-zeroization hunk")
- start = matches[0]
- end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("@@ ") or lines[i].startswith("--- a/")), len(lines))
- body = lines[start + 1:end]
- additions = [line for line in body if line.startswith("+")]
- expected = [
-  "+\t\t\t\t/* Clear an old PSK before replacing the config object. */",
-  "+\t\t\t\tforced_memzero(wdev->config->psk, sizeof(wdev->config->psk));",
- ]
- if additions != expected or any(line.startswith("-") for line in body):
-  raise RuntimeError("033 overlapping hunk differs from the exact two-line PSK clear; refusing automatic merge")
- return "\n".join(lines[:start] + lines[end:]) + "\n"
+def _replace_once(source, old, new, label):
+ count = source.count(old)
+ if count != 1:
+  raise RuntimeError(f"033 source anchor {label!r} expected once, found {count}")
+ return source.replace(old, new, 1)
 
-def integrate_033_psk_zeroization(root, events):
+def _remove_c_block(source, marker, required, label):
+ if source.count(marker) != 1:
+  raise RuntimeError(f"033 block {label!r} expected exactly once")
+ start = source.index(marker)
+ brace = source.index("{", start)
+ depth = 0
+ state = "code"
+ escaped = False
+ i = brace
+ while i < len(source):
+  ch = source[i]
+  nxt = source[i + 1] if i + 1 < len(source) else ""
+  if state == "line_comment":
+   if ch == "\n": state = "code"
+  elif state == "block_comment":
+   if ch == "*" and nxt == "/":
+    state = "code"; i += 1
+  elif state in ("string", "char"):
+   if escaped: escaped = False
+   elif ch == "\\": escaped = True
+   elif (state == "string" and ch == '"') or (state == "char" and ch == "'"):
+    state = "code"
+  else:
+   if ch == "/" and nxt == "/":
+    state = "line_comment"; i += 1
+   elif ch == "/" and nxt == "*":
+    state = "block_comment"; i += 1
+   elif ch == '"': state = "string"
+   elif ch == "'": state = "char"
+   elif ch == "{": depth += 1
+   elif ch == "}":
+    depth -= 1
+    if depth == 0:
+     block = source[start:i + 1]
+     for token in required:
+      if token not in block:
+       raise RuntimeError(f"033 block {label!r} missing expected token {token!r}")
+     return source[:start] + source[i + 1:]
+  i += 1
+ raise RuntimeError(f"033 block {label!r} has unbalanced braces")
+
+def integrate_033_main_config_lifecycle(root, original_patch, events):
+ # 033 is a supplemental, overlapping main.c revision, not a replayable
+ # standalone patch: it contains two main.c sections based on different
+ # intermediate versions. Merge its unique lifecycle semantics into 010
+ # with exact source anchors instead of accepting offset/reject behavior.
+ required = [
+  "Clear an old PSK before replacing the config object.",
+  "dpp_csign_updated = 1;",
+  "forced_memzero(config[k].dpp_netaccesskey, config[k].dpp_netaccesskey_len);",
+  "forced_memzero(config[k].dpp_ppkey, config[k].dpp_ppkey_len);",
+  "wdev->config->dpp_csign_len = 0;",
+ ]
+ for token in required:
+  if token not in original_patch:
+   raise RuntimeError(f"033 source responsibility marker missing: {token!r}")
+
  path = root / "wappd/common/main.c"
  source = path.read_text(encoding="utf-8")
- target = "os_memcpy(wdev->config, (char *)(&config[k]), sizeof(struct dpp_config));"
- if source.count(target) != 1:
-  raise RuntimeError(f"010 ownership boundary must contain exactly one memcpy anchor; found {source.count(target)}")
- line = next(line for line in source.splitlines() if target in line)
- indent = line[:len(line) - len(line.lstrip())]
- replacement = (
-  indent + "/* Clear an old PSK before replacing the config object. */\n" +
-  indent + "forced_memzero(wdev->config->psk, sizeof(wdev->config->psk));\n" +
-  line
+
+ # Remove the obsolete second copy of 1905 credential reconstruction; the
+ # credential path remains owned by the DPP credential helpers, not main.c.
+ source = _remove_c_block(
+  source, "if (is_1905_conn) {",
+  ["_1905connector", "_1905netAccessKey", "wapp_dpp_save_dpp_cred"],
+  "legacy 1905 credential reconstruction"
  )
- source = source.replace(line, replacement, 1)
+ source = _replace_once(
+  source, "\tstruct dpp_sec_cred *cred = NULL;\n", "",
+  "obsolete cred local"
+ )
+ source = _replace_once(
+  source, "\tstruct dpp_authentication auth;\n", "",
+  "obsolete auth local"
+ )
+ source = _replace_once(
+  source, "\tu16 cred_len = 0, is_1905_conn = 0, is_normal = 0;\n",
+  "\tu16 is_1905_conn = 0, is_normal = 0;\n",
+  "obsolete cred_len local"
+ )
+ source = source.replace("\t//struct dpp_bss_cred *bss_cred = NULL;\n", "")
+ source = source.replace("\t//char all_zero_mac[MAC_ADDR_LEN]={0};\n", "")
+ source = source.replace("\t\tos_memset(&auth, '\\0', sizeof(struct dpp_authentication));\n", "")
+
+ # The old disabled reboot-BSS-credential block only references locals removed
+ # above and is not executable code; remove that dead block explicitly.
+ dead_start = "\n#if 0\n\tcred_len = 0;"
+ if source.count(dead_start) != 1:
+  raise RuntimeError("033 dead BSS credential block anchor is not unique")
+ ds = source.index(dead_start)
+ de_marker = "\n#endif"
+ de = source.index(de_marker, ds + len(dead_start))
+ source = source[:ds] + source[de + len(de_marker):]
+
+ # Old WAPP config-owned dynamic values must be erased before free/replacement.
+ source = _replace_once(
+  source,
+  "\t\t\t\tif (wdev->config->dpp_connector) {\n\t\t\t\t\tos_free(wdev->config->dpp_connector);",
+  "\t\t\t\tif (wdev->config->dpp_connector) {\n"
+  "\t\t\t\t\tforced_memzero(wdev->config->dpp_connector, os_strlen(wdev->config->dpp_connector) + 1);\n"
+  "\t\t\t\t\tos_free(wdev->config->dpp_connector);",
+  "old connector clear"
+ )
+ for field, length in [
+  ("dpp_csign", "wdev->config->dpp_csign_len"),
+  ("dpp_netaccesskey", "wdev->config->dpp_netaccesskey_len"),
+  ("dpp_ppkey", "wdev->config->dpp_ppkey_len"),
+ ]:
+  old = f"\t\t\t\tif (wdev->config->{field}) {{\n\t\t\t\t\tos_free(wdev->config->{field});"
+  new = (f"\t\t\t\tif (wdev->config->{field}) {{\n"
+         f"\t\t\t\t\tforced_memzero(wdev->config->{field}, {length});\n"
+         f"\t\t\t\t\tos_free(wdev->config->{field});")
+  source = _replace_once(source, old, new, f"old {field} clear")
+
+ # The fixed-size PSK belongs to the destination config object and must be
+ # cleared before the struct copy overwrites it.
+ source = _replace_once(
+  source,
+  "\t\t\t\tos_memcpy(wdev->config, (char *)(&config[k]), sizeof(struct dpp_config));",
+  "\t\t\t\t/* Clear an old PSK before replacing the config object. */\n"
+  "\t\t\t\tforced_memzero(wdev->config->psk, sizeof(wdev->config->psk));\n"
+  "\t\t\t\tos_memcpy(wdev->config, (char *)(&config[k]), sizeof(struct dpp_config));",
+  "destination PSK clear"
+ )
+
+ # The old global c-sign key is secret material too; clear it and reset its
+ # length before allocating the replacement.
+ source = _replace_once(
+  source,
+  "\t\t\t\t\tif (wapp->dpp_csign) {\n"
+  "\t\t\t\t\t\tos_free(wapp->dpp_csign);\n"
+  "\t\t\t\t\t\twapp->dpp_csign = NULL;\n"
+  "\t\t\t\t\t}",
+  "\t\t\t\t\tif (wapp->dpp_csign) {\n"
+  "\t\t\t\t\t\tforced_memzero(wapp->dpp_csign, wapp->dpp_csign_len);\n"
+  "\t\t\t\t\t\tos_free(wapp->dpp_csign);\n"
+  "\t\t\t\t\t\twapp->dpp_csign = NULL;\n"
+  "\t\t\t\t\t\twapp->dpp_csign_len = 0;\n"
+  "\t\t\t\t\t}",
+  "old WAPP c-sign clear"
+ )
+
+ # Track whether the global c-sign pointer was replaced so the error path can
+ # roll it back if a later allocation fails.
+ source = _replace_once(
+  source,
+  "\tstruct dpp_config config[3];\n\tint ret = 0;\n",
+  "\tstruct dpp_config config[3];\n"
+  "\tint ret = 0;\n"
+  "#ifdef MAP_R3_RECONFIG\n"
+  "\tint dpp_csign_updated = 0;\n"
+  "#endif\n",
+  "c-sign rollback flag declaration"
+ )
+ source = _replace_once(
+  source,
+  "\t\t\t\t\twapp->dpp_csign_len = config[k].dpp_csign_len;\n",
+  "\t\t\t\t\twapp->dpp_csign_len = config[k].dpp_csign_len;\n"
+  "\t\t\t\t\tdpp_csign_updated = 1;\n",
+  "c-sign rollback flag set"
+ )
+
+ # If allocation of the destination config itself failed, take the same
+ # function cleanup path as the other allocation failures.
+ source = _replace_once(
+  source,
+  "\t\t\t\twdev->config->key_mgmt = WPA_KEY_MGMT_DPP;\n\t\t\t}\n",
+  "\t\t\t\twdev->config->key_mgmt = WPA_KEY_MGMT_DPP;\n"
+  "\t\t\t} else {\n"
+  "\t\t\t\tgoto error;\n"
+  "\t\t\t}\n",
+  "destination config allocation failure"
+ )
+
+ # Suppress the credential-bearing c-sign diagnostic.
+ import re as _re
+ source, removed_logs = _re.subn(
+  r'^\s*wpa_hexdump\(MSG_DEBUG, DPP_MAP_PREX "in process config cign key",\n'
+  r'\s*wapp->dpp_csign, wapp->dpp_csign_len\);\n',
+  "", source, flags=_re.M
+ )
+ if removed_logs != 1:
+  raise RuntimeError(f"033 expected one c-sign hexdump removal, found {removed_logs}")
+
+ # Rewrite success-path cleanup to erase every secret before freeing it.
+ success_start_marker = "\tif (config[k].dpp_csign)"
+ success_end_marker = "\n\t/* Get QR code save conunt for */"
+ if source.count(success_start_marker) != 1 or source.count(success_end_marker) != 1:
+  raise RuntimeError("033 success cleanup boundary is not unique")
+ ss = source.index(success_start_marker)
+ se = source.index(success_end_marker, ss)
+ success_cleanup = (
+  "\tif (config[k].dpp_csign) {\n"
+  "\t\tforced_memzero(config[k].dpp_csign, config[k].dpp_csign_len);\n"
+  "\t\tos_free(config[k].dpp_csign);\n"
+  "\t\tconfig[k].dpp_csign = NULL;\n"
+  "\t}\n"
+  "\tif (config[k].dpp_netaccesskey) {\n"
+  "\t\tforced_memzero(config[k].dpp_netaccesskey, config[k].dpp_netaccesskey_len);\n"
+  "\t\tos_free(config[k].dpp_netaccesskey);\n"
+  "\t\tconfig[k].dpp_netaccesskey = NULL;\n"
+  "\t}\n"
+  "\tif (config[k].ssid) {\n"
+  "\t\tos_free(config[k].ssid);\n"
+  "\t\tconfig[k].ssid = NULL;\n"
+  "\t}\n"
+  "\tif (config[k].dpp_connector) {\n"
+  "\t\tforced_memzero(config[k].dpp_connector, os_strlen(config[k].dpp_connector) + 1);\n"
+  "\t\tos_free(config[k].dpp_connector);\n"
+  "\t\tconfig[k].dpp_connector = NULL;\n"
+  "\t}\n"
+  "#ifdef MAP_R3_RECONFIG\n"
+  "\tif (config[k].dpp_ppkey) {\n"
+  "\t\tforced_memzero(config[k].dpp_ppkey, config[k].dpp_ppkey_len);\n"
+  "\t\tos_free(config[k].dpp_ppkey);\n"
+  "\t\tconfig[k].dpp_ppkey = NULL;\n"
+  "\t}\n"
+  "#endif\n"
+ )
+ source = source[:ss] + success_cleanup + source[se:]
+
+ # Replace the stale cred cleanup at successful return with bounded temporary
+ # buffer and stack-PSK erasure.
+ source = _replace_once(
+  source,
+  "\t//fail:\n\tif (cred)\n\t\tos_free(cred);\n\n\treturn WAPP_SUCCESS;",
+  "\t//fail:\n"
+  "\tforced_memzero(value, sizeof(value));\n"
+  "\tforced_memzero(buf_temp, sizeof(buf_temp));\n"
+  "\tforced_memzero(config[k].psk, sizeof(config[k].psk));\n"
+  "\treturn WAPP_SUCCESS;",
+  "success stack-buffer cleanup"
+ )
+
+ # Error path: roll back a newly installed global c-sign key, then erase all
+ # remaining input configuration material. All ownership pointers are nulled.
+ error_label = "\nerror:\n"
+ if source.count(error_label) != 1:
+  raise RuntimeError("033 main.c error label is not unique")
+ es = source.index(error_label) + len(error_label)
+ er = source.index("\n\treturn -1;", es)
+ error_cleanup = (
+  "#ifdef MAP_R3_RECONFIG\n"
+  "\tif (dpp_csign_updated && wapp->dpp_csign) {\n"
+  "\t\tforced_memzero(wapp->dpp_csign, wapp->dpp_csign_len);\n"
+  "\t\tos_free(wapp->dpp_csign);\n"
+  "\t\twapp->dpp_csign = NULL;\n"
+  "\t\twapp->dpp_csign_len = 0;\n"
+  "\t}\n"
+  "#endif\n"
+  "\tif (config[k].dpp_connector) {\n"
+  "\t\tforced_memzero(config[k].dpp_connector, os_strlen(config[k].dpp_connector) + 1);\n"
+  "\t\tos_free(config[k].dpp_connector);\n"
+  "\t\tconfig[k].dpp_connector = NULL;\n"
+  "\t}\n"
+  "\tif (config[k].dpp_netaccesskey) {\n"
+  "\t\tforced_memzero(config[k].dpp_netaccesskey, config[k].dpp_netaccesskey_len);\n"
+  "\t\tos_free(config[k].dpp_netaccesskey);\n"
+  "\t\tconfig[k].dpp_netaccesskey = NULL;\n"
+  "\t}\n"
+  "\tif (config[k].dpp_csign) {\n"
+  "\t\tforced_memzero(config[k].dpp_csign, config[k].dpp_csign_len);\n"
+  "\t\tos_free(config[k].dpp_csign);\n"
+  "\t\tconfig[k].dpp_csign = NULL;\n"
+  "\t}\n"
+  "\tif (config[k].ssid) {\n"
+  "\t\tos_free(config[k].ssid);\n"
+  "\t\tconfig[k].ssid = NULL;\n"
+  "\t}\n"
+  "#ifdef MAP_R3_RECONFIG\n"
+  "\tif (config[k].dpp_ppkey) {\n"
+  "\t\tforced_memzero(config[k].dpp_ppkey, config[k].dpp_ppkey_len);\n"
+  "\t\tos_free(config[k].dpp_ppkey);\n"
+  "\t\tconfig[k].dpp_ppkey = NULL;\n"
+  "\t}\n"
+  "#endif\n"
+  "\tforced_memzero(value, sizeof(value));\n"
+  "\tforced_memzero(buf_temp, sizeof(buf_temp));\n"
+  "\tforced_memzero(config[k].psk, sizeof(config[k].psk));"
+ )
+ source = source[:es] + error_cleanup + source[er:]
+
+ # No remnants of the removed temporary auth/credential objects may survive.
+ for forbidden in ["auth.c_sign_key", "auth.net_access_key", "auth.connector",
+                   "if (cred)", "cred_len"]:
+  if forbidden in source:
+   raise RuntimeError(f"033 obsolete credential local remains after merge: {forbidden}")
  path.write_text(source, encoding="utf-8", newline="")
- events.append("033 lifecycle merge: moved the two-line PSK zeroization hunk into 010 immediately before its config memcpy")
+ events.append(
+  "033 main.c merged into 010 by source-anchored lifecycle integration: "
+  "removed obsolete local 1905 credential reconstruction/dead BSS block; "
+  "zeroed old and replacement config secrets; added config allocation failure handling, "
+  "c-sign rollback, connector NUL-byte clearing, and success/error stack cleanup"
+ )
 
 def rebuild_037_map_hunks(root, content, events, metadata):
  path = root / "wappd/map/map_1905.c"
@@ -183,12 +450,11 @@ def rebuild_037_map_hunks(root, content, events, metadata):
 
 def apply_legacy_patch(root, name, content, events, metadata):
  if name == "033-dpp-main-config-lifecycle.patch":
-  content = remove_033_overlapping_psk_hunk(content)
+  integrate_033_main_config_lifecycle(root, content, events)
+  return
  if name == "037-dpp-diagnostic-redaction.patch":
   content = rebuild_037_map_hunks(root, content, events, metadata)
  apply_patch(root, name, content, events, allow_offsets=True)
- if name == "033-dpp-main-config-lifecycle.patch":
-  integrate_033_psk_zeroization(root, events)
 
 def capture_group(root, name, output):
  run(["git", "add", "-A"], cwd=root)
