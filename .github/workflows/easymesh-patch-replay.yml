@@ -1,0 +1,91 @@
+name: N60 Pro EasyMesh Patch Replay (Prepare Only)
+
+on:
+  push:
+    branches:
+      - runner/easymesh-patch-replay-20261114
+    paths:
+      - .github/workflows/easymesh-patch-replay.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: n60pro-easymesh-patch-replay
+  cancel-in-progress: false
+
+jobs:
+  replay:
+    name: Native OpenWrt Build/Prepare patch replay (no compile)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout exact baseline
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install minimal host dependencies
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential git python3 rsync unzip zlib1g-dev file wget
+
+      - name: Update feeds
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Configure N60 Pro
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cp config/n60pro-1001.config .config
+          sed -i '/^CONFIG_PACKAGE_libopenssl-devcrypto=y$/d' .config
+          echo '# CONFIG_PACKAGE_libopenssl-devcrypto is not set' >> .config
+          if grep -q '^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_' .config; then
+            sed -i -E "s|^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_[^=]+=y|# &|" .config
+            sed -i -E 's|^# (CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_netcore_n60-pro)=y|\1=y|' .config
+          fi
+          grep -q '^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_netcore_n60-pro=y' .config || echo 'CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_netcore_n60-pro=y' >> .config
+          make defconfig
+          git rev-parse HEAD | tee "$RUNNER_TEMP/replay-baseline.txt"
+
+      - name: Download fixed EasyMesh vendor inputs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p dl
+          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py download --repo "$GITHUB_WORKSPACE" --dl-dir dl --ids wappd mapd 1905daemon libmapd
+          sha256sum dl/wappd-80ca5724.tar.bz2 dl/mapd-6eca4331.tar.bz2 dl/1905daemon-35234223.tar.bz2 dl/libmapd-0132d199.tar.bz2 | tee "$RUNNER_TEMP/vendor-archive-sha256.txt"
+
+      - name: Run native OpenWrt package Prepare only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          LOG="$RUNNER_TEMP/easymesh-prepare.log"
+          make package/mtk/applications/easymesh-n60/prepare V=s 2>&1 | tee "$LOG"
+          if grep -Eiq 'Hunk #[0-9]+ succeeded.*(offset|fuzz)|offset [0-9]+ lines|with fuzz [0-9]+|Hunk #[0-9]+ FAILED|saving rejects|Reversed \(or previously applied\) patch' "$LOG"; then
+            echo "Strict patch replay violation detected." >&2
+            exit 1
+          fi
+          test -d build_dir/target-aarch64_cortex-a53_musl/easymesh-n60-7.6.7.3
+          echo "PASS: native OpenWrt package Prepare completed; no compile/link target was invoked." | tee "$RUNNER_TEMP/replay-result.txt"
+
+      - name: Upload replay evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60pro-easymesh-patch-replay-${{ github.run_number }}-attempt-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/easymesh-prepare.log
+            ${{ runner.temp }}/vendor-archive-sha256.txt
+            ${{ runner.temp }}/replay-baseline.txt
+            ${{ runner.temp }}/replay-result.txt
+          if-no-files-found: warn
+          retention-days: 30
