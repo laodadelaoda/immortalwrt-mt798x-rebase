@@ -1,9 +1,19 @@
 --- a/wappd/common/main.c
 +++ b/wappd/common/main.c
-@@ -1122,8 +1122,18 @@
+@@ -1122,8 +1122,26 @@
  				wdev->config = os_zalloc(sizeof(struct dpp_config));
  			if (wdev->config) {
++#ifdef DPP_R2_RECONFIG
++				if (wdev->config->dpp_reconfig_id) {
++					dpp_free_reconfig_id(wdev->config->dpp_reconfig_id);
++					wdev->config->dpp_reconfig_id = NULL;
++				}
++#endif /* DPP_R2_RECONFIG */
  				os_memcpy(wdev->config, (char *)(&config[k]), sizeof(struct dpp_config));
++				/* The copied reconfiguration object is not owned by this config. */
++#ifdef DPP_R2_RECONFIG
++				wdev->config->dpp_reconfig_id = NULL;
++#endif /* DPP_R2_RECONFIG */
 +				/* The destination owns independent copies of every dynamic field. */
 +				wdev->config->ssid = NULL;
 +				wdev->config->dpp_connector = NULL;
