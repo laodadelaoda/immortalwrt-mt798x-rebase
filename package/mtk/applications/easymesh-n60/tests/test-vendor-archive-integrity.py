@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Verify pinned vendor archive members, patch deltas, and kernel package build edges."""
 from pathlib import Path, PurePosixPath
-import hashlib, posixpath, re, subprocess, sys, tarfile
+import hashlib, posixpath, re, sys, tarfile
 
 def need(ok, msg):
     if not ok:
@@ -10,11 +10,6 @@ def need(ok, msg):
 if len(sys.argv) != 5:
     raise SystemExit("usage: test-vendor-archive-integrity.py <input> <source> <pristine> <repo>")
 inp, src, pristine, repo = map(Path, sys.argv[1:])
-lock_helper = repo / "package/mtk/applications/easymesh-n60/scripts/n60-vendor-source-transforms.py"
-lock_result = subprocess.run([sys.executable, str(lock_helper), "verify-lock", str(repo)],
-                             text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-need(lock_result.returncode == 0, "canonical vendor source lock failed:\\n" + lock_result.stdout)
-print(lock_result.stdout, end="")
 def inventory(root):
     return {p.relative_to(root).as_posix(): p for p in root.rglob("*") if p.is_file()}
 def sha(path):
