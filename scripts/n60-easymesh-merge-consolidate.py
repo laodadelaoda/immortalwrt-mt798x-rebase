@@ -139,7 +139,7 @@ def integrate_033_main_config_lifecycle(root, original_patch, events):
   "dpp_csign_updated = 1;",
   "forced_memzero(config[k].dpp_netaccesskey, config[k].dpp_netaccesskey_len);",
   "forced_memzero(config[k].dpp_ppkey, config[k].dpp_ppkey_len);",
-  "wdev->config->dpp_csign_len = 0;",
+  "wapp->dpp_csign_len = 0;",
  ]
  for token in required:
   if token not in original_patch:
