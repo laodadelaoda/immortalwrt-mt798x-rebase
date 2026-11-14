@@ -164,7 +164,7 @@ for rel in ("CMakeLists.txt","datconf/CMakeLists.txt","datconf/datconf.c","datco
     need(rel in datconf_files,f"datconf CMake/source input missing: {rel}")
 mtwifi_pkg=(repo/"package/mtk/drivers/mt_wifi/Makefile").read_text()
 need("PKG_BUILD_DEPENDS:=warp conninfra" in mtwifi_pkg and
-     'KBUILD_EXTRA_SYMBOLS="$(KERNEL_BUILD_DIR)/conninfra/Module.symvers"' in mtwifi_pkg,
+     'KBUILD_EXTRA_SYMBOLS="$(KERNEL_BUILD_DIR)/symvers/conninfra.symvers"' in mtwifi_pkg,
      "mt_wifi Conninfra/WARP dependency or modpost edge missing")
 need('M="$(PKG_BUILD_DIR)/mt_wifi_ap"' in mtwifi_pkg and
      (src/"mtwifi/mt_wifi_ap/Makefile").is_file(),
