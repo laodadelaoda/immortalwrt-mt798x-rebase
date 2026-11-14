@@ -70,11 +70,7 @@
  					os_memcpy(wdev->config->dpp_ppkey, config[k].dpp_ppkey,config[k].dpp_ppkey_len);
  				}
  #endif
-@@ -1240,6 +1268,45 @@
- 	if (cred)
- 		os_free(cred);
-
- 	return WAPP_SUCCESS;
+@@ -1273,1 +1301,40 @@
 +
 +wdev_config_error:
 +	if (wdev && wdev->config) {
@@ -114,11 +110,7 @@
 +		wdev->config->key_mgmt = 0;
 +	}
 +	goto error;
-
- error:
- 	if (auth.c_sign_key)
- 		wpabuf_clear_free(auth.c_sign_key);
-
+ 	error:
 # BEGIN: 033-dpp-main-config-lifecycle.patch — merged into 010 by lifecycle ownership
 --- a/wappd/common/main.c
 +++ b/wappd/common/main.c
