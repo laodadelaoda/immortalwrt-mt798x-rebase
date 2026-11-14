@@ -356,11 +356,22 @@ def integrate_033_main_config_lifecycle(root, original_patch, events):
 
  # Rewrite success-path cleanup to erase every secret before freeing it.
  success_start_marker = "\tif (config[k].dpp_csign)"
- success_end_marker = "\n\t/* Get QR code save conunt for */"
+ # 016 replaces the legacy QR-count comment with the bounded dpp_read_qr_count() block.
+ # Accept that post-016 anchor when the 033 lifecycle merge runs after the 016 main.c fold.
+ success_end_markers = (
+  "\n\t/* Get QR code save conunt for */",
+  "\n\tif (wapp->dpp) {\n\t\tunsigned int qr_count = 0;",
+ )
  ss = source.find(success_start_marker)
- se = source.find(success_end_marker, ss + 1) if ss >= 0 else -1
+ se = -1
+ success_end_marker = None
+ if ss >= 0:
+  candidates = [(source.find(marker, ss + 1), marker) for marker in success_end_markers]
+  candidates = [(pos, marker) for pos, marker in candidates if pos >= 0]
+  if candidates:
+   se, success_end_marker = min(candidates, key=lambda item: item[0])
  if ss < 0 or se < 0:
-  raise RuntimeError("033 success cleanup boundary is missing or out of order")
+  raise RuntimeError("033 success cleanup boundary is missing or out of order (legacy and post-016 anchors absent)")
  success_cleanup = (
   "\tif (config[k].dpp_csign) {\n"
   "\t\tforced_memzero(config[k].dpp_csign, config[k].dpp_csign_len);\n"
