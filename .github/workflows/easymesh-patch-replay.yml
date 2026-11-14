@@ -17,6 +17,9 @@ on:
       - package/mtk/applications/datconf/patches/**
       - package/kernel/mapfilter/patches/**
       - package/mtk/applications/easymesh-n60/Makefile
+      - package/mtk/applications/easymesh-n60/tests/**
+      - package/mtk/applications/easymesh-n60/scripts/**
+      - package/mtk/drivers/mt_wifi/tests/**
       - package/mtk/applications/datconf/Makefile
       - package/mtk/drivers/mt_wifi/Makefile
       - package/mtk/drivers/conninfra/Makefile
@@ -613,15 +616,6 @@ jobs:
             --repo "$GITHUB_WORKSPACE" \
             --evidence-dir "$RUNNER_TEMP/mtwifi-026-audit"
 
-      - name: Upload MT Wi-Fi 026 source, path and function evidence
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: n60-mtwifi-026-source-audit
-          path: ${{ runner.temp }}/mtwifi-026-audit/
-          if-no-files-found: warn
-          retention-days: 14
-
       - name: Create exact-SHA canonical audit credential
         if: success()
         shell: bash
@@ -646,6 +640,10 @@ jobs:
               "package/kernel/mapfilter/Makefile",
               "package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py",
               "package/mtk/applications/easymesh-n60/scripts/n60-vendor-source-transforms.py",
+              "package/mtk/applications/easymesh-n60/scripts/test-dpp-cred-len-preprocess.py",
+              "scripts/n60-easymesh-merge-consolidate.py",
+              "package/mtk/applications/easymesh-n60/tests/test-vendor-lock-evaluation.py",
+              "package/mtk/applications/easymesh-n60/tests/test-patch-maintenance-index.py",
               "package/mtk/applications/easymesh-n60/tests/test-vendor-archive-integrity.py",
               "package/mtk/applications/easymesh-n60/tests/test-dpp-source-contract.py",
               "package/mtk/drivers/mt_wifi/tests/test-026-prandom-u32-prepare.py",
