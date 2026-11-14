@@ -200,6 +200,8 @@ def main():
  endidx = next((i for i in range(hidx + 1, len(lines_037))
                 if lines_037[i].startswith("--- a/")), len(lines_037))
  body = lines_037[hidx + 1:endidx]
+ while body and body[-1] == "":
+  body.pop()  # blank separator before the next file header is outside the hunk
  old_count = sum(1 for line in body if line.startswith(" ") or line.startswith("-"))
  new_count = sum(1 for line in body if line.startswith(" ") or line.startswith("+"))
  if old_count != 0 or new_count != 19 or any(not line.startswith("+") for line in body):
