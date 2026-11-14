@@ -1,6 +1,157 @@
+diff --git a/wappd/common/main.c b/wappd/common/main.c
+index 12150f1..040ecb5 100644
 --- a/wappd/common/main.c
 +++ b/wappd/common/main.c
-@@ -1122,8 +1122,28 @@
+@@ -822,14 +822,12 @@ int dpp_read_config_file_for_connection(struct wifi_app *wapp)
+ 	struct wapp_dev *wdev = NULL, *wdev_temp = NULL;
+ 	struct dpp_config config[3];
+ 	int ret = 0;
++#ifdef MAP_R3_RECONFIG
++	int dpp_csign_updated = 0;
++#endif
+ #ifdef MAP_R3
+-	struct dpp_sec_cred *cred = NULL;
+-	struct dpp_authentication auth;
+-	//struct dpp_bss_cred *bss_cred = NULL;
+ 	u16 is_1905_conn = 0, is_normal = 0;
+ 	struct dl_list *dev_list;
+-	os_memset(&auth, 0, sizeof(auth));
+-	//char all_zero_mac[MAC_ADDR_LEN]={0};
+ #endif
+ 
+ 	DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"%s\n", __func__);
+@@ -966,103 +965,7 @@ int dpp_read_config_file_for_connection(struct wifi_app *wapp)
+ 		os_memcpy(config[k].dpp_connector, value, os_strlen(value));
+ 		config[k].dpp_connector[os_strlen(value)] = '\0';
+ 	}
+-	if (is_1905_conn) {
+-		NdisZeroMemory(value, 1024);
+-		NdisZeroMemory(param, 64);
+-		ret = os_snprintf(param, sizeof(param), "_netKeyExpiry");
+-		if (os_snprintf_error(sizeof(param), ret)) {
+-			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+-			goto error;
+-		}
+-		if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
+-			goto error;
+-		auth.net_access_key_expiry = atol(value);
+-		NdisZeroMemory(value, 1024);
+-		NdisZeroMemory(param, 64);
+-		ret = os_snprintf(param, sizeof(param), "_decryptThreshold");
+-		if (os_snprintf_error(sizeof(param), ret)) {
+-			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+-			goto error;
+-		}
+-		if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
+-			goto error;
+-		auth.decrypt_thresold = atoi(value);
+-		NdisZeroMemory(value, 1024);
+-		NdisZeroMemory(param, 64);
+-		ret = os_snprintf(param, sizeof(param), "_1905connector");
+-		if (os_snprintf_error(sizeof(param), ret)) {
+-			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+-			goto error;
+-		}
+-		if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
+-			goto error;
+-		auth.connector = os_zalloc(os_strlen(value)+1);
+-		if (!auth.connector) {
+-			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+-			goto error;
+-		}
+-		os_memcpy(auth.connector, value, os_strlen(value));
+-		NdisZeroMemory(buf_temp, 1024);
+-		NdisZeroMemory(value, 1024);
+-		NdisZeroMemory(param, 64);
+-		ret = os_snprintf(param, sizeof(param), "_1905netAccessKey");
+-		if (os_snprintf_error(sizeof(param), ret)) {
+-			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+-			goto error;
+-		}
+-		if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
+-			goto error;
+-		{
+-			size_t hex_len = os_strlen(value);
+-			size_t key_len;
+-			if (!hex_len || (hex_len & 1) || hex_len / 2 > sizeof(buf_temp))
+-				goto error;
+-			key_len = hex_len / 2;
+-			if (hexstr2bin(value, buf_temp, key_len) < 0)
+-				goto error;
+-			auth.net_access_key = wpabuf_alloc(key_len);
+-			if (!auth.net_access_key)
+-				goto error;
+-			NdisCopyMemory(auth.net_access_key->buf, buf_temp, key_len);
+-			auth.net_access_key->used = key_len;
+-		}
+-		NdisZeroMemory(buf_temp, sizeof(buf_temp));
+-		NdisZeroMemory(value, sizeof(value));
+-		NdisZeroMemory(buf_temp, 1024);
+-		NdisZeroMemory(value, 1024);
+-		NdisZeroMemory(param, 64);
+-		ret = os_snprintf(param, sizeof(param), "_1905cSignKey");
+-		if (os_snprintf_error(sizeof(param), ret)) {
+-			DBGPRINT(RT_DEBUG_ERROR, "[%s] os_snprintf fail\n", __func__);
+-			goto error;
+-		}
+-		if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
+-			goto error;
+-		{
+-			size_t hex_len = os_strlen(value);
+-			size_t key_len;
+-			if (!hex_len || (hex_len & 1) || hex_len / 2 > sizeof(buf_temp))
+-				goto error;
+-			key_len = hex_len / 2;
+-			if (hexstr2bin(value, buf_temp, key_len) < 0)
+-				goto error;
+-			auth.c_sign_key = wpabuf_alloc(key_len);
+-			if (!auth.c_sign_key)
+-				goto error;
+-			NdisCopyMemory(auth.c_sign_key->buf, buf_temp, key_len);
+-			auth.c_sign_key->used = key_len;
+-		}
+-		NdisZeroMemory(buf_temp, sizeof(buf_temp));
+-		NdisZeroMemory(value, sizeof(value));
+-		cred = wapp_dpp_save_dpp_cred(&auth);
+-		if (!cred) {
+-			DBGPRINT(RT_DEBUG_ERROR, "[%s] wapp_dpp_save_dpp_cred fail\n", __func__);
+-			goto error;
+-		}
+-		wpabuf_clear_free(auth.net_access_key);
+-		wpabuf_clear_free(auth.c_sign_key);
+-		os_free(auth.connector);
+-	}
++	
+ #if 1
+ #ifdef MAP_R3_RECONFIG
+ 
+@@ -1098,20 +1001,24 @@ int dpp_read_config_file_for_connection(struct wifi_app *wapp)
+ 					wdev->config->ssid = NULL;
+ 				}
+ 				if (wdev->config->dpp_connector) {
++					forced_memzero(wdev->config->dpp_connector, os_strlen(wdev->config->dpp_connector) + 1);
+ 					os_free(wdev->config->dpp_connector);
+ 					wdev->config->dpp_connector = NULL;
+ 				}
+ 				if (wdev->config->dpp_csign) {
++					forced_memzero(wdev->config->dpp_csign, wdev->config->dpp_csign_len);
+ 					os_free(wdev->config->dpp_csign);
+ 					wdev->config->dpp_csign = NULL;
+ 				}
+ 				if (wdev->config->dpp_netaccesskey) {
++					forced_memzero(wdev->config->dpp_netaccesskey, wdev->config->dpp_netaccesskey_len);
+ 					os_free(wdev->config->dpp_netaccesskey);
+ 					wdev->config->dpp_netaccesskey = NULL;
+ 				}
+ #if 1
+ #ifdef MAP_R3_RECONFIG
+ 				if (wdev->config->dpp_ppkey) {
++					forced_memzero(wdev->config->dpp_ppkey, wdev->config->dpp_ppkey_len);
+ 					os_free(wdev->config->dpp_ppkey);
+ 					wdev->config->dpp_ppkey = NULL;
+ 				}
+@@ -1121,41 +1028,69 @@ int dpp_read_config_file_for_connection(struct wifi_app *wapp)
+ 			if (!wdev->config)
  				wdev->config = os_zalloc(sizeof(struct dpp_config));
  			if (wdev->config) {
 +#ifdef DPP_R2_RECONFIG
@@ -9,6 +160,8 @@
 +					wdev->config->dpp_reconfig_id = NULL;
 +				}
 +#endif /* DPP_R2_RECONFIG */
++				/* Clear an old PSK before replacing the config object. */
++				forced_memzero(wdev->config->psk, sizeof(wdev->config->psk));
  				os_memcpy(wdev->config, (char *)(&config[k]), sizeof(struct dpp_config));
 +				/* The copied reconfiguration object is not owned by this config. */
 +#ifdef DPP_R2_RECONFIG
@@ -29,7 +182,12 @@
  					os_memcpy(wdev->config->dpp_csign, config[k].dpp_csign,config[k].dpp_csign_len);
  #ifdef MAP_R3_RECONFIG
  					if (wapp->dpp_csign) {
-@@ -1134,7 +1144,7 @@
++						forced_memzero(wapp->dpp_csign, wapp->dpp_csign_len);
+ 						os_free(wapp->dpp_csign);
+ 						wapp->dpp_csign = NULL;
++						wapp->dpp_csign_len = 0;
+ 					}
+ 					wapp->dpp_csign = os_zalloc(config[k].dpp_csign_len);
  					if (!wapp->dpp_csign) {
  						wpa_printf(MSG_ERROR, DPP_MAP_PREX
  								"wapp->dpp_csign allocation failed");
@@ -38,7 +196,12 @@
  					}
  					os_memcpy(wapp->dpp_csign, config[k].dpp_csign,
  							config[k].dpp_csign_len);
-@@ -1146,16 +1156,22 @@
+ 					wapp->dpp_csign_len = config[k].dpp_csign_len;
+-
+-					wpa_hexdump(MSG_DEBUG, DPP_MAP_PREX "in process config cign key",
+-							wapp->dpp_csign, wapp->dpp_csign_len);
++					dpp_csign_updated = 1;
+ #endif /* MAP_R3_RECONFIG */
  				}
  				if (config[k].dpp_netaccesskey_len > 0) {
  					wdev->config->dpp_netaccesskey = os_zalloc(config[k].dpp_netaccesskey_len);
@@ -54,14 +217,14 @@
  					wdev->config->ssid[config[k].ssid_len] = '\0';
  				}
  				if (os_strlen(config[k].dpp_connector) > 0) {
-
+ 
  					wdev->config->dpp_connector = os_zalloc(os_strlen(config[k].dpp_connector) + 1);
 +					if (!wdev->config->dpp_connector)
 +						goto wdev_config_error;
  					os_memcpy(wdev->config->dpp_connector, config[k].dpp_connector,os_strlen(config[k].dpp_connector));
  					wdev->config->dpp_connector[os_strlen(config[k].dpp_connector)] = '\0';
-
-@@ -1164,6 +1180,8 @@
+ 
+@@ -1164,105 +1099,139 @@ int dpp_read_config_file_for_connection(struct wifi_app *wapp)
  #ifdef MAP_R3_RECONFIG
  				if (config[k].dpp_ppkey_len > 0) {
  					wdev->config->dpp_ppkey = os_zalloc(config[k].dpp_ppkey_len);
@@ -70,10 +233,114 @@
  					os_memcpy(wdev->config->dpp_ppkey, config[k].dpp_ppkey,config[k].dpp_ppkey_len);
  				}
  #endif
-@@ -1241,7 +1259,46 @@
- 		os_free(cred);
-
+ #endif
+ 				wdev->config->key_mgmt = WPA_KEY_MGMT_DPP;
++			} else {
++				goto error;
+ 			}
+ 		}
+ 	}
+-	if (config[k].dpp_csign)
++	if (config[k].dpp_csign) {
++		forced_memzero(config[k].dpp_csign, config[k].dpp_csign_len);
+ 		os_free(config[k].dpp_csign);
+-	if (config[k].dpp_netaccesskey)
++		config[k].dpp_csign = NULL;
++	}
++	if (config[k].dpp_netaccesskey) {
++		forced_memzero(config[k].dpp_netaccesskey, config[k].dpp_netaccesskey_len);
+ 		os_free(config[k].dpp_netaccesskey);
+-	if (config[k].ssid)
++		config[k].dpp_netaccesskey = NULL;
++	}
++	if (config[k].ssid) {
+ 		os_free(config[k].ssid);
+-	if (config[k].dpp_connector)
++		config[k].ssid = NULL;
++	}
++	if (config[k].dpp_connector) {
++		forced_memzero(config[k].dpp_connector, os_strlen(config[k].dpp_connector) + 1);
+ 		os_free(config[k].dpp_connector);
+-#if 1
++		config[k].dpp_connector = NULL;
++	}
+ #ifdef MAP_R3_RECONFIG
+-	if (config[k].dpp_ppkey)
++	if (config[k].dpp_ppkey) {
++		forced_memzero(config[k].dpp_ppkey, config[k].dpp_ppkey_len);
+ 		os_free(config[k].dpp_ppkey);
+-#endif
+-#endif
+-
+-#if 0
+-	cred_len = 0;
+-
+-	dl_list_for_each(wdev, dev_list, struct wapp_dev, list) {
+-		NdisZeroMemory(value, 1024);
+-		NdisZeroMemory(param, 64);
+-		os_snprintf(param, sizeof(param), "_bsscredlen");
+-		get_dpp_parameters(wapp->map, param, value, sizeof(value));
+-		cred_len = atoi(value);
+-		if (cred_len) {
+-			bss_cred = os_zalloc(cred_len);
+-			if (!bss_cred)
+-				goto fail;
+-
+-			NdisZeroMemory(value, 1024);
+-			NdisZeroMemory(param, 64);
+-			os_memcpy(bss_cred->enrollee_mac, all_zero_mac, MAC_ADDR_LEN);
+-			os_memcpy(bss_cred->almac, all_zero_mac, MAC_ADDR_LEN);
+-			os_snprintf(param, sizeof(param), "_bhcredlen");
+-			get_dpp_parameters(wapp->map, param, value, sizeof(value));
+-			bss_cred->bh_connect_len = atoi(value);
+-			NdisZeroMemory(value, 1024);
+-			NdisZeroMemory(param, 64);
+-			os_snprintf(param, sizeof(param), "_fhcredlen");
+-			get_dpp_parameters(wapp->map, param, value, sizeof(value));
+-			bss_cred->fh_connect_len = atoi(value);
+-			bss_cred->payload_len = bss_cred->bh_connect_len + bss_cred->fh_connect_len;
+-			NdisZeroMemory(param, 64);
+-			os_snprintf(param, sizeof(param), "_bsscred");
+-			get_dpp_parameters(wapp->map, param, (char *)bss_cred->payload, bss_cred->payload_len+1);
+-
+-			hex_dump(DPP_MAP_PREX"Reboot BSS_connectors= ",(UCHAR *)bss_cred, cred_len);
+-			if (wapp_send_1905_msg(wapp, WAPP_SEND_BSS_CONNECTOR,
+-				cred_len, (char *)bss_cred) < 0)
+-				DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"sending failed\n");
+-
+-			os_free(bss_cred);
+-		} else
+-			continue;
+-
+-		break;
++		config[k].dpp_ppkey = NULL;
+ 	}
+ #endif
+ 
+-	/* Get QR code save conunt for */
+-	get_dpp_parameters(wapp->map, "qr_count", value, sizeof(value));
+-	if (wapp->dpp)
+-		wapp->dpp->qr_code_num = atoi(value);
++	if (wapp->dpp) {
++		unsigned int qr_count = 0;
+ 
+-//fail:
+-	if (cred)
+-		os_free(cred);
++		if (dpp_read_qr_count(wapp, &qr_count) < 0) {
++			DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"invalid qr_count while loading DPP config\n");
++			wapp->dpp->qr_code_num = 0;
++			goto error;
++		}
++		wapp->dpp->qr_code_num = (u8)qr_count;
++	}
+ 
++	//fail:
++	forced_memzero(value, sizeof(value));
++	forced_memzero(buf_temp, sizeof(buf_temp));
++	forced_memzero(config[k].psk, sizeof(config[k].psk));
  	return WAPP_SUCCESS;
+ 
 +
 +wdev_config_error:
 +	if (wdev && wdev->config) {
@@ -113,6 +380,196 @@
 +		wdev->config->key_mgmt = 0;
 +	}
 +	goto error;
-
  error:
- 	if (auth.c_sign_key)
+-	if (auth.c_sign_key)
+-		wpabuf_clear_free(auth.c_sign_key);
+-	if (auth.net_access_key)
+-		wpabuf_clear_free(auth.net_access_key);
+-	if (auth.connector)
+-		os_free(auth.connector);
+-	if (config[k].dpp_connector)
++#ifdef MAP_R3_RECONFIG
++	if (dpp_csign_updated && wapp->dpp_csign) {
++		forced_memzero(wapp->dpp_csign, wapp->dpp_csign_len);
++		os_free(wapp->dpp_csign);
++		wapp->dpp_csign = NULL;
++		wapp->dpp_csign_len = 0;
++	}
++#endif
++	if (config[k].dpp_connector) {
++		forced_memzero(config[k].dpp_connector, os_strlen(config[k].dpp_connector) + 1);
+ 		os_free(config[k].dpp_connector);
+-	if (config[k].dpp_netaccesskey)
++		config[k].dpp_connector = NULL;
++	}
++	if (config[k].dpp_netaccesskey) {
++		forced_memzero(config[k].dpp_netaccesskey, config[k].dpp_netaccesskey_len);
+ 		os_free(config[k].dpp_netaccesskey);
+-	if (config[k].dpp_csign)
++		config[k].dpp_netaccesskey = NULL;
++	}
++	if (config[k].dpp_csign) {
++		forced_memzero(config[k].dpp_csign, config[k].dpp_csign_len);
+ 		os_free(config[k].dpp_csign);
+-	if (config[k].ssid)
++		config[k].dpp_csign = NULL;
++	}
++	if (config[k].ssid) {
+ 		os_free(config[k].ssid);
++		config[k].ssid = NULL;
++	}
+ #ifdef MAP_R3_RECONFIG
+-	if (config[k].dpp_ppkey)
++	if (config[k].dpp_ppkey) {
++		forced_memzero(config[k].dpp_ppkey, config[k].dpp_ppkey_len);
+ 		os_free(config[k].dpp_ppkey);
++		config[k].dpp_ppkey = NULL;
++	}
+ #endif
+-	if (cred)
+-		os_free(cred);
++	forced_memzero(value, sizeof(value));
++	forced_memzero(buf_temp, sizeof(buf_temp));
++	forced_memzero(config[k].psk, sizeof(config[k].psk));
+ 	return -1;
+ 
+ }
+diff --git a/wappd/common/wdev.c b/wappd/common/wdev.c
+index 5bea33d..93e68a2 100644
+--- a/wappd/common/wdev.c
++++ b/wappd/common/wdev.c
+@@ -42,6 +42,7 @@
+ #include "interface.h"
+ #include "wps.h"
+ #include "debug.h"
++#include "util.h"
+ #ifdef DPP_SUPPORT
+ #include "dpp/dpp_wdev.h"
+ #include "gas_query.h"
+@@ -2257,8 +2258,6 @@ void wdev_handle_dpp_sta_info(struct wifi_app *wapp,
+ 	wapp_event_data *event_data)
+ {
+ 	char buf[2048] = {0};
+-	char hex_pmk[event_data->sta_info.pmk_len * 2 + 1];
+-	char hex_ptk[event_data->sta_info.ptk_len * 2 + 1];
+ 	int ret = 0;
+ 
+ #ifdef MAP_R3_RECONFIG
+@@ -2283,37 +2282,8 @@ void wdev_handle_dpp_sta_info(struct wifi_app *wapp,
+ 	}
+ 	wpa_write_config_file(DPP_CFG_FILE_TEST, buf, strlen(buf));
+ 	os_memset(buf, 0, 2048);
+-	ret = os_snprintf(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x_passphrase %s\n",
+-		PRINT_MAC(event_data->sta_info.src), event_data->sta_info.passphrase);
+-	if (os_snprintf_error(sizeof(buf), ret)) {
+-		DBGPRINT(RT_DEBUG_ERROR, "[%s] (%d): os_snprintf fail\n", __func__, __LINE__);
+-		return;
+-	}
+-	wpa_write_config_file(DPP_CFG_FILE_TEST, buf, strlen(buf));
+-	os_memset(buf, 0, 2048);
+-	os_snprintf_hex(hex_pmk, sizeof(hex_pmk), event_data->sta_info.pmk,
+-		event_data->sta_info.pmk_len);
+-	ret = os_snprintf(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x_PMK %s\n",
+-		PRINT_MAC(event_data->sta_info.src), hex_pmk);
+-	if (os_snprintf_error(sizeof(buf), ret)) {
+-		DBGPRINT(RT_DEBUG_ERROR, "[%s] (%d): os_snprintf fail\n", __func__, __LINE__);
+-		return;
+-	}
+-	wpa_write_config_file(DPP_CFG_FILE_TEST, buf, strlen(buf));
+-	os_memset(buf, 0, 2048);
+-	ret = os_snprintf_hex(hex_ptk, sizeof(hex_ptk), event_data->sta_info.ptk,
+-		event_data->sta_info.ptk_len);
+-	if (os_snprintf_error(sizeof(hex_ptk), ret)) {
+-		DBGPRINT(RT_DEBUG_ERROR, "[%s] (%d): os_snprintf fail\n", __func__, __LINE__);
+-		return;
+-	}
+-	ret = os_snprintf(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x_PTK %s\n",
+-		PRINT_MAC(event_data->sta_info.src), hex_ptk);
+-	if (os_snprintf_error(sizeof(buf), ret)) {
+-		DBGPRINT(RT_DEBUG_ERROR, "[%s] (%d): os_snprintf fail\n", __func__, __LINE__);
+-		return;
+-	}
+-	wpa_write_config_file(DPP_CFG_FILE_TEST, buf, strlen(buf));
++	/* Never persist passphrases, PMKs, or PTKs in the DPP test file. */
++
+ }
+ 
+ void wdev_handle_dpp_uri_info(struct wifi_app *wapp,
+@@ -3603,17 +3573,41 @@ int wdev_set_dpp_cred(struct wifi_app *wapp, struct wapp_dev *wdev,
+ 	}
+ 
+ 	if (wdev && wdev->config && primary_cred) {
++		if (wdev->config->dpp_connector)
++			forced_memzero(wdev->config->dpp_connector, os_strlen(wdev->config->dpp_connector) + 1);
++		if (wdev->config->dpp_netaccesskey)
++			forced_memzero(wdev->config->dpp_netaccesskey, wdev->config->dpp_netaccesskey_len);
++		if (wdev->config->dpp_csign)
++			forced_memzero(wdev->config->dpp_csign, wdev->config->dpp_csign_len);
++#ifdef MAP_R3_RECONFIG
++		if (wdev->config->dpp_ppkey)
++			forced_memzero(wdev->config->dpp_ppkey, wdev->config->dpp_ppkey_len);
++		forced_memzero(wdev->config->psk, sizeof(wdev->config->psk));
+ 		os_free(wdev->config->dpp_connector);
+ 		os_free(wdev->config->dpp_netaccesskey);
+ 		os_free(wdev->config->dpp_csign);
++		os_free(wdev->config->dpp_ppkey);
++#endif /* MAP_R3_RECONFIG */
+ 		os_free(wdev->config->ssid);
+ 		os_free(wdev->config);
+ 		wdev->config = NULL;
+ 	}
+ 	else if(wdev && wdev->config2) {
++		if (wdev->config2->dpp_connector)
++			forced_memzero(wdev->config2->dpp_connector, os_strlen(wdev->config2->dpp_connector) + 1);
++		if (wdev->config2->dpp_netaccesskey)
++			forced_memzero(wdev->config2->dpp_netaccesskey, wdev->config2->dpp_netaccesskey_len);
++		if (wdev->config2->dpp_csign)
++			forced_memzero(wdev->config2->dpp_csign, wdev->config2->dpp_csign_len);
++#ifdef MAP_R3_RECONFIG
++		if (wdev->config2->dpp_ppkey)
++			forced_memzero(wdev->config2->dpp_ppkey, wdev->config2->dpp_ppkey_len);
++		forced_memzero(wdev->config2->psk, sizeof(wdev->config2->psk));
+ 		os_free(wdev->config2->dpp_connector);
+ 		os_free(wdev->config2->dpp_netaccesskey);
+ 		os_free(wdev->config2->dpp_csign);
++		os_free(wdev->config2->dpp_ppkey);
++#endif /* MAP_R3_RECONFIG */
+ 		os_free(wdev->config2->ssid);
+ 		os_free(wdev->config2);
+ 		wdev->config2 = NULL;
+@@ -3640,16 +3634,29 @@ int wdev_set_dpp_cred(struct wifi_app *wapp, struct wapp_dev *wdev,
+ 	return WAPP_SUCCESS;
+ 
+ fail:
+-	if (wdev_config && wdev_config->ssid)
+-		os_free(wdev_config->ssid);
+-	if (wdev_config && wdev_config->dpp_connector)
++	if (wdev_config && wdev_config->dpp_connector) {
++		forced_memzero(wdev_config->dpp_connector, os_strlen(wdev_config->dpp_connector) + 1);
+ 		os_free(wdev_config->dpp_connector);
+-	if (wdev_config && wdev_config->dpp_csign)
++	}
++	if (wdev_config && wdev_config->dpp_csign) {
++		forced_memzero(wdev_config->dpp_csign, wdev_config->dpp_csign_len);
+ 		os_free(wdev_config->dpp_csign);
+-	if (wdev_config && wdev_config->dpp_netaccesskey)
++	}
++	if (wdev_config && wdev_config->dpp_netaccesskey) {
++		forced_memzero(wdev_config->dpp_netaccesskey, wdev_config->dpp_netaccesskey_len);
+ 		os_free(wdev_config->dpp_netaccesskey);
+-	if (wdev_config)
++	}
++#ifdef MAP_R3_RECONFIG
++	if (wdev_config && wdev_config->dpp_ppkey) {
++		forced_memzero(wdev_config->dpp_ppkey, wdev_config->dpp_ppkey_len);
++		os_free(wdev_config->dpp_ppkey);
++	}
++#endif /* MAP_R3_RECONFIG */
++	if (wdev_config) {
++		forced_memzero(wdev_config->psk, sizeof(wdev_config->psk));
++		os_free(wdev_config->ssid);
+ 		os_free(wdev_config);
++	}
+ 
+ 	return WAPP_INVALID_ARG;
+ }

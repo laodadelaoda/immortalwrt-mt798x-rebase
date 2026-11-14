@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "description": "Immutable references and SHA256 digests for the eight original N60 Pro audit evidence artifacts. Original artifacts remain in GitHub Actions run 42454704510; do not replace or delete them.",
+  "source_run": {
+    "id": 42454704510,
+    "branch": "n60pro-mtk-closed-driver",
+    "head_sha": "9fc7cf1499304bb3e4fce648ac27ed0cd3d1710a",
+    "url": "https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/actions/runs/42454704510"
+  },
+  "artifacts": [
+    {
+      "name": "n60-kernel-patch-attestation",
+      "id": 13607193166,
+      "sha256": "6cdfa8bee7cecb8c99cf9b289fd67096b3dd1ab7eea71529aeeb37fafb114f80",
+      "size_bytes": 701762,
+      "created_at": "2026-11-08T06:30:21Z",
+      "expires_at": "2026-12-08T06:30:20Z",
+      "download_url": "https://api.github.com/repos/laodadelaoda/immortalwrt-mt798x-rebase/actions/artifacts/13607193166/zip"
+    },
+    {
+      "name": "n60-unified-patch-inventory",
+      "id": 13607043323,
+      "sha256": "d5161b9f5e661ba1bc393da6b01d28f63aec62c6f1342b2ec08dc2fbf8dcc90a",
+      "size_bytes": 700748,
+      "created_at": "2026-11-08T06:27:14Z",
+      "expires_at": "2026-12-08T06:27:13Z",
+      "download_url": "https://api.github.com/repos/laodadelaoda/immortalwrt-mt798x-rebase/actions/artifacts/13607043323/zip"
+    },
+    {
+      "name": "dpp-pre017-full-audit-source",
+      "id": 13606948688,
+      "sha256": "418c09c439016f415740ba12cf94eba522dd9f10fe52b96b4dbd3c90f05e3914",
+      "size_bytes": 71495,
+      "created_at": "2026-11-08T06:27:11Z",
+      "expires_at": "2026-11-15T06:27:11Z",
+      "download_url": "https://api.github.com/repos/laodadelaoda/immortalwrt-mt798x-rebase/actions/artifacts/13606948688/zip"
+    },
+    {
+      "name": "n60-fixed-vendor-patch-audit",
+      "id": 13606858713,
+      "sha256": "aaa1d3e30654eb5105333c7c130a618a4a77d5cf80677558a27322681b51d352",
+      "size_bytes": 10326,
+      "created_at": "2026-11-08T06:27:09Z",
+      "expires_at": "2026-11-22T06:27:09Z",
+      "download_url": "https://api.github.com/repos/laodadelaoda/immortalwrt-mt798x-rebase/actions/artifacts/13606858713/zip"
+    },
+    {
+      "name": "n60-vendor-audit-attestation",
+      "id": 13606843824,
+      "sha256": "7b348c13def49ed7e2ecbdb9320e2c3205b993d14bc066cfe3418b4e78357586",
+      "size_bytes": 9919,
+      "created_at": "2026-11-08T06:27:08Z",
+      "expires_at": "2026-11-22T06:27:08Z",
+      "download_url": "https://api.github.com/repos/laodadelaoda/immortalwrt-mt798x-rebase/actions/artifacts/13606843824/zip"
+    },
+    {
+      "name": "dpp-security-audit-source",
+      "id": 13606769094,
+      "sha256": "d27405e1281dc6fd6a3056a80df899d246d31e0ef3101fd8e75d5df43d139c18",
+      "size_bytes": 2082790,
+      "created_at": "2026-11-08T06:27:13Z",
+      "expires_at": "2026-11-22T06:27:12Z",
+      "download_url": "https://api.github.com/repos/laodadelaoda/immortalwrt-mt798x-rebase/actions/artifacts/13606769094/zip"
+    },
+    {
+      "name": "n60-map-r3-cred-len-preprocess",
+      "id": 13606704080,
+      "sha256": "6921213a2d9a1c32cfd4695087e7f9ae604baf299493e96c9e345cc2aa9da834",
+      "size_bytes": 31532,
+      "created_at": "2026-11-08T06:27:08Z",
+      "expires_at": "2026-11-22T06:27:07Z",
+      "download_url": "https://api.github.com/repos/laodadelaoda/immortalwrt-mt798x-rebase/actions/artifacts/13606704080/zip"
+    },
+    {
+      "name": "n60-dpp-009-failure-context",
+      "id": 13606679324,
+      "sha256": "be0b2a9b306afb9f937549b382d40eb50a31967446bd46ffc0aca1d1ebebe49a",
+      "size_bytes": 30411,
+      "created_at": "2026-11-08T06:27:10Z",
+      "expires_at": "2026-11-22T06:27:10Z",
+      "download_url": "https://api.github.com/repos/laodadelaoda/immortalwrt-mt798x-rebase/actions/artifacts/13606679324/zip"
+    }
+  ]
+}
