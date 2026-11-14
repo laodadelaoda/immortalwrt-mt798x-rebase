@@ -29,7 +29,7 @@
  					os_memcpy(wdev->config->dpp_csign, config[k].dpp_csign,config[k].dpp_csign_len);
  #ifdef MAP_R3_RECONFIG
  					if (wapp->dpp_csign) {
-@@ -1134,7 +1144,7 @@
+@@ -1134,7 +1154,7 @@
  					if (!wapp->dpp_csign) {
  						wpa_printf(MSG_ERROR, DPP_MAP_PREX
  								"wapp->dpp_csign allocation failed");
@@ -38,19 +38,19 @@
  					}
  					os_memcpy(wapp->dpp_csign, config[k].dpp_csign,
  							config[k].dpp_csign_len);
-@@ -1148,1 +1158,3 @@
+@@ -1148,1 +1168,3 @@
  					wdev->config->dpp_netaccesskey = os_zalloc(config[k].dpp_netaccesskey_len);
 +					if (!wdev->config->dpp_netaccesskey)
 +						goto wdev_config_error;
-@@ -1152,1 +1164,3 @@
+@@ -1152,1 +1174,3 @@
  					wdev->config->ssid = os_zalloc(config[k].ssid_len + 1);
 +					if (!wdev->config->ssid)
 +						goto wdev_config_error;
-@@ -1158,1 +1172,3 @@
+@@ -1158,1 +1182,3 @@
  					wdev->config->dpp_connector = os_zalloc(os_strlen(config[k].dpp_connector) + 1);
 +					if (!wdev->config->dpp_connector)
 +						goto wdev_config_error;
-@@ -1164,6 +1180,8 @@
+@@ -1164,6 +1190,8 @@
  #ifdef MAP_R3_RECONFIG
  				if (config[k].dpp_ppkey_len > 0) {
  					wdev->config->dpp_ppkey = os_zalloc(config[k].dpp_ppkey_len);
@@ -59,7 +59,7 @@
  					os_memcpy(wdev->config->dpp_ppkey, config[k].dpp_ppkey,config[k].dpp_ppkey_len);
  				}
  #endif
-@@ -1240,6 +1258,45 @@
+@@ -1240,6 +1268,45 @@
  	if (cred)
  		os_free(cred);
 
