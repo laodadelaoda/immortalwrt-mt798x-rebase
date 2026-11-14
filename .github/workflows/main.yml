@@ -1,8 +1,6 @@
 name: N60 Pro Full Firmware Build
 
 on:
-  push:
-    branches: ["n60pro-mtk-closed-driver"]
   workflow_dispatch:
 
 permissions:
@@ -14,10 +12,7 @@ concurrency:
 
 jobs:
   firmware:
-    # HARD FREEZE: do not compile/link until the canonical vendor + native
-    # Prepare attestation is implemented, verified and bound to this exact SHA.
-    if: false
-    name: Build ImmortalWrt 25.12 / Linux 6.12 for Netcore N60 Pro (frozen)
+    name: Build ImmortalWrt 25.12 / Linux 6.12 for Netcore N60 Pro
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
