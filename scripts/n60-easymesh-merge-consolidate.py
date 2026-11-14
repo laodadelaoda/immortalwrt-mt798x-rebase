@@ -140,7 +140,35 @@ def main():
   raise RuntimeError(f"WAPP archive SHA256 mismatch: expected {source['sha256']} got {archive_sha}")
  original = {name: git_patch(repo, name) for name in ORIGINAL_ORDER}
  original_hashes = {name: digest(data.encode()) for name, data in original.items()}
- events = []
+
+ # 037 contains one objectively inconsistent new-file hunk header: the
+ # /dev/null source side declares one old line although the body contains
+ # exactly twenty added lines and no context/deletions. Correct only that
+ # hunk count; do not change any added source line.
+ patch_037 = "037-dpp-diagnostic-redaction.patch"
+ raw_037 = original[patch_037]
+ original_037_sha = digest(raw_037.encode())
+ lines_037 = raw_037.splitlines()
+ hunk_ids = [i for i, line in enumerate(lines_037) if line == "@@ -0,1 +1,20 @@"]
+ if len(hunk_ids) != 1:
+  raise RuntimeError("037 expected exactly one malformed /dev/null hunk @@ -0,1 +1,20 @@")
+ hidx = hunk_ids[0]
+ endidx = next((i for i in range(hidx + 1, len(lines_037))
+                if lines_037[i].startswith("--- a/")), len(lines_037))
+ body = lines_037[hidx + 1:endidx]
+ old_count = sum(1 for line in body if line.startswith(" ") or line.startswith("-"))
+ new_count = sum(1 for line in body if line.startswith(" ") or line.startswith("+"))
+ if old_count != 0 or new_count != 20 or any(not line.startswith("+") for line in body):
+  raise RuntimeError(f"037 new-file hunk body mismatch: old={old_count}, new={new_count}; refusing normalization")
+ lines_037[hidx] = "@@ -0,0 +1,20 @@"
+ normalized_037 = "\n".join(lines_037) + "\n"
+ normalized_037_sha = digest(normalized_037.encode())
+ original[patch_037] = normalized_037
+ events = [
+  "037 structural-only normalization: @@ -0,1 +1,20 @@ -> @@ -0,0 +1,20 @@",
+  f"037 original patch SHA256: {original_037_sha}",
+  f"037 normalized patch SHA256: {normalized_037_sha}",
+ ]
 
  with tempfile.TemporaryDirectory(prefix="n60-easymesh-merge-") as td:
   tmp = Path(td)
@@ -209,10 +237,11 @@ def main():
    f"- Original source baseline: {BASELINE_COMMIT}",
    f"- WAPP archive: {ARCHIVE_NAME}",
    f"- WAPP archive SHA256: {archive_sha}",
-   "- Original-order replay: PASS (11/11 patches; zero fuzz, offset, reject)",
+   "- Original Lock-order replay with the structurally corrected 037 new-file hunk: PASS (11/11 patches; zero fuzz, offset, reject)",
    "- Consolidated-order replay: PASS",
    "- Generated unified-diff replay: PASS",
    "- Final source tree byte parity: PASS",
+   "- 037 correction: only the invalid /dev/null hunk old-line count changed from 1 to 0; 20 added source lines were verified unchanged.",
    "",
    "## Responsibility mapping",
    "",
@@ -246,6 +275,9 @@ def main():
    "vendor_archive": ARCHIVE_NAME,
    "vendor_archive_sha256": archive_sha,
    "original_patch_sha256": original_hashes,
+   "037_original_sha256": original_037_sha,
+   "037_structurally_normalized_sha256": normalized_037_sha,
+   "037_structural_change": "@@ -0,1 +1,20 @@ -> @@ -0,0 +1,20 @@",
    "generated_patch_sha256": {k: v["sha256"] for k, v in meta.items()},
    "lock_sha256": lock_sha,
    "checks": {
