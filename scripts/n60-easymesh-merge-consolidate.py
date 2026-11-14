@@ -291,7 +291,7 @@ def main():
  old2 = sum(1 for line in body2 if line.startswith(" ") or line.startswith("-"))
  new2 = sum(1 for line in body2 if line.startswith(" ") or line.startswith("+"))
  deleted2 = [line for line in body2 if line.startswith("-")]
- if old2 != 7 or new2 != 5 or len(deleted2) != 2:
+ if old2 != 8 or new2 != 6 or len(deleted2) != 2:
   raise RuntimeError(f"037 map_1905 original hunk body mismatch: old={old2}, new={new2}, deletions={len(deleted2)}")
  if not any("2nd configurationObject JSON" in line for line in deleted2):
   raise RuntimeError("037 map_1905 original hunk does not target the expected second configurationObject hexdump")
@@ -300,7 +300,7 @@ def main():
  original[patch_037] = normalized_037
  events = [
   "037 structural normalization: @@ -0,1 +1,20 @@ -> @@ -0,0 +1,19 @@",
-  "037 original map_1905.c second hunk mismatch verified: header 9/7; actual body 7/5; map section will be regenerated from source",
+  "037 original map_1905.c second hunk mismatch verified: header 9/7; actual body 8/6; map section will be regenerated from source",
   f"037 original patch SHA256: {original_037_sha}",
   f"037 normalized patch SHA256: {normalized_037_sha}",
  ]
@@ -418,7 +418,7 @@ def main():
     "@@ -0,1 +1,20 @@ -> @@ -0,0 +1,19 @@",
     "map_1905.c regenerated from exact pre-037 source with two U3 hunks; only the two DPP credential hexdump calls removed"
    ],
-   "037_original_map_hunk_body_counts": {"declared": "9/7", "actual": "7/5"},
+   "037_original_map_hunk_body_counts": {"declared": "9/7", "actual": "8/6"},
    "037_map_hunks_sha256": merge_metadata["037_map_hunks_sha256"],
    "033_overlap_moved_to_010": "forced_memzero(wdev->config->psk, sizeof(wdev->config->psk))",
    "generated_patch_sha256": {k: v["sha256"] for k, v in meta.items()},
