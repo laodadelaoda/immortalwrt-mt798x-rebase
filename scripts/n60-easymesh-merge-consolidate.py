@@ -320,10 +320,15 @@ def integrate_033_main_config_lifecycle(root, original_patch, events):
  # Error path: roll back a newly installed global c-sign key, then erase all
  # remaining input configuration material. All ownership pointers are nulled.
  error_label = "\nerror:\n"
- if source.count(error_label) != 1:
-  raise RuntimeError("033 main.c error label is not unique")
- es = source.index(error_label) + len(error_label)
- er = source.index("\n\treturn -1;", es)
+ # main.c contains error labels in other functions; scope this cleanup label
+ # to the function region already anchored by the success-cleanup markers.
+ es = source.find(error_label, se + len(success_end_marker))
+ if es < 0:
+  raise RuntimeError("033 target function error label is missing after success cleanup")
+ es += len(error_label)
+ er = source.find("\n\treturn -1;", es)
+ if er < 0:
+  raise RuntimeError("033 target function error return is missing after its error label")
  error_cleanup = (
   "#ifdef MAP_R3_RECONFIG\n"
   "\tif (dpp_csign_updated && wapp->dpp_csign) {\n"
