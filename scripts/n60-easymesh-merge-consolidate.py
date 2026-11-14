@@ -632,7 +632,7 @@ def main():
  normalization_events = []
 
  # 036's final wdev.c hunk has stale unified-diff counts. Its body contains
- # 14 old-side and 27 new-side lines, not the declared 17/30. Correct only
+ # 16 old-side and 29 new-side lines, not the declared 17/30. Correct only
  # the header after verifying the exact body and fail-label target.
  patch_036 = "036-wapp-device-config-secret-cleanup.patch"
  raw_036 = original[patch_036]
@@ -650,15 +650,15 @@ def main():
   body_036.pop()
  old_036 = sum(1 for line in body_036 if line.startswith(" ") or line.startswith("-"))
  new_036 = sum(1 for line in body_036 if line.startswith(" ") or line.startswith("+"))
- if old_036 != 14 or new_036 != 27 or not any(line == " fail:" for line in body_036):
+ if old_036 != 16 or new_036 != 29 or not any(line == " fail:" for line in body_036):
   raise RuntimeError(f"036 wdev.c hunk body mismatch: old={old_036}, new={new_036}; refusing normalization")
  original_036_sha = digest(raw_036.encode())
- lines_036[hidx_036] = "@@ -3640,14 +3630,27 @@"
+ lines_036[hidx_036] = "@@ -3640,16 +3630,29 @@"
  normalized_036 = "\\n".join(lines_036) + "\\n"
  normalized_036_sha = digest(normalized_036.encode())
  original[patch_036] = normalized_036
  normalization_events.extend([
-  "036 structural normalization: @@ -3640,17 +3630,30 @@ -> @@ -3640,14 +3630,27 @@",
+  "036 structural normalization: @@ -3640,17 +3630,30 @@ -> @@ -3640,16 +3630,29 @@",
   f"036 original patch SHA256: {original_036_sha}",
   f"036 normalized patch SHA256: {normalized_036_sha}",
  ])
