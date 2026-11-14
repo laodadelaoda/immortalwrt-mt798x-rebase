@@ -71,13 +71,13 @@ def apply_patch(root, name, content, events, allow_offsets=False):
                     cwd=root, input=content, text=True,
                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
  output = p.stdout or ""
- events.append(f"### {name} (allow_offsets={allow_offsets})\\n{output}")
- bad = re.search(r"(with fuzz\\s+\\d+|Hunk\\s+#\\d+\\s+FAILED|saving rejects|Reversed \\(or previously applied\\)|malformed patch)", output, re.I)
- if not allow_offsets and re.search(r"offset\\s+-?\\d+\\s+lines?", output, re.I):
+ events.append(f"### {name} (allow_offsets={allow_offsets})\n{output}")
+ bad = re.search(r"(with fuzz\s+\d+|Hunk\s+#\d+\s+FAILED|saving rejects|Reversed \(or previously applied\)|malformed patch)", output, re.I)
+ if not allow_offsets and re.search(r"offset\s+-?\d+\s+lines?", output, re.I):
   bad = True
  if p.returncode or bad:
   mode = "zero-fuzz replay" if allow_offsets else "zero-fuzz/zero-offset replay"
-  raise RuntimeError(f"{mode} failed for {name} (rc={p.returncode})\\n{output}")
+  raise RuntimeError(f"{mode} failed for {name} (rc={p.returncode})\n{output}")
  rejects = list(root.rglob("*.rej")) + list(root.rglob("*.orig"))
  if rejects:
   raise RuntimeError(f"reject/orig files appeared after {name}: {rejects[:8]}")
@@ -92,12 +92,12 @@ def remove_033_overlapping_psk_hunk(content):
  body = lines[start + 1:end]
  additions = [line for line in body if line.startswith("+")]
  expected = [
-  "+\\t\\t\\t\\t/* Clear an old PSK before replacing the config object. */",
-  "+\\t\\t\\t\\tforced_memzero(wdev->config->psk, sizeof(wdev->config->psk));",
+  "+\t\t\t\t/* Clear an old PSK before replacing the config object. */",
+  "+\t\t\t\tforced_memzero(wdev->config->psk, sizeof(wdev->config->psk));",
  ]
  if additions != expected or any(line.startswith("-") for line in body):
   raise RuntimeError("033 overlapping hunk differs from the exact two-line PSK clear; refusing automatic merge")
- return "\\n".join(lines[:start] + lines[end:]) + "\\n"
+ return "\n".join(lines[:start] + lines[end:]) + "\n"
 
 def integrate_033_psk_zeroization(root, events):
  path = root / "wappd/common/main.c"
@@ -108,8 +108,8 @@ def integrate_033_psk_zeroization(root, events):
  line = next(line for line in source.splitlines() if target in line)
  indent = line[:len(line) - len(line.lstrip())]
  replacement = (
-  indent + "/* Clear an old PSK before replacing the config object. */\\n" +
-  indent + "forced_memzero(wdev->config->psk, sizeof(wdev->config->psk));\\n" +
+  indent + "/* Clear an old PSK before replacing the config object. */\n" +
+  indent + "forced_memzero(wdev->config->psk, sizeof(wdev->config->psk));\n" +
   line
  )
  source = source.replace(line, replacement, 1)
@@ -187,7 +187,7 @@ def main():
 
  # 037 contains one objectively inconsistent new-file hunk header: the
  # /dev/null source side declares one old line although the body contains
- # exactly twenty added lines and no context/deletions. Correct only that
+ # exactly nineteen added lines and no context/deletions. Correct only that
  # hunk count; do not change any added source line.
  patch_037 = "037-dpp-diagnostic-redaction.patch"
  raw_037 = original[patch_037]
@@ -281,7 +281,7 @@ def main():
    f"- Original source baseline: {BASELINE_COMMIT}",
    f"- WAPP archive: {ARCHIVE_NAME}",
    f"- WAPP archive SHA256: {archive_sha}",
-   "- Original Lock-order replay with the structurally corrected 037 new-file hunk: PASS (11/11 patches; zero fuzz, offset, reject)",
+   "- Original Lock-order reference replay with the 033 overlap merged into 010 and 037 hunk counts corrected: PASS (zero fuzz/reject; historical offsets are rebased into the generated patches).",
    "- Consolidated-order replay: PASS",
    "- Generated unified-diff replay: PASS",
    "- Final source tree byte parity: PASS",
