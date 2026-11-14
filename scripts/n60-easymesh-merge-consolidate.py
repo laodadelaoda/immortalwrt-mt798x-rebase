@@ -169,12 +169,10 @@ def rebase_patch_to_zero_offset(root, name, content, events):
             f"+{int(header.group(3)) + delta}{header.group(4) or ''} @@{header.group(5)}\n")
   out.append(line)
  rebased = "".join(out)
- verify = subprocess.run(cmd, cwd=root, input=rebased, text=True,
-                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
- verify_output = verify.stdout or ""
- if verify.returncode or re.search(r"(offset\s+[+-]?\d+\s+lines?|with fuzz\s+\d+|Hunk\s+#\d+\s+FAILED|saving rejects|malformed patch)", verify_output, re.I):
-  raise RuntimeError(f"{name} hunk-header rebase did not produce zero-offset replay\n{verify_output}")
- events.append(f"{name}: source-anchored hunk headers rebased from dry-run offsets; strict dry-run PASS\n{output}\nSTRICT DRY-RUN\n{verify_output}")
+ # The caller immediately applies this rebased patch to the disposable replay
+ # tree with apply_patch(), which is the authoritative zero-fuzz/zero-offset
+ # check. Do not run a second dry-run here: it duplicates the actual replay.
+ events.append(f"{name}: hunk headers rebased from the diagnostic probe; zero-offset is verified by the subsequent actual apply\n{output}")
  return rebased
 
 def _replace_once(source, old, new, label):
