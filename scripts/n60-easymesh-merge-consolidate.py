@@ -99,9 +99,13 @@ def apply_patch(root, name, content, events, allow_offsets=False):
      diagnostics.append(f"--- source context {source_path.relative_to(root)}:{lo}-{hi} ---\\n" + "\\n".join(f"{n}: {source_lines[n-1]}" for n in range(lo, hi+1)))
   detail = "\\n".join(diagnostics)
   raise RuntimeError(f"{mode} failed for {name} (rc={p.returncode})\\n{output}\\n{detail}")
- rejects = list(root.rglob("*.rej")) + list(root.rglob("*.orig"))
+ rejects = list(root.rglob("*.rej"))
  if rejects:
-  raise RuntimeError(f"reject/orig files appeared after {name}: {rejects[:8]}")
+  raise RuntimeError(f"reject files appeared after {name}: {rejects[:8]}")
+ # GNU patch may leave a successful-application .orig backup. It is not a
+ # reject and must not be confused with a partial/failed patch application.
+ for backup in root.rglob("*.orig"):
+  backup.unlink()
 
 def _replace_once(source, old, new, label):
  count = source.count(old)
