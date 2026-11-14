@@ -304,6 +304,7 @@ def main():
   f"037 original patch SHA256: {original_037_sha}",
   f"037 normalized patch SHA256: {normalized_037_sha}",
  ]
+ merge_metadata = {}
 
  with tempfile.TemporaryDirectory(prefix="n60-easymesh-merge-") as td:
   tmp = Path(td)
@@ -318,10 +319,10 @@ def main():
    apply_legacy_patch(candidate, name, original[name], events, merge_metadata)
   p008 = capture_group(candidate, TARGETS[0], output / TARGETS[0])
   for name in GROUPS[TARGETS[1]]:
-   apply_legacy_patch(candidate, name, original[name], events)
+   apply_legacy_patch(candidate, name, original[name], events, merge_metadata)
   p010 = capture_group(candidate, TARGETS[1], output / TARGETS[1])
   for name in GROUPS[TARGETS[2]]:
-   apply_legacy_patch(candidate, name, original[name], events)
+   apply_legacy_patch(candidate, name, original[name], events, merge_metadata)
   p015 = capture_group(candidate, TARGETS[2], output / TARGETS[2])
   apply_patch(candidate, ORIGINAL_ORDER[5], original[ORIGINAL_ORDER[5]], events)
 
