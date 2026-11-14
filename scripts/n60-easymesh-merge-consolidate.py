@@ -108,7 +108,7 @@ def apply_patch(root, name, content, events, allow_offsets=False):
   backup.unlink()
 
 def patch_file_sections(content):
- return re.findall(r"(?ms)^--- a/[^\r\n]+\n.*?(?=^--- a/|\\Z)", content)
+ return re.findall(r"(?ms)^--- a/[^\r\n]+\n.*?(?=^--- a/|\Z)", content)
 
 def section_path(section):
  match = re.match(r"^--- a/([^\r\n]+)", section)
