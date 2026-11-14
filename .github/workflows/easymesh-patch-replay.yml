@@ -7,6 +7,9 @@ on:
       - runner/easymesh-patch-replay-20261114
     paths:
       - .github/workflows/easymesh-patch-replay.yml
+      - package/mtk/applications/easymesh-n60/patches/**
+      - package/mtk/applications/easymesh-n60/Makefile
+      - package/mtk/vendor-sources.lock.json
 
 permissions:
   contents: read
