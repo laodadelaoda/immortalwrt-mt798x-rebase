@@ -654,7 +654,7 @@ def main():
   raise RuntimeError(f"036 wdev.c hunk body mismatch: old={old_036}, new={new_036}; refusing normalization")
  original_036_sha = digest(raw_036.encode())
  lines_036[hidx_036] = "@@ -3640,16 +3630,29 @@"
- normalized_036 = "\\n".join(lines_036) + "\\n"
+ normalized_036 = "\n".join(lines_036) + "\n"
  normalized_036_sha = digest(normalized_036.encode())
  original[patch_036] = normalized_036
  normalization_events.extend([
