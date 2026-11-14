@@ -76,7 +76,29 @@ def git_patch(repo, name):
  blob = PINNED_PATCH_BLOBS.get(name)
  if not blob:
   raise RuntimeError(f"no immutable source blob is pinned for {name}")
- data = run(["git", "cat-file", "blob", blob], cwd=repo)
+ try:
+  data = run(["git", "cat-file", "blob", blob], cwd=repo)
+ except RuntimeError:
+  # Some historical blobs are absent from the checkout's object pack even
+  # with fetch-depth=0 (the commit may be outside advertised branch history).
+  # Retrieve only that exact immutable commit/path from GitHub raw, then let
+  # the Git blob hash below authenticate every byte before it is consumed.
+  from urllib.request import urlopen
+  source_commit = LEGACY_PATCH_BASELINE if name in REMOVED else BASELINE_COMMIT
+  path = f"{PATCH_REL}/{name}"
+  url = (
+   "https://raw.githubusercontent.com/laodadelaoda/"
+   "immortalwrt-mt798x-rebase/"
+   f"{source_commit}/{path}"
+  )
+  try:
+   with urlopen(url, timeout=30) as response:
+    data = response.read().decode("utf-8")
+  except Exception as exc:
+   raise RuntimeError(
+    f"cannot retrieve pinned source blob for {name}: "
+    f"git object {blob} is absent and immutable URL fetch failed: {exc}"
+   ) from exc
  actual = run(["git", "hash-object", "--stdin"], cwd=repo, input_text=data).strip()
  if actual != blob:
   raise RuntimeError(
