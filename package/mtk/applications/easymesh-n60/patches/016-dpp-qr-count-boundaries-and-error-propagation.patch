@@ -1,6 +1,6 @@
 --- a/wappd/dpp/dpp.c
 +++ b/wappd/dpp/dpp.c
-@@ -10386,35 +10386,106 @@
+@@ -10330,35 +10330,106 @@
  }
  
  #ifdef MAP_R3
@@ -127,7 +127,7 @@
  	}
  
  	for( int i=0;i<20;i++)
-@@ -10424,15 +10495,16 @@
+@@ -10368,15 +10439,16 @@
  
  #ifdef OPENWRT_SUPPORT
  		struct kvc_context *dat_ctx = NULL;
@@ -148,7 +148,7 @@
  
  		strncat(ifparam, param,os_strlen(param));
  		dat_ctx = dat_load(DPP_CFG_FILE);
-@@ -10464,6 +10536,8 @@
+@@ -10408,6 +10480,8 @@
  			    return -1;
  #endif /* OPENWRT_SUPPORT */
  	}
@@ -157,7 +157,7 @@
  	return dpp_reset_mapd_user_config_file(wapp);
  }
  
-@@ -10485,15 +10559,16 @@
+@@ -10429,15 +10503,16 @@
  
  #ifdef OPENWRT_SUPPORT
  		struct kvc_context *dat_ctx = NULL;
@@ -178,7 +178,7 @@
  
  		strncat(ifparam, param, os_strlen(param));
  		dat_ctx = dat_load(MAPD_USER_CFG_FILE);
-@@ -10533,98 +10608,82 @@
+@@ -10477,98 +10552,82 @@
  #endif /*MAP R3 */
  void  dpp_remove_uri_from_file(struct wifi_app *wapp, unsigned int id , const char *uri_temp)
  {
@@ -361,7 +361,7 @@
  #endif 
 --- a/wappd/dpp/dpp_wdev.c
 +++ b/wappd/dpp/dpp_wdev.c
-@@ -545,34 +545,36 @@
+@@ -546,34 +546,36 @@
  
  void wapp_dpp_get_uri_frm_file(struct wifi_app *wapp)
  {
@@ -420,7 +420,7 @@
  }
  
  int wapp_dpp_set_onboarding_type(struct wifi_app *wapp, u8 flag)
-@@ -7127,40 +7129,39 @@
+@@ -6931,40 +6933,39 @@
  
  void dpp_save_dpp_uri_to_file(struct wifi_app *wapp, char *uri_str)
  {
@@ -488,26 +488,3 @@
  }
  #endif
  #ifdef OPENWRT_SUPPORT
---- a/wappd/common/main.c
-+++ b/wappd/common/main.c
-@@ -1249,10 +1249,16 @@
- 	}
- #endif
- 
--	/* Get QR code save conunt for */
--	get_dpp_parameters(wapp->map, "qr_count", value, sizeof(value));
--	if (wapp->dpp)
--		wapp->dpp->qr_code_num = atoi(value);
-+	if (wapp->dpp) {
-+		unsigned int qr_count = 0;
-+
-+		if (dpp_read_qr_count(wapp, &qr_count) < 0) {
-+			DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"invalid qr_count while loading DPP config\n");
-+			wapp->dpp->qr_code_num = 0;
-+			goto error;
-+		}
-+		wapp->dpp->qr_code_num = (u8)qr_count;
-+	}
- 
- //fail:
- 	if (cred)
