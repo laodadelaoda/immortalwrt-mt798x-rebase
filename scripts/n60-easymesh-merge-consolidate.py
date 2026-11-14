@@ -275,10 +275,10 @@ def integrate_033_main_config_lifecycle(root, original_patch, events):
  # Rewrite success-path cleanup to erase every secret before freeing it.
  success_start_marker = "\tif (config[k].dpp_csign)"
  success_end_marker = "\n\t/* Get QR code save conunt for */"
- if source.count(success_start_marker) != 1 or source.count(success_end_marker) != 1:
-  raise RuntimeError("033 success cleanup boundary is not unique")
- ss = source.index(success_start_marker)
- se = source.index(success_end_marker, ss)
+ ss = source.find(success_start_marker)
+ se = source.find(success_end_marker, ss + 1) if ss >= 0 else -1
+ if ss < 0 or se < 0:
+  raise RuntimeError("033 success cleanup boundary is missing or out of order")
  success_cleanup = (
   "\tif (config[k].dpp_csign) {\n"
   "\t\tforced_memzero(config[k].dpp_csign, config[k].dpp_csign_len);\n"
