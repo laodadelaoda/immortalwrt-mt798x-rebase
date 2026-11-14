@@ -53,7 +53,10 @@ def digest(data):
 
 def git_patch(repo, name):
  path = f"{PATCH_REL}/{name}"
- return (repo / path).read_text(encoding="utf-8")
+ patch_path = repo / path
+ if patch_path.is_file():
+  return patch_path.read_text(encoding="utf-8")
+ return run(["git", "show", f"{BASELINE_COMMIT}:{path}"], cwd=repo)
 
 def init_tree(root):
  run(["git", "init", "-q"], cwd=root)
