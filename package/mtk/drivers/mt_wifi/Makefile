@@ -318,8 +318,8 @@ endef
 
 define Build/Compile
 	@if [ "$(CONFIG_MTK_CONNINFRA_APSOC)" = "y" ]; then \
-		test -s "$(KERNEL_BUILD_DIR)/conninfra/Module.symvers" || { \
-			echo "ERROR: conninfra Module.symvers is missing; build dependency closure is incomplete."; \
+		test -s "$(KERNEL_BUILD_DIR)/symvers/conninfra.symvers" || { \
+			echo "ERROR: conninfra symvers export is missing; build dependency closure is incomplete."; \
 			exit 1; \
 		}; \
 	fi
@@ -327,7 +327,7 @@ define Build/Compile
 		$(KERNEL_MAKE_FLAGS) \
 		M="$(PKG_BUILD_DIR)/mt_wifi_ap" \
 		LINUX_DIR="$(KERNEL_BUILD_DIR)" \
-		$(if $(CONFIG_MTK_CONNINFRA_APSOC),KBUILD_EXTRA_SYMBOLS="$(KERNEL_BUILD_DIR)/conninfra/Module.symvers") \
+		$(if $(CONFIG_MTK_CONNINFRA_APSOC),KBUILD_EXTRA_SYMBOLS="$(KERNEL_BUILD_DIR)/symvers/conninfra.symvers") \
 		$(foreach c, $(PKG_KCONFIG),$(if $(CONFIG_MTK_$c),CONFIG_$(c)=$(CONFIG_MTK_$(c)))) \
 		modules
 endef
