@@ -70,8 +70,41 @@ jobs:
         run: |
           set -Eeuo pipefail
           LOG="$RUNNER_TEMP/easymesh-prepare.log"
+          DIAG="$RUNNER_TEMP/replay-diagnostics"
+          mkdir -p "$DIAG/rejects" "$DIAG/source-snapshots"
+          collect_replay_diagnostics() {
+            rc=$?
+            set +e
+            printf 'exit_code=%s\\nrun_id=%s\\nrun_attempt=%s\\ncommit=%s\\n' "$rc" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_SHA" > "$DIAG/metadata.txt"
+            if [ -d build_dir ]; then
+              find build_dir -type f \\( -name '*.rej' -o -name '*.orig' \\) -print > "$DIAG/reject-file-list.txt"
+              while IFS= read -r reject; do
+                [ -n "$reject" ] || continue
+                rel="${reject#build_dir/}"
+                mkdir -p "$DIAG/rejects/$(dirname "$rel")"
+                cp -a "$reject" "$DIAG/rejects/$rel"
+                source="${reject%.rej}"
+                if [ -f "$source" ]; then
+                  mkdir -p "$DIAG/source-snapshots/$(dirname "$rel")"
+                  cp -a "$source" "$DIAG/source-snapshots/$rel"
+                fi
+              done < "$DIAG/reject-file-list.txt"
+              find build_dir -type d -name wappd -print > "$DIAG/wapp-source-roots.txt"
+              n=0
+              while IFS= read -r wappdir; do
+                [ -n "$wappdir" ] || continue
+                n=$((n + 1))
+                tar -czf "$DIAG/source-snapshots/wapp-source-$n.tar.gz" -C "$(dirname "$wappdir")" .
+              done < "$DIAG/wapp-source-roots.txt"
+            else
+              echo "build_dir was not created" > "$DIAG/reject-file-list.txt"
+            fi
+            [ ! -f "$LOG" ] || cp -a "$LOG" "$DIAG/"
+            exit "$rc"
+          }
+          trap collect_replay_diagnostics EXIT
           make package/mtk/applications/easymesh-n60/prepare V=s 2>&1 | tee "$LOG"
-          if grep -Eiq 'Hunk #[0-9]+ succeeded.*(offset|fuzz)|offset [0-9]+ lines|with fuzz [0-9]+|Hunk #[0-9]+ FAILED|saving rejects|Reversed \(or previously applied\) patch' "$LOG"; then
+          if grep -Eiq 'Hunk #[0-9]+ succeeded.*(offset|fuzz)|offset [0-9]+ lines|with fuzz [0-9]+|Hunk #[0-9]+ FAILED|saving rejects|Reversed \\(or previously applied\\) patch' "$LOG"; then
             echo "Strict patch replay violation detected." >&2
             exit 1
           fi
@@ -88,5 +121,6 @@ jobs:
             ${{ runner.temp }}/vendor-archive-sha256.txt
             ${{ runner.temp }}/replay-baseline.txt
             ${{ runner.temp }}/replay-result.txt
+            ${{ runner.temp }}/replay-diagnostics/**
           if-no-files-found: warn
           retention-days: 30
