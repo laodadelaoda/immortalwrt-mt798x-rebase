@@ -38,29 +38,18 @@
  					}
  					os_memcpy(wapp->dpp_csign, config[k].dpp_csign,
  							config[k].dpp_csign_len);
-@@ -1146,14 +1156,20 @@
- 				}
- 				if (config[k].dpp_netaccesskey_len > 0) {
- 					wdev->config->dpp_netaccesskey = os_zalloc(config[k].dpp_netaccesskey_len);
+@@ -1148,1 +1158,3 @@
+					wdev->config->dpp_netaccesskey = os_zalloc(config[k].dpp_netaccesskey_len);
 +					if (!wdev->config->dpp_netaccesskey)
 +						goto wdev_config_error;
- 					os_memcpy(wdev->config->dpp_netaccesskey, config[k].dpp_netaccesskey,config[k].dpp_netaccesskey_len);
- 				}
- 				if (config[k].ssid_len > 0) {
- 					wdev->config->ssid = os_zalloc(config[k].ssid_len + 1);
+@@ -1152,1 +1164,3 @@
+					wdev->config->ssid = os_zalloc(config[k].ssid_len + 1);
 +					if (!wdev->config->ssid)
 +						goto wdev_config_error;
- 					os_memcpy(wdev->config->ssid, config[k].ssid,config[k].ssid_len);
- 					wdev->config->ssid[config[k].ssid_len] = '\0';
- 				}
- 				if (os_strlen(config[k].dpp_connector) > 0) {
-
- 					wdev->config->dpp_connector = os_zalloc(os_strlen(config[k].dpp_connector) + 1);
+@@ -1158,1 +1172,3 @@
+					wdev->config->dpp_connector = os_zalloc(os_strlen(config[k].dpp_connector) + 1);
 +					if (!wdev->config->dpp_connector)
 +						goto wdev_config_error;
- 					os_memcpy(wdev->config->dpp_connector, config[k].dpp_connector,os_strlen(config[k].dpp_connector));
- 					wdev->config->dpp_connector[os_strlen(config[k].dpp_connector)] = '\0';
-
 @@ -1164,6 +1180,8 @@
  #ifdef MAP_R3_RECONFIG
  				if (config[k].dpp_ppkey_len > 0) {
