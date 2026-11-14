@@ -20,6 +20,201 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  #include "crypto/evp.h"
  #include "wapp_cmm.h"
  
+@@ -2672,49 +2672,55 @@
+ }
+ 
+ 
++/* OpenSSL 3 EVP_PKEY helpers are defined with the M-derivation code below. */
++static int dpp_evp_pkey_get_group(const EVP_PKEY *pkey, EC_GROUP **group);
++static int dpp_evp_pkey_get_public_point(const EVP_PKEY *pkey,
++					const EC_GROUP *group,
++					EC_POINT **point);
++
+ static int dpp_auth_derive_l_responder(struct dpp_authentication *auth)
+ {
+-	const EC_GROUP *group;
+-	EC_POINT *l = NULL;
+-	EC_KEY *BI = NULL, *bR = NULL, *pR = NULL;
+-	const EC_POINT *BI_point;
+-	BN_CTX *bnctx;
+-	BIGNUM *lx, *sum, *q;
+-	const BIGNUM *bR_bn, *pR_bn;
++	EC_GROUP *group = NULL, *own_group = NULL;
++	EC_POINT *l = NULL, *BI_point = NULL;
++	BN_CTX *bnctx = NULL;
++	BIGNUM *lx = NULL, *sum = NULL, *q = NULL;
++	BIGNUM *bR_bn = NULL, *pR_bn = NULL;
+ 	int ret = -1;
+ 
+ 	/* L = ((bR + pR) modulo q) * BI */
++	if (!auth || !auth->peer_bi || !auth->peer_bi->pubkey ||
++	    !auth->own_bi || !auth->own_bi->pubkey ||
++	    !auth->own_protocol_key)
++		return -1;
+ 
+ 	bnctx = BN_CTX_new();
+ 	sum = BN_new();
+ 	q = BN_new();
+ 	lx = BN_new();
+-	if (!bnctx || !sum || !q || !lx)
+-		goto fail;
+-	BI = EVP_PKEY_get1_EC_KEY(auth->peer_bi->pubkey);
+-	if (!BI)
+-		goto fail;
+-	BI_point = EC_KEY_get0_public_key(BI);
+-	group = EC_KEY_get0_group(BI);
+-	if (!group)
++	if (!bnctx || !sum || !q || !lx ||
++	    dpp_evp_pkey_get_group(auth->peer_bi->pubkey, &group) < 0 ||
++	    dpp_evp_pkey_get_public_point(auth->peer_bi->pubkey, group,
++					   &BI_point) < 0 ||
++	    dpp_evp_pkey_get_group(auth->own_bi->pubkey, &own_group) < 0 ||
++	    EC_GROUP_cmp(group, own_group, NULL) != 0)
++		goto fail;
++	EC_GROUP_free(own_group);
++	own_group = NULL;
++	if (dpp_evp_pkey_get_group(auth->own_protocol_key, &own_group) < 0 ||
++	    EC_GROUP_cmp(group, own_group, NULL) != 0 ||
++	    EVP_PKEY_get_bn_param(auth->own_bi->pubkey,
++				  OSSL_PKEY_PARAM_PRIV_KEY, &bR_bn) != 1 ||
++	    EVP_PKEY_get_bn_param(auth->own_protocol_key,
++				  OSSL_PKEY_PARAM_PRIV_KEY, &pR_bn) != 1)
+ 		goto fail;
+ 
+-	bR = EVP_PKEY_get1_EC_KEY(auth->own_bi->pubkey);
+-	pR = EVP_PKEY_get1_EC_KEY(auth->own_protocol_key);
+-	if (!bR || !pR)
+-		goto fail;
+-	bR_bn = EC_KEY_get0_private_key(bR);
+-	pR_bn = EC_KEY_get0_private_key(pR);
+-	if (!bR_bn || !pR_bn)
+-		goto fail;
+ 	if (EC_GROUP_get_order(group, q, bnctx) != 1 ||
+ 	    BN_mod_add(sum, bR_bn, pR_bn, q, bnctx) != 1)
+ 		goto fail;
+ 	l = EC_POINT_new(group);
+ 	if (!l ||
+ 	    EC_POINT_mul(group, l, NULL, BI_point, sum, bnctx) != 1 ||
+-	    EC_POINT_get_affine_coordinates_GFp(group, l, lx, NULL,
+-						bnctx) != 1) {
++	    EC_POINT_get_affine_coordinates(group, l, lx, NULL, bnctx) != 1) {
+ 		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+ 			   "OpenSSL: failed: %s",
+ 			   ERR_error_string(ERR_get_error(), NULL));
+@@ -2723,17 +2729,20 @@
+ 
+ 	if (dpp_bn2bin_pad(lx, auth->Lx, auth->secret_len) < 0)
+ 		goto fail;
+-	wpa_hexdump_key(MSG_DEBUG, DPP_MAP_PREX "DPP: L.x", auth->Lx, auth->secret_len);
++	wpa_hexdump_key(MSG_DEBUG, DPP_MAP_PREX "DPP: L.x", auth->Lx,
++			auth->secret_len);
+ 	auth->Lx_len = auth->secret_len;
+ 	ret = 0;
+ fail:
+ 	EC_POINT_clear_free(l);
+-	EC_KEY_free(BI);
+-	EC_KEY_free(bR);
+-	EC_KEY_free(pR);
++	EC_POINT_clear_free(BI_point);
++	EC_GROUP_free(group);
++	EC_GROUP_free(own_group);
+ 	BN_clear_free(lx);
+ 	BN_clear_free(sum);
+-	BN_free(q);
++	BN_clear_free(q);
++	BN_clear_free(bR_bn);
++	BN_clear_free(pR_bn);
+ 	BN_CTX_free(bnctx);
+ 	return ret;
+ }
+@@ -2741,42 +2750,37 @@
+ 
+ static int dpp_auth_derive_l_initiator(struct dpp_authentication *auth)
+ {
+-	const EC_GROUP *group;
++	EC_GROUP *group = NULL;
+ 	EC_POINT *l = NULL, *sum = NULL;
+-	EC_KEY *bI = NULL, *BR = NULL, *PR = NULL;
+-	const EC_POINT *BR_point, *PR_point;
+-	BN_CTX *bnctx;
+-	BIGNUM *lx;
+-	const BIGNUM *bI_bn;
++	EC_POINT *BR_point = NULL, *PR_point = NULL;
++	BN_CTX *bnctx = NULL;
++	BIGNUM *lx = NULL, *bI_bn = NULL;
+ 	int ret = -1;
+ 
+ 	/* L = bI * (BR + PR) */
++	if (!auth || !auth->peer_bi || !auth->peer_bi->pubkey ||
++	    !auth->peer_protocol_key || !auth->own_bi ||
++	    !auth->own_bi->pubkey)
++		return -1;
+ 
+ 	bnctx = BN_CTX_new();
+ 	lx = BN_new();
+-	if (!bnctx || !lx)
++	if (!bnctx || !lx ||
++	    dpp_evp_pkey_get_group(auth->own_bi->pubkey, &group) < 0 ||
++	    dpp_evp_pkey_get_public_point(auth->peer_bi->pubkey, group,
++					   &BR_point) < 0 ||
++	    dpp_evp_pkey_get_public_point(auth->peer_protocol_key, group,
++					   &PR_point) < 0 ||
++	    EVP_PKEY_get_bn_param(auth->own_bi->pubkey,
++				  OSSL_PKEY_PARAM_PRIV_KEY, &bI_bn) != 1)
+ 		goto fail;
+-	BR = EVP_PKEY_get1_EC_KEY(auth->peer_bi->pubkey);
+-	PR = EVP_PKEY_get1_EC_KEY(auth->peer_protocol_key);
+-	if (!BR || !PR)
+-		goto fail;
+-	BR_point = EC_KEY_get0_public_key(BR);
+-	PR_point = EC_KEY_get0_public_key(PR);
+ 
+-	bI = EVP_PKEY_get1_EC_KEY(auth->own_bi->pubkey);
+-	if (!bI)
+-		goto fail;
+-	group = EC_KEY_get0_group(bI);
+-	bI_bn = EC_KEY_get0_private_key(bI);
+-	if (!group || !bI_bn)
+-		goto fail;
+ 	sum = EC_POINT_new(group);
+ 	l = EC_POINT_new(group);
+ 	if (!sum || !l ||
+ 	    EC_POINT_add(group, sum, BR_point, PR_point, bnctx) != 1 ||
+ 	    EC_POINT_mul(group, l, NULL, sum, bI_bn, bnctx) != 1 ||
+-	    EC_POINT_get_affine_coordinates_GFp(group, l, lx, NULL,
+-						bnctx) != 1) {
++	    EC_POINT_get_affine_coordinates(group, l, lx, NULL, bnctx) != 1) {
+ 		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+ 			   "OpenSSL: failed: %s",
+ 			   ERR_error_string(ERR_get_error(), NULL));
+@@ -2785,21 +2789,22 @@
+ 
+ 	if (dpp_bn2bin_pad(lx, auth->Lx, auth->secret_len) < 0)
+ 		goto fail;
+-	wpa_hexdump_key(MSG_DEBUG, DPP_MAP_PREX "DPP: L.x", auth->Lx, auth->secret_len);
++	wpa_hexdump_key(MSG_DEBUG, DPP_MAP_PREX "DPP: L.x", auth->Lx,
++			auth->secret_len);
+ 	auth->Lx_len = auth->secret_len;
+ 	ret = 0;
+ fail:
+ 	EC_POINT_clear_free(l);
+ 	EC_POINT_clear_free(sum);
+-	EC_KEY_free(bI);
+-	EC_KEY_free(BR);
+-	EC_KEY_free(PR);
++	EC_POINT_clear_free(BR_point);
++	EC_POINT_clear_free(PR_point);
++	EC_GROUP_free(group);
+ 	BN_clear_free(lx);
++	BN_clear_free(bI_bn);
+ 	BN_CTX_free(bnctx);
+ 	return ret;
+ }
+ 
+-
+ static int dpp_auth_build_resp_ok(struct dpp_authentication *auth)
+ {
+ 	size_t nonce_len;
 @@ -14472,39 +14473,98 @@
  	return secret_len;
  }
