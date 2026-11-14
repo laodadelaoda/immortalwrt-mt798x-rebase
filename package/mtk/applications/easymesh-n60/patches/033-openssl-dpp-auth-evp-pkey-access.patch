@@ -20,7 +20,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  #include "crypto/evp.h"
  #include "wapp_cmm.h"
  
-@@ -14472,39 +14473,98 @@
+@@ -14452,39 +14453,98 @@
  	return secret_len;
  }
  
@@ -142,7 +142,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  		goto fail;
  
  	sum = EC_POINT_new(group);
- 	M = EC_POINT_new(group);
+@@ -14492,28 +14552,30 @@
  	if (!sum || !M ||
  	    EC_POINT_add(group, sum, CR_point, PR_point, bnctx) != 1 ||
  	    EC_POINT_mul(group, M, NULL, sum, cI_bn, bnctx) != 1 ||
@@ -166,7 +166,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  		goto fail;
 -	wpa_hexdump_key(MSG_INFO1, DPP_MAP_PREX "DPP: M.x", auth->Mx, auth->secret_len);
 +	wpa_hexdump_key(MSG_INFO1, DPP_MAP_PREX "DPP: M.x", auth->Mx,
-+			 auth->secret_len);
++			auth->secret_len);
  	auth->Mx_len = auth->secret_len;
  	ret = 0;
  fail:
@@ -182,7 +182,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  	BN_clear_free(mx);
  	BN_CTX_free(bnctx);
  	return ret;
-@@ -14512,28 +14572,30 @@
+@@ -14521,41 +14583,36 @@
  
  static int dpp_auth_derive_m_R(struct dpp_authentication *auth)
  {
@@ -244,7 +244,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  		goto fail;
  
  	if (EC_GROUP_get_order(group, q, bnctx) != 1 ||
-@@ -14541,32 +14603,35 @@
+@@ -14563,32 +14620,35 @@
  		goto fail;
  
  	M = EC_POINT_new(group);
@@ -270,7 +270,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  		goto fail;
 -	wpa_hexdump_key(MSG_INFO1, DPP_MAP_PREX "DPP: M.x", auth->Mx, auth->secret_len);
 +	wpa_hexdump_key(MSG_INFO1, DPP_MAP_PREX "DPP: M.x", auth->Mx,
-+			 auth->secret_len);
++			auth->secret_len);
  	auth->Mx_len = auth->secret_len;
  	ret = 0;
  fail:
