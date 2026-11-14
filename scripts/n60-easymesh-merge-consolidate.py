@@ -150,14 +150,22 @@ def rebuild_037_map_hunks(root, content, events, metadata):
   tofile="b/wappd/map/map_1905.c",
   n=3,
  ))
- if not regenerated.startswith("--- a/wappd/map/map_1905.c\\n") or regenerated.count("\\n@@ ") != 2:
+ if not regenerated.startswith("--- a/wappd/map/map_1905.c\n") or regenerated.count("\n@@ ") != 2:
   raise RuntimeError("037 source-regenerated map_1905 diff must contain exactly two U3 hunks")
- hunk_lines = re.findall(r"^@@ -([0-9]+),([0-9]+) \\+([0-9]+),([0-9]+) @@", regenerated, re.M)
+ hunk_lines = re.findall(r"^@@ -([0-9]+),([0-9]+) \+([0-9]+),([0-9]+) @@", regenerated, re.M)
  if len(hunk_lines) != 2:
   raise RuntimeError(f"037 source-regenerated map_1905 hunk header parse failed: {hunk_lines}")
- for hunk in hunk_lines:
-  # Count each generated hunk body and reject any malformed generated header.
-  pass
+ header_positions = [i for i, line in enumerate(regenerated.splitlines()) if line.startswith("@@ ")]
+ generated_lines = regenerated.splitlines()
+ for pos_index, pos in enumerate(header_positions):
+  header = generated_lines[pos]
+  end = header_positions[pos_index + 1] if pos_index + 1 < len(header_positions) else len(generated_lines)
+  body = generated_lines[pos + 1:end]
+  old_actual = sum(1 for line in body if line.startswith(" ") or line.startswith("-"))
+  new_actual = sum(1 for line in body if line.startswith(" ") or line.startswith("+"))
+  match = re.match(r"^@@ -[0-9]+,([0-9]+) \+[0-9]+,([0-9]+) @@", header)
+  if not match or old_actual != int(match.group(1)) or new_actual != int(match.group(2)):
+   raise RuntimeError(f"037 regenerated hunk count mismatch: {header}; actual={old_actual}/{new_actual}")
  map_sha = hashlib.sha256(regenerated.encode()).hexdigest()
  marker = "--- a/wappd/map/map_1905.c"
  if content.count(marker) != 1:
@@ -177,7 +185,7 @@ def apply_legacy_patch(root, name, content, events, metadata):
  if name == "033-dpp-main-config-lifecycle.patch":
   content = remove_033_overlapping_psk_hunk(content)
  if name == "037-dpp-diagnostic-redaction.patch":
-  content = rebuild_037_map_hunks(root, name, content, events, metadata)
+  content = rebuild_037_map_hunks(root, content, events, metadata)
  apply_patch(root, name, content, events, allow_offsets=True)
  if name == "033-dpp-main-config-lifecycle.patch":
   integrate_033_psk_zeroization(root, events)
@@ -409,6 +417,7 @@ def main():
     "@@ -0,1 +1,20 @@ -> @@ -0,0 +1,19 @@",
     "map_1905.c regenerated from exact pre-037 source with two U3 hunks; only the two DPP credential hexdump calls removed"
    ],
+   "037_original_map_hunk_body_counts": {"declared": "9/7", "actual": "7/5"},
    "037_map_hunks_sha256": merge_metadata["037_map_hunks_sha256"],
    "033_overlap_moved_to_010": "forced_memzero(wdev->config->psk, sizeof(wdev->config->psk))",
    "generated_patch_sha256": {k: v["sha256"] for k, v in meta.items()},
