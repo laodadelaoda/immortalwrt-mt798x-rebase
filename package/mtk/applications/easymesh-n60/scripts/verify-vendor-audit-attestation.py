@@ -46,7 +46,9 @@ FIXED = [
     "target/linux/mediatek/filogic/target.mk",
     "scripts/patch-kernel.sh",
     "config/n60pro-1001.config",
-]def sha(path: Path) -> str:
+]
+
+def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 def is_transient_python_artifact(path: Path) -> bool:
