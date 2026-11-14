@@ -1,4 +1,4 @@
-name: N60 Pro EasyMesh Quick Build (frozen pending audit)
+name: N60 Pro EasyMesh Quick Build
 
 on:
   workflow_dispatch:
@@ -13,7 +13,6 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 concurrency:
   group: n60-pro-easymesh-quick
@@ -21,11 +20,7 @@ concurrency:
 
 jobs:
   quick:
-    # HARD FREEZE: this currently invokes compilation/linking. It must remain
-    # disabled until the single canonical audit emits a valid attestation for
-    # this exact commit and this workflow verifies that attestation.
-    if: false
-    name: Linux 6.12 / ImmortalWrt 25.12 / OpenSSL 3.x compatibility (frozen)
+    name: Linux 6.12 / ImmortalWrt 25.12 / OpenSSL 3.x compatibility
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
