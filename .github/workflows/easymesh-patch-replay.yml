@@ -1,6 +1,7 @@
 name: N60 Pro EasyMesh Patch Replay (Prepare Only)
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - runner/easymesh-patch-replay-20261114
