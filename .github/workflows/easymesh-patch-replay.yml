@@ -7,6 +7,7 @@ on:
       - runner/easymesh-patch-replay-20261114
     paths:
       - .github/workflows/easymesh-patch-replay.yml
+      - scripts/n60-easymesh-merge-consolidate.py
       - package/mtk/applications/easymesh-n60/patches/**
       - package/mtk/applications/easymesh-n60/Makefile
       - package/mtk/vendor-sources.lock.json
@@ -28,7 +29,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 1
+          fetch-depth: 3
           persist-credentials: false
 
       - name: Install minimal host dependencies
@@ -67,6 +68,13 @@ jobs:
           mkdir -p dl
           python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py download --repo "$GITHUB_WORKSPACE" --dl-dir dl --ids wappd mapd 1905daemon libmapd
           sha256sum dl/wappd-80ca5724.tar.bz2 dl/mapd-6eca4331.tar.bz2 dl/1905daemon-35234223.tar.bz2 dl/libmapd-0132d199.tar.bz2 | tee "$RUNNER_TEMP/vendor-archive-sha256.txt"
+
+      - name: Consolidate 033-037 by source responsibility and verify exact replay
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$RUNNER_TEMP/merge-candidate"
+          python3 scripts/n60-easymesh-merge-consolidate.py --repo "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/merge-candidate" 2>&1 | tee "$RUNNER_TEMP/merge-generation.log"
 
       - name: Run native OpenWrt package Prepare only
         shell: bash
@@ -121,6 +129,8 @@ jobs:
           name: n60pro-easymesh-patch-replay-${{ github.run_number }}-attempt-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/easymesh-prepare.log
+            ${{ runner.temp }}/merge-generation.log
+            ${{ runner.temp }}/merge-candidate/**
             ${{ runner.temp }}/vendor-archive-sha256.txt
             ${{ runner.temp }}/replay-baseline.txt
             ${{ runner.temp }}/replay-result.txt
