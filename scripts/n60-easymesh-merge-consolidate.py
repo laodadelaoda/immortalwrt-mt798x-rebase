@@ -107,6 +107,71 @@ def apply_patch(root, name, content, events, allow_offsets=False):
  for backup in root.rglob("*.orig"):
   backup.unlink()
 
+def patch_file_sections(content):
+ sections = re.split(r"(?=^--- a/)", content, flags=re.M)
+ return [section for section in sections if section.startswith("--- a/")]
+
+def section_path(section):
+ match = re.match(r"^--- a/([^\\n]+)", section)
+ return match.group(1) if match else None
+
+def select_patch_section(content, path):
+ matches = [section for section in patch_file_sections(content) if section_path(section) == path]
+ if len(matches) != 1:
+  raise RuntimeError(f"expected exactly one patch section for {path}, found {len(matches)}")
+ return matches[0]
+
+def remove_patch_section(content, path):
+ sections = patch_file_sections(content)
+ matches = [section for section in sections if section_path(section) == path]
+ if len(matches) != 1:
+  raise RuntimeError(f"expected exactly one patch section for removal {path}, found {len(matches)}")
+ return "".join(section for section in sections if section_path(section) != path)
+
+def rebase_patch_to_zero_offset(root, name, content, events):
+ cmd = ["patch", "--dry-run", "--batch", "--forward", "--fuzz=0", "-p1"]
+ probe = subprocess.run(cmd, cwd=root, input=content, text=True,
+                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+ output = probe.stdout or ""
+ if probe.returncode or re.search(r"(with fuzz\\s+\\d+|Hunk\\s+#\\d+\\s+FAILED|saving rejects|malformed patch)", output, re.I):
+  raise RuntimeError(f"cannot derive exact hunk anchors for {name}\\n{output}")
+ offsets = {}
+ current_file = None
+ hunk_no = 0
+ for line in output.splitlines():
+  if line.startswith("patching file "):
+   current_file = line[len("patching file "):]
+   hunk_no = 0
+  match = re.search(r"Hunk #([0-9]+) succeeded at [0-9]+(?: \\(offset ([+-]?[0-9]+) lines?\\))?", line)
+  if match and current_file:
+   hunk_no = int(match.group(1))
+   offsets[(current_file, hunk_no)] = int(match.group(2) or 0)
+ out = []
+ current_file = None
+ hunk_no = 0
+ for line in content.splitlines(keepends=True):
+  if line.startswith("--- a/"):
+   current_file = line[len("--- a/"):].strip()
+   hunk_no = 0
+  if line.startswith("@@ "):
+   hunk_no += 1
+   delta = offsets.get((current_file, hunk_no), 0)
+   header = re.match(r"^@@ -(\\d+)(,\\d+)? \\+(\\d+)(,\\d+)? @@(.*)$", line.rstrip("\\n"))
+   if not header:
+    raise RuntimeError(f"cannot parse unified hunk header in {name}: {line.rstrip()}")
+   if delta:
+    line = (f"@@ -{int(header.group(1)) + delta}{header.group(2) or ''} "
+            f"+{int(header.group(3)) + delta}{header.group(4) or ''} @@{header.group(5)}\\n")
+  out.append(line)
+ rebased = "".join(out)
+ verify = subprocess.run(cmd, cwd=root, input=rebased, text=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+ verify_output = verify.stdout or ""
+ if verify.returncode or re.search(r"(offset\\s+[+-]?\\d+\\s+lines?|with fuzz\\s+\\d+|Hunk\\s+#\\d+\\s+FAILED|saving rejects|malformed patch)", verify_output, re.I):
+  raise RuntimeError(f"{name} hunk-header rebase did not produce zero-offset replay\\n{verify_output}")
+ events.append(f"{name}: source-anchored hunk headers rebased from dry-run offsets; strict dry-run PASS\\n{output}\\nSTRICT DRY-RUN\\n{verify_output}")
+ return rebased
+
 def _replace_once(source, old, new, label):
  count = source.count(old)
  if count != 1:
@@ -615,13 +680,23 @@ def main():
   for name in GROUPS[TARGETS[0]]:
    apply_legacy_patch(candidate, name, original[name], events, merge_metadata)
   p008 = capture_group(candidate, TARGETS[0], output / TARGETS[0])
-  for name in GROUPS[TARGETS[1]]:
+  # 016's main.c QR-count hunk is a prerequisite context for 033.
+  # Fold that hunk into 010, while retaining the other 016 files in 016.
+  apply_legacy_patch(candidate, GROUPS[TARGETS[1]][0],
+                     original[GROUPS[TARGETS[1]][0]], events, merge_metadata)
+  qr_main_section = select_patch_section(
+   original[ORIGINAL_ORDER[5]], "wappd/common/main.c")
+  apply_patch(candidate, ORIGINAL_ORDER[5] + " [main.c hunk folded into 010]",
+              qr_main_section, events)
+  for name in GROUPS[TARGETS[1]][1:]:
    apply_legacy_patch(candidate, name, original[name], events, merge_metadata)
   p010 = capture_group(candidate, TARGETS[1], output / TARGETS[1])
   for name in GROUPS[TARGETS[2]]:
    apply_legacy_patch(candidate, name, original[name], events, merge_metadata)
   p015 = capture_group(candidate, TARGETS[2], output / TARGETS[2])
-  apply_patch(candidate, ORIGINAL_ORDER[5], original[ORIGINAL_ORDER[5]], events)
+  p016 = remove_patch_section(original[ORIGINAL_ORDER[5]], "wappd/common/main.c")
+  p016 = rebase_patch_to_zero_offset(candidate, ORIGINAL_ORDER[5], p016, events)
+  apply_patch(candidate, ORIGINAL_ORDER[5] + " [remaining hunks]", p016, events)
 
   # Reference tree: replay the unmodified original Lock sequence.
   reference = extract_source(archive, tmp / "reference")
@@ -641,17 +716,19 @@ def main():
    generated = (output / name).read_text(encoding="utf-8")
    apply_patch(verify, name, generated, events)
    commit_tree(verify, f"verify consolidated: {name}")
-  apply_patch(verify, ORIGINAL_ORDER[5], original[ORIGINAL_ORDER[5]], events)
+  apply_patch(verify, ORIGINAL_ORDER[5] + " [remaining hunks]", p016, events)
   compare_trees(verify, reference)
 
   meta = {}
-  for name, data in [(TARGETS[0], p008), (TARGETS[1], p010), (TARGETS[2], p015)]:
+  for name, data in [(TARGETS[0], p008), (TARGETS[1], p010), (TARGETS[2], p015),
+                    (ORIGINAL_ORDER[5], p016)]:
    raw = data.encode()
    meta[name] = {"sha256": digest(raw), "hunks": len(re.findall(r"^@@ ", data, re.M)), "bytes": len(raw)}
 
   # Change the repository checkout only after both replay paths are byte-identical.
   for name in TARGETS:
    shutil.copy2(output / name, patch_dir / name)
+  (patch_dir / ORIGINAL_ORDER[5]).write_text(p016, encoding="utf-8", newline="")
   for name in REMOVED:
    path = patch_dir / name
    if path.exists():
@@ -680,8 +757,9 @@ def main():
    "## Responsibility mapping",
    "",
    "- 008: original 008 + 035 + 037 (DPP authentication/key lifecycle and diagnostic redaction)",
-   "- 010: original 010 + 033 + 036 (WAPP DPP config-object lifecycle, rollback and destruction)",
+   "- 010: original 010 + 033 + 036 + the overlapping 016 main.c QR-count hunk (WAPP DPP config-object lifecycle, rollback and destruction)",
    "- 015: original 015 + 034 (DPP configuration lookup, credential retrieval and BSS credential construction)",
+   "- 016: dpp.c/dpp.h/dpp_wdev.c remain in 016; its main.c hunk is folded into 010 because 033 requires the post-016 QR-count context.",
    "- 002: unchanged; parser/parameter validation responsibility remains independent",
    "",
    "## Generated patch evidence",
@@ -719,6 +797,8 @@ def main():
    "037_map_hunks_sha256": merge_metadata["037_map_hunks_sha256"],
    "033_overlap_moved_to_010": "forced_memzero(wdev->config->psk, sizeof(wdev->config->psk))",
    "generated_patch_sha256": {k: v["sha256"] for k, v in meta.items()},
+   "016_main_c_hunk_folded_into_010": True,
+   "016_remaining_patch_sha256": digest(p016.encode()),
    "lock_sha256": lock_sha,
    "checks": {
     "legacy_reference_zero_fuzz_zero_reject": True,
