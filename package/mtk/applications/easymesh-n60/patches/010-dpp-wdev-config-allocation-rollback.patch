@@ -15,7 +15,8 @@ index 12150f1..040ecb5 100644
 -	//struct dpp_bss_cred *bss_cred = NULL;
  	u16 is_1905_conn = 0, is_normal = 0;
  	struct dl_list *dev_list;
- -	//char all_zero_mac[MAC_ADDR_LEN]={0};
+-	os_memset(&auth, 0, sizeof(auth));
+-	//char all_zero_mac[MAC_ADDR_LEN]={0};
  #endif
  
  	DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"%s\n", __func__);
