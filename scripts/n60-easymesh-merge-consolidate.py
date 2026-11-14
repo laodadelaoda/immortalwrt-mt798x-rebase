@@ -629,6 +629,39 @@ def main():
   raise RuntimeError(f"WAPP archive SHA256 mismatch: expected {source['sha256']} got {archive_sha}")
  original = {name: git_patch(repo, name) for name in ORIGINAL_ORDER}
  original_hashes = {name: digest(data.encode()) for name, data in original.items()}
+ normalization_events = []
+
+ # 036's final wdev.c hunk has stale unified-diff counts. Its body contains
+ # 14 old-side and 27 new-side lines, not the declared 17/30. Correct only
+ # the header after verifying the exact body and fail-label target.
+ patch_036 = "036-wapp-device-config-secret-cleanup.patch"
+ raw_036 = original[patch_036]
+ lines_036 = raw_036.splitlines()
+ hunk_036 = [i for i, line in enumerate(lines_036)
+             if line == "@@ -3640,17 +3630,30 @@"]
+ if len(hunk_036) != 1:
+  raise RuntimeError("036 expected exactly one stale wdev.c hunk @@ -3640,17 +3630,30 @@")
+ hidx_036 = hunk_036[0]
+ endidx_036 = next((i for i in range(hidx_036 + 1, len(lines_036))
+                    if lines_036[i].startswith("@@ ") or lines_036[i].startswith("--- a/")),
+                   len(lines_036))
+ body_036 = lines_036[hidx_036 + 1:endidx_036]
+ while body_036 and body_036[-1] == "":
+  body_036.pop()
+ old_036 = sum(1 for line in body_036 if line.startswith(" ") or line.startswith("-"))
+ new_036 = sum(1 for line in body_036 if line.startswith(" ") or line.startswith("+"))
+ if old_036 != 14 or new_036 != 27 or not any(line == " fail:" for line in body_036):
+  raise RuntimeError(f"036 wdev.c hunk body mismatch: old={old_036}, new={new_036}; refusing normalization")
+ original_036_sha = digest(raw_036.encode())
+ lines_036[hidx_036] = "@@ -3640,14 +3630,27 @@"
+ normalized_036 = "\\n".join(lines_036) + "\\n"
+ normalized_036_sha = digest(normalized_036.encode())
+ original[patch_036] = normalized_036
+ normalization_events.extend([
+  "036 structural normalization: @@ -3640,17 +3630,30 @@ -> @@ -3640,14 +3630,27 @@",
+  f"036 original patch SHA256: {original_036_sha}",
+  f"036 normalized patch SHA256: {normalized_036_sha}",
+ ])
 
  # 037 contains one objectively inconsistent new-file hunk header: the
  # /dev/null source side declares one old line although the body contains
@@ -676,7 +709,7 @@ def main():
  normalized_037 = "\n".join(lines_037) + "\n"
  normalized_037_sha = digest(normalized_037.encode())
  original[patch_037] = normalized_037
- events = [
+ events = normalization_events + [
   "037 structural normalization: @@ -0,1 +1,20 @@ -> @@ -0,0 +1,19 @@",
   "037 original map_1905.c second hunk mismatch verified: header 9/7; actual body 8/6; map section will be regenerated from source",
   f"037 original patch SHA256: {original_037_sha}",
