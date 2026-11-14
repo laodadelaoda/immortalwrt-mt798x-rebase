@@ -60,12 +60,19 @@ def git_patch(repo, name):
  data = run(["git", "show", f"{BASELINE_COMMIT}:{path}"], cwd=repo)
  if name == "010-dpp-wdev-config-allocation-rollback.patch":
   marker = "# BEGIN: 033-dpp-main-config-lifecycle.patch"
-  if data.count(marker) != 1:
+  marker_count = data.count(marker)
+  # The pinned pre-consolidation baseline has two valid historical layouts:
+  # (a) 033 is a standalone patch and 010 has no embedded marker; or
+  # (b) 033 was embedded into 010 by an earlier candidate revision.
+  # In either case ORIGINAL_ORDER replays 033 exactly once as its own semantic
+  # input. Strip only the embedded copy when present; reject ambiguous copies.
+  if marker_count > 1:
    raise RuntimeError(
-    f"pinned baseline 010 must contain exactly one embedded 033 marker block; "
-    f"found {data.count(marker)} at {BASELINE_COMMIT}:{path}"
+    f"pinned baseline 010 has ambiguous embedded 033 marker blocks; "
+    f"found {marker_count} at {BASELINE_COMMIT}:{path}"
    )
-  data = data.split(marker, 1)[0]
+  if marker_count == 1:
+   data = data.split(marker, 1)[0]
  return data
 
 def init_tree(root):
