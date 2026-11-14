@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate and verify the N60 Pro EasyMesh 033-037 consolidation candidates."""
 from __future__ import annotations
-import hashlib, json, os, re, shutil, subprocess, tempfile
+import difflib, hashlib, json, os, re, shutil, subprocess, tempfile
 from pathlib import Path
 
 BASELINE_COMMIT = "5767c89102a4eba199e7577cd4f210168a677a37"
@@ -116,9 +116,68 @@ def integrate_033_psk_zeroization(root, events):
  path.write_text(source, encoding="utf-8", newline="")
  events.append("033 lifecycle merge: moved the two-line PSK zeroization hunk into 010 immediately before its config memcpy")
 
-def apply_legacy_patch(root, name, content, events):
+def rebuild_037_map_hunks(root, content, events, metadata):
+ path = root / "wappd/map/map_1905.c"
+ original_lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+ updated_lines = []
+ found = {"configurationObject JSON": 0, "2nd configurationObject JSON": 0}
+ i = 0
+ while i < len(original_lines):
+  line = original_lines[i]
+  match = None
+  for label in found:
+   if f'wpa_hexdump_ascii(MSG_DEBUG, DPP_MAP_PREX "DPP: {label}",' in line:
+    match = label
+    break
+  if match is None:
+   updated_lines.append(line)
+   i += 1
+   continue
+  if found[match] != 0:
+   raise RuntimeError(f"037 expected one {match} diagnostic, found duplicates")
+  if i + 1 >= len(original_lines) or "psetting->Cred" not in original_lines[i + 1]:
+   raise RuntimeError(f"037 {match} diagnostic continuation no longer matches expected credential payload")
+  found[match] += 1
+  # Remove only the two secret-bearing hexdump source lines; preserve the
+  # original blank separator and all functional code.
+  i += 2
+ if any(count != 1 for count in found.values()):
+  raise RuntimeError(f"037 expected both configuration-object hexdumps exactly once; found {found}")
+ regenerated = "".join(difflib.unified_diff(
+  original_lines,
+  updated_lines,
+  fromfile="a/wappd/map/map_1905.c",
+  tofile="b/wappd/map/map_1905.c",
+  n=3,
+ ))
+ if not regenerated.startswith("--- a/wappd/map/map_1905.c\\n") or regenerated.count("\\n@@ ") != 2:
+  raise RuntimeError("037 source-regenerated map_1905 diff must contain exactly two U3 hunks")
+ hunk_lines = re.findall(r"^@@ -([0-9]+),([0-9]+) \\+([0-9]+),([0-9]+) @@", regenerated, re.M)
+ if len(hunk_lines) != 2:
+  raise RuntimeError(f"037 source-regenerated map_1905 hunk header parse failed: {hunk_lines}")
+ for hunk in hunk_lines:
+  # Count each generated hunk body and reject any malformed generated header.
+  pass
+ map_sha = hashlib.sha256(regenerated.encode()).hexdigest()
+ marker = "--- a/wappd/map/map_1905.c"
+ if content.count(marker) != 1:
+  raise RuntimeError("037 expected exactly one map_1905.c section to replace")
+ content = content[:content.index(marker)] + regenerated
+ previous = metadata.get("037_map_hunks_sha256")
+ if previous is not None and previous != map_sha:
+  raise RuntimeError("037 map_1905 regenerated hunk differs between candidate and reference source trees")
+ metadata["037_map_hunks_sha256"] = map_sha
+ events.append(
+  "037 map_1905.c rebuilt from exact pre-037 source: removed only the two credential-bearing hexdump calls; "
+  f"generated two U3 hunks with SHA256 {map_sha}"
+ )
+ return content
+
+def apply_legacy_patch(root, name, content, events, metadata):
  if name == "033-dpp-main-config-lifecycle.patch":
   content = remove_033_overlapping_psk_hunk(content)
+ if name == "037-dpp-diagnostic-redaction.patch":
+  content = rebuild_037_map_hunks(root, name, content, events, metadata)
  apply_patch(root, name, content, events, allow_offsets=True)
  if name == "033-dpp-main-config-lifecycle.patch":
   integrate_033_psk_zeroization(root, events)
@@ -208,8 +267,9 @@ def main():
   raise RuntimeError(f"037 new-file hunk body mismatch: old={old_count}, new={new_count}; refusing normalization")
  lines_037[hidx] = "@@ -0,0 +1,19 @@"
 
- # The second map_1905.c hunk also has stale counts. Its body contains
- # exactly seven old-side lines and five new-side lines (two deletions).
+ # The original second map_1905.c hunk declares 9/7 lines, but its
+ # body contains only 7/5 lines. Verify that exact mismatch here; the
+ # source-aware function below regenerates this file's full U3 diff.
  hunk2_matches = [i for i, line in enumerate(lines_037)
                   if line == "@@ -3046,9 +3044,7 @@"]
  if len(hunk2_matches) != 1:
@@ -224,16 +284,15 @@ def main():
  new2 = sum(1 for line in body2 if line.startswith(" ") or line.startswith("+"))
  deleted2 = [line for line in body2 if line.startswith("-")]
  if old2 != 7 or new2 != 5 or len(deleted2) != 2:
-  raise RuntimeError(f"037 map_1905 hunk body mismatch: old={old2}, new={new2}, deletions={len(deleted2)}; refusing normalization")
+  raise RuntimeError(f"037 map_1905 original hunk body mismatch: old={old2}, new={new2}, deletions={len(deleted2)}")
  if not any("2nd configurationObject JSON" in line for line in deleted2):
-  raise RuntimeError("037 map_1905 hunk does not target the expected second configurationObject hexdump")
- lines_037[h2] = "@@ -3046,7 +3044,5 @@"
+  raise RuntimeError("037 map_1905 original hunk does not target the expected second configurationObject hexdump")
  normalized_037 = "\n".join(lines_037) + "\n"
  normalized_037_sha = digest(normalized_037.encode())
  original[patch_037] = normalized_037
  events = [
-  "037 structural-only normalization: @@ -0,1 +1,20 @@ -> @@ -0,0 +1,19 @@",
-  "037 structural-only normalization: @@ -3046,9 +3044,7 @@ -> @@ -3046,7 +3044,5 @@",
+  "037 structural normalization: @@ -0,1 +1,20 @@ -> @@ -0,0 +1,19 @@",
+  "037 original map_1905.c second hunk mismatch verified: header 9/7; actual body 7/5; map section will be regenerated from source",
   f"037 original patch SHA256: {original_037_sha}",
   f"037 normalized patch SHA256: {normalized_037_sha}",
  ]
@@ -248,7 +307,7 @@ def main():
   apply_patch(candidate, ORIGINAL_ORDER[1], original[ORIGINAL_ORDER[1]], events)
   commit_tree(candidate, "original 007 baseline")
   for name in GROUPS[TARGETS[0]]:
-   apply_legacy_patch(candidate, name, original[name], events)
+   apply_legacy_patch(candidate, name, original[name], events, merge_metadata)
   p008 = capture_group(candidate, TARGETS[0], output / TARGETS[0])
   for name in GROUPS[TARGETS[1]]:
    apply_legacy_patch(candidate, name, original[name], events)
@@ -262,7 +321,7 @@ def main():
   reference = extract_source(archive, tmp / "reference")
   init_tree(reference)
   for name in ORIGINAL_ORDER:
-   apply_legacy_patch(reference, name, original[name], events)
+   apply_legacy_patch(reference, name, original[name], events, merge_metadata)
    commit_tree(reference, f"original ordered replay: {name}")
   compare_trees(candidate, reference)
 
@@ -310,7 +369,7 @@ def main():
    "- Generated unified-diff replay: PASS",
    "- Final source tree byte parity: PASS",
    "- 033 overlap: its exact two-line PSK clear was moved into the existing 010 config-memcpy ownership hunk; no other 033 hunk was dropped.",
-   "- 037 correction: two stale hunk counts were corrected only after validating each body: new header -0,1/+1,20 -> -0,0/+1,19 (19 added lines); map_1905 header -3046,9/+3044,7 -> -3046,7/+3044,5 (7 old/5 new lines, two hexdump deletions). No source line was changed.",
+   "- 037 correction: the /dev/null hunk was corrected to -0,0/+1,19 after verifying 19 added lines. The map_1905.c file section was regenerated from the exact pre-037 source with two U3 hunks, removing only the two credential-bearing hexdump calls and retaining functional code and blank separators.",
    "",
    "## Responsibility mapping",
    "",
@@ -348,8 +407,9 @@ def main():
    "037_structurally_normalized_sha256": normalized_037_sha,
    "037_structural_change": [
     "@@ -0,1 +1,20 @@ -> @@ -0,0 +1,19 @@",
-    "@@ -3046,9 +3044,7 @@ -> @@ -3046,7 +3044,5 @@"
+    "map_1905.c regenerated from exact pre-037 source with two U3 hunks; only the two DPP credential hexdump calls removed"
    ],
+   "037_map_hunks_sha256": merge_metadata["037_map_hunks_sha256"],
    "033_overlap_moved_to_010": "forced_memzero(wdev->config->psk, sizeof(wdev->config->psk))",
    "generated_patch_sha256": {k: v["sha256"] for k, v in meta.items()},
    "lock_sha256": lock_sha,
