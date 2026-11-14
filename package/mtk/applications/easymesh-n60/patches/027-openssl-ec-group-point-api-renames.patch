@@ -157,7 +157,6 @@ index 4565480..04a170a 100755
 -	    EC_POINT_get_affine_coordinates_GFp(group, m, mx, NULL,
 +	    EC_POINT_get_affine_coordinates(group, m, mx, NULL,
 
-# OpenSSL 3.x EVP-only DPP M derivation migration
 --- a/wappd/dpp/dpp.c
 +++ b/wappd/dpp/dpp.c
 @@ -12,6 +12,7 @@
