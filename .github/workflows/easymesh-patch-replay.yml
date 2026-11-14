@@ -421,9 +421,12 @@ jobs:
           {
             echo "Repository revision: $(git rev-parse HEAD)"
             echo "WAPP archive SHA256: $(python3 -c 'import json; from pathlib import Path; d=json.loads(Path("package/mtk/vendor-sources.lock.json").read_text()); print(next(x["sha256"] for x in d["sources"] if x["id"]=="wappd"))')"
-            echo "DPP patch series: 017-dpp-credential-security-lifecycle.patch (consolidated 017+018)"
+            echo "DPP patch series: generated consolidated 008/010/015/016 (legacy 033-037 folded; 017/018 retired)"
             sha256sum \
-              package/mtk/applications/easymesh-n60/patches/017-dpp-credential-security-lifecycle.patch \
+              "$RUNNER_TEMP/easymesh-merge-candidate/008-dpp-parser-bounds-and-secret-redaction.patch" \
+              "$RUNNER_TEMP/easymesh-merge-candidate/010-dpp-wdev-config-allocation-rollback.patch" \
+              "$RUNNER_TEMP/easymesh-merge-candidate/015-dpp-config-lookup-null-and-error-guard.patch" \
+              "$RUNNER_TEMP/easymesh-merge-candidate/016-dpp-qr-count-boundaries-and-error-propagation.patch" \
               "$OUT/dpp-audit/pristine/common/main.c" \
               "$OUT/dpp-audit/pristine/common/wdev.c" \
               "$OUT/dpp-audit/pristine/dpp/dpp.c" \
