@@ -2,7 +2,7 @@ diff --git a/wappd/common/main.c b/wappd/common/main.c
 index 12150f1..040ecb5 100644
 --- a/wappd/common/main.c
 +++ b/wappd/common/main.c
-@@ -822,14 +822,13 @@ int dpp_read_config_file_for_connection(struct wifi_app *wapp)
+@@ -822,14 +822,12 @@ int dpp_read_config_file_for_connection(struct wifi_app *wapp)
  	struct wapp_dev *wdev = NULL, *wdev_temp = NULL;
  	struct dpp_config config[3];
  	int ret = 0;
@@ -15,8 +15,7 @@ index 12150f1..040ecb5 100644
 -	//struct dpp_bss_cred *bss_cred = NULL;
  	u16 is_1905_conn = 0, is_normal = 0;
  	struct dl_list *dev_list;
- 	os_memset(&auth, 0, sizeof(auth));
--	//char all_zero_mac[MAC_ADDR_LEN]={0};
+ -	//char all_zero_mac[MAC_ADDR_LEN]={0};
  #endif
  
  	DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"%s\n", __func__);
