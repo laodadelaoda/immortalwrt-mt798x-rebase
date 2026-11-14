@@ -17,6 +17,7 @@ on:
       - package/mtk/applications/datconf/patches/**
       - package/kernel/mapfilter/patches/**
       - package/mtk/applications/easymesh-n60/Makefile
+      - docs/audit/easymesh-patch-dependencies.csv
       - package/mtk/applications/easymesh-n60/tests/**
       - package/mtk/applications/easymesh-n60/scripts/**
       - package/mtk/drivers/mt_wifi/tests/**
@@ -28,6 +29,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: n60pro-canonical-vendor-audit
+  cancel-in-progress: false
 
 jobs:
   source-patch-audit:
