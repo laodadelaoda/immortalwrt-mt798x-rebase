@@ -25,7 +25,7 @@ the existing DPP x||y form is preserved when prefix is not requested.
 -	EC_KEY_set_conv_form(eckey, POINT_CONVERSION_UNCOMPRESSED);
 -	len = i2o_ECPublicKey(eckey, NULL);
 -	if (len <= 0) {
-+	encoded = EVP_PKEY_get1_encoded_public_key(pkey, &len);
++	len = EVP_PKEY_get1_encoded_public_key(pkey, &encoded);
 +	if (!encoded || !len || len > INT_MAX) {
  		wpa_printf(MSG_ERROR, DPP_MAP_PREX
  			   "DDP: Failed to determine public key encoding length");
@@ -76,7 +76,7 @@ the existing DPP x||y form is preserved when prefix is not requested.
 -	EC_KEY_set_conv_form(eckey, POINT_CONVERSION_UNCOMPRESSED);
 -	len = i2o_ECPublicKey(eckey, NULL);
 -	if (len <= 0) {
-+	encoded = EVP_PKEY_get1_encoded_public_key(pkey, &len);
++	len = EVP_PKEY_get1_encoded_public_key(pkey, &encoded);
 +	if (!encoded || !len || len > INT_MAX) {
  		wpa_printf(MSG_ERROR,
  			   "DDP: Failed to determine public key encoding length");
