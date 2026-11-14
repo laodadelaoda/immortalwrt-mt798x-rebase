@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: n60pro-easymesh-patch-replay
@@ -137,15 +138,6 @@ jobs:
             sha256sum -c SHA256SUMS
             printf '%s  %s\n' "d910d12d76a436d6253342545f2813431f4ca4d37b9c2fbf49192c5d19b49137" vendor-sources.lock.json | sha256sum -c -
           )
-          if cmp -s "$CANDIDATE/008-dpp-parser-bounds-and-secret-redaction.patch" "$PATCH_DIR/008-dpp-parser-bounds-and-secret-redaction.patch" &&
-             cmp -s "$CANDIDATE/010-dpp-wdev-config-allocation-rollback.patch" "$PATCH_DIR/010-dpp-wdev-config-allocation-rollback.patch" &&
-             cmp -s "$CANDIDATE/015-dpp-config-lookup-null-and-error-guard.patch" "$PATCH_DIR/015-dpp-config-lookup-null-and-error-guard.patch" &&
-             cmp -s "$CANDIDATE/016-dpp-qr-count-boundaries-and-error-propagation.patch" "$PATCH_DIR/016-dpp-qr-count-boundaries-and-error-propagation.patch" &&
-             cmp -s "$CANDIDATE/vendor-sources.lock.json" "$LOCK" &&
-             ! compgen -G "$PATCH_DIR/03[3-7]-*.patch" >/dev/null; then
-            echo "Verified consolidation is already committed; no write needed."
-            exit 0
-          fi
           install -m 0644 "$CANDIDATE/008-dpp-parser-bounds-and-secret-redaction.patch" "$PATCH_DIR/"
           install -m 0644 "$CANDIDATE/010-dpp-wdev-config-allocation-rollback.patch" "$PATCH_DIR/"
           install -m 0644 "$CANDIDATE/015-dpp-config-lookup-null-and-error-guard.patch" "$PATCH_DIR/"
@@ -160,8 +152,12 @@ jobs:
           git diff --cached --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Consolidate EasyMesh DPP patches 033-037 into 008/010/015"
-          git push origin "HEAD:$GITHUB_REF_NAME"
+          if git diff --cached --quiet; then
+            echo "Consolidated patch files already match; evidence files are still retained when newly generated."
+          else
+            git commit -m "Consolidate EasyMesh DPP patches 033-037 into 008/010/015"
+            git push origin "HEAD:$GITHUB_REF_NAME"
+          fi
           curl --fail-with-body -sS -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GH_TOKEN" \
