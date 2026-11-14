@@ -4,7 +4,7 @@ from __future__ import annotations
 import difflib, hashlib, json, os, re, shutil, subprocess, tempfile
 from pathlib import Path
 
-BASELINE_COMMIT = "4be17091600a8da8641c1579bf4d0963cb60d655"
+BASELINE_COMMIT = "4289d029c18ccebf8525af80f5f656f62f9dc1a2"
 LOCK_REL = "package/mtk/vendor-sources.lock.json"
 PATCH_REL = "package/mtk/applications/easymesh-n60/patches"
 ARCHIVE_NAME = "wappd-80ca5724.tar.bz2"
