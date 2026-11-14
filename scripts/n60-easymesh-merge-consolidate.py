@@ -55,8 +55,15 @@ def git_patch(repo, name):
  path = f"{PATCH_REL}/{name}"
  patch_path = repo / path
  if patch_path.is_file():
-  return patch_path.read_text(encoding="utf-8")
- return run(["git", "show", f"{BASELINE_COMMIT}:{path}"], cwd=repo)
+  data = patch_path.read_text(encoding="utf-8")
+ else:
+  data = run(["git", "show", f"{BASELINE_COMMIT}:{path}"], cwd=repo)
+ if name == "010-dpp-wdev-config-allocation-rollback.patch":
+  marker = "# BEGIN: 033-dpp-main-config-lifecycle.patch"
+  if data.count(marker) != 1:
+   raise RuntimeError("010 must contain exactly one embedded 033 marker block")
+  data = data.split(marker, 1)[0]
+ return data
 
 def init_tree(root):
  run(["git", "init", "-q"], cwd=root)
