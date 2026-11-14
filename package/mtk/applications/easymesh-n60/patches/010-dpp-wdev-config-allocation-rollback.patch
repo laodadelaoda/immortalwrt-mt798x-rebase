@@ -70,7 +70,8 @@
  					os_memcpy(wdev->config->dpp_ppkey, config[k].dpp_ppkey,config[k].dpp_ppkey_len);
  				}
  #endif
-@@ -1241,7 +1259,46 @@
+@@ -1240,8 +1258,47 @@
+ 	if (cred)
  		os_free(cred);
 
  	return WAPP_SUCCESS;
