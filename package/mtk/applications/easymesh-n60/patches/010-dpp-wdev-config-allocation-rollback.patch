@@ -110,7 +110,7 @@
 +		wdev->config->key_mgmt = 0;
 +	}
 +	goto error;
- 	error:
+ error:
 # BEGIN: 033-dpp-main-config-lifecycle.patch — merged into 010 by lifecycle ownership
 --- a/wappd/common/main.c
 +++ b/wappd/common/main.c
