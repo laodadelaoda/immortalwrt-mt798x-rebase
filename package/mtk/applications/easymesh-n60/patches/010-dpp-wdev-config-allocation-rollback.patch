@@ -117,3 +117,4 @@
 
  error:
  	if (auth.c_sign_key)
+ 		wpabuf_clear_free(auth.c_sign_key);
