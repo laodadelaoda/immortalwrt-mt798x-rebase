@@ -9,7 +9,7 @@
  #include <openssl/hmac.h>
  #include <openssl/rand.h>
  #ifdef CONFIG_OPENSSL_CMAC
-@@ -774,8 +777,113 @@
+@@ -774,8 +777,112 @@
  }
  
  
@@ -247,7 +247,7 @@
  #include <openssl/hmac.h>
  #include <openssl/rand.h>
  #ifdef CONFIG_OPENSSL_CMAC
-@@ -722,8 +725,114 @@
+@@ -722,8 +725,113 @@
  }
  
  
