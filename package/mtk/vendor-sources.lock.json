@@ -192,7 +192,8 @@
         "029-openssl-evp-pkey-eq-migration.patch",
         "030-openssl-dpp-evp-pkey-private-key-decode.patch",
         "031-openssl-dpp-evp-pkey-public-point-export.patch",
-        "032-openssl-tls-supported-groups.patch"
+        "032-openssl-tls-supported-groups.patch",
+        "033-openssl-dpp-auth-evp-pkey-access.patch"
       ],
       "scope": "EasyMesh Build/Prepare ordered vendor patch series",
       "post_normalize_order": [
