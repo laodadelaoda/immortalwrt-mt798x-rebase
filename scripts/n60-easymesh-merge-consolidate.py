@@ -694,6 +694,7 @@ def main():
   p016 = remove_patch_section(original[ORIGINAL_ORDER[5]], "wappd/common/main.c")
   p016 = rebase_patch_to_zero_offset(candidate, ORIGINAL_ORDER[5], p016, events)
   apply_patch(candidate, ORIGINAL_ORDER[5] + " [remaining hunks]", p016, events)
+  (output / ORIGINAL_ORDER[5]).write_text(p016, encoding="utf-8", newline="")
 
   # Reference tree: replay the unmodified original Lock sequence.
   reference = extract_source(archive, tmp / "reference")
