@@ -15,6 +15,7 @@ FIXED = [
     ".github/workflows/main.yml",
     ".github/workflows/easymesh-quick.yml",
     "docs/audit/WORKFLOW-OWNERSHIP.md",
+    "docs/audit/n60-original-audit-artifacts-preservation.json",
     "docs/audit/easymesh-patch-dependencies.csv",
     "package/mtk/applications/easymesh-n60/scripts/verify-vendor-audit-attestation.py",
     "scripts/n60-easymesh-merge-consolidate.py",
