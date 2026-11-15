@@ -1,6 +1,6 @@
 --- a/ethernet/mediatek_DSA/libbridge/libbridge_init.c
 +++ b/ethernet/mediatek_DSA/libbridge/libbridge_init.c
-@@ -29,6 +29,6 @@
+@@ -29,7 +29,7 @@
  #include "libbridge_private.h"
  
  int br_socket_fd = -1;
@@ -8,6 +8,7 @@
 +#define BRIDGE_SYSFS_PATH_SIZE 128
  
  int br_init(void)
+ {
 @@ -47,7 +47,7 @@
  /* If /sys/class/net/XXX/bridge exists then it must be a bridge */
  static int isbridge(const struct dirent *entry)
