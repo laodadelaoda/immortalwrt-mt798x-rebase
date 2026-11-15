@@ -2,7 +2,7 @@ diff --git a/1905daemon/src/dpp.c b/1905daemon/src/dpp.c
 index 81d863e..21d187a 100644
 --- a/1905daemon/src/dpp.c
 +++ b/1905daemon/src/dpp.c
-@@ -3246,53 +3246,43 @@ fail:
+@@ -3220,53 +3220,43 @@ fail:
  
  static int dpp_auth_derive_l_responder(struct dpp_authentication *auth)
  {
@@ -80,7 +80,7 @@ index 81d863e..21d187a 100644
  	if (dpp_bn2bin_pad(lx, auth->Lx, auth->secret_len) < 0)
  		goto fail;
  	wpa_hexdump_key(MSG_DEBUG, "DPP: L.x", auth->Lx, auth->secret_len);
-@@ -3300,12 +3290,15 @@ static int dpp_auth_derive_l_responder(struct dpp_authentication *auth)
+@@ -3274,12 +3264,15 @@ static int dpp_auth_derive_l_responder(struct dpp_authentication *auth)
  	ret = 0;
  fail:
  	EC_POINT_clear_free(l);
@@ -100,7 +100,7 @@ index 81d863e..21d187a 100644
  	BN_CTX_free(bnctx);
  	return ret;
  }
-@@ -3313,48 +3306,42 @@ fail:
+@@ -3287,48 +3280,42 @@ fail:
  
  static int dpp_auth_derive_l_initiator(struct dpp_authentication *auth)
  {
@@ -170,7 +170,7 @@ index 81d863e..21d187a 100644
  	if (dpp_bn2bin_pad(lx, auth->Lx, auth->secret_len) < 0)
  		goto fail;
  	wpa_hexdump_key(MSG_DEBUG, "DPP: L.x", auth->Lx, auth->secret_len);
-@@ -3363,10 +3350,13 @@ static int dpp_auth_derive_l_initiator(struct dpp_authentication *auth)
+@@ -3337,10 +3324,13 @@ static int dpp_auth_derive_l_initiator(struct dpp_authentication *auth)
  fail:
  	EC_POINT_clear_free(l);
  	EC_POINT_clear_free(sum);
@@ -187,7 +187,7 @@ index 81d863e..21d187a 100644
  	BN_CTX_free(bnctx);
  	return ret;
  }
-@@ -7215,11 +7205,9 @@ static EC_POINT * dpp_pkex_derive_Qi(const struct dpp_curve_params *curve,
+@@ -7193,11 +7183,9 @@ static EC_POINT * dpp_pkex_derive_Qi(const struct dpp_curve_params *curve,
  	unsigned int num_elem = 0;
  	EC_POINT *Qi = NULL;
  	EVP_PKEY *Pi = NULL;
@@ -201,7 +201,7 @@ index 81d863e..21d187a 100644
  
  	/* Qi = H(MAC-Initiator | [identifier |] code) * Pi */
  
-@@ -7247,13 +7235,8 @@ static EC_POINT * dpp_pkex_derive_Qi(const struct dpp_curve_params *curve,
+@@ -7225,13 +7213,8 @@ static EC_POINT * dpp_pkex_derive_Qi(const struct dpp_curve_params *curve,
  	if (!Pi)
  		goto fail;
  	dpp_debug_print_key("DPP: Pi", Pi);
@@ -217,7 +217,7 @@ index 81d863e..21d187a 100644
  		goto fail;
  	group2 = EC_GROUP_dup(group);
  	if (!group2)
-@@ -7273,7 +7256,8 @@ static EC_POINT * dpp_pkex_derive_Qi(const struct dpp_curve_params *curve,
+@@ -7251,7 +7234,8 @@ static EC_POINT * dpp_pkex_derive_Qi(const struct dpp_curve_params *curve,
  	}
  	dpp_debug_print_point("DPP: Qi", group, Qi);
  out:
@@ -227,7 +227,7 @@ index 81d863e..21d187a 100644
  	EVP_PKEY_free(Pi);
  	BN_clear_free(hash_bn);
  	if (ret_group && Qi)
-@@ -7299,11 +7283,9 @@ static EC_POINT * dpp_pkex_derive_Qr(const struct dpp_curve_params *curve,
+@@ -7277,11 +7261,9 @@ static EC_POINT * dpp_pkex_derive_Qr(const struct dpp_curve_params *curve,
  	unsigned int num_elem = 0;
  	EC_POINT *Qr = NULL;
  	EVP_PKEY *Pr = NULL;
@@ -241,7 +241,7 @@ index 81d863e..21d187a 100644
  
  	/* Qr = H(MAC-Responder | | [identifier | ] code) * Pr */
  
-@@ -7331,13 +7313,8 @@ static EC_POINT * dpp_pkex_derive_Qr(const struct dpp_curve_params *curve,
+@@ -7309,13 +7291,8 @@ static EC_POINT * dpp_pkex_derive_Qr(const struct dpp_curve_params *curve,
  	if (!Pr)
  		goto fail;
  	dpp_debug_print_key("DPP: Pr", Pr);
@@ -257,7 +257,7 @@ index 81d863e..21d187a 100644
  		goto fail;
  	group2 = EC_GROUP_dup(group);
  	if (!group2)
-@@ -7357,7 +7334,8 @@ static EC_POINT * dpp_pkex_derive_Qr(const struct dpp_curve_params *curve,
+@@ -7335,7 +7312,8 @@ static EC_POINT * dpp_pkex_derive_Qr(const struct dpp_curve_params *curve,
  	}
  	dpp_debug_print_point("DPP: Qr", group, Qr);
  out:
@@ -267,7 +267,7 @@ index 81d863e..21d187a 100644
  	EVP_PKEY_free(Pr);
  	BN_clear_free(hash_bn);
  	if (ret_group && Qr)
-@@ -7441,8 +7419,7 @@ fail:
+@@ -7419,8 +7397,7 @@ fail:
  
  static struct wpabuf * dpp_pkex_build_exchange_req(struct dpp_pkex *pkex)
  {
@@ -277,7 +277,7 @@ index 81d863e..21d187a 100644
  	BN_CTX *bnctx = NULL;
  	EC_GROUP *group = NULL;
  	EC_POINT *Qi = NULL, *M = NULL;
-@@ -7483,11 +7460,7 @@ static struct wpabuf * dpp_pkex_build_exchange_req(struct dpp_pkex *pkex)
+@@ -7461,11 +7438,7 @@ static struct wpabuf * dpp_pkex_build_exchange_req(struct dpp_pkex *pkex)
  		goto fail;
  
  	/* M = X + Qi */
@@ -290,7 +290,7 @@ index 81d863e..21d187a 100644
  		goto fail;
  	dpp_debug_print_point("DPP: X", group, X_point);
  	M = EC_POINT_new(group);
-@@ -7560,7 +7533,8 @@ skip_finite_cyclic_group:
+@@ -7538,7 +7511,8 @@ skip_finite_cyclic_group:
  
  out:
  	wpabuf_free(M_buf);
@@ -300,7 +300,7 @@ index 81d863e..21d187a 100644
  	EC_POINT_free(M);
  	EC_POINT_free(Qi);
  	BN_clear_free(Mx);
-@@ -7812,8 +7786,7 @@ struct dpp_pkex * dpp_pkex_rx_exchange_req(void *msg_ctx,
+@@ -7790,8 +7764,7 @@ struct dpp_pkex * dpp_pkex_rx_exchange_req(void *msg_ctx,
  	BN_CTX *bnctx = NULL;
  	EC_GROUP *group = NULL;
  	BIGNUM *Mx = NULL, *My = NULL;
@@ -310,7 +310,7 @@ index 81d863e..21d187a 100644
  	BIGNUM *Nx = NULL, *Ny = NULL;
  	u8 Kx[DPP_MAX_SHARED_SECRET_LEN];
  	size_t Kx_len;
-@@ -7927,14 +7900,8 @@ struct dpp_pkex * dpp_pkex_rx_exchange_req(void *msg_ctx,
+@@ -7905,14 +7878,8 @@ struct dpp_pkex * dpp_pkex_rx_exchange_req(void *msg_ctx,
  
  	os_memcpy(pkex->Mx, attr_key, attr_key_len / 2);
  
@@ -327,7 +327,7 @@ index 81d863e..21d187a 100644
  		goto fail;
  
  	/* Qr = H(MAC-Responder | | [identifier | ] code) * Pr */
-@@ -7962,11 +7929,7 @@ struct dpp_pkex * dpp_pkex_rx_exchange_req(void *msg_ctx,
+@@ -7940,11 +7907,7 @@ struct dpp_pkex * dpp_pkex_rx_exchange_req(void *msg_ctx,
  		goto fail;
  
  	/* N = Y + Qr */
@@ -340,7 +340,7 @@ index 81d863e..21d187a 100644
  		goto fail;
  	dpp_debug_print_point("DPP: Y", group, Y_point);
  	N = EC_POINT_new(group);
-@@ -8013,8 +7976,7 @@ out:
+@@ -7991,8 +7954,7 @@ out:
  	EC_POINT_free(M);
  	EC_POINT_free(N);
  	EC_POINT_free(X);
@@ -350,7 +350,7 @@ index 81d863e..21d187a 100644
  	EC_GROUP_free(group);
  	return pkex;
  fail:
-@@ -8150,7 +8112,7 @@ struct wpabuf * dpp_pkex_rx_exchange_resp(struct dpp_pkex *pkex,
+@@ -8128,7 +8090,7 @@ struct wpabuf * dpp_pkex_rx_exchange_resp(struct dpp_pkex *pkex,
  	const struct dpp_curve_params *curve = pkex->own_bi->curve;
  	EC_POINT *Qr = NULL, *Y = NULL, *N = NULL;
  	BIGNUM *Nx = NULL, *Ny = NULL;
@@ -359,7 +359,7 @@ index 81d863e..21d187a 100644
  	size_t Jx_len, Kx_len;
  	u8 Jx[DPP_MAX_SHARED_SECRET_LEN], Kx[DPP_MAX_SHARED_SECRET_LEN];
  	const u8 *addr[4];
-@@ -8252,14 +8214,8 @@ struct wpabuf * dpp_pkex_rx_exchange_resp(struct dpp_pkex *pkex,
+@@ -8230,14 +8192,8 @@ struct wpabuf * dpp_pkex_rx_exchange_resp(struct dpp_pkex *pkex,
  	pkex->exchange_done = 1;
  
  	/* ECDH: J = a * Y' */
@@ -376,7 +376,7 @@ index 81d863e..21d187a 100644
  		goto fail;
  	if (dpp_ecdh(pkex->own_bi->pubkey, pkex->y, Jx, &Jx_len) < 0)
  		goto fail;
-@@ -8316,7 +8272,7 @@ out:
+@@ -8294,7 +8250,7 @@ out:
  	EC_POINT_free(N);
  	BN_free(Nx);
  	BN_free(Ny);
