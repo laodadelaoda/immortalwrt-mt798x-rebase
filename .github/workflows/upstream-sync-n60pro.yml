@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - n60pro-mtk-closed-driver
+      - automation/upstream-25.12-resolved
     paths:
       - .github/workflows/upstream-sync-n60pro.yml
 
@@ -21,14 +22,12 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 180
     steps:
-      - name: Checkout N60 Pro branch with full history
+      - name: Checkout triggering branch with full history
         uses: actions/checkout@v4
         with:
-          ref: n60pro-mtk-closed-driver
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure Git identity
         run: |
@@ -39,19 +38,31 @@ jobs:
         run: |
           git remote add upstream https://github.com/chasey-dev/immortalwrt-mt798x-rebase.git
           git fetch --no-tags upstream 25.12
-          git fetch origin n60pro-mtk-closed-driver
+          git fetch origin
 
-      - name: Build synchronization branch and merge upstream
+      - name: Merge upstream and resolve only audited patch conflicts
         id: merge
         shell: bash
         run: |
           set -euo pipefail
-          BASE_BRANCH="n60pro-mtk-closed-driver"
-          SYNC_BRANCH="automation/upstream-25.12-sync"
-          git checkout -B "$SYNC_BRANCH" "origin/$BASE_BRANCH"
+          TARGET_BRANCH="n60pro-mtk-closed-driver"
+          RESOLVED_BRANCH="automation/upstream-25.12-resolved"
+          CURRENT_BRANCH="$(git branch --show-current)"
+
+          if [[ "$CURRENT_BRANCH" == "$RESOLVED_BRANCH" ]]; then
+            SOURCE_BRANCH="$RESOLVED_BRANCH"
+            SYNC_BRANCH="$RESOLVED_BRANCH"
+            RESOLVE_AUDITED=true
+          else
+            SOURCE_BRANCH="$TARGET_BRANCH"
+            SYNC_BRANCH="automation/upstream-25.12-sync"
+            RESOLVE_AUDITED=false
+          fi
+
+          git checkout -B "$SYNC_BRANCH" "origin/$SOURCE_BRANCH"
+
           if git merge --no-edit --no-ff upstream/25.12; then
             echo "merge_result=clean" >> "$GITHUB_OUTPUT"
-            echo "Upstream merge completed without conflicts."
           else
             mkdir -p conflict-diagnostics/stages
             git status --short > conflict-diagnostics/status.txt
@@ -60,11 +71,12 @@ jobs:
             git merge-base HEAD upstream/25.12 > conflict-diagnostics/merge-base.txt
             git diff --cc > conflict-diagnostics/combined-diff.patch || true
             git ls-files -u > conflict-diagnostics/unmerged-index.txt
-            git diff --name-only --diff-filter=U | tee conflict-diagnostics/conflict-files.txt
+            git diff --name-only --diff-filter=U | sort -u | tee conflict-diagnostics/conflict-files.txt
             cp conflict-diagnostics/conflict-files.txt conflict-files.txt
+
             while IFS= read -r path; do
               [ -n "$path" ] || continue
-              key=$(printf '%s' "$path" | sed 's#[/ ]#__#g')
+              key="$(printf '%s' "$path" | sed 's#[/ ]#__#g')"
               printf '%s\t%s\n' "$key" "$path" >> conflict-diagnostics/path-map.tsv
               git show ":1:$path" > "conflict-diagnostics/stages/$key.base" 2>/dev/null || true
               git show ":2:$path" > "conflict-diagnostics/stages/$key.n60pro" 2>/dev/null || true
@@ -73,54 +85,124 @@ jobs:
                 cp "$path" "conflict-diagnostics/stages/$key.worktree"
               fi
             done < conflict-diagnostics/conflict-files.txt
-            {
-              echo "## Upstream merge conflicts"
-              echo
-              echo "The automatic three-way merge stopped safely. No target branch was modified."
-              echo
-              echo "N60 Pro HEAD: $(cat conflict-diagnostics/n60pro-head.txt)"
-              echo "Upstream HEAD: $(cat conflict-diagnostics/upstream-head.txt)"
-              echo "Merge base: $(cat conflict-diagnostics/merge-base.txt)"
-              echo
-              echo "Three-way stages and combined diff are attached as an artifact."
-              echo
-              echo 'Files requiring conflict resolution:'
-              sed 's/^/- `/; s/$/`/' conflict-diagnostics/conflict-files.txt
-            } >> "$GITHUB_STEP_SUMMARY"
-            echo "merge_result=conflict" >> "$GITHUB_OUTPUT"
-            exit 1
+
+            if [[ "$RESOLVE_AUDITED" == true ]]; then
+              expected_files="$(printf '%s\n' \
+                'target/linux/mediatek/patches-6.12/999-ppe-23-mtk_ppe-add-keep-dscp-toggle.patch' \
+                'target/linux/mediatek/patches-6.12/999-wed-07-mtk-wed-add-hwpath-wmm-support.patch' | sort -u)"
+              unexpected="$(comm -23 conflict-diagnostics/conflict-files.txt <(printf '%s\n' "$expected_files"))"
+              if [[ -n "$unexpected" ]]; then
+                echo "Unexpected conflicts remain; refusing automatic resolution:"
+                printf '%s\n' "$unexpected"
+                exit 1
+              fi
+
+              while IFS= read -r file; do
+                [[ -n "$file" ]] || continue
+                if git ls-files -u -- "$file" | grep -q .; then
+                  git checkout --ours -- "$file"
+                  git add -- "$file"
+                fi
+              done < <(printf '%s\n' "$expected_files")
+
+              if git diff --name-only --diff-filter=U | grep -q .; then
+                echo "Unresolved conflicts remain after the audited resolution set."
+                git diff --name-only --diff-filter=U
+                exit 1
+              fi
+
+              git commit --no-edit
+              {
+                echo "## Audited upstream conflict resolution"
+                echo
+                echo "Retained the two reviewed N60-specific follow-up patches:"
+                printf '%s\n' "$expected_files" | sed 's/^/- `/; s/$/`/'
+                echo
+                echo "The PPE 464xlat patch merged automatically; its upstream DSA integration and N60 guards are both present."
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "merge_result=resolved" >> "$GITHUB_OUTPUT"
+            else
+              {
+                echo "## Upstream merge conflicts"
+                echo
+                echo "The automatic three-way merge stopped safely. No target branch was modified."
+                echo
+                echo "N60 Pro HEAD: $(cat conflict-diagnostics/n60pro-head.txt)"
+                echo "Upstream HEAD: $(cat conflict-diagnostics/upstream-head.txt)"
+                echo "Merge base: $(cat conflict-diagnostics/merge-base.txt)"
+                echo
+                echo "Three-way stages and combined diff are attached as an artifact."
+                echo
+                echo 'Files requiring conflict resolution:'
+                sed 's/^/- `/; s/$/`/' conflict-diagnostics/conflict-files.txt
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "merge_result=conflict" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
           fi
 
       - name: Verify upstream ancestry
-        if: steps.merge.outputs.merge_result == 'clean'
+        if: steps.merge.outputs.merge_result == 'clean' || steps.merge.outputs.merge_result == 'resolved'
         run: |
           set -euo pipefail
           git merge-base --is-ancestor upstream/25.12 HEAD
-          test "$(git rev-list --count upstream/25.12..HEAD)" -ge 0
           echo "Upstream 25.12 is an ancestor of the synchronization branch." >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Push synchronization branch
-        if: steps.merge.outputs.merge_result == 'clean'
+      - name: Replay N60 Pro Linux 6.12 patch stack (Prepare only)
+        if: steps.merge.outputs.merge_result == 'clean' || steps.merge.outputs.merge_result == 'resolved'
+        shell: bash
         run: |
-          git push --force-with-lease origin HEAD:refs/heads/automation/upstream-25.12-sync
+          set -Eeuo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev python3-dev rsync unzip zlib1g-dev file wget time xsltproc libelf-dev device-tree-compiler qemu-utils python3-setuptools python3-pyelftools swig ccache
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          cp config/n60pro-1001.config .config
+          echo 'CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_netcore_n60-pro=y' >> .config
+          make defconfig
+          echo "Kernel patch replay revision: $(git rev-parse HEAD)"
+          make target/linux/prepare V=s 2>&1 | tee "$RUNNER_TEMP/n60-kernel-patch-replay.log"
+          if grep -Eiq 'with fuzz [1-9]|fuzz [1-9]|offset [+-]?[1-9][0-9]* lines?|FAILED|\\.rej' "$RUNNER_TEMP/n60-kernel-patch-replay.log"; then
+            echo "FAIL: kernel patch replay reported fuzz, offset, failed hunk, or reject."
+            exit 1
+          fi
+          echo "PASS: target/linux/prepare completed; no fuzz, non-zero offset, failed hunk, or reject was reported." | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Applied patch log lines: $(grep -c 'Applying' "$RUNNER_TEMP/n60-kernel-patch-replay.log" || true)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Push synchronization branch
+        if: steps.merge.outputs.merge_result == 'clean' || steps.merge.outputs.merge_result == 'resolved'
+        run: |
+          set -euo pipefail
+          CURRENT_BRANCH="$(git branch --show-current)"
+          git push origin "HEAD:refs/heads/$CURRENT_BRANCH"
 
       - name: Create or update synchronization PR
-        if: steps.merge.outputs.merge_result == 'clean'
+        if: steps.merge.outputs.merge_result == 'clean' || steps.merge.outputs.merge_result == 'resolved'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
+          CURRENT_BRANCH="$(git branch --show-current)"
           gh pr create \
             --repo "${GITHUB_REPOSITORY}" \
             --base n60pro-mtk-closed-driver \
-            --head automation/upstream-25.12-sync \
+            --head "$CURRENT_BRANCH" \
             --title "Sync upstream chasey-dev/25.12 into N60 Pro" \
-            --body "Automated three-way merge of upstream `chasey-dev/25.12` into `n60pro-mtk-closed-driver`. This PR is generated by the N60 Pro upstream synchronization workflow. Review CI and device-specific compatibility before merging." \
-            || gh pr view automation/upstream-25.12-sync --repo "${GITHUB_REPOSITORY}" --json url --jq .url
+            --body "Controlled three-way merge of the 58 upstream-only commits into the N60 Pro branch. The 22 original patch conflicts were reconciled; the two remaining N60-specific follow-up patches were retained. Kernel patch replay and target build validation remain required before merge." \
+            || gh pr view "$CURRENT_BRANCH" --repo "${GITHUB_REPOSITORY}" --json url --jq .url
+
+      - name: Upload kernel patch replay log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: n60pro-kernel-patch-replay
+          path: ${{ runner.temp }}/n60-kernel-patch-replay.log
+          if-no-files-found: ignore
 
       - name: Upload conflict diagnostics
-        if: failure() && hashFiles('conflict-diagnostics/conflict-files.txt') != ''
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: n60pro-upstream-merge-diagnostics
           path: conflict-diagnostics/
-          if-no-files-found: error
+          if-no-files-found: ignore

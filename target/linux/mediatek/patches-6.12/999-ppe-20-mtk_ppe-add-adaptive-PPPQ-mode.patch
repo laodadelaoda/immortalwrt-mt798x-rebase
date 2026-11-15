@@ -1,5 +1,5 @@
 ---
-[v1] net: ethernet: mtk_ppe: add adaptive PPPQ mode
+[v2] net: ethernet: mtk_ppe: add adaptive PPPQ mode
 
 User can use the commnad below to enable adaptive PPPQ mode.
   - echo 3 > /sys/kernel/debug/mtk_ppe/qos_toggle
@@ -7,6 +7,8 @@ User can use the commnad below to enable adaptive PPPQ mode.
 This mode can control the total number of PPPQ users to ensure they
 do not exceed the QDMA bandwidth.
 ---
+v2: Move the 2.5G wifi_rx PPPQ path check to the internal QoS mode
+    patch so that it applies to both PPPQ and adaptive PPPQ modes.
 v1: Add adaptive PPPQ mode to control PPPQ user count dynamically.
 ---
 
@@ -23,37 +25,25 @@ do not exceed the QDMA bandwidth.
 
 Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 ---
- drivers/net/ethernet/mediatek/mtk_eth_soc.h   |  3 +++
- drivers/net/ethernet/mediatek/mtk_ppe.c       | 30 +++++++++++++++++++++++++++++-
+ drivers/net/ethernet/mediatek/mtk_ppe.c       | 33 +++++++++++++++++--
  drivers/net/ethernet/mediatek/mtk_ppe.h       |  1 +
- .../net/ethernet/mediatek/mtk_ppe_debugfs.c   |  3 ++
- .../net/ethernet/mediatek/mtk_ppe_offload.c   |  3 ++-
- 5 files changed, 38 insertions(+), 2 deletions(-)
+ .../net/ethernet/mediatek/mtk_ppe_debugfs.c   |  7 ++++
+ .../net/ethernet/mediatek/mtk_ppe_offload.c   |  2 +-
+ 4 files changed, 41 insertions(+), 3 deletions(-)
 
---- a/drivers/net/ethernet/mediatek/mtk_eth_soc.h
-+++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.h
-@@ -2067,6 +2067,9 @@ mtk_ppe_check_pppq_path(struct mtk_eth *
- 		/* Handle cases of GMAC port linked less or equal to 1Gbps */
- 		if (odev_speed <= SPEED_1000)
- 			return 1;
-+
-+		if (eth->qos_toggle == 3 && odev_speed <= SPEED_2500 && wifi_rx)
-+			return 1;
- 	}
- 
- 	return 0;
 --- a/drivers/net/ethernet/mediatek/mtk_ppe.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe.c
-@@ -696,11 +696,23 @@ __mtk_foe_entry_clear
+@@ -718,16 +718,29 @@ __mtk_foe_entry_clear(struct mtk_ppe *pp
+ 
  	if (entry->hash != 0xffff && set_state) {
  		struct mtk_foe_entry *hwe = mtk_foe_get_entry(ppe, entry->hash);
++		int queue;
++		u32 *ib2;
  
  		state = FIELD_GET(MTK_FOE_IB1_STATE, hwe->ib1);
-+
+ 
 +		if (mtk_is_netsys_v3_or_greater(ppe->eth) && ppe->eth->qos_toggle == 3) {
-+			u32 *ib2 = mtk_foe_entry_ib2(ppe->eth, &entry->data);
-+			int queue;
-+
++			ib2 = mtk_foe_entry_ib2(ppe->eth, &entry->data);
 +			if (*ib2 & MTK_FOE_IB2_PSE_QOS_V2) {
 +				queue = mtk_foe_entry_get_queue(ppe->eth, &entry->data);
 +				spin_lock(&ppe->eth->qdma_shaper.lock);
@@ -61,14 +51,20 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +				spin_unlock(&ppe->eth->qdma_shaper.lock);
 +			}
 +		}
- 
++
  		hwe->ib1 &= ~MTK_FOE_IB1_STATE;
  		hwe->ib1 |= FIELD_PREP(MTK_FOE_IB1_STATE, MTK_FOE_STATE_INVALID);
  		dma_wmb();
  		if (state == MTK_FOE_STATE_BIND)
  			mtk_ppe_cache_clear(ppe);
++
++		entry->hash = 0xffff;
  	}
-@@ -825,7 +837,8 @@ __mtk_foe_entry_commit(struct mtk_ppe *p
+-	entry->hash = 0xffff;
+ 
+ 	if (entry->type != MTK_FLOW_TYPE_L2_SUBFLOW)
+ 		return;
+@@ -848,7 +861,8 @@ __mtk_foe_entry_commit(struct mtk_ppe *p
  	struct mtk_eth *eth = ppe->eth;
  	u16 timestamp = mtk_eth_timestamp(eth);
  	struct mtk_foe_entry *hwe;
@@ -78,7 +74,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  
  	hwe = mtk_foe_get_entry(ppe, hash);
  
-@@ -842,6 +855,21 @@ __mtk_foe_entry_commit(struct mtk_ppe *p
+@@ -865,6 +879,21 @@ __mtk_foe_entry_commit(struct mtk_ppe *p
  					 timestamp);
  	}
  
@@ -102,7 +98,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	hwe->ib1 = entry->ib1;
 --- a/drivers/net/ethernet/mediatek/mtk_ppe.h
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe.h
-@@ -378,6 +378,7 @@ mtk_ppe_check_skb(struct mtk_ppe *ppe, s
+@@ -380,6 +380,7 @@ mtk_ppe_check_skb(struct mtk_ppe *ppe, s
  	__mtk_ppe_check_skb(ppe, skb, hash);
  }
  
@@ -112,26 +108,30 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  			  u8 *dest_mac);
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_debugfs.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_debugfs.c
-@@ -208,5 +208,7 @@ mtk_ppe_internal_debugfs_read_qos
+@@ -207,6 +207,8 @@ mtk_ppe_internal_debugfs_read_qos(struct
+ 		pr_info("HQoS is enabled now!\n");
  	else if (eth->qos_toggle == 2)
- 		seq_puts(m, "Per-port-per-queue mode is enabled!\n");
+ 		pr_info("Per-port-per-queue mode is enabled!\n");
 +	else if (eth->qos_toggle == 3)
-+		seq_puts(m, "Adaptive Per-port-per-queue mode is enabled!\n");
++		pr_info("Adaptive Per-port-per-queue mode is enabled!\n");
  
  	return 0;
  }
-@@ -248,7 +248,8 @@ mtk_ppe_internal_debugfs_write_qos
- 	case '3':
- 		eth->qos_toggle = 3;
+@@ -239,6 +241,11 @@ mtk_ppe_internal_debugfs_write_qos(struc
+ 		pr_info("Per-port-per-queue mode is going to be enabled !\n");
+ 		pr_info("PPPQ use qid 3~14 (scheduler 0).\n");
+ 		eth->qos_toggle = 2;
++	} else if (buf[0] == '3') {
++		pr_info("Adaptive Per-port-per-queue mode is going to be enabled !\n");
++		pr_info("PPPQ use qid 3~14 (scheduler 0).\n");
++		eth->qos_toggle = 3;
 +		eth->qdma_shaper.threshold = 6000;
- 		break;
  	}
  
- 	return count;
- }
+ 	return len;
 --- a/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
 +++ b/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
-@@ -341,7 +341,8 @@ mtk_flow_set_output_device(struct mtk_et
+@@ -331,7 +331,8 @@ mtk_flow_set_output_device(struct mtk_et
  		ct_mark = mtk_flow_get_ct_mark(ct);
  	}
  
