@@ -278,7 +278,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  	return NULL;
  }
  
-@@ -1342,64 +1270,54 @@
+@@ -1342,65 +1270,55 @@
  {
  	unsigned char *der = NULL;
  	int der_len;
@@ -417,7 +417,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  	EVP_MD_CTX_destroy(md_ctx);
  	os_free(prot_hdr);
  	wpabuf_free(kid);
-@@ -8256,22 +8165,14 @@
+@@ -8256,23 +8165,15 @@
  int dpp_configurator_get_key(const struct dpp_configurator *conf, char *buf,
  			     size_t buflen)
  {
@@ -443,7 +443,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  	return ret;
  }
  
-@@ -8892,7 +8793,11 @@
+@@ -8892,5 +8793,9 @@
  	group = EC_GROUP_new_by_curve_name(OBJ_txt2nid(curve->name));
  	if (!group)
  		return NULL;
