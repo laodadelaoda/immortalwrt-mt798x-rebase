@@ -10,7 +10,7 @@ index 04a170a..99aa2e1 100644
  #include "utils/base64.h"
  //#include "dpp_i.h"
  
-@@ -33,23 +34,21 @@ int dpp_reconfig_derive_ke_initiator(struct dpp_authentication *auth,
+@@ -33,23 +34,23 @@ int dpp_reconfig_derive_ke_initiator(struct dpp_authentication *auth,
  {
  	BN_CTX *bnctx = NULL;
  	EVP_PKEY *pr = NULL, *peer_key = NULL;
@@ -36,8 +36,8 @@ index 04a170a..99aa2e1 100644
 -				  r_proto, r_proto_len);
 +	if (!auth || !auth->curve || !auth->conf || !auth->conf->connector_key ||
 +	    !r_proto || !r_proto_len || !auth->curve->nonce_len ||
-	    auth->curve->nonce_len > sizeof(auth->c_nonce) ||
-	    auth->curve->nonce_len > sizeof(auth->e_nonce))
++	    auth->curve->nonce_len > sizeof(auth->c_nonce) ||
++	    auth->curve->nonce_len > sizeof(auth->e_nonce))
 +		goto fail;
 +	pr = dpp_set_pubkey_point(auth->conf->connector_key, r_proto, r_proto_len);
  	if (!pr) {
@@ -131,7 +131,7 @@ index 04a170a..99aa2e1 100644
  int dpp_reconfig_derive_ke_responder(struct dpp_authentication *auth,
  				     const u8 *net_access_key,
  				     size_t net_access_key_len,
-@@ -130,124 +124,105 @@ int dpp_reconfig_derive_ke_responder(struct dpp_authentication *auth,
+@@ -130,125 +124,109 @@ int dpp_reconfig_derive_ke_responder(struct dpp_authentication *auth,
  	BN_CTX *bnctx = NULL;
  	EVP_PKEY *own_key = NULL, *peer_key = NULL;
  	BIGNUM *sum = NULL, *q = NULL, *mx = NULL;
@@ -157,9 +157,9 @@ index 04a170a..99aa2e1 100644
 -	own_key = dpp_set_keypair(&auth->curve, net_access_key,
 -				  net_access_key_len);
 +	if (!auth || !auth->curve || !net_access_key || !peer_net_access_key ||
-	    !auth->curve->nonce_len ||
-	    auth->curve->nonce_len > sizeof(auth->c_nonce) ||
-	    auth->curve->nonce_len > sizeof(auth->e_nonce))
++	    !auth->curve->nonce_len ||
++	    auth->curve->nonce_len > sizeof(auth->c_nonce) ||
++	    auth->curve->nonce_len > sizeof(auth->e_nonce))
 +		goto fail;
 +	own_key = dpp_set_keypair(&auth->curve, net_access_key, net_access_key_len);
  	if (!own_key) {
