@@ -276,7 +276,8 @@
  			}
  			pos2++;
  			pos1 = pos2;
-@@ -528,12 +547,12 @@
+@@ -527,13 +545,13 @@
+ 			pos2 = strchr(pos1, ' ');
  			if (pos2 == NULL) {
  				DBGPRINT(RT_DEBUG_TRACE, "resv2 not found\n");
 -				break;
@@ -292,11 +293,7 @@
  			}
  			pos2++;
  			pos1 = pos2;
-@@ -538,23 +538,24 @@
- 			pos2++;
- 			pos1 = pos2;
- 
- 			/*hidden ssid*/
+@@ -542,7 +560,7 @@
  			pos2 = strchr(pos1, '\n');
  			if (pos2 == NULL) {
  				DBGPRINT(RT_DEBUG_TRACE, "hidden ssid not found\n");
@@ -305,7 +302,7 @@
  			}
  			*pos2 = '\0';
  			if (sscanf(pos1, "hidden-%c", &hidden_ssid) == 1) {
- 				pos2++;
+@@ -550,13 +568,14 @@
  				pos1 = pos2;
  			} else {
  				DBGPRINT(RT_DEBUG_TRACE, "wrong format hidden ssid\n");
@@ -319,11 +316,9 @@
  		memcpy(bss_info[i].key, key, sizeof(key));
 +		forced_memzero(key, sizeof(key));
  		memcpy(bss_info[i].oper_class, op_class, sizeof(op_class));
-@@ -564,32 +564,32 @@
- 		if (hidden_ssid == 'Y')
- 			bss_info[i].hidden_ssid = 1;
- 		else if (hidden_ssid == 'N')
- 			bss_info[i].hidden_ssid = 0;
+ 		memcpy(bss_info[i].ssid, ssid, sizeof(ssid));
+ 		bss_info[i].wfa_vendor_extension |= (resv1 & 0x01) << 6;
+@@ -568,24 +587,24 @@
  		else
  			bss_info[i].hidden_ssid = 0;
  		DBGPRINT(RT_DEBUG_OFF, "set bss index=%d, mac="MACSTR
@@ -357,10 +352,6 @@
  		DBGPRINT(RT_DEBUG_ERROR, "[%s] fclose fail\n", __func__);
  		return -1;
  	}
- 
- 
- 	if (0 == op_8x) {
- 		DBGPRINT(RT_DEBUG_TRACE, RED("!!!2G Band BSS Configuration is missing!!!\n"));
 @@ -645,6 +666,10 @@
  	}
  	return 0;
