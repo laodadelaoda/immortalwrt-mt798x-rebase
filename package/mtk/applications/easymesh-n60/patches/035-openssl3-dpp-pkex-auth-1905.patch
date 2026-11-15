@@ -262,7 +262,7 @@ diff --git a/1905daemon/src/dpp.c b/1905daemon/src/dpp.c
  
  	/* Qr = H(MAC-Responder | | [identifier | ] code) * Pr */
  
-@@ -7309,22 +7293,15 @@
+@@ -7309,22 +7291,15 @@
  	if (!Pr)
  		goto fail;
  	dpp_debug_print_key("DPP: Pr", Pr);
@@ -370,7 +370,7 @@ diff --git a/1905daemon/src/dpp.c b/1905daemon/src/dpp.c
  		goto fail;
  
  	/* Qr = H(MAC-Responder | | [identifier | ] code) * Pr */
-@@ -7940,11 +7911,7 @@
+@@ -7940,11 +7907,7 @@
  		goto fail;
  
  	/* N = Y + Qr */
@@ -394,7 +394,7 @@ diff --git a/1905daemon/src/dpp.c b/1905daemon/src/dpp.c
 +	forced_memzero(Kx, sizeof(Kx));
  	return pkex;
  fail:
- 	wpa_printf(MSG_DEBUG, DPP_MAP_PREX "DPP: PKEX Exchange Request processing failed");
+ 	wpa_printf(MSG_DEBUG, "DPP: PKEX Exchange Request processing failed");
 @@ -8128,7 +8091,7 @@
  	const struct dpp_curve_params *curve = pkex->own_bi->curve;
  	EC_POINT *Qr = NULL, *Y = NULL, *N = NULL;
@@ -433,7 +433,7 @@ diff --git a/1905daemon/src/dpp.c b/1905daemon/src/dpp.c
 +	forced_memzero(Kx, sizeof(Kx));
  	return msg;
  fail:
- 	wpa_printf(MSG_DEBUG, DPP_MAP_PREX "DPP: PKEX Exchange Response processing failed");
+ 	wpa_printf(MSG_DEBUG, "DPP: PKEX Exchange Response processing failed");
 @@ -8721,7 +8680,11 @@
  		return;
  
