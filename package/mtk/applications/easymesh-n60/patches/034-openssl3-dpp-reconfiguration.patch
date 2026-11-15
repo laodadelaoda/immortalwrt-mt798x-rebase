@@ -306,3 +306,4 @@ index 04a170a..99aa2e1 100644
  #if 0
  struct json_token * dpp_parse_own_connector(const char *own_connector)
  {
+ 
