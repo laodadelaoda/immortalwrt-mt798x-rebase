@@ -245,7 +245,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  	size_t Jx_len, Kx_len;
  	u8 Jx[DPP_MAX_SHARED_SECRET_LEN], Kx[DPP_MAX_SHARED_SECRET_LEN];
  	const u8 *addr[4];
-@@ -9587,14 +9565,8 @@
+@@ -9587,23 +9565,17 @@
  	pkex->exchange_done = 1;
  
  	/* ECDH: J = a * Y??*/
