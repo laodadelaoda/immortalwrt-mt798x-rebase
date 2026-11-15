@@ -10,18 +10,22 @@
  #endif
  	int ch = 0, sch = 0;
  	unsigned char hidden_ssid = 0;
-@@ -112,12 +115,18 @@
+@@ -112,13 +115,20 @@
  	char SUB = 0x1A;
  	int tmp = 0;
  
 -	if (!name || !bss_info || !config_bss_num || !max_bss_num ||
++	if (config_bss_num)
++		*config_bss_num = 0;
++	if (bss_info && max_bss_num && max_bss_num <= MAX_SET_BSS_INFO_NUM)
++		os_memset(bss_info, 0, sizeof(*bss_info) * max_bss_num);
 +	if (!ctx || !name || !bss_info || !config_bss_num || !max_bss_num ||
  		max_bss_num > MAX_SET_BSS_INFO_NUM) {
  		debug(DEBUG_ERROR, "invalid WTS parser arguments");
  		return -1;
  	}
- 	*config_bss_num = 0;
-+	os_memset(bss_info, 0, sizeof(*bss_info) * max_bss_num);
+-	*config_bss_num = 0;
+-	os_memset(bss_info, 0, sizeof(*bss_info) * max_bss_num);
 +#ifdef MAP_R2
 +	pending_primary_vid = ctx->map_policy.setting.primary_vid;
 +	pending_pcp = ctx->map_policy.setting.dft.PCP;
@@ -30,8 +34,10 @@
  
  	content_len = 100 * max_bss_num;
  	content = (char *)os_zalloc(content_len);
-@@ -132,10 +141,6 @@
+@@ -132,10 +141,8 @@
  		debug(DEBUG_ERROR, "open file %s fail\n", name);
++		forced_memzero(content, content_len);
++		forced_memzero(key, sizeof(key));
  		os_free(content);
  		return -1;
 -	}
@@ -122,7 +128,7 @@
  		}
  		*pos2 = '\0';
  		if (sscanf(pos1, "%d", &resv1) != 1) {
-@@ -333,7 +343,9 @@
+@@ -333,5 +343,7 @@
 
  		end_line = strchr(pos1, '\n');
 -		if (!end_line)
@@ -267,7 +273,9 @@
  	}
  
  	*config_bss_num = i;
-@@ -604,8 +611,15 @@
+@@ -604,8 +611,17 @@
++		forced_memzero(content, content_len);
++		forced_memzero(key, sizeof(key));
  	os_free(content);
  	if (fclose(f) < 0) {
  		debug(DEBUG_ERROR, "[%d]fclose fail!\n", __LINE__);
@@ -283,12 +291,14 @@
  
  	if (!(fh_bss_unhidden & BAND_2G_CAP)) {
  		debug(DEBUG_OFF, "2G bss is hidden or empty! wps may fail!\n");
-@@ -628,6 +642,8 @@
+@@ -628,6 +642,10 @@
  #endif
  	return 0;
  err:
 +	os_memset(bss_info, 0, sizeof(*bss_info) * max_bss_num);
 +	*config_bss_num = 0;
++		forced_memzero(content, content_len);
++		forced_memzero(key, sizeof(key));
  	os_free(content);
  	if (fclose(f) < 0)
  		debug(DEBUG_ERROR, "[%d]fclose fail!\n", __LINE__);
