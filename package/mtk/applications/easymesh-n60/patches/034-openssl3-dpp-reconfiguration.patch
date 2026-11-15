@@ -103,7 +103,7 @@ index 04a170a..99aa2e1 100644
  		goto fail;
 +	wpa_hexdump_key(MSG_DEBUG, "DPP: PRK", prk, curve->hash_len);
  	wpa_hexdump_key(MSG_DEBUG,
- 			"DPP: ke = HKDF(C-nonce | E-nonce, "dpp reconfig key", M.x)",
+ 			"DPP: ke = HKDF(C-nonce | E-nonce, \"dpp reconfig key\", M.x)",
  			auth->ke, curve->hash_len);
 -
  	res = 0;
@@ -269,7 +269,7 @@ index 04a170a..99aa2e1 100644
  		goto fail;
 +	wpa_hexdump_key(MSG_DEBUG, "DPP: PRK", prk, curve->hash_len);
  	wpa_hexdump_key(MSG_DEBUG,
- 			"DPP: ke = HKDF(C-nonce | E-nonce, "dpp reconfig key", M.x)",
+ 			"DPP: ke = HKDF(C-nonce | E-nonce, \"dpp reconfig key\", M.x)",
  			auth->ke, curve->hash_len);
 -
  	res = 0;
