@@ -160,6 +160,8 @@ jobs:
           cp config/n60pro-1001.config .config
           echo 'CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_netcore_n60-pro=y' >> .config
           make defconfig
+          grep -Fx 'LINUX_VERSION-6.12 = .112' target/linux/generic/kernel-6.12
+          grep -Fx 'LINUX_KERNEL_HASH-6.12.112 = 164dc9d1f6c93c61a15e1f071c48379b467f2b17c469cce7223471968208ed03' target/linux/generic/kernel-6.12
           echo "Kernel patch replay revision: $(git rev-parse HEAD)"
           make target/linux/prepare V=s 2>&1 | tee "$RUNNER_TEMP/n60-kernel-patch-replay.log"
           if grep -Eiq 'with fuzz [1-9]|fuzz [1-9]|offset [+-]?[1-9][0-9]* lines?|FAILED|\\.rej' "$RUNNER_TEMP/n60-kernel-patch-replay.log"; then
