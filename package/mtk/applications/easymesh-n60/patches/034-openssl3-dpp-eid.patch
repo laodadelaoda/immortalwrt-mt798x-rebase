@@ -22,8 +22,6 @@ index 58ced13..fe743a2 100644
  	p = pp_key;
  	ppkey = d2i_PUBKEY(NULL, &p, pp_key_len);
 -	if (!ppkey)
--		goto fail;
--
 -	eckey = EVP_PKEY_get0_EC_KEY(csign);
 -	if (!eckey)
 +	if (!ppkey || dpp_pkey_get_group(csign, &group) < 0 ||
