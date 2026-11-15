@@ -1,0 +1,23 @@
+--- a/ethernet/mediatek_DSA/libbridge/libbridge_devif.c
++++ b/ethernet/mediatek_DSA/libbridge/libbridge_devif.c
+@@ -28,15 +28,15 @@
+ #include "libbridge.h"
+ #include "libbridge_private.h"
+ 
+-#define PATH_MAX 128
++#define BRIDGE_SYSFS_PATH_SIZE 128
+ 
+ static FILE *fpopen(const char *dir, const char *name)
+ {
+-	char path[PATH_MAX];
++	char path[BRIDGE_SYSFS_PATH_SIZE];
+ 	int ret = 0;
+ 
+-	ret = snprintf(path, PATH_MAX, "%s/%s", dir, name);
+-	if (ret < 0 || ret >= PATH_MAX)
++	ret = snprintf(path, BRIDGE_SYSFS_PATH_SIZE, "%s/%s", dir, name);
++	if (ret < 0 || ret >= BRIDGE_SYSFS_PATH_SIZE)
+ 		dprintf("[%d]snprintf fail!\n", __LINE__);
+ 
+ 	return fopen(path, "r");
+}

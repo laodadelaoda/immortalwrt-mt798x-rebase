@@ -207,11 +207,13 @@
       "scope": "EasyMesh Build/Prepare ordered vendor patch series",
       "post_normalize_order": [
         "006-p1905-libbridge-tool-propagation.patch",
-        "001-dsa-use-linux-mii-ioctl.patch"
+        "001-dsa-use-linux-mii-ioctl.patch",
+        "002-p1905-libbridge-path-max-conflict.patch"
       ],
       "post_normalize_root_suffixes": {
         "006-p1905-libbridge-tool-propagation.patch": "",
-        "001-dsa-use-linux-mii-ioctl.patch": "1905daemon"
+        "001-dsa-use-linux-mii-ioctl.patch": "1905daemon",
+        "002-p1905-libbridge-path-max-conflict.patch": "1905daemon"
       },
       "application_stage_order": 1
     },
