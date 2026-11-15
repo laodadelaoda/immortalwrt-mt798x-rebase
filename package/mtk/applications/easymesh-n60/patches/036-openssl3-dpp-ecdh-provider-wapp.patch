@@ -122,7 +122,7 @@ diff --git a/wappd/crypto/crypto_openssl.c b/wappd/crypto/crypto_openssl.c
 -	if (EC_POINT_get_affine_coordinates(ecdh->ec->group, pubkey,
 -						x, y, ecdh->ec->bnctx) != 1) {
 -		wpa_printf(MSG_ERROR, DPP_MAP_PREX
--			   "OpenSSL: EC_POINT_get_affine_coordinates_GFp failed: %s",
+-			   "OpenSSL: EC_POINT_get_affine_coordinates failed: %s",
 -			   ERR_error_string(ERR_get_error(), NULL));
 +	buf = wpabuf_alloc((size_t) len * (inc_y ? 2 : 1));
 +	if (!buf || BN_bn2binpad(x, wpabuf_put(buf, len), len) != len)
@@ -271,7 +271,7 @@ diff --git a/wappd/crypto/crypto_openssl.c b/wappd/crypto/crypto_openssl.c
 -							 x, y,
 -							 ecdh->ec->bnctx)) {
 -			wpa_printf(MSG_ERROR, DPP_MAP_PREX
--				   "OpenSSL: EC_POINT_set_affine_coordinates_GFp failed: %s",
+-				   "OpenSSL: EC_POINT_set_affine_coordinates failed: %s",
 -				   ERR_error_string(ERR_get_error(), NULL));
 -			goto fail;
 -		}
@@ -279,7 +279,7 @@ diff --git a/wappd/crypto/crypto_openssl.c b/wappd/crypto/crypto_openssl.c
 -							    pub, x, 0,
 -							    ecdh->ec->bnctx)) {
 -		wpa_printf(MSG_ERROR, DPP_MAP_PREX
--			   "OpenSSL: EC_POINT_set_compressed_coordinates_GFp failed: %s",
+-			   "OpenSSL: EC_POINT_set_compressed_coordinates failed: %s",
 -			   ERR_error_string(ERR_get_error(), NULL));
 -		goto fail;
 -	}
