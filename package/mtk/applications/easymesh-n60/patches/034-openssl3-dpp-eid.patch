@@ -28,12 +28,11 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
 -		goto fail;
 -	group = EC_KEY_get0_group(eckey);
 -	if (!group)
--		goto fail;
--
 +	if (!ppkey || dpp_pkey_get_group(csign, &group) < 0 ||
 +	    dpp_pkey_get_group(ppkey, &pp_group) < 0 ||
 +	    EC_GROUP_cmp(group, pp_group, NULL) != 0)
-+		goto fail;
+ 		goto fail;
+-
 +	/* E-id = r * G; the group is owned independently of the provider key. */
  	e_id = EC_POINT_new(group);
  	ctx = BN_CTX_new();
@@ -69,14 +68,14 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  	BN_clear_free(bn);
 +	BN_clear_free(q);
  	BN_CTX_free(ctx);
--        if (q)
--		BN_clear_free(q);
+-	        if (q)
+-			BN_clear_free(q);
 -	
  	return id;
  }
--
+ 
 -static EVP_PKEY * dpp_pkey_from_point(const EC_GROUP *group,
--				      const EC_POINT *point)
+-					      const EC_POINT *point)
 -{
 -	EC_KEY *eckey;
 -	EVP_PKEY *pkey = NULL;
@@ -105,7 +104,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
 -	return pkey;
 -}
 -
- 
+-
  int dpp_update_reconfig_id(struct dpp_reconfig_id *id)
  {
  	BN_CTX *ctx = NULL;
@@ -116,16 +115,14 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  	int ret = -1;
 -	const EC_KEY *pp;
 -	const EC_POINT *pp_point;
--
+ 
 -	pp = EVP_PKEY_get0_EC_KEY(id->pp_key);
 -	if (!pp)
--		goto fail;
--	pp_point = EC_KEY_get0_public_key(pp);
-+
 +	if (!id || !id->group || !id->csign || !id->pp_key || !id->e_id)
 +		return -1;
 +	if (dpp_pkey_get_public_point(id->pp_key, id->group, &pp_point) < 0)
-+		goto fail;
+ 		goto fail;
+-	pp_point = EC_KEY_get0_public_key(pp);
  	e_prime_id = EC_POINT_new(id->group);
  	a_nonce = EC_POINT_new(id->group);
  	ctx = BN_CTX_new();
@@ -231,16 +228,16 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
 -	group = EC_KEY_get0_group(pp_ec);
 -	a_nonce_point = EC_KEY_get0_public_key(a_nonce_ec);
 -	e_prime_id_point = EC_KEY_get0_public_key(e_prime_id_ec);
+-	ctx = BN_CTX_new();
+-	if (!pp_bn || !group || !a_nonce_point || !e_prime_id_point || !ctx)
 +	/* E-id = E'-id - s_C * A-NONCE. */
 +	if (!ppkey || !a_nonce || !e_prime_id ||
 +	    dpp_pkey_get_group(ppkey, &group) < 0 ||
 +	    dpp_pkey_get_public_point(a_nonce, group, &a_nonce_point) < 0 ||
 +	    dpp_pkey_get_public_point(e_prime_id, group, &e_prime_id_point) < 0 ||
 +	    EVP_PKEY_get_bn_param(ppkey, OSSL_PKEY_PARAM_PRIV_KEY, &pp_bn) != 1)
-+		goto fail;
- 	ctx = BN_CTX_new();
--	if (!pp_bn || !group || !a_nonce_point || !e_prime_id_point || !ctx)
--		goto fail;
+ 		goto fail;
++	ctx = BN_CTX_new();
  	e_id = EC_POINT_new(group);
 -	if (!e_id ||
 +	if (!ctx || !e_id ||
@@ -265,3 +262,4 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
 +
  #endif
  struct wpabuf * dpp_build_annouce_frame(struct dpp_global *dpp, struct dpp_bootstrap_info *dpp_bi)
+ {
