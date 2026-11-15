@@ -1,0 +1,62 @@
+--- a/wappd/include/ieee80211u_defs.h
++++ b/wappd/include/ieee80211u_defs.h
+@@ -38,7 +38,7 @@
+ #ifndef __IEEE80211U_DEFS_H__
+ #define __IEEE80211U_DEFS_H__
+ 
+-struct wifi_app *wapp;
++extern struct wifi_app *wapp;
+ 
+ int wapp_send_anqp_req(struct wifi_app *wapp, const char *iface, 
+      const char *peer_sta_addr, 
+--- a/wappd/include/ieee80211v_defs.h
++++ b/wappd/include/ieee80211v_defs.h
+@@ -42,8 +42,8 @@
+ #define BSS_TRANSITION_CANDIDATE_PREF 0x03
+ #define SKIP_EID_LEN 2
+ 
+-struct wifi_app *wapp;
+-struct wapp_dev *wdev;
++extern struct wifi_app *wapp;
++extern struct wapp_dev *wdev;
+ 
+ enum wnm_ie_eid {
+ 	IE_TIME_ADVERTISEMENT = 69,
+--- a/wappd/include/map.h
++++ b/wappd/include/map.h
+@@ -463,7 +463,7 @@
+ 
+ #endif
+ #ifdef MAP_R3
+-	u8 dpp_onboarding_dis;
++	extern u8 dpp_onboarding_dis;
+ #endif
+ #endif
+ struct GNU_PACKED bh_bss_assoc_ctrl_setting {
+--- a/wappd/common/main.c
++++ b/wappd/common/main.c
+@@ -36,6 +36,10 @@
+  */
+ 
+ #include <stdio.h>
++
++/* Single definitions for the legacy WAPP cross-module state pointers. */
++struct wifi_app *wapp;
++struct wapp_dev *wdev;
+ #include <stdlib.h>
+ #include <unistd.h>
+ #include <ctype.h>
+--- a/wappd/map/map.c
++++ b/wappd/map/map.c
+@@ -41,6 +41,11 @@
+ #include <libdatconf.h>
+ #endif
+ #include "wapp_cmm.h"
++
++#if defined(MAP_R2) && defined(MAP_R3)
++/* Defined once; map.h exposes the declaration to MAP translation units. */
++u8 dpp_onboarding_dis;
++#endif
+ #include "driver_wext.h"
+ #include "interface.h"
+ #include "map_test.h"
