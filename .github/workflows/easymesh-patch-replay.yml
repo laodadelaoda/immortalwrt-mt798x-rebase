@@ -377,7 +377,7 @@ jobs:
           for name in "${easy_post_names[@]}"; do
             case "$name" in
               006-*) apply_one "$EASY_POST_DIR/$name" "$SRC/easymesh" ;;
-              001-*) apply_one "$EASY_POST_DIR/$name" "$SRC/easymesh/1905daemon" ;;
+              001-*|002-*) apply_one "$EASY_POST_DIR/$name" "$SRC/easymesh/1905daemon" ;;
               *) fail "unexpected EasyMesh post-normalize Lock patch: $name" ;;
             esac
           done
