@@ -246,6 +246,8 @@ diff --git a/1905daemon/src/dpp.c b/1905daemon/src/dpp.c
 +	EC_GROUP_free(group2);
 +	forced_memzero(hash, sizeof(hash));
  	return Qi;
+ fail:
+ 	EC_POINT_free(Qi);
 @@ -7277,11 +7261,9 @@
  	unsigned int num_elem = 0;
  	EC_POINT *Qr = NULL;
@@ -306,6 +308,8 @@ diff --git a/1905daemon/src/dpp.c b/1905daemon/src/dpp.c
 +	EC_GROUP_free(group2);
 +	forced_memzero(hash, sizeof(hash));
  	return Qr;
+ fail:
+ 	EC_POINT_free(Qr);
 @@ -7419,8 +7397,7 @@
  
  static struct wpabuf * dpp_pkex_build_exchange_req(struct dpp_pkex *pkex)
