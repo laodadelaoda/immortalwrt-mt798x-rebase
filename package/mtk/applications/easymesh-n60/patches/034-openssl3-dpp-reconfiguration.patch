@@ -307,12 +307,18 @@ index 04a170a..99aa2e1 100644
  struct json_token * dpp_parse_own_connector(const char *own_connector)
  {
 @@ -618,7 +598,6 @@
+ 	size_t clear_len, attr_len, len[2];
+ 	const u8 *addr[2];
  	u8 *wrapped;
 -	int res = -1;
  
  	/* Build DPP Reconfig Authentication Response frame attributes */
  	clear_len = 4 + auth->curve->nonce_len +
 @@ -707,7 +686,6 @@
+ 	//wpabuf_free(auth->reconfig_resp_msg);
+ 	//auth->reconfig_resp_msg = msg;
  
 -	res = 0;
  out:
+ 	wpabuf_free(clear);
+ 	wpabuf_free(pr);
