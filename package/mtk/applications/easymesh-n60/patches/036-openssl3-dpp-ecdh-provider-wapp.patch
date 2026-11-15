@@ -1,0 +1,254 @@
+diff --git a/wappd/crypto/crypto_openssl.c b/wappd/crypto/crypto_openssl.c
+--- a/wappd/crypto/crypto_openssl.c
++++ b/wappd/crypto/crypto_openssl.c
+@@ -2132,10 +2132,10 @@
+ 
+ struct crypto_ecdh * crypto_ecdh_init(int group)
+ {
+-	struct crypto_ecdh *ecdh;
+-	EVP_PKEY *params = NULL;
+-	EC_KEY *ec_params;
++	struct crypto_ecdh *ecdh = NULL;
+ 	EVP_PKEY_CTX *kctx = NULL;
++	OSSL_PARAM params[2];
++	char *group_name;
+ 
+ 	ecdh = os_zalloc(sizeof(*ecdh));
+ 	if (!ecdh)
+@@ -2145,199 +2145,165 @@
+ 	if (!ecdh->ec)
+ 		goto fail;
+ 
+-	ec_params = EC_KEY_new_by_curve_name(ecdh->ec->nid);
+-	if (!ec_params) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "OpenSSL: Failed to generate EC_KEY parameters");
++	group_name = (char *) OBJ_nid2sn(ecdh->ec->nid);
++	if (!group_name)
+ 		goto fail;
+-	}
+-	EC_KEY_set_asn1_flag(ec_params, OPENSSL_EC_NAMED_CURVE);
+-	params = EVP_PKEY_new();
+-	if (!params || EVP_PKEY_set1_EC_KEY(params, ec_params) != 1) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "OpenSSL: Failed to generate EVP_PKEY parameters");
++
++	kctx = EVP_PKEY_CTX_new_from_name(NULL, "EC", NULL);
++	if (!kctx || EVP_PKEY_keygen_init(kctx) <= 0)
+ 		goto fail;
+-	}
+-
+-	kctx = EVP_PKEY_CTX_new(params, NULL);
+-	if (!kctx)
++
++	params[0] = OSSL_PARAM_construct_utf8_string(
++		OSSL_PKEY_PARAM_GROUP_NAME, group_name, 0);
++	params[1] = OSSL_PARAM_construct_end();
++	if (EVP_PKEY_CTX_set_params(kctx, params) <= 0 ||
++	    EVP_PKEY_generate(kctx, &ecdh->pkey) <= 0)
+ 		goto fail;
+ 
+-	if (EVP_PKEY_keygen_init(kctx) != 1) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "OpenSSL: EVP_PKEY_keygen_init failed: %s",
+-			   ERR_error_string(ERR_get_error(), NULL));
+-		goto fail;
+-	}
+-
+-	if (EVP_PKEY_keygen(kctx, &ecdh->pkey) != 1) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX "OpenSSL: EVP_PKEY_keygen failed: %s",
+-			   ERR_error_string(ERR_get_error(), NULL));
+-		goto fail;
+-	}
+-
+-done:
+-	EVP_PKEY_free(params);
+ 	EVP_PKEY_CTX_free(kctx);
+-
+ 	return ecdh;
+ fail:
+-	crypto_ecdh_deinit(ecdh);
+-	ecdh = NULL;
+-	goto done;
++	EVP_PKEY_free(ecdh ? ecdh->pkey : NULL);
++	if (ecdh) {
++		crypto_ec_deinit(ecdh->ec);
++		os_free(ecdh);
++	}
++	EVP_PKEY_CTX_free(kctx);
++	return NULL;
+ }
+ 
+ 
+ struct wpabuf * crypto_ecdh_get_pubkey(struct crypto_ecdh *ecdh, int inc_y)
+ {
+ 	struct wpabuf *buf = NULL;
+-	EC_KEY *eckey;
+-	const EC_POINT *pubkey;
+-	BIGNUM *x, *y = NULL;
+-	int len = BN_num_bytes(ecdh->ec->prime);
+-	int res;
+-
+-	eckey = EVP_PKEY_get1_EC_KEY(ecdh->pkey);
+-	if (!eckey)
+-		return NULL;
+-
+-	pubkey = EC_KEY_get0_public_key(eckey);
+-	if (!pubkey)
+-		return NULL;
+-
+-	x = BN_new();
+-	if (inc_y) {
+-		y = BN_new();
+-		if (!y)
+-			goto fail;
+-	}
+-	buf = wpabuf_alloc(inc_y ? 2 * len : len);
+-	if (!x || !buf)
++	BIGNUM *x = NULL, *y = NULL;
++	int len;
++
++	if (!ecdh || !ecdh->ec || !ecdh->pkey)
++		return NULL;
++	len = BN_num_bytes(ecdh->ec->prime);
++	if (len <= 0 ||
++	    EVP_PKEY_get_bn_param(ecdh->pkey, OSSL_PKEY_PARAM_EC_PUB_X,
++				  &x) != 1 ||
++	    (inc_y && EVP_PKEY_get_bn_param(ecdh->pkey,
++					    OSSL_PKEY_PARAM_EC_PUB_Y,
++					    &y) != 1))
+ 		goto fail;
+ 
+-	if (EC_POINT_get_affine_coordinates(ecdh->ec->group, pubkey,
+-						x, y, ecdh->ec->bnctx) != 1) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "OpenSSL: EC_POINT_get_affine_coordinates_GFp failed: %s",
+-			   ERR_error_string(ERR_get_error(), NULL));
++	buf = wpabuf_alloc((size_t) len * (inc_y ? 2 : 1));
++	if (!buf || BN_bn2binpad(x, wpabuf_put(buf, len), len) != len)
+ 		goto fail;
+-	}
+-
+-	res = crypto_bignum_to_bin((struct crypto_bignum *) x,
+-				   wpabuf_put(buf, len), len, len);
+-	if (res < 0)
++	if (inc_y && BN_bn2binpad(y, wpabuf_put(buf, len), len) != len)
+ 		goto fail;
+ 
+-	if (inc_y) {
+-		res = crypto_bignum_to_bin((struct crypto_bignum *) y,
+-					   wpabuf_put(buf, len), len, len);
+-		if (res < 0)
+-			goto fail;
+-	}
++	BN_clear_free(x);
++	BN_clear_free(y);
++	return buf;
++fail:
++	BN_clear_free(x);
++	BN_clear_free(y);
++	wpabuf_clear_free(buf);
++	return NULL;
++}
++
++
++struct wpabuf * crypto_ecdh_set_peerkey(struct crypto_ecdh *ecdh, int inc_y,
++					const u8 *key, size_t len)
++{
++	BIGNUM *x = NULL, *y = NULL;
++	EC_POINT *pub = NULL;
++	BN_CTX *bnctx = NULL;
++	EVP_PKEY_CTX *fromdata_ctx = NULL, *derive_ctx = NULL;
++	EVP_PKEY *peerkey = NULL;
++	OSSL_PARAM params[3];
++	struct wpabuf *secret = NULL;
++	unsigned char *pub_octets = NULL;
++	const char *group_name;
++	size_t coord_len, pub_len, secret_len = 0;
++	int ret = -1;
++
++	if (!ecdh || !ecdh->ec || !ecdh->pkey || !key)
++		return NULL;
++	if (BN_num_bytes(ecdh->ec->prime) <= 0)
++		return NULL;
++	coord_len = (size_t) BN_num_bytes(ecdh->ec->prime);
++	if (coord_len > (size_t) INT_MAX / 2 ||
++	    (inc_y ? len != 2 * coord_len : len != coord_len) ||
++	    coord_len > INT_MAX)
++		return NULL;
++
++	x = BN_bin2bn(key, (int) coord_len, NULL);
++	if (inc_y)
++		y = BN_bin2bn(key + coord_len, (int) coord_len, NULL);
++	pub = EC_POINT_new(ecdh->ec->group);
++	bnctx = BN_CTX_new();
++	if (!x || (inc_y && !y) || !pub || !bnctx)
++		goto done;
++
++	if ((inc_y && EC_POINT_set_affine_coordinates(ecdh->ec->group, pub,
++							      x, y, bnctx) != 1) ||
++	    (!inc_y && EC_POINT_set_compressed_coordinates(ecdh->ec->group,
++								 pub, x, 0, bnctx) != 1) ||
++	    EC_POINT_is_at_infinity(ecdh->ec->group, pub) != 0 ||
++	    EC_POINT_is_on_curve(ecdh->ec->group, pub, bnctx) != 1)
++		goto done;
++
++	pub_len = EC_POINT_point2oct(ecdh->ec->group, pub,
++				     POINT_CONVERSION_UNCOMPRESSED,
++				     NULL, 0, bnctx);
++	if (pub_len != 1 + 2 * coord_len)
++		goto done;
++	pub_octets = OPENSSL_malloc(pub_len);
++	if (!pub_octets ||
++	    EC_POINT_point2oct(ecdh->ec->group, pub,
++			       POINT_CONVERSION_UNCOMPRESSED,
++			       pub_octets, pub_len, bnctx) != pub_len)
++		goto done;
++
++	group_name = OBJ_nid2sn(ecdh->ec->nid);
++	if (!group_name)
++		goto done;
++	fromdata_ctx = EVP_PKEY_CTX_new_from_name(NULL, "EC", NULL);
++	if (!fromdata_ctx || EVP_PKEY_fromdata_init(fromdata_ctx) <= 0)
++		goto done;
++	params[0] = OSSL_PARAM_construct_utf8_string(
++		OSSL_PKEY_PARAM_GROUP_NAME, (char *) group_name, 0);
++	params[1] = OSSL_PARAM_construct_octet_string(
++		OSSL_PKEY_PARAM_PUB_KEY, pub_octets, pub_len);
++	params[2] = OSSL_PARAM_construct_end();
++	if (EVP_PKEY_fromdata(fromdata_ctx, &peerkey, EVP_PKEY_PUBLIC_KEY,
++			      params) <= 0)
++		goto done;
++
++	derive_ctx = EVP_PKEY_CTX_new_from_pkey(NULL, ecdh->pkey, NULL);
++	if (!derive_ctx || EVP_PKEY_derive_init(derive_ctx) <= 0 ||
++	    EVP_PKEY_derive_set_peer_ex(derive_ctx, peerkey, 1) <= 0 ||
++	    EVP_PKEY_derive(derive_ctx, NULL, &secret_len) <= 0 ||
++	    secret_len != coord_len)
++		goto done;
++
++	secret = wpabuf_alloc(secret_len);
++	if (!secret ||
++	    EVP_PKEY_derive(derive_ctx, wpabuf_put(secret, secret_len),
++			    &secret_len) <= 0 || secret_len != coord_len)
++		goto done;
++	ret = 0;
++
++done:
++	BN_clear_free(x);
++	BN_clear_free(y);
++	EC_POINT_clear_free(pub);
++	BN_CTX_free(bnctx);
++	OPENSSL_free(pub_octets);
++	EVP_PKEY_CTX_free(fromdata_ctx);
++	EVP_PKEY_CTX_free(derive_ctx);
++	EVP_PKEY_free(peerkey);
++	if (ret < 0) {
++		wpabuf_clear_free(secret);
++		secret = NULL;
++	}
++	return secret;
++}
+ 
+ void crypto_ecdh_deinit(struct crypto_ecdh *ecdh)
+ {

@@ -200,7 +200,8 @@
         "034-openssl3-dpp-reconfiguration.patch",
         "034-openssl3-dpp-eid.patch",
         "035-openssl3-dpp-pkex-wapp.patch",
-        "035-openssl3-dpp-pkex-auth-1905.patch"
+        "035-openssl3-dpp-pkex-auth-1905.patch",
+        "036-openssl3-dpp-ecdh-provider-wapp.patch"
       ],
       "scope": "EasyMesh Build/Prepare ordered vendor patch series",
       "post_normalize_order": [
