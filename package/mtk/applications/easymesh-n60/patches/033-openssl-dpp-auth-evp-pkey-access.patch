@@ -9,6 +9,9 @@ participating keys use the same EC group.
 Use owned EC_POINT, EC_GROUP and BIGNUM objects with cleanup on every
 failure path; clear private scalar material before release.
 
+Reuse the shared provider-native accessors from dpp_evp.h; keep group and
+public-point extraction in one implementation for WAPP and 1905daemon.
+
 diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
 --- a/wappd/dpp/dpp.c
 +++ b/wappd/dpp/dpp.c
