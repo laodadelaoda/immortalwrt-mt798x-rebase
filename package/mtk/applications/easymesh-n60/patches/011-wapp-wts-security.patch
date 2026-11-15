@@ -359,13 +359,14 @@
  
  	if (0 == op_8x) {
  		DBGPRINT(RT_DEBUG_TRACE, RED("!!!2G Band BSS Configuration is missing!!!\n"));
-@@ -645,6 +666,9 @@
+@@ -645,6 +666,10 @@
  	}
  	return 0;
  err:
 +	*config_bss_num = 0;
 +	memset(bss_info, 0, sizeof(*bss_info) * max_bss_num);
-+		forced_memzero(content, content_len);
++	forced_memzero(key, sizeof(key));
++	forced_memzero(content, content_len);
  	os_free(content);
  	tmp = fclose(f);
  	if (tmp != 0)
