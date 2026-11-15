@@ -1,6 +1,6 @@
 --- a/ethernet/mediatek_DSA/libbridge/libbridge_init.c
 +++ b/ethernet/mediatek_DSA/libbridge/libbridge_init.c
-@@ -29,7 +29,7 @@
+@@ -29,6 +29,6 @@
  #include "libbridge_private.h"
  
  int br_socket_fd = -1;
