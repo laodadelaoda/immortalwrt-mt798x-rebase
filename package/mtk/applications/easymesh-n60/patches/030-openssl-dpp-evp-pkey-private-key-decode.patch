@@ -1,67 +1,39 @@
-From: N60 Pro OpenSSL migration
-Subject: [PATCH] easymesh: decode DPP private keys into EVP_PKEY
-
-On OpenSSL 3, decode the DER private key directly into the provider-facing
-EVP_PKEY object, require complete DER consumption and an EC key, and retain
-the existing DPP curve allow-list validation. Older OpenSSL keeps the
-EC_KEY decoder compatibility path.
-
---- a/wappd/dpp/dpp.c
-+++ b/wappd/dpp/dpp.c
-@@ -1305,6 +1305,30 @@
- EVP_PKEY * dpp_set_keypair(const struct dpp_curve_params **curve,
- 				  const u8 *privkey, size_t privkey_len)
- {
-+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-+	EVP_PKEY *pkey = NULL;
-+	char group_name[80];
-+	size_t group_name_len = 0;
-+	const unsigned char *pos = privkey;
-+	int nid;
-+
-+	if (!curve || !privkey || !privkey_len || privkey_len > LONG_MAX)
-+		return NULL;
-+	pkey = d2i_AutoPrivateKey(NULL, &pos, (long) privkey_len);
-+	if (!pkey || pos != privkey + privkey_len ||
-+	    !EVP_PKEY_is_a(pkey, "EC") ||
-+	    EVP_PKEY_get_group_name(pkey, group_name, sizeof(group_name),
-+				    &group_name_len) != 1)
-+		goto fail;
-+	nid = OBJ_txt2nid(group_name);
-+	*curve = dpp_get_curve_nid(nid);
-+	if (!*curve)
-+		goto fail;
-+	return pkey;
-+fail:
-+	EVP_PKEY_free(pkey);
-+	return NULL;
-+#else
- 	EVP_PKEY *pkey;
- 	EC_KEY *eckey;
- 	const EC_GROUP *group;
-@@ -1344,6 +1368,7 @@
- 		return NULL;
- 	}
- 	return pkey;
-+#endif
- }
- 
- 
+diff --git a/1905daemon/src/dpp.c b/1905daemon/src/dpp.c
+index 7ef2528..c9959fa 100644
 --- a/1905daemon/src/dpp.c
 +++ b/1905daemon/src/dpp.c
-@@ -1956,6 +1956,30 @@
+@@ -1956,45 +1956,28 @@ dpp_get_curve_jwk_crv(const char *name)
  static EVP_PKEY * dpp_set_keypair(const struct dpp_curve_params **curve,
  				  const u8 *privkey, size_t privkey_len)
  {
-+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+-	EVP_PKEY *pkey;
+-	EC_KEY *eckey;
+-	const EC_GROUP *group;
 +	EVP_PKEY *pkey = NULL;
-+	char group_name[80];
++	char group_name[80] = { 0 };
 +	size_t group_name_len = 0;
 +	const unsigned char *pos = privkey;
-+	int nid;
-+
+ 	int nid;
+ 
+-	pkey = EVP_PKEY_new();
+-	if (!pkey)
 +	if (!curve || !privkey || !privkey_len || privkey_len > LONG_MAX)
-+		return NULL;
+ 		return NULL;
+-	eckey = d2i_ECPrivateKey(NULL, &privkey, privkey_len);
+-	if (!eckey) {
+-		wpa_printf(MSG_INFO,
+-			   "DPP: OpenSSL: d2i_ECPrivateKey() failed: %s",
+-			   ERR_error_string(ERR_get_error(), NULL));
+-		EVP_PKEY_free(pkey);
+-		return NULL;
+-	}
+-	group = EC_KEY_get0_group(eckey);
+-	if (!group) {
+-		EC_KEY_free(eckey);
+-		EVP_PKEY_free(pkey);
+-		return NULL;
+-	}
+-	nid = EC_GROUP_get_curve_name(group);
 +	pkey = d2i_AutoPrivateKey(NULL, &pos, (long) privkey_len);
 +	if (!pkey || pos != privkey + privkey_len ||
 +	    !EVP_PKEY_is_a(pkey, "EC") ||
@@ -69,22 +41,94 @@ EC_KEY decoder compatibility path.
 +				    &group_name_len) != 1)
 +		goto fail;
 +	nid = OBJ_txt2nid(group_name);
-+	*curve = dpp_get_curve_nid(nid);
+ 	*curve = dpp_get_curve_nid(nid);
+-	if (!*curve) {
+-		wpa_printf(MSG_INFO,
+-			   "DPP: Unsupported curve (nid=%d) in pre-assigned key",
+-			   nid);
+-		EC_KEY_free(eckey);
+-		EVP_PKEY_free(pkey);
+-		return NULL;
+-	}
+-
+-	if (EVP_PKEY_assign_EC_KEY(pkey, eckey) != 1) {
+-		EC_KEY_free(eckey);
+-		EVP_PKEY_free(pkey);
+-		return NULL;
+-	}
 +	if (!*curve)
 +		goto fail;
-+	return pkey;
+ 	return pkey;
 +fail:
 +	EVP_PKEY_free(pkey);
 +	return NULL;
-+#else
- 	EVP_PKEY *pkey;
- 	EC_KEY *eckey;
- 	const EC_GROUP *group;
-@@ -1995,6 +2019,7 @@
+ }
+ 
+ 
+diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
+index f39b61a..4ecd880 100644
+--- a/wappd/dpp/dpp.c
++++ b/wappd/dpp/dpp.c
+@@ -1305,45 +1305,28 @@ dpp_get_curve_jwk_crv(const char *name)
+ EVP_PKEY * dpp_set_keypair(const struct dpp_curve_params **curve,
+ 				  const u8 *privkey, size_t privkey_len)
+ {
+-	EVP_PKEY *pkey;
+-	EC_KEY *eckey;
+-	const EC_GROUP *group;
++	EVP_PKEY *pkey = NULL;
++	char group_name[80] = { 0 };
++	size_t group_name_len = 0;
++	const unsigned char *pos = privkey;
+ 	int nid;
+ 
+-	pkey = EVP_PKEY_new();
+-	if (!pkey)
++	if (!curve || !privkey || !privkey_len || privkey_len > LONG_MAX)
  		return NULL;
- 	}
+-	eckey = d2i_ECPrivateKey(NULL, &privkey, privkey_len);
+-	if (!eckey) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "DPP: OpenSSL: d2i_ECPrivateKey() failed: %s",
+-			   ERR_error_string(ERR_get_error(), NULL));
+-		EVP_PKEY_free(pkey);
+-		return NULL;
+-	}
+-	group = EC_KEY_get0_group(eckey);
+-	if (!group) {
+-		EC_KEY_free(eckey);
+-		EVP_PKEY_free(pkey);
+-		return NULL;
+-	}
+-	nid = EC_GROUP_get_curve_name(group);
++	pkey = d2i_AutoPrivateKey(NULL, &pos, (long) privkey_len);
++	if (!pkey || pos != privkey + privkey_len ||
++	    !EVP_PKEY_is_a(pkey, "EC") ||
++	    EVP_PKEY_get_group_name(pkey, group_name, sizeof(group_name),
++				    &group_name_len) != 1)
++		goto fail;
++	nid = OBJ_txt2nid(group_name);
+ 	*curve = dpp_get_curve_nid(nid);
+-	if (!*curve) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "DPP: Unsupported curve (nid=%d) in pre-assigned key",
+-			   nid);
+-		EC_KEY_free(eckey);
+-		EVP_PKEY_free(pkey);
+-		return NULL;
+-	}
+-
+-	if (EVP_PKEY_assign_EC_KEY(pkey, eckey) != 1) {
+-		EC_KEY_free(eckey);
+-		EVP_PKEY_free(pkey);
+-		return NULL;
+-	}
++	if (!*curve)
++		goto fail;
  	return pkey;
-+#endif
++fail:
++	EVP_PKEY_free(pkey);
++	return NULL;
  }
  
  
