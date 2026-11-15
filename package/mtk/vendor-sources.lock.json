@@ -193,7 +193,14 @@
         "030-openssl-dpp-evp-pkey-private-key-decode.patch",
         "031-openssl-dpp-evp-pkey-public-point-export.patch",
         "032-openssl-tls-supported-groups.patch",
-        "033-openssl-dpp-auth-evp-pkey-access.patch"
+        "033-openssl-dpp-auth-evp-pkey-access.patch",
+        "034-openssl3-dpp-evp-provider-helpers.patch",
+        "034-openssl3-dpp-evp-provider-wapp.patch",
+        "034-openssl3-dpp-evp-provider-1905.patch",
+        "034-openssl3-dpp-reconfiguration.patch",
+        "034-openssl3-dpp-eid.patch",
+        "035-openssl3-dpp-pkex-wapp.patch",
+        "035-openssl3-dpp-pkex-auth-1905.patch"
       ],
       "scope": "EasyMesh Build/Prepare ordered vendor patch series",
       "post_normalize_order": [
