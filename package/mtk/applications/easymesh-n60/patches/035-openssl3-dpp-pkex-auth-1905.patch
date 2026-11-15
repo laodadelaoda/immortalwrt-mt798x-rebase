@@ -419,7 +419,7 @@ index 81d863e..21d187a 100644
 +	forced_memzero(Kx, sizeof(Kx));
  	return msg;
 
-@@ -8868,14 +8868,18 @@ void dpp_pkex_free(struct dpp_pkex *pkex)
+@@ -8868,13 +8868,17 @@ void dpp_pkex_free(struct dpp_pkex *pkex)
  {
  	if (!pkex)
  		return;
