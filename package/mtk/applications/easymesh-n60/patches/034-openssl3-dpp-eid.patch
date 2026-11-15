@@ -68,14 +68,14 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  	BN_clear_free(bn);
 +	BN_clear_free(q);
  	BN_CTX_free(ctx);
--	        if (q)
+-        if (q)
 -			BN_clear_free(q);
 -	
  	return id;
  }
  
 -static EVP_PKEY * dpp_pkey_from_point(const EC_GROUP *group,
--					      const EC_POINT *point)
+-				      const EC_POINT *point)
 -{
 -	EC_KEY *eckey;
 -	EVP_PKEY *pkey = NULL;
