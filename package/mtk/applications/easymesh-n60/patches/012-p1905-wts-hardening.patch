@@ -10,7 +10,7 @@
  #endif
  	int ch = 0, sch = 0;
  	unsigned char hidden_ssid = 0;
-@@ -112,13 +115,20 @@
+@@ -112,12 +115,20 @@
  	char SUB = 0x1A;
  	int tmp = 0;
  
@@ -25,7 +25,6 @@
  		return -1;
  	}
 -	*config_bss_num = 0;
--	os_memset(bss_info, 0, sizeof(*bss_info) * max_bss_num);
 +#ifdef MAP_R2
 +	pending_primary_vid = ctx->map_policy.setting.primary_vid;
 +	pending_pcp = ctx->map_policy.setting.dft.PCP;
@@ -34,7 +33,9 @@
  
  	content_len = 100 * max_bss_num;
  	content = (char *)os_zalloc(content_len);
-@@ -132,10 +141,8 @@
+@@ -130,12 +141,10 @@
+ 	f = fopen(name, "r");
+ 	if (f == NULL) {
  		debug(DEBUG_ERROR, "open file %s fail\n", name);
 +		forced_memzero(content, content_len);
 +		forced_memzero(key, sizeof(key));
@@ -47,7 +48,7 @@
  	}
  
  	i = 0;
-@@ -190,11 +195,16 @@
+@@ -190,11 +199,16 @@
  			continue;
  		}
  
@@ -65,7 +66,7 @@
  		}
  		*pos2 = '\0';
  		if (sscanf(pos1, "%d", &index) != 1) {
-@@ -208,7 +218,7 @@
+@@ -208,7 +222,7 @@
  		pos2 = strchr(pos1, ' ');
  		if (pos2 == NULL) {
  			debug(DEBUG_ERROR, "mac not found\n");
@@ -74,7 +75,7 @@
  		}
  		*pos2 = '\0';
  		if (sscanf(pos1, "%02x:%02x:%02x:%02x:%02x:%02x", mac_int,
-@@ -227,7 +237,7 @@
+@@ -227,7 +241,7 @@
  		pos2 = strchr(pos1, ' ');
  		if (pos2 == NULL) {
  			debug(DEBUG_ERROR, "opclass not found\n");
@@ -83,7 +84,7 @@
  		}
  		*pos2 = '\0';
  
-@@ -246,7 +256,7 @@
+@@ -246,7 +260,7 @@
  		pos2 = strchr(pos1, ' ');
  		if (pos2 == NULL) {
  			debug(DEBUG_ERROR, "ssid not found\n");
@@ -92,7 +93,7 @@
  		}
  		*pos2 = '\0';
  		if (sscanf(pos1, "%32s", ssid) != 1) {
-@@ -266,7 +276,7 @@
+@@ -266,7 +280,7 @@
  		pos2 = strchr(pos1, ' ');
  		if (pos2 == NULL) {
  			debug(DEBUG_ERROR, "authmode not found\n");
@@ -101,7 +102,7 @@
  		}
  		*pos2 = '\0';
  		if (sscanf(pos1, "0x%04x", &authmode) != 1) {
-@@ -280,7 +290,7 @@
+@@ -280,7 +294,7 @@
  		pos2 = strchr(pos1, ' ');
  		if (pos2 == NULL) {
  			debug(DEBUG_ERROR, "encrytype not found\n");
@@ -110,7 +111,7 @@
  		}
  		*pos2 = '\0';
  		if (sscanf(pos1, "0x%04x", &encrytype) != 1) {
-@@ -294,7 +304,7 @@
+@@ -294,7 +308,7 @@
  		pos2 = strchr(pos1, ' ');
  		if (pos2 == NULL) {
  			debug(DEBUG_ERROR, "key not found\n");
@@ -119,7 +120,7 @@
  		}
  		*pos2 = '\0';
  		if (sscanf(pos1, "%64s", key) != 1) {
-@@ -314,7 +324,7 @@
+@@ -314,7 +328,7 @@
  		pos2 = strchr(pos1, ' ');
  		if (pos2 == NULL) {
  			debug(DEBUG_ERROR, "resv1 not found\n");
@@ -128,8 +129,9 @@
  		}
  		*pos2 = '\0';
  		if (sscanf(pos1, "%d", &resv1) != 1) {
-@@ -333,5 +343,7 @@
-
+@@ -332,8 +346,10 @@
+ 		}
+ 
  		end_line = strchr(pos1, '\n');
 -		if (!end_line)
 -			break;
@@ -137,10 +139,10 @@
 +			debug(DEBUG_ERROR, "end line not found\n");
 +			goto err;
 +		}
-
+ 
  		// no ts, no hiddden-ssid, to next line
  		if (end_line - pos2 == 1) {
-@@ -353,7 +365,7 @@
+@@ -353,7 +369,7 @@
  				pos2 = strstr(pos1, "0x");
  				if (pos2 == NULL) {
  					debug(DEBUG_ERROR, "default vlan tlv len not found\n");
@@ -149,7 +151,7 @@
  				}
  				pos2 += 2;
  				pos1 = pos2;
-@@ -366,7 +378,7 @@
+@@ -366,7 +382,7 @@
  				pos2 = strstr(pos1, "0x");
  				if (pos2 == NULL) {
  					debug(DEBUG_ERROR, "default vlan not found\n");
@@ -158,7 +160,7 @@
  				}
  				pos2 += 2;
  				pos1 = pos2;
-@@ -379,7 +391,7 @@
+@@ -379,7 +395,7 @@
  				pos2 = strstr(pos1, "0x");
  				if (pos2 == NULL) {
  					debug(DEBUG_ERROR, "default pcp not found\n");
@@ -167,7 +169,7 @@
  				}
  				pos2 += 2;
  				pos1 = pos2;
-@@ -400,7 +412,7 @@
+@@ -400,7 +416,7 @@
  				pos2 = strstr(pos1, "0x");
  				if (pos2 == NULL) {
  					debug(DEBUG_ERROR, "traffic separation length not found\n");
@@ -176,7 +178,7 @@
  				}
  				pos2 += 2;
  				pos1 = pos2;
-@@ -413,7 +425,7 @@
+@@ -413,7 +429,7 @@
  				pos2 = strstr(pos1, "0x");
  				if (pos2 == NULL) {
  					debug(DEBUG_ERROR, "num of ssid not found\n");
@@ -185,7 +187,7 @@
  				}
  				pos2 += 2;
  				pos1 = pos2;
-@@ -426,7 +438,7 @@
+@@ -426,7 +442,7 @@
  				pos2 = strstr(pos1, "0x");
  				if (pos2 == NULL) {
  					debug(DEBUG_ERROR, "ssid len not found\n");
@@ -194,7 +196,7 @@
  				}
  				pos2 += 2;
  				pos1 = pos2;
-@@ -439,7 +451,7 @@
+@@ -439,7 +455,7 @@
  				pos2 = strchr(pos1, ' ');
  				if (pos2 == NULL) {
  					debug(DEBUG_ERROR, "ssid not found\n");
@@ -203,7 +205,7 @@
  				}
  				pos2 ++;
  				pos1 = pos2;
-@@ -455,7 +467,7 @@
+@@ -455,7 +471,7 @@
  				pos2 = strstr(pos1, "0x");
  				if (pos2 == NULL) {
  					debug(DEBUG_ERROR, "vlan not found\n");
@@ -212,7 +214,7 @@
  				}
  				pos2 += 2;
  				pos1 = pos2;
-@@ -467,7 +479,7 @@
+@@ -467,7 +483,7 @@
  				/* end of vlan */
  				pos2 = strchr(pos1, '\n');
  				if (!pos2)
@@ -221,7 +223,7 @@
  				else
  					pos2 ++;
  				pos1 = pos2;
-@@ -486,7 +498,7 @@
+@@ -486,7 +502,7 @@
  				pos1 = pos2;
  			} else {
  				debug(DEBUG_ERROR, "wrong format hidden ssid\n");
@@ -230,7 +232,7 @@
  			}
  		}
  #ifdef MAP_R2
-@@ -517,14 +529,14 @@
+@@ -517,14 +533,14 @@
  				pos2 = strstr(pos1, "pvid");
  				if (pos2 != NULL && (pos2 - pos1) < 10) {
  					debug(DEBUG_ERROR, "default vlan found\n");
@@ -247,7 +249,7 @@
  					}
  					pos2++;
  					pos1 = pos2;
-@@ -532,11 +544,11 @@
+@@ -532,11 +548,11 @@
  						debug(DEBUG_ERROR, "[%d]sscanf fail!\n", __LINE__);
  						goto err;
  					}
@@ -261,22 +263,22 @@
  				} else {
  					debug(DEBUG_TRACE, "pvid not found or too far\n");
  				}
-@@ -592,11 +604,7 @@
+@@ -592,20 +608,25 @@
  				fh_bss_unhidden |= bss_info[i].band_support;
  
  		i++;
-+		forced_memzero(key, sizeof(key));
 -		if (i >= max_bss_num) {
 -			debug(DEBUG_ERROR, "too much bss wireless setting info\n");
 -			i--;
 -			break;
 -		}
++		forced_memzero(key, sizeof(key));
  	}
  
  	*config_bss_num = i;
-@@ -604,8 +611,17 @@
-+		forced_memzero(content, content_len);
-+		forced_memzero(key, sizeof(key));
+ 	debug(DEBUG_OFF, "config_bss_num=%d\n", *config_bss_num);
++	forced_memzero(content, content_len);
++	forced_memzero(key, sizeof(key));
  	os_free(content);
  	if (fclose(f) < 0) {
  		debug(DEBUG_ERROR, "[%d]fclose fail!\n", __LINE__);
@@ -292,14 +294,14 @@
  
  	if (!(fh_bss_unhidden & BAND_2G_CAP)) {
  		debug(DEBUG_OFF, "2G bss is hidden or empty! wps may fail!\n");
-@@ -628,6 +642,10 @@
+@@ -628,6 +649,10 @@
  #endif
  	return 0;
  err:
 +	os_memset(bss_info, 0, sizeof(*bss_info) * max_bss_num);
 +	*config_bss_num = 0;
-+		forced_memzero(content, content_len);
-+		forced_memzero(key, sizeof(key));
++	forced_memzero(content, content_len);
++	forced_memzero(key, sizeof(key));
  	os_free(content);
  	if (fclose(f) < 0)
  		debug(DEBUG_ERROR, "[%d]fclose fail!\n", __LINE__);
