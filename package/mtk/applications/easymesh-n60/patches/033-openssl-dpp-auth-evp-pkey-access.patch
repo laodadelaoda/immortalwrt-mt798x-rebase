@@ -213,10 +213,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  static int dpp_auth_build_resp_ok(struct dpp_authentication *auth)
  {
  	size_t nonce_len;
-@@ -14430,39 +14431,30 @@
- 	return secret_len;
- }
- 
+@@ -14433,36 +14434,27 @@
  static int dpp_auth_derive_m_I(struct dpp_authentication *auth)
  {
 -	const EC_GROUP *group;
