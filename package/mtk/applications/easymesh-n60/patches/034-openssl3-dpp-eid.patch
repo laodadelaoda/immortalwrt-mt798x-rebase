@@ -1,0 +1,265 @@
+diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
+index 78310e4..fe743a2 100644
+--- a/wappd/dpp/dpp.c
++++ b/wappd/dpp/dpp.c
+@@ -11631,45 +11536,35 @@ struct dpp_reconfig_id * dpp_gen_reconfig_id(const u8 *csign_key,
+ 	struct dpp_reconfig_id *id = NULL;
+ 	BN_CTX *ctx = NULL;
+ 	BIGNUM *bn = NULL, *q = NULL;
+-	const EC_KEY *eckey;
+-	const EC_GROUP *group;
++	EC_GROUP *group = NULL, *pp_group = NULL;
+ 	EC_POINT *e_id = NULL;
+ 
+ 	p = csign_key;
+ 	csign = d2i_PUBKEY(NULL, &p, csign_key_len);
+-	if (!csign)
+-		goto fail;
+-
+-	if (!pp_key)
++	if (!csign || !pp_key)
+ 		goto fail;
+ 	p = pp_key;
+ 	ppkey = d2i_PUBKEY(NULL, &p, pp_key_len);
+-	if (!ppkey)
+-		goto fail;
+-
+-	eckey = EVP_PKEY_get0_EC_KEY(csign);
+-	if (!eckey)
++	if (!ppkey || dpp_pkey_get_group(csign, &group) < 0 ||
++	    dpp_pkey_get_group(ppkey, &pp_group) < 0 ||
++	    EC_GROUP_cmp(group, pp_group, NULL) != 0)
+ 		goto fail;
+-	group = EC_KEY_get0_group(eckey);
+-	if (!group)
+-		goto fail;
+-
++	/* E-id = r * G; the group is owned independently of the provider key. */
+ 	e_id = EC_POINT_new(group);
+ 	ctx = BN_CTX_new();
+ 	bn = BN_new();
+ 	q = BN_new();
+ 	if (!e_id || !ctx || !bn || !q ||
+ 	    !EC_GROUP_get_order(group, q, ctx) ||
+-	    !BN_rand_range(bn, q) ||
++	    !BN_priv_rand_range(bn, q) || BN_is_zero(bn) ||
+ 	    !EC_POINT_mul(group, e_id, bn, NULL, NULL, ctx))
+ 		goto fail;
+-
+ 	dpp_debug_print_point("DPP: Generated random point E-id", group, e_id);
+-
+ 	id = os_zalloc(sizeof(*id));
+ 	if (!id)
+ 		goto fail;
+ 	id->group = group;
++	group = NULL;
+ 	id->e_id = e_id;
+ 	e_id = NULL;
+ 	id->csign = csign;
+@@ -11677,153 +11572,116 @@ struct dpp_reconfig_id * dpp_gen_reconfig_id(const u8 *csign_key,
+ 	id->pp_key = ppkey;
+ 	ppkey = NULL;
+ fail:
+-	EC_POINT_free(e_id);
++	EC_GROUP_free(group);
++	EC_GROUP_free(pp_group);
++	EC_POINT_clear_free(e_id);
+ 	EVP_PKEY_free(csign);
+ 	EVP_PKEY_free(ppkey);
+ 	BN_clear_free(bn);
++	BN_clear_free(q);
+ 	BN_CTX_free(ctx);
+-        if (q)
+-		BN_clear_free(q);
+-	
+ 	return id;
+ }
+ 
+-static EVP_PKEY * dpp_pkey_from_point(const EC_GROUP *group,
+-				      const EC_POINT *point)
+-{
+-	EC_KEY *eckey;
+-	EVP_PKEY *pkey = NULL;
+-
+-	eckey = EC_KEY_new();
+-	if (!eckey ||
+-	    EC_KEY_set_group(eckey, group) != 1 ||
+-	    EC_KEY_set_public_key(eckey, point) != 1) {
+-		wpa_printf(MSG_ERROR,
+-			   "DPP: Failed to set EC_KEY: %s",
+-			   ERR_error_string(ERR_get_error(), NULL));
+-		goto fail;
+-	}
+-	EC_KEY_set_asn1_flag(eckey, OPENSSL_EC_NAMED_CURVE);
+-
+-	pkey = EVP_PKEY_new();
+-	if (!pkey || EVP_PKEY_set1_EC_KEY(pkey, eckey) != 1) {
+-		wpa_printf(MSG_ERROR, "DPP: Could not create EVP_PKEY");
+-		EVP_PKEY_free(pkey);
+-		pkey = NULL;
+-		goto fail;
+-	}
+-
+-fail:
+-	EC_KEY_free(eckey);
+-	return pkey;
+-}
+-
+-
+ int dpp_update_reconfig_id(struct dpp_reconfig_id *id)
+ {
+ 	BN_CTX *ctx = NULL;
+ 	BIGNUM *bn = NULL, *q = NULL;
+-	EC_POINT *e_prime_id = NULL, *a_nonce = NULL;
++	EC_POINT *e_prime_id = NULL, *a_nonce = NULL, *pp_point = NULL;
++	EVP_PKEY *new_a_nonce = NULL, *new_e_prime_id = NULL;
+ 	int ret = -1;
+-	const EC_KEY *pp;
+-	const EC_POINT *pp_point;
+ 
+-	pp = EVP_PKEY_get0_EC_KEY(id->pp_key);
+-	if (!pp)
++	if (!id || !id->group || !id->csign || !id->pp_key || !id->e_id)
++		return -1;
++	if (dpp_pkey_get_public_point(id->pp_key, id->group, &pp_point) < 0)
+ 		goto fail;
+-	pp_point = EC_KEY_get0_public_key(pp);
+ 	e_prime_id = EC_POINT_new(id->group);
+ 	a_nonce = EC_POINT_new(id->group);
+ 	ctx = BN_CTX_new();
+ 	bn = BN_new();
+ 	q = BN_new();
+-	/* Generate random 0 <= a-nonce < q
+-	 * A-NONCE = a-nonce * G
+-	 * E'-id = E-id + a-nonce * P_pk */
+-	if (!pp_point || !e_prime_id || !a_nonce || !ctx || !bn || !q ||
++	/* A-NONCE = a-nonce * G; E'-id = E-id + a-nonce * P_pk. */
++	if (!e_prime_id || !a_nonce || !ctx || !bn || !q ||
+ 	    !EC_GROUP_get_order(id->group, q, ctx) ||
+-	    !BN_rand_range(bn, q) || /* bn = a-nonce */
++	    !BN_priv_rand_range(bn, q) || BN_is_zero(bn) ||
+ 	    !EC_POINT_mul(id->group, a_nonce, bn, NULL, NULL, ctx) ||
+ 	    !EC_POINT_mul(id->group, e_prime_id, NULL, pp_point, bn, ctx) ||
+ 	    !EC_POINT_add(id->group, e_prime_id, id->e_id, e_prime_id, ctx))
+ 		goto fail;
+-
+ 	dpp_debug_print_point("DPP: Generated A-NONCE", id->group, a_nonce);
+-	dpp_debug_print_point("DPP: Encrypted E-id to E'-id",
+-			      id->group, e_prime_id);
+-
++	dpp_debug_print_point("DPP: Encrypted E-id to E'-id", id->group, e_prime_id);
++	new_a_nonce = dpp_pkey_from_point(id->csign, id->group, a_nonce);
++	new_e_prime_id = dpp_pkey_from_point(id->csign, id->group, e_prime_id);
++	if (!new_a_nonce || !new_e_prime_id)
++		goto fail;
+ 	EVP_PKEY_free(id->a_nonce);
+ 	EVP_PKEY_free(id->e_prime_id);
+-	id->a_nonce = dpp_pkey_from_point(id->group, a_nonce);
+-	id->e_prime_id = dpp_pkey_from_point(id->group, e_prime_id);
+-	if (!id->a_nonce || !id->e_prime_id)
+-		goto fail;
+-
++	id->a_nonce = new_a_nonce;
++	id->e_prime_id = new_e_prime_id;
++	new_a_nonce = NULL;
++	new_e_prime_id = NULL;
+ 	ret = 0;
+-
+ fail:
+-	EC_POINT_free(e_prime_id);
+-	EC_POINT_free(a_nonce);
++	EVP_PKEY_free(new_a_nonce);
++	EVP_PKEY_free(new_e_prime_id);
++	EC_POINT_clear_free(pp_point);
++	EC_POINT_clear_free(e_prime_id);
++	EC_POINT_clear_free(a_nonce);
+ 	BN_clear_free(bn);
++	BN_clear_free(q);
+ 	BN_CTX_free(ctx);
+-	if (q)
+-		BN_clear_free(q);
+ 	return ret;
+ }
+ 
+ void dpp_free_reconfig_id(struct dpp_reconfig_id *id)
+ {
+-	if (id) {
+-		EC_POINT_clear_free(id->e_id);
+-		EVP_PKEY_free(id->csign);
+-		EVP_PKEY_free(id->a_nonce);
+-		EVP_PKEY_free(id->e_prime_id);
+-		EVP_PKEY_free(id->pp_key);
+-		os_free(id);
+-	}
++	if (!id)
++		return;
++	EC_GROUP_free(id->group);
++	EC_POINT_clear_free(id->e_id);
++	EVP_PKEY_free(id->csign);
++	EVP_PKEY_free(id->a_nonce);
++	EVP_PKEY_free(id->e_prime_id);
++	EVP_PKEY_free(id->pp_key);
++	forced_memzero(id, sizeof(*id));
++	os_free(id);
+ }
+ 
+ EC_POINT * dpp_decrypt_e_id(EVP_PKEY *ppkey, EVP_PKEY *a_nonce,
+ 			    EVP_PKEY *e_prime_id)
+ {
+-	const EC_KEY *pp_ec, *a_nonce_ec, *e_prime_id_ec;
+-	const BIGNUM *pp_bn;
+-	const EC_GROUP *group;
+-	EC_POINT *e_id = NULL;
+-	const EC_POINT *a_nonce_point, *e_prime_id_point;
++	BIGNUM *pp_bn = NULL;
++	EC_GROUP *group = NULL;
++	EC_POINT *e_id = NULL, *a_nonce_point = NULL, *e_prime_id_point = NULL;
+ 	BN_CTX *ctx = NULL;
+ 
+-	if (!ppkey)
+-		return NULL;
+-
+-	/* E-id = E'-id - s_C * A-NONCE */
+-	pp_ec = EVP_PKEY_get0_EC_KEY(ppkey);
+-	a_nonce_ec = EVP_PKEY_get0_EC_KEY(a_nonce);
+-	e_prime_id_ec = EVP_PKEY_get0_EC_KEY(e_prime_id);
+-	if (!pp_ec || !a_nonce_ec || !e_prime_id_ec)
+-		return NULL;
+-	pp_bn = EC_KEY_get0_private_key(pp_ec);
+-	group = EC_KEY_get0_group(pp_ec);
+-	a_nonce_point = EC_KEY_get0_public_key(a_nonce_ec);
+-	e_prime_id_point = EC_KEY_get0_public_key(e_prime_id_ec);
+-	ctx = BN_CTX_new();
+-	if (!pp_bn || !group || !a_nonce_point || !e_prime_id_point || !ctx)
++	/* E-id = E'-id - s_C * A-NONCE. */
++	if (!ppkey || !a_nonce || !e_prime_id ||
++	    dpp_pkey_get_group(ppkey, &group) < 0 ||
++	    dpp_pkey_get_public_point(a_nonce, group, &a_nonce_point) < 0 ||
++	    dpp_pkey_get_public_point(e_prime_id, group, &e_prime_id_point) < 0 ||
++	    EVP_PKEY_get_bn_param(ppkey, OSSL_PKEY_PARAM_PRIV_KEY, &pp_bn) != 1)
+ 		goto fail;
++	ctx = BN_CTX_new();
+ 	e_id = EC_POINT_new(group);
+-	if (!e_id ||
++	if (!ctx || !e_id ||
+ 	    !EC_POINT_mul(group, e_id, NULL, a_nonce_point, pp_bn, ctx) ||
+ 	    !EC_POINT_invert(group, e_id, ctx) ||
+ 	    !EC_POINT_add(group, e_id, e_prime_id_point, e_id, ctx)) {
+ 		EC_POINT_clear_free(e_id);
++		e_id = NULL;
+ 		goto fail;
+ 	}
+-
+ 	dpp_debug_print_point("DPP: Decrypted E-id", group, e_id);
+-
+ fail:
++	BN_clear_free(pp_bn);
++	EC_GROUP_free(group);
++	EC_POINT_clear_free(a_nonce_point);
++	EC_POINT_clear_free(e_prime_id_point);
+ 	BN_CTX_free(ctx);
+ 	return e_id;
+ }
++
+ #endif
+ struct wpabuf * dpp_build_annouce_frame(struct dpp_global *dpp, struct dpp_bootstrap_info *dpp_bi)
