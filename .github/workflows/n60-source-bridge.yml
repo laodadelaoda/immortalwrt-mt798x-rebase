@@ -98,8 +98,9 @@ jobs:
           exact = {
               "package/mtk/vendor-sources.lock.json",
               "package/mtk/applications/easymesh-n60/Makefile",
-              "scripts/n60-vendor-lock.py",
-              "scripts/n60-vendor-source-transforms.py",
+              "package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py",
+              "package/mtk/applications/easymesh-n60/scripts/n60-vendor-source-transforms.py",
+              "package/mtk/applications/easymesh-n60/tests/test-vendor-lock-evaluation.py",
               "config/n60pro-1001.config",
           }
           for source in lock["sources"]:
