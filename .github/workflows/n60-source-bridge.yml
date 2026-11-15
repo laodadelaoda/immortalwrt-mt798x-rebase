@@ -44,7 +44,7 @@ jobs:
 
       - name: Download and verify every locked vendor archive
         env:
-          INCLUDE_AUXILIARY: ${{ inputs.include_auxiliary }}
+          INCLUDE_AUXILIARY: ${{ inputs.include_auxiliary || 'true' }}
         shell: bash
         run: |
           set -euo pipefail
