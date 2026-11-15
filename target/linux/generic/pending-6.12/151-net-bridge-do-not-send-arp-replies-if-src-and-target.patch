@@ -15,7 +15,7 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
 
 --- a/net/bridge/br_arp_nd_proxy.c
 +++ b/net/bridge/br_arp_nd_proxy.c
-@@ -205,13 +205,14 @@ void br_do_proxy_suppress_arp(struct sk_
+@@ -205,15 +205,17 @@ void br_do_proxy_suppress_arp(struct sk_
  			if ((p && (p->flags & BR_PROXYARP)) ||
  			    (dst && (dst->flags & BR_PROXYARP_WIFI)) ||
  			    br_is_neigh_suppress_enabled(dst, vid)) {
