@@ -10,6 +10,7 @@ on:
       - automation/upstream-25.12-resolved
     paths:
       - .github/workflows/upstream-sync-n60pro.yml
+      - target/linux/generic/pending-6.12/151-net-bridge-do-not-send-arp-replies-if-src-and-target.patch
 
 permissions:
   contents: write
