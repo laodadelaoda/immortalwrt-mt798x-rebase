@@ -217,7 +217,7 @@ index 81d863e..21d187a 100644
  		goto fail;
  	group2 = EC_GROUP_dup(group);
  	if (!group2)
-@@ -7251,7 +7234,8 @@ static EC_POINT * dpp_pkex_derive_Qi(const struct dpp_curve_params *curve,
+@@ -7251,8 +7234,13 @@ static EC_POINT * dpp_pkex_derive_Qi(const struct dpp_curve_params *curve,
  	}
  	dpp_debug_print_point("DPP: Qi", group, Qi);
  out:
@@ -227,6 +227,11 @@ index 81d863e..21d187a 100644
  	EVP_PKEY_free(Pi);
  	BN_clear_free(hash_bn);
  	if (ret_group && Qi)
+ 		*ret_group = group2;
++		group2 = NULL;
++	}
++	EC_GROUP_free(group2);
++	forced_memzero(hash, sizeof(hash));
 @@ -7277,11 +7261,9 @@ static EC_POINT * dpp_pkex_derive_Qr(const struct dpp_curve_params *curve,
  	unsigned int num_elem = 0;
  	EC_POINT *Qr = NULL;
@@ -257,7 +262,7 @@ index 81d863e..21d187a 100644
  		goto fail;
  	group2 = EC_GROUP_dup(group);
  	if (!group2)
-@@ -7335,7 +7312,8 @@ static EC_POINT * dpp_pkex_derive_Qr(const struct dpp_curve_params *curve,
+@@ -7335,8 +7312,13 @@ static EC_POINT * dpp_pkex_derive_Qr(const struct dpp_curve_params *curve,
  	}
  	dpp_debug_print_point("DPP: Qr", group, Qr);
  out:
@@ -267,6 +272,11 @@ index 81d863e..21d187a 100644
  	EVP_PKEY_free(Pr);
  	BN_clear_free(hash_bn);
  	if (ret_group && Qr)
+ 		*ret_group = group2;
++		group2 = NULL;
++	}
++	EC_GROUP_free(group2);
++	forced_memzero(hash, sizeof(hash));
 @@ -7419,8 +7397,7 @@ fail:
  
  static struct wpabuf * dpp_pkex_build_exchange_req(struct dpp_pkex *pkex)
