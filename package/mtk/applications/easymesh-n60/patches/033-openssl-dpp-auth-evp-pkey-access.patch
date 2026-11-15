@@ -20,7 +20,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  #include "crypto/evp.h"
  #include "wapp_cmm.h"
  
-@@ -2672,49 +2672,55 @@
+@@ -2630,49 +2630,55 @@
  }
  
  
@@ -101,7 +101,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  		wpa_printf(MSG_ERROR, DPP_MAP_PREX
  			   "OpenSSL: failed: %s",
  			   ERR_error_string(ERR_get_error(), NULL));
-@@ -2723,17 +2729,20 @@
+@@ -2681,17 +2687,20 @@
  
  	if (dpp_bn2bin_pad(lx, auth->Lx, auth->secret_len) < 0)
  		goto fail;
@@ -127,7 +127,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  	BN_CTX_free(bnctx);
  	return ret;
  }
-@@ -2741,42 +2750,37 @@
+@@ -2699,42 +2708,37 @@
  
  static int dpp_auth_derive_l_initiator(struct dpp_authentication *auth)
  {
@@ -187,7 +187,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  		wpa_printf(MSG_ERROR, DPP_MAP_PREX
  			   "OpenSSL: failed: %s",
  			   ERR_error_string(ERR_get_error(), NULL));
-@@ -2785,21 +2789,22 @@
+@@ -2743,21 +2747,22 @@
  
  	if (dpp_bn2bin_pad(lx, auth->Lx, auth->secret_len) < 0)
  		goto fail;
@@ -215,7 +215,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  static int dpp_auth_build_resp_ok(struct dpp_authentication *auth)
  {
  	size_t nonce_len;
-@@ -14472,39 +14473,98 @@
+@@ -14430,39 +14431,98 @@
  	return secret_len;
  }
  
@@ -337,7 +337,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  		goto fail;
  
  	sum = EC_POINT_new(group);
-@@ -14512,28 +14572,30 @@
+@@ -14470,28 +14530,30 @@
  	if (!sum || !M ||
  	    EC_POINT_add(group, sum, CR_point, PR_point, bnctx) != 1 ||
  	    EC_POINT_mul(group, M, NULL, sum, cI_bn, bnctx) != 1 ||
@@ -377,7 +377,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  	BN_clear_free(mx);
  	BN_CTX_free(bnctx);
  	return ret;
-@@ -14541,41 +14603,36 @@
+@@ -14499,41 +14561,36 @@
  
  static int dpp_auth_derive_m_R(struct dpp_authentication *auth)
  {
@@ -439,7 +439,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  		goto fail;
  
  	if (EC_GROUP_get_order(group, q, bnctx) != 1 ||
-@@ -14583,32 +14640,35 @@
+@@ -14541,32 +14598,35 @@
  		goto fail;
  
  	M = EC_POINT_new(group);
