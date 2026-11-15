@@ -2,7 +2,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
 index 58ced13..fe743a2 100644
 --- a/wappd/dpp/dpp.c
 +++ b/wappd/dpp/dpp.c
-@@ -11536,45 +11536,35 @@ struct dpp_reconfig_id * dpp_gen_reconfig_id(const u8 *csign_key,
+@@ -11519,45 +11519,35 @@ struct dpp_reconfig_id * dpp_gen_reconfig_id(const u8 *csign_key,
  	struct dpp_reconfig_id *id = NULL;
  	BN_CTX *ctx = NULL;
  	BIGNUM *bn = NULL, *q = NULL;
@@ -56,7 +56,7 @@ index 58ced13..fe743a2 100644
  	id->e_id = e_id;
  	e_id = NULL;
  	id->csign = csign;
-@@ -11582,153 +11572,116 @@ struct dpp_reconfig_id * dpp_gen_reconfig_id(const u8 *csign_key,
+@@ -11565,153 +11555,116 @@ struct dpp_reconfig_id * dpp_gen_reconfig_id(const u8 *csign_key,
  	id->pp_key = ppkey;
  	ppkey = NULL;
  fail:
