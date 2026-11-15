@@ -215,7 +215,7 @@ index fe743a2..1f346a7 100644
  		goto fail;
  	dpp_debug_print_point("DPP: Y", group, Y_point);
  	N = EC_POINT_new(group);
-@@ -9418,8 +9397,8 @@ out:
+@@ -9418,8 +9397,9 @@ out:
  	EC_POINT_free(M);
  	EC_POINT_free(N);
  	EC_POINT_free(X);
@@ -223,6 +223,7 @@ index fe743a2..1f346a7 100644
 -	EC_KEY_free(Y_ec);
 +	EC_POINT_clear_free(Y_point);
 +	EC_GROUP_free(group);
++	forced_memzero(Kx, sizeof(Kx));
  	return pkex;
  fail:
  	wpa_printf(MSG_DEBUG, DPP_MAP_PREX "DPP: PKEX Exchange Request processing failed");
@@ -260,7 +261,7 @@ index fe743a2..1f346a7 100644
  		goto fail;
  	ctx = EVP_PKEY_CTX_new(pkex->own_bi->pubkey, NULL);
  	if (!ctx ||
-@@ -9677,7 +9650,7 @@ out:
+@@ -9677,7 +9650,9 @@ out:
  	EC_POINT_free(N);
  	BN_free(Nx);
  	BN_free(Ny);
@@ -268,4 +269,6 @@ index fe743a2..1f346a7 100644
 +	EC_GROUP_free(group);
  	EVP_PKEY_CTX_free(ctx);
  	BN_CTX_free(bnctx);
++	forced_memzero(Jx, sizeof(Jx));
++	forced_memzero(Kx, sizeof(Kx));
  	return msg;
