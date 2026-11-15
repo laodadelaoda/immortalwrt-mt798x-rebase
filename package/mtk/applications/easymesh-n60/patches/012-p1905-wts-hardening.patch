@@ -261,10 +261,11 @@
  				} else {
  					debug(DEBUG_TRACE, "pvid not found or too far\n");
  				}
-@@ -592,11 +604,6 @@
+@@ -592,11 +604,7 @@
  				fh_bss_unhidden |= bss_info[i].band_support;
  
  		i++;
++		forced_memzero(key, sizeof(key));
 -		if (i >= max_bss_num) {
 -			debug(DEBUG_ERROR, "too much bss wireless setting info\n");
 -			i--;
