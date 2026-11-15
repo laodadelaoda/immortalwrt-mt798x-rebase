@@ -9,6 +9,20 @@
  #include <pthread.h>
  #include <stdbool.h>
  #include "libbridge.h"
+@@ -637,12 +639 @@
+-static void fill_mtk_mii_ioctl(
+-	struct mtk_mii_ioctl_data *mtk_mii, unsigned short phy_id,
+-	unsigned short reg_num, unsigned int *val)
+-{
+-	mtk_mii->phy_id  = phy_id;
+-	mtk_mii->reg_num = reg_num;
+-	mtk_mii->val_in  = *val;
+-	mtk_mii->val_out = 0;
+-}
+-
+-
+-
++
 @@ -649,24 +651,26 @@
  static int get_phy_status_by_index(
  	unsigned short index,
