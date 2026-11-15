@@ -32,7 +32,7 @@
  	/* Workaround old glibc breakage.
 --- a/ethernet/mediatek_DSA/libbridge/libbridge_devif.c
 +++ b/ethernet/mediatek_DSA/libbridge/libbridge_devif.c
-@@ -28,15 +28,15 @@
+@@ -28,16 +28,16 @@
  #include "libbridge.h"
  #include "libbridge_private.h"
  
@@ -52,4 +52,4 @@
  		dprintf("[%d]snprintf fail!\n", __LINE__);
  
  	return fopen(path, "r");
-}
+ }
