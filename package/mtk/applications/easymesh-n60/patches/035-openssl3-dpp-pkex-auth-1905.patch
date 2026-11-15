@@ -229,7 +229,7 @@ index 81d863e..21d187a 100644
 -	if (ret_group && Qi)
 +	if (ret_group && Qi) {
  		*ret_group = group2;
-+ 		group2 = NULL;
++		group2 = NULL;
 +	}
 +	EC_GROUP_free(group2);
 +	forced_memzero(hash, sizeof(hash));
@@ -275,7 +275,7 @@ index 81d863e..21d187a 100644
 -	if (ret_group && Qr)
 +	if (ret_group && Qr) {
  		*ret_group = group2;
-+ 		group2 = NULL;
++		group2 = NULL;
 +	}
 +	EC_GROUP_free(group2);
 +	forced_memzero(hash, sizeof(hash));
