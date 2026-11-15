@@ -443,7 +443,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  	return ret;
  }
  
-@@ -8892,5 +8793,9 @@
+@@ -8892,7 +8793,11 @@
  	group = EC_GROUP_new_by_curve_name(OBJ_txt2nid(curve->name));
  	if (!group)
  		return NULL;
@@ -453,4 +453,5 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
 +		EC_GROUP_free(group);
 +		return key;
 +	}
+ }
  
