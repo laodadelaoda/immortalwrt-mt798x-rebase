@@ -1,3 +1,4 @@
+diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
 --- a/wappd/dpp/dpp.c
 +++ b/wappd/dpp/dpp.c
 @@ -8804,7 +8804,7 @@
