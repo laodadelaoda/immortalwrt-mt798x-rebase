@@ -1,0 +1,158 @@
+diff --git a/dpp_evp.h b/dpp_evp.h
+new file mode 100644
+index 0000000..ff3e575
+--- /dev/null
++++ b/dpp_evp.h
+@@ -0,0 +1,139 @@
++/* OpenSSL 3.5 provider-native DPP EC helpers.
++ * Returned groups, points and keys are owned by the caller. Private BIGNUMs
++ * returned by EVP_PKEY_get_bn_param() must be released with BN_clear_free().
++ */
++#ifndef DPP_EVP_PROVIDER_HELPERS_H
++#define DPP_EVP_PROVIDER_HELPERS_H
++
++#include <openssl/evp.h>
++#include <openssl/ec.h>
++#include <openssl/core_names.h>
++#include <openssl/param_build.h>
++#include <openssl/objects.h>
++
++static inline int dpp_pkey_get_group(const EVP_PKEY *pkey, EC_GROUP **group)
++{
++	char name[80] = { 0 };
++	size_t name_len = 0;
++	int nid;
++
++	if (!pkey || !group)
++		return -1;
++	*group = NULL;
++	if (!EVP_PKEY_is_a(pkey, "EC") ||
++	    EVP_PKEY_get_utf8_string_param(pkey, OSSL_PKEY_PARAM_GROUP_NAME,
++					   name, sizeof(name), &name_len) != 1 ||
++	    !name_len || name_len >= sizeof(name))
++		return -1;
++	nid = OBJ_txt2nid(name);
++	if (nid == NID_undef)
++		return -1;
++	*group = EC_GROUP_new_by_curve_name(nid);
++	return *group ? 0 : -1;
++}
++
++static inline int dpp_pkey_get_public_point(const EVP_PKEY *pkey, const EC_GROUP *group,
++			      EC_POINT **point)
++{
++	EC_GROUP *key_group = NULL;
++	unsigned char *encoded = NULL;
++	size_t encoded_len = 0;
++	int ret = -1;
++
++	if (!pkey || !group || !point)
++		return -1;
++	*point = NULL;
++	if (dpp_pkey_get_group(pkey, &key_group) < 0 ||
++	    EC_GROUP_cmp(group, key_group, NULL) != 0 ||
++	    EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_PUB_KEY,
++					    NULL, 0, &encoded_len) != 1 ||
++	    !encoded_len)
++		goto out;
++	encoded = OPENSSL_malloc(encoded_len);
++	if (!encoded ||
++	    EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_PUB_KEY,
++					    encoded, encoded_len,
++					    &encoded_len) != 1)
++		goto out;
++	*point = EC_POINT_new(group);
++	if (!*point || EC_POINT_oct2point(group, *point, encoded,
++					  encoded_len, NULL) != 1 ||
++	    EC_POINT_is_at_infinity(group, *point) ||
++	    EC_POINT_is_on_curve(group, *point, NULL) != 1) {
++		EC_POINT_clear_free(*point);
++		*point = NULL;
++		goto out;
++	}
++	ret = 0;
++out:
++	OPENSSL_free(encoded);
++	EC_GROUP_free(key_group);
++	return ret;
++}
++
++static inline EVP_PKEY * dpp_pkey_from_ec_group_point(const EC_GROUP *group,
++					const EC_POINT *point)
++{
++	EVP_PKEY_CTX *ctx = NULL;
++	OSSL_PARAM_BLD *bld = NULL;
++	OSSL_PARAM *params = NULL;
++	EVP_PKEY *pkey = NULL;
++	const char *group_name;
++	size_t encoded_len;
++	unsigned char *encoded = NULL;
++
++	if (!group || !point || EC_POINT_is_at_infinity(group, point) ||
++	    EC_POINT_is_on_curve(group, point, NULL) != 1)
++		return NULL;
++	group_name = OBJ_nid2sn(EC_GROUP_get_curve_name(group));
++	if (!group_name || !group_name[0])
++		return NULL;
++	encoded_len = EC_POINT_point2oct(group, point, POINT_CONVERSION_UNCOMPRESSED,
++					 NULL, 0, NULL);
++	if (!encoded_len)
++		return NULL;
++	encoded = OPENSSL_malloc(encoded_len);
++	if (!encoded || EC_POINT_point2oct(group, point,
++					   POINT_CONVERSION_UNCOMPRESSED,
++					   encoded, encoded_len, NULL) != encoded_len)
++		goto out;
++	ctx = EVP_PKEY_CTX_new_from_name(NULL, "EC", NULL);
++	bld = OSSL_PARAM_BLD_new();
++	if (!ctx || !bld ||
++	    !OSSL_PARAM_BLD_push_utf8_string(bld, OSSL_PKEY_PARAM_GROUP_NAME,
++					     group_name, 0) ||
++	    !OSSL_PARAM_BLD_push_octet_string(bld, OSSL_PKEY_PARAM_PUB_KEY,
++					       encoded, encoded_len))
++		goto out;
++	params = OSSL_PARAM_BLD_to_param(bld);
++	if (!params || EVP_PKEY_fromdata_init(ctx) <= 0 ||
++	    EVP_PKEY_fromdata(ctx, &pkey, EVP_PKEY_PUBLIC_KEY, params) <= 0) {
++		EVP_PKEY_free(pkey);
++		pkey = NULL;
++	}
++out:
++	OPENSSL_free(encoded);
++	OSSL_PARAM_free(params);
++	OSSL_PARAM_BLD_free(bld);
++	EVP_PKEY_CTX_free(ctx);
++	return pkey;
++}
++
++static inline EVP_PKEY * dpp_pkey_from_point(const EVP_PKEY *group_key,
++			       const EC_GROUP *group, const EC_POINT *point)
++{
++	EC_GROUP *key_group = NULL;
++	EVP_PKEY *pkey = NULL;
++
++	if (!group_key || !group || !point ||
++	    dpp_pkey_get_group(group_key, &key_group) < 0 ||
++	    EC_GROUP_cmp(group, key_group, NULL) != 0)
++		goto out;
++	pkey = dpp_pkey_from_ec_group_point(group, point);
++out:
++	EC_GROUP_free(key_group);
++	return pkey;
++}
++
++
++#endif /* DPP_EVP_PROVIDER_HELPERS_H */
+diff --git a/wappd/dpp/dpp.h b/wappd/dpp/dpp.h
+index 5e3d3ca..89d0185 100644
+--- a/wappd/dpp/dpp.h
++++ b/wappd/dpp/dpp.h
+@@ -813,7 +813,7 @@ struct pmk_cache {
+ 
+ #ifdef DPP_R2_RECONFIG
+ struct dpp_reconfig_id {
+-	const EC_GROUP *group;
++	EC_GROUP *group;
+ 	EC_POINT *e_id; /* E-id */
+ 	EVP_PKEY *csign;
+ 	EVP_PKEY *a_nonce; /* A-NONCE */
