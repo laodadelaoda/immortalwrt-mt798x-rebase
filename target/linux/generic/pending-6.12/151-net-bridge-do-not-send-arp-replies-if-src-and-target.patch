@@ -25,10 +25,10 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
 +					replied = false;
 +				else if (!vid)
  					br_arp_send(br, p, skb->dev, sip, tip,
- 						    sha, ha, sha, 0, 0);
+ 						    sha, n->ha, sha, 0, 0);
  				else
 @@ -215,7 +218,6 @@ void br_do_proxy_suppress_arp(struct sk_
- 						    sha, ha, sha,
+ 						    sha, n->ha, sha,
  						    skb->vlan_proto,
  						    skb_vlan_tag_get(skb));
 -				replied = true;
