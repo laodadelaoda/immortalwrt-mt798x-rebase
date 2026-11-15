@@ -1,0 +1,387 @@
+diff --git a/1905daemon/src/dpp.c b/1905daemon/src/dpp.c
+index 81d863e..21d187a 100644
+--- a/1905daemon/src/dpp.c
++++ b/1905daemon/src/dpp.c
+@@ -3246,53 +3246,43 @@ fail:
+ 
+ static int dpp_auth_derive_l_responder(struct dpp_authentication *auth)
+ {
+-	const EC_GROUP *group;
+-	EC_POINT *l = NULL;
+-	EC_KEY *BI = NULL, *bR = NULL, *pR = NULL;
+-	const EC_POINT *BI_point;
+-	BN_CTX *bnctx;
+-	BIGNUM *lx, *sum, *q;
+-	const BIGNUM *bR_bn, *pR_bn;
++	BN_CTX *bnctx = NULL;
++	BIGNUM *sum = NULL, *q = NULL, *lx = NULL;
++	BIGNUM *bR_bn = NULL, *pR_bn = NULL;
++	EC_GROUP *group = NULL, *own_group = NULL, *protocol_group = NULL;
++	EC_POINT *BI_point = NULL, *l = NULL;
+ 	int ret = -1;
+ 
+ 	/* L = ((bR + pR) modulo q) * BI */
+-
++	if (!auth || !auth->peer_bi || !auth->own_bi ||
++	    !auth->own_bi->pubkey || !auth->own_protocol_key)
++		goto fail;
+ 	bnctx = BN_CTX_new();
+ 	sum = BN_new();
+ 	q = BN_new();
+ 	lx = BN_new();
+-	if (!bnctx || !sum || !q || !lx)
+-		goto fail;
+-	BI = EVP_PKEY_get1_EC_KEY(auth->peer_bi->pubkey);
+-	if (!BI)
+-		goto fail;
+-	BI_point = EC_KEY_get0_public_key(BI);
+-	group = EC_KEY_get0_group(BI);
+-	if (!group)
+-		goto fail;
+-
+-	bR = EVP_PKEY_get1_EC_KEY(auth->own_bi->pubkey);
+-	pR = EVP_PKEY_get1_EC_KEY(auth->own_protocol_key);
+-	if (!bR || !pR)
+-		goto fail;
+-	bR_bn = EC_KEY_get0_private_key(bR);
+-	pR_bn = EC_KEY_get0_private_key(pR);
+-	if (!bR_bn || !pR_bn)
+-		goto fail;
+-	if (EC_GROUP_get_order(group, q, bnctx) != 1 ||
++	if (!bnctx || !sum || !q || !lx ||
++	    dpp_pkey_get_group(auth->peer_bi->pubkey, &group) < 0 ||
++	    dpp_pkey_get_public_point(auth->peer_bi->pubkey, group,
++				      &BI_point) < 0 ||
++	    dpp_pkey_get_group(auth->own_bi->pubkey, &own_group) < 0 ||
++	    dpp_pkey_get_group(auth->own_protocol_key, &protocol_group) < 0 ||
++	    EC_GROUP_cmp(group, own_group, NULL) != 0 ||
++	    EC_GROUP_cmp(group, protocol_group, NULL) != 0 ||
++	    EVP_PKEY_get_bn_param(auth->own_bi->pubkey,
++				  OSSL_PKEY_PARAM_PRIV_KEY, &bR_bn) != 1 ||
++	    EVP_PKEY_get_bn_param(auth->own_protocol_key,
++				  OSSL_PKEY_PARAM_PRIV_KEY, &pR_bn) != 1 ||
++	    EC_GROUP_get_order(group, q, bnctx) != 1 ||
+ 	    BN_mod_add(sum, bR_bn, pR_bn, q, bnctx) != 1)
+ 		goto fail;
+ 	l = EC_POINT_new(group);
+-	if (!l ||
+-	    EC_POINT_mul(group, l, NULL, BI_point, sum, bnctx) != 1 ||
+-	    EC_POINT_get_affine_coordinates(group, l, lx, NULL,
+-						bnctx) != 1) {
+-		wpa_printf(MSG_ERROR,
+-			   "OpenSSL: failed: %s",
++	if (!l || EC_POINT_mul(group, l, NULL, BI_point, sum, bnctx) != 1 ||
++	    EC_POINT_get_affine_coordinates(group, l, lx, NULL, bnctx) != 1) {
++		wpa_printf(MSG_ERROR, "OpenSSL: failed: %s",
+ 			   ERR_error_string(ERR_get_error(), NULL));
+ 		goto fail;
+ 	}
+-
+ 	if (dpp_bn2bin_pad(lx, auth->Lx, auth->secret_len) < 0)
+ 		goto fail;
+ 	wpa_hexdump_key(MSG_DEBUG, "DPP: L.x", auth->Lx, auth->secret_len);
+@@ -3300,12 +3290,15 @@ static int dpp_auth_derive_l_responder(struct dpp_authentication *auth)
+ 	ret = 0;
+ fail:
+ 	EC_POINT_clear_free(l);
+-	EC_KEY_free(BI);
+-	EC_KEY_free(bR);
+-	EC_KEY_free(pR);
++	EC_POINT_clear_free(BI_point);
++	EC_GROUP_free(group);
++	EC_GROUP_free(own_group);
++	EC_GROUP_free(protocol_group);
+ 	BN_clear_free(lx);
+ 	BN_clear_free(sum);
+-	BN_free(q);
++	BN_clear_free(q);
++	BN_clear_free(bR_bn);
++	BN_clear_free(pR_bn);
+ 	BN_CTX_free(bnctx);
+ 	return ret;
+ }
+@@ -3313,48 +3306,42 @@ fail:
+ 
+ static int dpp_auth_derive_l_initiator(struct dpp_authentication *auth)
+ {
+-	const EC_GROUP *group;
++	BN_CTX *bnctx = NULL;
++	BIGNUM *lx = NULL, *bI_bn = NULL;
++	EC_GROUP *group = NULL, *peer_group = NULL, *protocol_group = NULL;
++	EC_POINT *BR_point = NULL, *PR_point = NULL;
+ 	EC_POINT *l = NULL, *sum = NULL;
+-	EC_KEY *bI = NULL, *BR = NULL, *PR = NULL;
+-	const EC_POINT *BR_point, *PR_point;
+-	BN_CTX *bnctx;
+-	BIGNUM *lx;
+-	const BIGNUM *bI_bn;
+ 	int ret = -1;
+ 
+ 	/* L = bI * (BR + PR) */
+-
++	if (!auth || !auth->peer_bi || !auth->peer_bi->pubkey ||
++	    !auth->peer_protocol_key || !auth->own_bi || !auth->own_bi->pubkey)
++		goto fail;
+ 	bnctx = BN_CTX_new();
+ 	lx = BN_new();
+-	if (!bnctx || !lx)
+-		goto fail;
+-	BR = EVP_PKEY_get1_EC_KEY(auth->peer_bi->pubkey);
+-	PR = EVP_PKEY_get1_EC_KEY(auth->peer_protocol_key);
+-	if (!BR || !PR)
+-		goto fail;
+-	BR_point = EC_KEY_get0_public_key(BR);
+-	PR_point = EC_KEY_get0_public_key(PR);
+-
+-	bI = EVP_PKEY_get1_EC_KEY(auth->own_bi->pubkey);
+-	if (!bI)
+-		goto fail;
+-	group = EC_KEY_get0_group(bI);
+-	bI_bn = EC_KEY_get0_private_key(bI);
+-	if (!group || !bI_bn)
++	if (!bnctx || !lx ||
++	    dpp_pkey_get_group(auth->own_bi->pubkey, &group) < 0 ||
++	    dpp_pkey_get_group(auth->peer_bi->pubkey, &peer_group) < 0 ||
++	    dpp_pkey_get_group(auth->peer_protocol_key, &protocol_group) < 0 ||
++	    EC_GROUP_cmp(group, peer_group, NULL) != 0 ||
++	    EC_GROUP_cmp(group, protocol_group, NULL) != 0 ||
++	    dpp_pkey_get_public_point(auth->peer_bi->pubkey, group,
++				      &BR_point) < 0 ||
++	    dpp_pkey_get_public_point(auth->peer_protocol_key, group,
++				      &PR_point) < 0 ||
++	    EVP_PKEY_get_bn_param(auth->own_bi->pubkey,
++				  OSSL_PKEY_PARAM_PRIV_KEY, &bI_bn) != 1)
+ 		goto fail;
+ 	sum = EC_POINT_new(group);
+ 	l = EC_POINT_new(group);
+ 	if (!sum || !l ||
+ 	    EC_POINT_add(group, sum, BR_point, PR_point, bnctx) != 1 ||
+ 	    EC_POINT_mul(group, l, NULL, sum, bI_bn, bnctx) != 1 ||
+-	    EC_POINT_get_affine_coordinates(group, l, lx, NULL,
+-						bnctx) != 1) {
+-		wpa_printf(MSG_ERROR,
+-			   "OpenSSL: failed: %s",
++	    EC_POINT_get_affine_coordinates(group, l, lx, NULL, bnctx) != 1) {
++		wpa_printf(MSG_ERROR, "OpenSSL: failed: %s",
+ 			   ERR_error_string(ERR_get_error(), NULL));
+ 		goto fail;
+ 	}
+-
+ 	if (dpp_bn2bin_pad(lx, auth->Lx, auth->secret_len) < 0)
+ 		goto fail;
+ 	wpa_hexdump_key(MSG_DEBUG, "DPP: L.x", auth->Lx, auth->secret_len);
+@@ -3363,10 +3350,13 @@ static int dpp_auth_derive_l_initiator(struct dpp_authentication *auth)
+ fail:
+ 	EC_POINT_clear_free(l);
+ 	EC_POINT_clear_free(sum);
+-	EC_KEY_free(bI);
+-	EC_KEY_free(BR);
+-	EC_KEY_free(PR);
++	EC_POINT_clear_free(BR_point);
++	EC_POINT_clear_free(PR_point);
++	EC_GROUP_free(group);
++	EC_GROUP_free(peer_group);
++	EC_GROUP_free(protocol_group);
+ 	BN_clear_free(lx);
++	BN_clear_free(bI_bn);
+ 	BN_CTX_free(bnctx);
+ 	return ret;
+ }
+@@ -7215,11 +7205,9 @@ static EC_POINT * dpp_pkex_derive_Qi(const struct dpp_curve_params *curve,
+ 	unsigned int num_elem = 0;
+ 	EC_POINT *Qi = NULL;
+ 	EVP_PKEY *Pi = NULL;
+-	EC_KEY *Pi_ec = NULL;
+-	const EC_POINT *Pi_point;
++	EC_POINT *Pi_point = NULL;
+ 	BIGNUM *hash_bn = NULL;
+-	const EC_GROUP *group = NULL;
+-	EC_GROUP *group2 = NULL;
++	EC_GROUP *group = NULL, *group2 = NULL;
+ 
+ 	/* Qi = H(MAC-Initiator | [identifier |] code) * Pi */
+ 
+@@ -7247,13 +7235,8 @@ static EC_POINT * dpp_pkex_derive_Qi(const struct dpp_curve_params *curve,
+ 	if (!Pi)
+ 		goto fail;
+ 	dpp_debug_print_key("DPP: Pi", Pi);
+-	Pi_ec = EVP_PKEY_get1_EC_KEY(Pi);
+-	if (!Pi_ec)
+-		goto fail;
+-	Pi_point = EC_KEY_get0_public_key(Pi_ec);
+-
+-	group = EC_KEY_get0_group(Pi_ec);
+-	if (!group)
++	if (dpp_pkey_get_group(Pi, &group) < 0 ||
++	    dpp_pkey_get_public_point(Pi, group, &Pi_point) < 0)
+ 		goto fail;
+ 	group2 = EC_GROUP_dup(group);
+ 	if (!group2)
+@@ -7273,7 +7256,8 @@ static EC_POINT * dpp_pkex_derive_Qi(const struct dpp_curve_params *curve,
+ 	}
+ 	dpp_debug_print_point("DPP: Qi", group, Qi);
+ out:
+-	EC_KEY_free(Pi_ec);
++	EC_POINT_clear_free(Pi_point);
++	EC_GROUP_free(group);
+ 	EVP_PKEY_free(Pi);
+ 	BN_clear_free(hash_bn);
+ 	if (ret_group && Qi)
+@@ -7299,11 +7283,9 @@ static EC_POINT * dpp_pkex_derive_Qr(const struct dpp_curve_params *curve,
+ 	unsigned int num_elem = 0;
+ 	EC_POINT *Qr = NULL;
+ 	EVP_PKEY *Pr = NULL;
+-	EC_KEY *Pr_ec = NULL;
+-	const EC_POINT *Pr_point;
++	EC_POINT *Pr_point = NULL;
+ 	BIGNUM *hash_bn = NULL;
+-	const EC_GROUP *group = NULL;
+-	EC_GROUP *group2 = NULL;
++	EC_GROUP *group = NULL, *group2 = NULL;
+ 
+ 	/* Qr = H(MAC-Responder | | [identifier | ] code) * Pr */
+ 
+@@ -7331,13 +7313,8 @@ static EC_POINT * dpp_pkex_derive_Qr(const struct dpp_curve_params *curve,
+ 	if (!Pr)
+ 		goto fail;
+ 	dpp_debug_print_key("DPP: Pr", Pr);
+-	Pr_ec = EVP_PKEY_get1_EC_KEY(Pr);
+-	if (!Pr_ec)
+-		goto fail;
+-	Pr_point = EC_KEY_get0_public_key(Pr_ec);
+-
+-	group = EC_KEY_get0_group(Pr_ec);
+-	if (!group)
++	if (dpp_pkey_get_group(Pr, &group) < 0 ||
++	    dpp_pkey_get_public_point(Pr, group, &Pr_point) < 0)
+ 		goto fail;
+ 	group2 = EC_GROUP_dup(group);
+ 	if (!group2)
+@@ -7357,7 +7334,8 @@ static EC_POINT * dpp_pkex_derive_Qr(const struct dpp_curve_params *curve,
+ 	}
+ 	dpp_debug_print_point("DPP: Qr", group, Qr);
+ out:
+-	EC_KEY_free(Pr_ec);
++	EC_POINT_clear_free(Pr_point);
++	EC_GROUP_free(group);
+ 	EVP_PKEY_free(Pr);
+ 	BN_clear_free(hash_bn);
+ 	if (ret_group && Qr)
+@@ -7441,8 +7419,7 @@ fail:
+ 
+ static struct wpabuf * dpp_pkex_build_exchange_req(struct dpp_pkex *pkex)
+ {
+-	EC_KEY *X_ec = NULL;
+-	const EC_POINT *X_point;
++	EC_POINT *X_point = NULL;
+ 	BN_CTX *bnctx = NULL;
+ 	EC_GROUP *group = NULL;
+ 	EC_POINT *Qi = NULL, *M = NULL;
+@@ -7483,11 +7460,7 @@ static struct wpabuf * dpp_pkex_build_exchange_req(struct dpp_pkex *pkex)
+ 		goto fail;
+ 
+ 	/* M = X + Qi */
+-	X_ec = EVP_PKEY_get1_EC_KEY(pkex->x);
+-	if (!X_ec)
+-		goto fail;
+-	X_point = EC_KEY_get0_public_key(X_ec);
+-	if (!X_point)
++	if (dpp_pkey_get_public_point(pkex->x, group, &X_point) < 0)
+ 		goto fail;
+ 	dpp_debug_print_point("DPP: X", group, X_point);
+ 	M = EC_POINT_new(group);
+@@ -7560,7 +7533,8 @@ skip_finite_cyclic_group:
+ 
+ out:
+ 	wpabuf_free(M_buf);
+-	EC_KEY_free(X_ec);
++	EC_POINT_clear_free(X_point);
++	EC_GROUP_free(group);
+ 	EC_POINT_free(M);
+ 	EC_POINT_free(Qi);
+ 	BN_clear_free(Mx);
+@@ -7812,8 +7786,7 @@ struct dpp_pkex * dpp_pkex_rx_exchange_req(void *msg_ctx,
+ 	BN_CTX *bnctx = NULL;
+ 	EC_GROUP *group = NULL;
+ 	BIGNUM *Mx = NULL, *My = NULL;
+-	EC_KEY *Y_ec = NULL, *X_ec = NULL;;
+-	const EC_POINT *Y_point;
++	EC_POINT *Y_point = NULL;
+ 	BIGNUM *Nx = NULL, *Ny = NULL;
+ 	u8 Kx[DPP_MAX_SHARED_SECRET_LEN];
+ 	size_t Kx_len;
+@@ -7927,14 +7900,8 @@ struct dpp_pkex * dpp_pkex_rx_exchange_req(void *msg_ctx,
+ 
+ 	os_memcpy(pkex->Mx, attr_key, attr_key_len / 2);
+ 
+-	X_ec = EC_KEY_new();
+-	if (!X_ec ||
+-	    EC_KEY_set_group(X_ec, group) != 1 ||
+-	    EC_KEY_set_public_key(X_ec, X) != 1)
+-		goto fail;
+-	pkex->x = EVP_PKEY_new();
+-	if (!pkex->x ||
+-	    EVP_PKEY_set1_EC_KEY(pkex->x, X_ec) != 1)
++	pkex->x = dpp_pkey_from_point(bi->pubkey, group, X);
++	if (!pkex->x)
+ 		goto fail;
+ 
+ 	/* Qr = H(MAC-Responder | | [identifier | ] code) * Pr */
+@@ -7962,11 +7929,7 @@ struct dpp_pkex * dpp_pkex_rx_exchange_req(void *msg_ctx,
+ 		goto fail;
+ 
+ 	/* N = Y + Qr */
+-	Y_ec = EVP_PKEY_get1_EC_KEY(pkex->y);
+-	if (!Y_ec)
+-		goto fail;
+-	Y_point = EC_KEY_get0_public_key(Y_ec);
+-	if (!Y_point)
++	if (dpp_pkey_get_public_point(pkex->y, group, &Y_point) < 0)
+ 		goto fail;
+ 	dpp_debug_print_point("DPP: Y", group, Y_point);
+ 	N = EC_POINT_new(group);
+@@ -8013,8 +7976,7 @@ out:
+ 	EC_POINT_free(M);
+ 	EC_POINT_free(N);
+ 	EC_POINT_free(X);
+-	EC_KEY_free(X_ec);
+-	EC_KEY_free(Y_ec);
++	EC_POINT_clear_free(Y_point);
+ 	EC_GROUP_free(group);
+ 	return pkex;
+ fail:
+@@ -8150,7 +8112,7 @@ struct wpabuf * dpp_pkex_rx_exchange_resp(struct dpp_pkex *pkex,
+ 	const struct dpp_curve_params *curve = pkex->own_bi->curve;
+ 	EC_POINT *Qr = NULL, *Y = NULL, *N = NULL;
+ 	BIGNUM *Nx = NULL, *Ny = NULL;
+-	EC_KEY *Y_ec = NULL;
++
+ 	size_t Jx_len, Kx_len;
+ 	u8 Jx[DPP_MAX_SHARED_SECRET_LEN], Kx[DPP_MAX_SHARED_SECRET_LEN];
+ 	const u8 *addr[4];
+@@ -8252,14 +8214,8 @@ struct wpabuf * dpp_pkex_rx_exchange_resp(struct dpp_pkex *pkex,
+ 	pkex->exchange_done = 1;
+ 
+ 	/* ECDH: J = a * Y' */
+-	Y_ec = EC_KEY_new();
+-	if (!Y_ec ||
+-	    EC_KEY_set_group(Y_ec, group) != 1 ||
+-	    EC_KEY_set_public_key(Y_ec, Y) != 1)
+-		goto fail;
+-	pkex->y = EVP_PKEY_new();
+-	if (!pkex->y ||
+-	    EVP_PKEY_set1_EC_KEY(pkex->y, Y_ec) != 1)
++	pkex->y = dpp_pkey_from_point(pkex->own_bi->pubkey, group, Y);
++	if (!pkex->y)
+ 		goto fail;
+ 	if (dpp_ecdh(pkex->own_bi->pubkey, pkex->y, Jx, &Jx_len) < 0)
+ 		goto fail;
+@@ -8316,7 +8272,7 @@ out:
+ 	EC_POINT_free(N);
+ 	BN_free(Nx);
+ 	BN_free(Ny);
+-	EC_KEY_free(Y_ec);
++
+ 	BN_CTX_free(bnctx);
+ 	EC_GROUP_free(group);
+ 	return msg;
