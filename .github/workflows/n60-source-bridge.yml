@@ -133,7 +133,6 @@ jobs:
           print(json.dumps(metadata, indent=2))
           PY
           cp package/mtk/vendor-sources.lock.json bridge/
-          cp bridge/vendor-archives.json bridge/
           tar -czf "n60-source-bridge-${GITHUB_SHA}.tar.gz" -C bridge .
           sha256sum "n60-source-bridge-${GITHUB_SHA}.tar.gz" | tee "n60-source-bridge-${GITHUB_SHA}.tar.gz.sha256"
 
