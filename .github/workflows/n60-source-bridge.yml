@@ -6,6 +6,8 @@ on:
       - n60pro-mtk-closed-driver
     paths:
       - ".github/workflows/n60-source-bridge.yml"
+      - "package/mtk/vendor-sources.lock.json"
+      - "package/mtk/applications/easymesh-n60/patches/**"
   workflow_dispatch:
     inputs:
       ref:
