@@ -28,8 +28,10 @@
  
  	f = fopen(name, "r");
  	if (f == NULL) {
-@@ -308,55 +316,58 @@
- 	}
+@@ -306,57 +314,57 @@
+-	for (i = 0; i < max_bss_num; i++) {
+-		memset(&bss_info[i], 0, sizeof(struct set_config_bss_info));
+-	}
  
  	i = 0;
 -	do {
