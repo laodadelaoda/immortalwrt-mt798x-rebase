@@ -418,3 +418,23 @@ index 81d863e..21d187a 100644
 +	forced_memzero(Jx, sizeof(Jx));
 +	forced_memzero(Kx, sizeof(Kx));
  	return msg;
+
+@@ -8868,14 +8868,18 @@ void dpp_pkex_free(struct dpp_pkex *pkex)
+ {
+ 	if (!pkex)
+ 		return;
+ 
+ 	os_free(pkex->identifier);
+-	os_free(pkex->code);
++	if (pkex->code) {
++		forced_memzero(pkex->code, os_strlen(pkex->code));
++		os_free(pkex->code);
++	}
++	forced_memzero(pkex->z, sizeof(pkex->z));
+ 	EVP_PKEY_free(pkex->x);
+ 	EVP_PKEY_free(pkex->y);
+ 	EVP_PKEY_free(pkex->peer_bootstrap_key);
+ 	wpabuf_free(pkex->exchange_req);
+ 	wpabuf_free(pkex->exchange_resp);
+ 	os_free(pkex);
+ }
