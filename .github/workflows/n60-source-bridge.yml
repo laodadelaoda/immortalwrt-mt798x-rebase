@@ -1,6 +1,11 @@
 name: N60 Source Bridge
 
 on:
+  push:
+    branches:
+      - n60pro-mtk-closed-driver
+    paths:
+      - ".github/workflows/n60-source-bridge.yml"
   workflow_dispatch:
     inputs:
       ref:
