@@ -370,7 +370,7 @@ index 81d863e..21d187a 100644
  		goto fail;
  	dpp_debug_print_point("DPP: Y", group, Y_point);
  	N = EC_POINT_new(group);
-@@ -7991,8 +7954,7 @@ out:
+@@ -7991,8 +7954,8 @@ out:
  	EC_POINT_free(M);
  	EC_POINT_free(N);
  	EC_POINT_free(X);
@@ -378,6 +378,7 @@ index 81d863e..21d187a 100644
 -	EC_KEY_free(Y_ec);
 +	EC_POINT_clear_free(Y_point);
  	EC_GROUP_free(group);
++	forced_memzero(Kx, sizeof(Kx));
  	return pkex;
  fail:
 @@ -8128,7 +8090,7 @@ struct wpabuf * dpp_pkex_rx_exchange_resp(struct dpp_pkex *pkex,
@@ -406,7 +407,7 @@ index 81d863e..21d187a 100644
  		goto fail;
  	if (dpp_ecdh(pkex->own_bi->pubkey, pkex->y, Jx, &Jx_len) < 0)
  		goto fail;
-@@ -8294,7 +8250,7 @@ out:
+@@ -8294,7 +8250,9 @@ out:
  	EC_POINT_free(N);
  	BN_free(Nx);
  	BN_free(Ny);
@@ -414,4 +415,6 @@ index 81d863e..21d187a 100644
 +
  	BN_CTX_free(bnctx);
  	EC_GROUP_free(group);
++	forced_memzero(Jx, sizeof(Jx));
++	forced_memzero(Kx, sizeof(Kx));
  	return msg;
