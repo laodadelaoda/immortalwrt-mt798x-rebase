@@ -7,7 +7,7 @@ the existing DPP x||y form is preserved when prefix is not requested.
 
 --- a/wappd/dpp/dpp.c
 +++ b/wappd/dpp/dpp.c
-@@ -407,39 +407,30 @@
+@@ -407,39 +407,40 @@
  
  struct wpabuf * dpp_get_pubkey_point(EVP_PKEY *pkey, int prefix)
  {
@@ -34,7 +34,8 @@ the existing DPP x||y form is preserved when prefix is not requested.
 -	EC_KEY_set_conv_form(eckey, POINT_CONVERSION_UNCOMPRESSED);
 -	len = i2o_ECPublicKey(eckey, NULL);
 -	if (len <= 0) {
-+ 	len = EVP_PKEY_get1_encoded_public_key(export_key, &encoded);
++	len = EVP_PKEY_get1_encoded_public_key(export_key, &encoded);
++	EVP_PKEY_free(export_key);
 +	if (!encoded || !len || len > INT_MAX) {
  		wpa_printf(MSG_ERROR, DPP_MAP_PREX
  			   "DDP: Failed to determine public key encoding length");
@@ -67,7 +68,7 @@ the existing DPP x||y form is preserved when prefix is not requested.
  		/* Remove 0x04 prefix to match DPP definition */
 --- a/1905daemon/src/dpp.c
 +++ b/1905daemon/src/dpp.c
-@@ -1140,39 +1140,30 @@
+@@ -1140,39 +1140,40 @@
  
  static struct wpabuf * dpp_get_pubkey_point(EVP_PKEY *pkey, int prefix)
  {
@@ -94,7 +95,8 @@ the existing DPP x||y form is preserved when prefix is not requested.
 -	EC_KEY_set_conv_form(eckey, POINT_CONVERSION_UNCOMPRESSED);
 -	len = i2o_ECPublicKey(eckey, NULL);
 -	if (len <= 0) {
-+ 	len = EVP_PKEY_get1_encoded_public_key(export_key, &encoded);
++	len = EVP_PKEY_get1_encoded_public_key(export_key, &encoded);
++	EVP_PKEY_free(export_key);
 +	if (!encoded || !len || len > INT_MAX) {
  		wpa_printf(MSG_ERROR,
  			   "DDP: Failed to determine public key encoding length");
