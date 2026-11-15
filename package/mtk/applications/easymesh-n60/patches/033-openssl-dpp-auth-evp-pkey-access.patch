@@ -16,19 +16,14 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  #include <openssl/asn1.h>
  #include <openssl/asn1t.h>
  #include <openssl/evp.h>
-+#include <openssl/core_names.h>
++#include "../../dpp_evp.h"
  #include "crypto/evp.h"
  #include "wapp_cmm.h"
  
-@@ -2630,49 +2630,55 @@
+@@ -2630,49 +2631,50 @@
  }
  
  
-+/* OpenSSL 3 EVP_PKEY helpers are defined with the M-derivation code below. */
-+static int dpp_evp_pkey_get_group(const EVP_PKEY *pkey, EC_GROUP **group);
-+static int dpp_evp_pkey_get_public_point(const EVP_PKEY *pkey,
-+					const EC_GROUP *group,
-+					EC_POINT **point);
 +
  static int dpp_auth_derive_l_responder(struct dpp_authentication *auth)
  {
@@ -65,8 +60,8 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
 -	group = EC_KEY_get0_group(BI);
 -	if (!group)
 +	if (!bnctx || !sum || !q || !lx ||
-+	    dpp_evp_pkey_get_group(auth->peer_bi->pubkey, &group) < 0 ||
-+	    dpp_evp_pkey_get_public_point(auth->peer_bi->pubkey, group,
++	    dpp_pkey_get_group(auth->peer_bi->pubkey, &group) < 0 ||
++	    dpp_pkey_get_public_point(auth->peer_bi->pubkey, group,
 +					   &BI_point) < 0 ||
 +	    dpp_evp_pkey_get_group(auth->own_bi->pubkey, &own_group) < 0 ||
 +	    EC_GROUP_cmp(group, own_group, NULL) != 0)
@@ -101,7 +96,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  		wpa_printf(MSG_ERROR, DPP_MAP_PREX
  			   "OpenSSL: failed: %s",
  			   ERR_error_string(ERR_get_error(), NULL));
-@@ -2681,17 +2687,20 @@
+@@ -2681,17 +2683,20 @@
  
  	if (dpp_bn2bin_pad(lx, auth->Lx, auth->secret_len) < 0)
  		goto fail;
@@ -127,7 +122,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  	BN_CTX_free(bnctx);
  	return ret;
  }
-@@ -2699,42 +2708,37 @@
+@@ -2699,42 +2704,37 @@
  
  static int dpp_auth_derive_l_initiator(struct dpp_authentication *auth)
  {
@@ -187,7 +182,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  		wpa_printf(MSG_ERROR, DPP_MAP_PREX
  			   "OpenSSL: failed: %s",
  			   ERR_error_string(ERR_get_error(), NULL));
-@@ -2743,21 +2747,22 @@
+@@ -2743,21 +2743,22 @@
  
  	if (dpp_bn2bin_pad(lx, auth->Lx, auth->secret_len) < 0)
  		goto fail;
@@ -215,78 +210,10 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  static int dpp_auth_build_resp_ok(struct dpp_authentication *auth)
  {
  	size_t nonce_len;
-@@ -14430,39 +14431,98 @@
+@@ -14430,39 +14431,30 @@
  	return secret_len;
  }
  
-+/* Extract an EC group name from an EVP_PKEY without using deprecated EC_KEY APIs. */
-+static int dpp_evp_pkey_get_group(const EVP_PKEY *pkey, EC_GROUP **group)
-+{
-+	char group_name[80] = { 0 };
-+	size_t group_name_len = 0;
-+	int nid;
-+
-+	if (!pkey || !group)
-+		return -1;
-+	*group = NULL;
-+	if (!EVP_PKEY_is_a(pkey, "EC") ||
-+	    EVP_PKEY_get_utf8_string_param(pkey, OSSL_PKEY_PARAM_GROUP_NAME,
-+					   group_name, sizeof(group_name),
-+					   &group_name_len) != 1)
-+		return -1;
-+
-+	nid = OBJ_txt2nid(group_name);
-+	if (nid == NID_undef)
-+		return -1;
-+
-+	*group = EC_GROUP_new_by_curve_name(nid);
-+	return *group ? 0 : -1;
-+}
-+
-+/* Decode an EVP_PKEY public point into the caller's validated EC group. */
-+static int dpp_evp_pkey_get_public_point(const EVP_PKEY *pkey,
-+					const EC_GROUP *group,
-+					EC_POINT **point)
-+{
-+	unsigned char *encoded = NULL;
-+	size_t encoded_len = 0;
-+	EC_GROUP *key_group = NULL;
-+	int ret = -1;
-+
-+	if (!pkey || !group || !point)
-+		return -1;
-+	*point = NULL;
-+	if (dpp_evp_pkey_get_group(pkey, &key_group) < 0 ||
-+	    EC_GROUP_cmp(group, key_group, NULL) != 0)
-+		goto out;
-+
-+	if (EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_PUB_KEY,
-+					    NULL, 0, &encoded_len) != 1 ||
-+	    !encoded_len)
-+		goto out;
-+	encoded = OPENSSL_malloc(encoded_len);
-+	if (!encoded ||
-+	    EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_PUB_KEY,
-+					    encoded, encoded_len,
-+					    &encoded_len) != 1)
-+		goto out;
-+
-+	*point = EC_POINT_new(group);
-+	if (!*point || EC_POINT_oct2point(group, *point, encoded,
-+					  encoded_len, NULL) != 1) {
-+		EC_POINT_clear_free(*point);
-+		*point = NULL;
-+		goto out;
-+	}
-+	ret = 0;
-+out:
-+	OPENSSL_free(encoded);
-+	EC_GROUP_free(key_group);
-+	return ret;
-+}
-+
-+
-+
  static int dpp_auth_derive_m_I(struct dpp_authentication *auth)
  {
 -	const EC_GROUP *group;
@@ -337,7 +264,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  		goto fail;
  
  	sum = EC_POINT_new(group);
-@@ -14470,28 +14530,30 @@
+@@ -14470,28 +14462,30 @@
  	if (!sum || !M ||
  	    EC_POINT_add(group, sum, CR_point, PR_point, bnctx) != 1 ||
  	    EC_POINT_mul(group, M, NULL, sum, cI_bn, bnctx) != 1 ||
@@ -377,7 +304,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  	BN_clear_free(mx);
  	BN_CTX_free(bnctx);
  	return ret;
-@@ -14499,41 +14561,36 @@
+@@ -14499,41 +14493,36 @@
  
  static int dpp_auth_derive_m_R(struct dpp_authentication *auth)
  {
@@ -439,7 +366,7 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  		goto fail;
  
  	if (EC_GROUP_get_order(group, q, bnctx) != 1 ||
-@@ -14541,32 +14598,35 @@
+@@ -14541,32 +14530,35 @@
  		goto fail;
  
  	M = EC_POINT_new(group);
