@@ -1,7 +1,7 @@
 diff --git a/wappd/crypto/crypto_openssl.c b/wappd/crypto/crypto_openssl.c
 --- a/wappd/crypto/crypto_openssl.c
 +++ b/wappd/crypto/crypto_openssl.c
-@@ -2132,10 +2132,10 @@
+@@ -2105,10 +2105,10 @@
  
  struct crypto_ecdh * crypto_ecdh_init(int group)
  {
@@ -15,7 +15,7 @@ diff --git a/wappd/crypto/crypto_openssl.c b/wappd/crypto/crypto_openssl.c
  
  	ecdh = os_zalloc(sizeof(*ecdh));
  	if (!ecdh)
-@@ -2145,199 +2145,165 @@
+@@ -2118,199 +2118,165 @@
  	if (!ecdh->ec)
  		goto fail;
  
@@ -233,21 +233,119 @@ diff --git a/wappd/crypto/crypto_openssl.c b/wappd/crypto/crypto_openssl.c
 +			    &secret_len) <= 0 || secret_len != coord_len)
 +		goto done;
 +	ret = 0;
-+
-+done:
-+	BN_clear_free(x);
-+	BN_clear_free(y);
+ 
+ done:
+ 	BN_clear_free(x);
+ 	BN_clear_free(y);
+-	EC_KEY_free(eckey);
+-
+-	return buf;
+-fail:
+-	wpabuf_free(buf);
+-	buf = NULL;
+-	goto done;
+-}
+-
+-
+-struct wpabuf * crypto_ecdh_set_peerkey(struct crypto_ecdh *ecdh, int inc_y,
+-					const u8 *key, size_t len)
+-{
+-	BIGNUM *x, *y = NULL;
+-	EVP_PKEY_CTX *ctx = NULL;
+-	EVP_PKEY *peerkey = NULL;
+-	struct wpabuf *secret = NULL;
+-	size_t secret_len;
+-	EC_POINT *pub;
+-	EC_KEY *eckey = NULL;
+-
+-	x = BN_bin2bn(key, inc_y ? len / 2 : len, NULL);
+-	pub = EC_POINT_new(ecdh->ec->group);
+-	if (!x || !pub)
+-		goto fail;
+-
+-	if (inc_y) {
+-		y = BN_bin2bn(key + len / 2, len / 2, NULL);
+-		if (!y)
+-			goto fail;
+-		if (!EC_POINT_set_affine_coordinates(ecdh->ec->group, pub,
+-							 x, y,
+-							 ecdh->ec->bnctx)) {
+-			wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-				   "OpenSSL: EC_POINT_set_affine_coordinates_GFp failed: %s",
+-				   ERR_error_string(ERR_get_error(), NULL));
+-			goto fail;
+-		}
+-	} else if (!EC_POINT_set_compressed_coordinates(ecdh->ec->group,
+-							    pub, x, 0,
+-							    ecdh->ec->bnctx)) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "OpenSSL: EC_POINT_set_compressed_coordinates_GFp failed: %s",
+-			   ERR_error_string(ERR_get_error(), NULL));
+-		goto fail;
+-	}
+-
+-	if (!EC_POINT_is_on_curve(ecdh->ec->group, pub, ecdh->ec->bnctx)) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "OpenSSL: ECDH peer public key is not on curve");
+-		goto fail;
+-	}
+-
+-	eckey = EC_KEY_new_by_curve_name(ecdh->ec->nid);
+-	if (!eckey || EC_KEY_set_public_key(eckey, pub) != 1) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "OpenSSL: EC_KEY_set_public_key failed: %s",
+-			   ERR_error_string(ERR_get_error(), NULL));
+-		goto fail;
+-	}
+-
+-	peerkey = EVP_PKEY_new();
+-	if (!peerkey || EVP_PKEY_set1_EC_KEY(peerkey, eckey) != 1)
+-		goto fail;
+-
+-	ctx = EVP_PKEY_CTX_new(ecdh->pkey, NULL);
+-	if (!ctx || EVP_PKEY_derive_init(ctx) != 1 ||
+-	    EVP_PKEY_derive_set_peer(ctx, peerkey) != 1 ||
+-	    EVP_PKEY_derive(ctx, NULL, &secret_len) != 1) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "OpenSSL: EVP_PKEY_derive(1) failed: %s",
+-			   ERR_error_string(ERR_get_error(), NULL));
+-		goto fail;
+-	}
+-
+-	secret = wpabuf_alloc(secret_len);
+-	if (!secret)
+-		goto fail;
+-	if (EVP_PKEY_derive(ctx, wpabuf_put(secret, secret_len),
+-			    &secret_len) != 1) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "OpenSSL: EVP_PKEY_derive(2) failed: %s",
+-			   ERR_error_string(ERR_get_error(), NULL));
+-		goto fail;
+-	}
+-
+-done:
+-	BN_free(x);
+-	BN_free(y);
+-	EC_KEY_free(eckey);
+-	EC_POINT_free(pub);
+-	EVP_PKEY_CTX_free(ctx);
 +	EC_POINT_clear_free(pub);
 +	BN_CTX_free(bnctx);
 +	OPENSSL_free(pub_octets);
 +	EVP_PKEY_CTX_free(fromdata_ctx);
 +	EVP_PKEY_CTX_free(derive_ctx);
-+	EVP_PKEY_free(peerkey);
+ 	EVP_PKEY_free(peerkey);
 +	if (ret < 0) {
 +		wpabuf_clear_free(secret);
 +		secret = NULL;
 +	}
-+	return secret;
+ 	return secret;
+-fail:
+-	wpabuf_free(secret);
+-	secret = NULL;
+-	goto done;
+-}
+-
 +}
  
  void crypto_ecdh_deinit(struct crypto_ecdh *ecdh)
