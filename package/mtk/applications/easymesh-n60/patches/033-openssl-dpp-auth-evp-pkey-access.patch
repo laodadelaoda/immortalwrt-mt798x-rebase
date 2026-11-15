@@ -63,12 +63,12 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
 +	    dpp_pkey_get_group(auth->peer_bi->pubkey, &group) < 0 ||
 +	    dpp_pkey_get_public_point(auth->peer_bi->pubkey, group,
 +					   &BI_point) < 0 ||
-+	    dpp_evp_pkey_get_group(auth->own_bi->pubkey, &own_group) < 0 ||
++	    dpp_pkey_get_group(auth->own_bi->pubkey, &own_group) < 0 ||
 +	    EC_GROUP_cmp(group, own_group, NULL) != 0)
 +		goto fail;
 +	EC_GROUP_free(own_group);
 +	own_group = NULL;
-+	if (dpp_evp_pkey_get_group(auth->own_protocol_key, &own_group) < 0 ||
++	if (dpp_pkey_get_group(auth->own_protocol_key, &own_group) < 0 ||
 +	    EC_GROUP_cmp(group, own_group, NULL) != 0 ||
 +	    EVP_PKEY_get_bn_param(auth->own_bi->pubkey,
 +				  OSSL_PKEY_PARAM_PRIV_KEY, &bR_bn) != 1 ||
@@ -149,10 +149,10 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
  	lx = BN_new();
 -	if (!bnctx || !lx)
 +	if (!bnctx || !lx ||
-+	    dpp_evp_pkey_get_group(auth->own_bi->pubkey, &group) < 0 ||
-+	    dpp_evp_pkey_get_public_point(auth->peer_bi->pubkey, group,
++	    dpp_pkey_get_group(auth->own_bi->pubkey, &group) < 0 ||
++	    dpp_pkey_get_public_point(auth->peer_bi->pubkey, group,
 +					   &BR_point) < 0 ||
-+	    dpp_evp_pkey_get_public_point(auth->peer_protocol_key, group,
++	    dpp_pkey_get_public_point(auth->peer_protocol_key, group,
 +					   &PR_point) < 0 ||
 +	    EVP_PKEY_get_bn_param(auth->own_bi->pubkey,
 +				  OSSL_PKEY_PARAM_PRIV_KEY, &bI_bn) != 1)
@@ -254,10 +254,10 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
 -	cI_bn = EC_KEY_get0_private_key(cI);
 -	if (!group || !cI_bn)
 +	if (!bnctx || !mx ||
-+	    dpp_evp_pkey_get_group(auth->own_connector_key, &group) < 0 ||
-+	    dpp_evp_pkey_get_public_point(auth->peer_connector_key, group,
++	    dpp_pkey_get_group(auth->own_connector_key, &group) < 0 ||
++	    dpp_pkey_get_public_point(auth->peer_connector_key, group,
 +					   &CR_point) < 0 ||
-+	    dpp_evp_pkey_get_public_point(auth->peer_protocol_key, group,
++	    dpp_pkey_get_public_point(auth->peer_protocol_key, group,
 +					   &PR_point) < 0 ||
 +	    EVP_PKEY_get_bn_param(auth->own_connector_key,
 +				  OSSL_PKEY_PARAM_PRIV_KEY, &cI_bn) != 1)
@@ -349,15 +349,15 @@ diff --git a/wappd/dpp/dpp.c b/wappd/dpp/dpp.c
 -	pR_bn = EC_KEY_get0_private_key(pR);
 -	if (!cR_bn || !pR_bn)
 +	if (!bnctx || !sum || !q || !mx ||
-+	    dpp_evp_pkey_get_group(auth->peer_connector_key, &group) < 0 ||
-+	    dpp_evp_pkey_get_public_point(auth->peer_connector_key, group,
++	    dpp_pkey_get_group(auth->peer_connector_key, &group) < 0 ||
++	    dpp_pkey_get_public_point(auth->peer_connector_key, group,
 +					   &CI_point) < 0 ||
-+	    dpp_evp_pkey_get_group(auth->own_connector_key, &own_group) < 0 ||
++	    dpp_pkey_get_group(auth->own_connector_key, &own_group) < 0 ||
 +	    EC_GROUP_cmp(group, own_group, NULL) != 0)
 +		goto fail;
 +	EC_GROUP_free(own_group);
 +	own_group = NULL;
-+	if (dpp_evp_pkey_get_group(auth->own_protocol_key, &own_group) < 0 ||
++	if (dpp_pkey_get_group(auth->own_protocol_key, &own_group) < 0 ||
 +	    EC_GROUP_cmp(group, own_group, NULL) != 0 ||
 +	    EVP_PKEY_get_bn_param(auth->own_connector_key,
 +				  OSSL_PKEY_PARAM_PRIV_KEY, &cR_bn) != 1 ||
