@@ -138,7 +138,7 @@ jobs:
           test -d "$PATCH_DIR"
           test -f "$PATCH_DIR/999-eth-91-mtk_eth_soc-add-mtkhnat-driver-support.patch"
           test -f "$PATCH_DIR/999-eth-93-mtk_eth_soc-add-internal-SER-notify-event.patch"
-          test ! -e "$PATCH_DIR/999-eth-90-mtk_eth_soc-support-proprietary-debugfs.patch"
+          test -f "$PATCH_DIR/999-eth-90-mtk_eth_soc-support-proprietary-debugfs.patch"
           test ! -e "$PATCH_DIR/999-hnat-13-netdevice-add-ndo_flow_offload_stats64_add-for-offload-stats-correction.patch"
           COUNT="$(find "$PATCH_DIR" -maxdepth 1 -type f -name '*.patch' | wc -l)"
           test "$COUNT" -gt 0
