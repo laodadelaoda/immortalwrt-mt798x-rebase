@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - n60pro-mtk-closed-driver
+      - n60pro-25.12-upstream-base
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - n60pro-mtk-closed-driver
+      - n60pro-25.12-upstream-base
   workflow_dispatch:
     inputs:
       run_full:
@@ -128,35 +130,23 @@ jobs:
           grep -Fx 'CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_netcore_n60-pro=y' .config
           grep -Fx 'CONFIG_PACKAGE_easymesh-n60=y' .config
 
-      - name: Apply the N60 Pro MT7986A kernel patch scope
+      - name: Verify complete Linux 6.12.116 native patch stack
         shell: bash
         run: |
           set -Eeuo pipefail
-          SOURCE_PATCH_DIR="target/linux/mediatek/patches-6.12"
-          SCOPED_PATCH_DIR="$RUNNER_TEMP/n60pro-kernel-patches-6.12"
-          STAGED_PATCH_DIR="$RUNNER_TEMP/n60pro-kernel-patches-staged"
-          ORIGINAL_PATCH_DIR="$RUNNER_TEMP/n60pro-kernel-patches-original"
-          test -d "$SOURCE_PATCH_DIR"
-          python3 .github/scripts/n60pro-kernel-patch-scope.py \
-            --source "$SOURCE_PATCH_DIR" \
-            --output "$SCOPED_PATCH_DIR"
-
-          echo "N60 Pro scoped kernel patches: $(find "$SCOPED_PATCH_DIR" -maxdepth 1 -type f -name '*.patch' | wc -l)"
-          sha256sum "$SCOPED_PATCH_DIR/scope-manifest.json"
-
-          # Resolve the generated absolute symlinks before replacing the native
-          # OpenWrt patch directory. Keep every non-patch file unchanged.
-          cp -a "$SOURCE_PATCH_DIR" "$STAGED_PATCH_DIR"
-          find "$STAGED_PATCH_DIR" -maxdepth 1 -type f -name '*.patch' -delete
-          compgen -G "$SCOPED_PATCH_DIR/*.patch" >/dev/null
-          cp -L "$SCOPED_PATCH_DIR"/*.patch "$STAGED_PATCH_DIR"/
-          test "$(find "$STAGED_PATCH_DIR" -maxdepth 1 -type f -name '*.patch' | wc -l)" -gt 0
-          mv "$SOURCE_PATCH_DIR" "$ORIGINAL_PATCH_DIR"
-          mv "$STAGED_PATCH_DIR" "$SOURCE_PATCH_DIR"
-          echo "N60 Pro native kernel patch scope installed."
-          echo "Source patch count: $(find "$ORIGINAL_PATCH_DIR" -maxdepth 1 -type f -name '*.patch' | wc -l)"
-          echo "Applied patch count: $(find "$SOURCE_PATCH_DIR" -maxdepth 1 -type f -name '*.patch' | wc -l)"
-          cat "$SCOPED_PATCH_DIR/scope-manifest.sha256"
+          PATCH_DIR="target/linux/mediatek/patches-6.12"
+          test -d "$PATCH_DIR"
+          test -f "$PATCH_DIR/999-eth-91-mtk_eth_soc-add-mtkhnat-driver-support.patch"
+          test -f "$PATCH_DIR/999-eth-93-mtk_eth_soc-add-internal-SER-notify-event.patch"
+          test ! -e "$PATCH_DIR/999-eth-90-mtk_eth_soc-support-proprietary-debugfs.patch"
+          test ! -e "$PATCH_DIR/999-hnat-13-netdevice-add-ndo_flow_offload_stats64_add-for-offload-stats-correction.patch"
+          COUNT="$(find "$PATCH_DIR" -maxdepth 1 -type f -name '*.patch' | wc -l)"
+          test "$COUNT" -gt 0
+          echo "All native Linux 6.12 patch files will be applied; no scope filtering."
+          echo "Patch count: $COUNT"
+          sha256sum "$PATCH_DIR"/*.patch > "$RUNNER_TEMP/n60pro-kernel-patches.sha256"
+          sha256sum "$RUNNER_TEMP/n60pro-kernel-patches.sha256"
+          cat "$RUNNER_TEMP/n60pro-kernel-patches.sha256"
 
       - name: Download package sources
         shell: bash
