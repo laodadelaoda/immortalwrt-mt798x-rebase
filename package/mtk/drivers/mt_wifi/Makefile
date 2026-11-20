@@ -317,6 +317,10 @@ define KernelPackage/mt_wifi/config
 endef
 
 define Build/Compile
+	@test -s "$(KERNEL_BUILD_DIR)/symvers/warp.symvers" || { \
+		echo "ERROR: WARP symvers export is missing; mt_wifi warp_proxy dependency is incomplete."; \
+		exit 1; \
+	}
 	@if [ "$(CONFIG_MTK_CONNINFRA_APSOC)" = "y" ]; then \
 		test -s "$(KERNEL_BUILD_DIR)/symvers/conninfra.symvers" || { \
 			echo "ERROR: conninfra symvers export is missing; build dependency closure is incomplete."; \
@@ -327,7 +331,7 @@ define Build/Compile
 		$(KERNEL_MAKE_FLAGS) \
 		M="$(PKG_BUILD_DIR)/mt_wifi_ap" \
 		LINUX_DIR="$(KERNEL_BUILD_DIR)" \
-		$(if $(CONFIG_MTK_CONNINFRA_APSOC),KBUILD_EXTRA_SYMBOLS="$(KERNEL_BUILD_DIR)/symvers/conninfra.symvers") \
+		KBUILD_EXTRA_SYMBOLS="$(KERNEL_BUILD_DIR)/symvers/warp.symvers $(if $(CONFIG_MTK_CONNINFRA_APSOC),$(KERNEL_BUILD_DIR)/symvers/conninfra.symvers)" \
 		$(foreach c, $(PKG_KCONFIG),$(if $(CONFIG_MTK_$c),CONFIG_$(c)=$(CONFIG_MTK_$(c)))) \
 		modules
 endef
