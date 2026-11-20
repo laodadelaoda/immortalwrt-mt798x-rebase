@@ -1,0 +1,239 @@
+name: Canonicalize EasyMesh source-file patches
+
+on:
+  # This workflow rewrites and pushes canonical patches; keep it explicit so
+  # it cannot race the Full build or mutate the revision being built.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: n60pro-easymesh-canonicalize-three-patches
+  cancel-in-progress: false
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: n60pro-mtk-closed-driver
+          fetch-depth: 0
+
+      - name: Rebuild each patch from its own Lock position, then replay the complete Prepare sequence
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export LC_ALL=C
+          REPO="$GITHUB_WORKSPACE"
+          PKG="$REPO/package/mtk/applications/easymesh-n60"
+          LOCK="$REPO/package/mtk/vendor-sources.lock.json"
+          ROOT="$RUNNER_TEMP/easymesh-canonicalize"
+          INPUT="$ROOT/downloads"
+          SRC="$ROOT/source"
+          VERIFY="$ROOT/verify"
+          mkdir -p "$INPUT" "$SRC"
+
+          python3 - "$LOCK" "$INPUT" <<'PY'
+          import hashlib, json, subprocess, sys
+          from pathlib import Path
+          lock_path, download_dir = map(Path, sys.argv[1:])
+          lock = json.loads(lock_path.read_text())
+          wanted = {"wappd", "mapd", "1905daemon", "libmapd"}
+          sources = {x["id"]: x for x in lock["sources"] if x["id"] in wanted}
+          if set(sources) != wanted:
+              raise SystemExit(f"Lock source set mismatch: {sorted(sources)}")
+          for ident in sorted(wanted):
+              item = sources[ident]
+              archive = download_dir / item["archive"]
+              subprocess.run(["curl", "--fail", "--silent", "--show-error", "--location",
+                              "--retry", "3", "--retry-all-errors", item["url"], "-o", str(archive)],
+                             check=True)
+              digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+              if digest != item["sha256"]:
+                  raise SystemExit(f"FAIL: Lock SHA256 mismatch for {ident}: {digest}")
+              print(f"PASS: {ident} archive SHA256 {digest}")
+          PY
+
+          python3 "$PKG/scripts/n60-vendor-source-transforms.py" verify-lock "$REPO" --downloads "$INPUT"
+
+          python3 - "$LOCK" "$INPUT" "$SRC" <<'PY'
+          import json, subprocess, sys
+          from pathlib import Path
+          lock_path, download_dir, source_dir = map(Path, sys.argv[1:])
+          lock = json.loads(lock_path.read_text())
+          wanted = {"wappd", "mapd", "1905daemon", "libmapd"}
+          for item in lock["sources"]:
+              if item["id"] not in wanted:
+                  continue
+              subprocess.run(["tar", "-xjf", str(download_dir / item["archive"]),
+                              "-C", str(source_dir)], check=True)
+              root = source_dir / item["extract_root"]
+              if not root.is_dir():
+                  raise SystemExit(f"FAIL: missing Lock extract_root {item['extract_root']}")
+          PY
+
+          python3 - "$REPO" "$PKG" "$SRC" "$VERIFY" <<'PY'
+          import difflib, hashlib, json, re, shutil, subprocess, sys
+          from pathlib import Path
+
+          repo, pkg, src, verify = map(Path, sys.argv[1:])
+          lock_path = repo / "package/mtk/vendor-sources.lock.json"
+          lock = json.loads(lock_path.read_text())
+          patch_dir = pkg / "patches"
+          lock_tool = pkg / "scripts/n60-vendor-lock.py"
+          transform_tool = pkg / "scripts/n60-vendor-source-transforms.py"
+          targets = {
+              "002-dpp-parser-safety.patch": "wappd/common/main.c",
+              "002-map-1905-config-safety.patch": "wappd/map/map_1905.c",
+              "011-1905daemon-file-io-source.patch": "1905daemon/src/file_io.c",
+          }
+          def command(args, cwd=None):
+              p = subprocess.run(args, cwd=cwd, text=True, stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT)
+              if p.stdout:
+                  print(p.stdout, end="")
+              if p.returncode:
+                  raise SystemExit(f"FAIL: command returned {p.returncode}: {' '.join(map(str,args))}")
+              return p.stdout
+
+          def order(phase):
+              out = command(["python3", str(lock_tool), "patch-order", "--repo",
+                             str(repo), "--set", "easymesh", "--phase", phase], cwd=pkg)
+              names = [x.strip() for x in out.splitlines() if x.strip()]
+              if not names:
+                  raise SystemExit(f"FAIL: empty Lock {phase} patch order")
+              return names
+
+          def patch_paths(path):
+              lines = path.read_text(encoding="utf-8").splitlines()
+              old = []
+              new = []
+              for line in lines:
+                  if line.startswith("--- a/"):
+                      old.append(line[6:].split("\t")[0])
+                  elif line == "--- /dev/null":
+                      old.append("/dev/null")
+                  elif line.startswith("+++ b/"):
+                      new.append(line[6:].split("\t")[0])
+                  elif line == "+++ /dev/null":
+                      new.append("/dev/null")
+              changed = {x for x in old + new if x != "/dev/null"}
+              if not old or len(old) != len(new) or len(changed) != 1:
+                  raise SystemExit(f"FAIL: malformed or non-file-scoped patch {path.name}: {old} -> {new}")
+              return changed
+
+          def apply_one(name, root, allow_offset=False):
+              patch_file = patch_dir / name
+              if not patch_file.is_file():
+                  raise SystemExit(f"FAIL: missing locked patch {name}")
+              paths = patch_paths(patch_file)
+              log = command(["patch", "--verbose", "--batch", "--forward", "--fuzz=0",
+                             "-p1", "-d", str(root)], cwd=pkg) if False else None
+              proc = subprocess.run(["patch", "--verbose", "--batch", "--forward", "--fuzz=0",
+                                     "-p1", "-d", str(root)], input=patch_file.read_bytes(),
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+              output = proc.stdout.decode("utf-8", errors="replace")
+              print(output, end="")
+              if proc.returncode:
+                  raise SystemExit(f"FAIL: patch replay failed: {name}")
+              expected = sum(1 for x in patch_file.read_text(encoding="utf-8").splitlines()
+                             if x.startswith("@@ "))
+              applied = len(re.findall(r"Hunk #\d+ succeeded", output))
+              if applied != expected:
+                  raise SystemExit(f"FAIL: {name} applied {applied}/{expected} hunks")
+              if re.search(r"with fuzz [1-9]\d*", output, re.I):
+                  raise SystemExit(f"FAIL: fuzz used while applying {name}")
+              if not allow_offset and re.search(r"\(offset [+-]?[1-9]\d* lines?\)", output):
+                  raise SystemExit(f"FAIL: non-zero offset while applying {name}")
+              print(f"PASS: {name}: {applied} hunks; fuzz=0; " +
+                    ("initial source-position offset normalized" if allow_offset else "offset=0"))
+              return paths
+
+          def normalize(root):
+              command(["python3", str(transform_tool), "normalize", str(root)], cwd=pkg)
+
+          def post_normalize(root):
+              for name in order("post_normalize"):
+                  suffix = command(["python3", str(lock_tool), "patch-root", "--repo",
+                                    str(repo), "--set", "easymesh", "--phase",
+                                    "post_normalize", "--name", name], cwd=pkg).strip()
+                  patch_root = root / suffix if suffix else root
+                  apply_one(name, patch_root, allow_offset=False)
+
+          def finalize(root):
+              command(["python3", str(transform_tool), "finalize", str(root)], cwd=pkg)
+
+          pristine = repo / "unused-pristine-placeholder"
+          shutil.copytree(src, verify.parent / "pristine")
+          pristine = verify.parent / "pristine"
+
+          app_order = order("application")
+          seen_targets = set()
+          for name in app_order:
+              if name in targets:
+                  rel = targets[name]
+                  patch_file = patch_dir / name
+                  paths = patch_paths(patch_file)
+                  if paths != {rel}:
+                      raise SystemExit(f"FAIL: {name} must modify only {rel}, found {sorted(paths)}")
+                  before = (src / rel).read_bytes()
+                  apply_one(name, src, allow_offset=True)
+                  after = (src / rel).read_bytes()
+                  if before == after:
+                      raise SystemExit(f"FAIL: target patch made no change: {name}")
+                  diff = "".join(difflib.unified_diff(
+                      before.decode("utf-8").splitlines(keepends=True),
+                      after.decode("utf-8").splitlines(keepends=True),
+                      fromfile="a/" + rel, tofile="b/" + rel, n=3, lineterm="\n"))
+                  if not diff:
+                      raise SystemExit(f"FAIL: empty canonical diff for {name}")
+                  patch_file.write_text(diff, encoding="utf-8", newline="")
+                  lines = diff.splitlines()
+                  hunks = [x for x in lines if x.startswith("@@ ")]
+                  old_positions = [int(re.match(r"@@ -(\d+)", x).group(1)) for x in hunks]
+                  new_positions = [int(re.match(r"@@ -\d+(?:,\d+)? \+(\d+)", x).group(1)) for x in hunks]
+                  if old_positions != sorted(old_positions) or new_positions != sorted(new_positions):
+                      raise SystemExit(f"FAIL: regenerated hunks not source-ordered: {name}")
+                  if patch_paths(patch_file) != {rel}:
+                      raise SystemExit(f"FAIL: regenerated patch changed file scope: {name}")
+                  print(f"REGENERATED: {name}; source={rel}; hunks={len(hunks)}; sha256={hashlib.sha256(diff.encode()).hexdigest()}")
+                  seen_targets.add(name)
+              else:
+                  apply_one(name, src, allow_offset=False)
+          if seen_targets != set(targets):
+              raise SystemExit(f"FAIL: target patches absent from Lock order: {sorted(set(targets)-seen_targets)}")
+
+          normalize(src)
+          post_normalize(src)
+          finalize(src)
+
+          # Independent second replay: all three regenerated diffs must apply at their
+          # actual Lock positions with no fuzz, no offset, no reject, and identical output.
+          shutil.rmtree(verify, ignore_errors=True)
+          shutil.copytree(pristine, verify)
+          for name in app_order:
+              apply_one(name, verify, allow_offset=False)
+          normalize(verify)
+          post_normalize(verify)
+          finalize(verify)
+
+          comparison = subprocess.run(["diff", "-qr", str(src), str(verify)],
+                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+          if comparison.returncode:
+              print(comparison.stdout)
+              raise SystemExit("FAIL: full Prepare replay differs from regenerated working tree")
+          print("PASS: complete Lock application + Normalize + post-normalize + Finalize replay is byte-identical")
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package/mtk/applications/easymesh-n60/patches/002-dpp-parser-safety.patch package/mtk/applications/easymesh-n60/patches/002-map-1905-config-safety.patch package/mtk/applications/easymesh-n60/patches/011-1905daemon-file-io-source.patch
+          if git diff --cached --quiet; then
+            echo "PASS: all three patches already match their stage-specific source deltas"
+            exit 0
+          fi
+          git commit -m "fix(n60pro): canonicalize three stage-specific file patches"
+          git push origin HEAD:n60pro-mtk-closed-driver

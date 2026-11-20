@@ -1,0 +1,21 @@
+From: OpenAI
+Subject: [PATCH] easymesh: make MLD capability typedef explicit
+
+Keep the packed MLD capability layout unchanged while declaring the
+MLD_CAP_PARM and PMLD_CAP_PARM aliases explicitly. This changes only the
+source-level typedef spelling and preserves the structure layout.
+
+--- a/mapd/src/clientDB/client_db.h
++++ b/mapd/src/clientDB/client_db.h
+@@ -416,7 +416,10 @@
+ 	u16   AarSupport:1;
+ 	u16   rsv:3;
+ #endif /* CFG_BIG_ENDIAN */
+-} MLD_CAP_PARM, *PMLD_CAP_PARM;
++};
++
++typedef struct _MLD_CAP_PARM MLD_CAP_PARM;
++typedef struct _MLD_CAP_PARM *PMLD_CAP_PARM;
+ 
+ struct client {
+ 	struct dl_list sta_seen_entry;

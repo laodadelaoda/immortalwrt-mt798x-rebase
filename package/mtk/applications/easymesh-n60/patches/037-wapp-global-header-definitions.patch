@@ -1,0 +1,11 @@
+--- a/wappd/include/ieee80211u_defs.h
++++ b/wappd/include/ieee80211u_defs.h
+@@ -38,7 +38,7 @@
+ #ifndef __IEEE80211U_DEFS_H__
+ #define __IEEE80211U_DEFS_H__
+ 
+-struct wifi_app *wapp;
++extern struct wifi_app *wapp;
+ 
+ int wapp_send_anqp_req(struct wifi_app *wapp, const char *iface, 
+      const char *peer_sta_addr, 

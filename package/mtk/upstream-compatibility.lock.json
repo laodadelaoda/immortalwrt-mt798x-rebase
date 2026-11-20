@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "upstream_repository": "https://github.com/chasey-dev/immortalwrt-mt798x-rebase.git",
+  "upstream_branch": "25.12",
+  "last_integrated_upstream_sha": "9f397975c7b47ce6986a6e39529d2f72fd5c729d",
+  "policy": "Do not advance baseline until upstream changes are integrated and all required compatibility evidence is reviewed."
+}

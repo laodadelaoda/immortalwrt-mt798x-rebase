@@ -1,0 +1,81 @@
+--- a/mapd/src/dot11_if/wapp_if.c
++++ b/mapd/src/dot11_if/wapp_if.c
+@@ -52,25 +52,62 @@
+ extern u8 ZERO_MAC_ADDR[ETH_ALEN];
+ 
+ struct wapp_usr_intf_ctrl *ctrl_conn;
++struct wapp_usr_intf_ctrl *wapp_ctrl;
+ 
+ static int wapp_send_incr_conf(struct wapp_usr_intf_ctrl *ctrl, char incr_decr);
+ static int wapp_send_buf_incr_evt(struct mapd_global *global, int buf_len);
+ 
++#ifdef MAP_R2
++/* Validate the variable-length association-status payload before parsing it. */
++static int wapp_assoc_status_notif_valid(const struct msg *event)
++{
++	const unsigned char *buffer;
++	const struct assoc_notification *assoc;
++	size_t offset;
++	unsigned int i;
++
++	if (!event || event->length < sizeof(*assoc))
++		return 0;
++
++	buffer = (const unsigned char *)event->buffer;
++	assoc = (const struct assoc_notification *)buffer;
++	offset = sizeof(*assoc);
++
++	for (i = 0; i < assoc->notification_tlv_num; i++) {
++		const struct notification_tlv *tlv;
++		size_t status_bytes;
++
++		if (offset > event->length ||
++		    event->length - offset < sizeof(*tlv))
++			return 0;
++
++		tlv = (const struct notification_tlv *)(buffer + offset);
++		offset += sizeof(*tlv);
++		status_bytes = (size_t)tlv->bssid_num * sizeof(struct status);
++		if (status_bytes > event->length - offset)
++			return 0;
++		offset += status_bytes;
++	}
++
++	return offset == event->length;
++}
++#endif /* MAP_R2 */
++
+ 
+ /* Process events from WAPP, which could be :-
+  * 1)Solicited WAPP Responses to commands from 1905D, proxied by MAPD
+  *    --wapp_event->type == type == non_zero; from == 1
+  *    --Pass on to 1905D, and sniff specific responses
+  * 2)Solicited WAPP Responses to commands from MAPD //Don't pass on to 1905D.
+  *    --wapp_event->type == type = non_zero; from == 0
+  *    --Consume
+  * 3)Commands to 1905D from WAPP
+  *    --type == non_zero; type != wapp_event->type;  wapp_event->type == {COMMANDS}; from = -1
+  *    --type = 0; wapp_event->type == {COMMANDS}; from = -1
+  *    --Send to 1905D; Wait for Response; Relay it to WAPP
+  * 4)Unsolicited messages from WAPP // Pass on to 1905D, sniff specific messages.
+  *    --type == non_zero; type != wapp_event->type;  wapp_event->type == {RESPONSES}; from = -1
+  *    --type = 0; wapp_event->type == {Responses}; from = -1
+  *    --Pass on to 1905D, and sniff specific responses
+  * */
+ 
+@@ -3114,7 +3151,14 @@
+ #endif /*MAP_R3_DE*/
+ #ifdef MAP_R2
+ 		case WAPP_ASSOC_STATUS_NOTIFICATION:
+-			topo_srv_parse_wapp_assoc_status_notif(global,(struct assoc_notification *)wapp_event->buffer);
++			if (!wapp_assoc_status_notif_valid(wapp_event)) {
++				err("invalid WAPP association status notification length");
++				os_free(wapp_event);
++				break;
++			}
++			topo_srv_parse_wapp_assoc_status_notif(global,
++					(struct assoc_notification *)wapp_event->buffer,
++					(unsigned short)wapp_event->length);
+ 			if (wapp_event != NULL) {
+ 				os_free(wapp_event);
+ 			}

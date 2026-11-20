@@ -17,6 +17,7 @@ define Package/mtkhqos_util
   SECTION:=MTK Properties
   CATEGORY:=MTK Properties
   TITLE:=mtk hqos utility
+  DEPENDS:=+kmod-mediatek-hnat
   SUBMENU:=Applications
 endef
 

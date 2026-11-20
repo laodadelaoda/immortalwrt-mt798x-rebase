@@ -1,0 +1,8 @@
+--- a/mapd/src/ch_planning/ch_planning_r2.c
++++ b/mapd/src/ch_planning/ch_planning_r2.c
+@@ -2742 +2742 @@
+-	u8 current_rank = 1, is_current_ch_max = 0;
++	u8 current_rank = 1;
+@@ -2786 +2786 @@
+-	is_current_ch_max = ch_planning_min_score_margin_check(own_dev, ch_info);
++	ch_planning_min_score_margin_check(own_dev, ch_info);

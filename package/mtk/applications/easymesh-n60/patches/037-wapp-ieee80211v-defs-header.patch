@@ -1,0 +1,13 @@
+--- a/wappd/include/ieee80211v_defs.h
++++ b/wappd/include/ieee80211v_defs.h
+@@ -42,8 +42,8 @@
+ #define BSS_TRANSITION_CANDIDATE_PREF 0x03
+ #define SKIP_EID_LEN 2
+ 
+-struct wifi_app *wapp;
+-struct wapp_dev *wdev;
++extern struct wifi_app *wapp;
++extern struct wapp_dev *wdev;
+ 
+ enum wnm_ie_eid {
+ 	IE_TIME_ADVERTISEMENT = 69,

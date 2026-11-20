@@ -1,0 +1,70 @@
+--- a/bndstrg_plus/driver_wext.c
++++ b/bndstrg_plus/driver_wext.c
+@@ -116,16 +116,19 @@
+     iwr.u.data.flags = oid;
+     iwr.u.data.flags |= OID_GET_SET_TOGGLE;
+ 
+-    if (data)
++    if (len && !buf)
++        return -1;
++    if (data && len) {
+         os_memcpy(buf, data, len);
++    }
+ 
+-	if (buf) {
+-    	iwr.u.data.pointer = (caddr_t)buf;    
+-    	iwr.u.data.length = len;
+-	} else {
+-    	iwr.u.data.pointer = NULL;    
+-    	iwr.u.data.length = 0;
+-	}
++    if (buf) {
++        iwr.u.data.pointer = (caddr_t)buf;
++        iwr.u.data.length = len;
++    } else {
++        iwr.u.data.pointer = NULL;
++        iwr.u.data.length = 0;
++    }
+ 
+     if (ioctl(drv_data->ioctl_sock, RT_PRIV_IOCTL, &iwr) < 0) {
+         DBGPRINT(DEBUG_TRACE, "%s oid=0x%x len (%zd) failed\n",ifname, oid, len);
+--- a/bndstrg_plus/main.c
++++ b/bndstrg_plus/main.c
+@@ -158,8 +158,9 @@
+ {
+ 
+ 	int ret;
+-	int opmode;
+-	int drv_mode;
++	/* N60 Pro is dual-band; the WEXT backend currently ignores drv_mode. */
++	int opmode = OP_DUALBAND;
++	int drv_mode = 0;
+ 	int debug_level;
+ 	int version = 2;
+ 	char filename[256] = {0}; 
+--- a/bndstrg_plus/bndstrg.h
++++ b/bndstrg_plus/bndstrg.h
+@@ -657,6 +657,5 @@
+ struct bnd_msg_cli_probe {
+ 	u8 bAllowStaConnectInHt;
+-	u8 bIosCapable;          /* For IOS immediately connect */
+ 	u8	bVHTCapable;
+ 	u8	Nss;
+ 	signed char	Rssi[4];
+--- a/bndstrg_plus/bndstrg.c
++++ b/bndstrg_plus/bndstrg.c
+@@ -6441,14 +6441,6 @@
+ 		entry->Nss = Nss;
+ 	}
+ 
+-	/* For IOS immediately connect */
+-	if (cli_probe->bIosCapable == TRUE && 
+-		entry->Operation_steered == FALSE && entry->bConnStatus == FALSE)
+-	{
+-		//if(!IS_BND_STRG_DUAL_BAND_CLIENT(entry->Control_Flags))
+-		//	entry->bAllowStaConnectImmediately = TRUE;
+-	}
+-
+ 	return;
+ }
+ 

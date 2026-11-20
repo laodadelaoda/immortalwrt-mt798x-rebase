@@ -1,0 +1,37 @@
+--- a/1905daemon/src/security_engine.c
++++ b/1905daemon/src/security_engine.c
+@@ -132,9 +132,13 @@
+ 
+ struct gik_pool_entry *gik_pool_entry_lookup(unsigned char key_identifier)
+ {
++	struct dl_list *pos;
+ 	struct gik_pool_entry *entry = NULL;
+ 
+-	dl_list_for_each(entry, &gik_pool_list, struct gik_pool_entry, entry) {
++	for (pos = gik_pool_list.next;
++	     pos != &gik_pool_list;
++	     pos = pos->next) {
++		entry = dl_list_entry(pos, struct gik_pool_entry, entry);
+ 		if (entry->key_identifier == key_identifier)
+ 			return entry;
+ 	}
+@@ -1106,6 +1110,7 @@
+ {
+ 	int i = 0, j = 0, k = 0;
+ 	struct security_entry *sec_entry = NULL;
++	struct dl_list *pool_pos;
+ 	struct gik_pool_entry *pool_entry = NULL;
+ 	struct gik_peer_entry *peer_entry = NULL;
+ 	char *pos = reply;
+@@ -1274,7 +1279,10 @@
+ 		return -1;
+ 	}
+ 	total_len += len;
+-	dl_list_for_each(pool_entry, &gik_pool_list, struct gik_pool_entry, entry) {
++	for (pool_pos = gik_pool_list.next;
++	     pool_pos != &gik_pool_list;
++	     pool_pos = pool_pos->next) {
++		pool_entry = dl_list_entry(pool_pos, struct gik_pool_entry, entry);
+ 		len = os_snprintf(pos + total_len, reply_size - total_len,
+ 						"\t[key_identifier]	 %d\n", pool_entry->key_identifier);
+ 		if (os_snprintf_error(reply_size - total_len, len)) {

@@ -1,0 +1,1001 @@
+--- a/wappd/dpp/dpp_wdev.c
++++ b/wappd/dpp/dpp_wdev.c
+@@ -43,7 +43,7 @@
+ static void dpp_fetch_psk_akm_param(struct wapp_dev *wdev, struct dpp_config_obj *conf, struct kvc_context *dat_ctx);
+ 
+ #else
+-static void dpp_fetch_dpp_akm_param(struct wapp_dev *wdev, struct dpp_authentication *auth,
++static int dpp_fetch_dpp_akm_param(struct wapp_dev *wdev, struct dpp_authentication *auth,
+ 				    struct kvc_context *dat_ctx);
+ static void dpp_fetch_psk_akm_param(struct wapp_dev *wdev, struct dpp_authentication *auth,
+ 				    struct kvc_context *dat_ctx);
+@@ -524,52 +524,57 @@
+ 
+ int wapp_dpp_get_conf_frm_file(struct wifi_app *wapp, const char *str)
+ {
+-	int ret = 0;
+-	char param[64], value[64];
++	int ret;
++	char param[64] = {0}, value[64] = {0};
++
++	if (!wapp || !wapp->map || !str)
++		return 0;
+ 	ret = os_snprintf(param, sizeof(param), "_%s", str);
+-	if (os_snprintf_error(sizeof(param), ret))
++	if (os_snprintf_error(sizeof(param), ret)) {
+ 		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"%s %d os_snprintf error\n", __func__, __LINE__);
+-
+-	ret = 0;
+-	get_dpp_parameters(wapp->map, param, value, sizeof(value));
+-	if(os_strcmp(value,"1") == 0) {
++		return 0;
++	}
++	if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
++		return 0;
++	if (os_strcmp(value, "1") == 0) {
+ 		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"found config %s\n", str);
+ 		return 1;
+ 	}
+-
+-	return ret;
++	return 0;
+ }
+ 
+ void wapp_dpp_get_uri_frm_file(struct wifi_app *wapp)
+ {
+-	char qr_param[20] = "0";
+-	char value[150] = "0";
+-	char param_str[15] = "agt_qr_code";
+-	char uri_num = 1;
+-	int uri_cnt = 0;
++	char qr_param[20] = {0};
++	char value[150] = {0};
++	unsigned int uri_num, uri_cnt = 0;
+ 	int ret;
+ 
+-	/* Get QR code save conunt for */
+-	get_dpp_parameters(wapp->map, "qr_count", value, sizeof(value));
+-	uri_cnt = atoi(value);
+-	if(uri_cnt != 0) {
+-		/* Resetting the flag so the same QR code is not saved */
++	if (!wapp || !wapp->map || !wapp->dpp)
++		return;
++	if (dpp_read_qr_count(wapp, &uri_cnt) < 0) {
++		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"invalid qr_count; refusing URI load\n");
+ 		wapp->dpp->qr_cmd = 0;
+-		for(uri_num = 1; uri_num <= uri_cnt; uri_num++) {
+-			os_memset(qr_param, 0, 20);
+-			os_memset(value, 0, 150);
+-			ret = os_snprintf(qr_param, sizeof(qr_param), "%s_%u", param_str, uri_num);
+-			if (os_snprintf_error(sizeof(qr_param), ret)) {
+-				DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"%s %d os_snprintf error\n", __func__, __LINE__);
+-				continue;
+-			}
+-
+-			get_dpp_parameters(wapp->map, qr_param, value, sizeof(value));
+-			if(!is_str_null(value))
+-				wapp_dpp_qr_code(wapp, (const char *)value);
+-		}
+-		wapp->dpp->qr_cmd = 1;
+-	}
++		return;
++	}
++	wapp->dpp->qr_cmd = 0;
++	if (!uri_cnt)
++		return;
++
++	/* Keep the command disabled unless every configured entry is readable. */
++	for (uri_num = 1; uri_num <= uri_cnt; uri_num++) {
++		ret = os_snprintf(qr_param, sizeof(qr_param), "agt_qr_code_%u", uri_num);
++		if (os_snprintf_error(sizeof(qr_param), ret))
++			return;
++		ret = dpp_read_qr_parameter(wapp, qr_param, value, sizeof(value));
++		if (ret != 0) {
++			DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"failed to read QR entry %u\n", uri_num);
++			return;
++		}
++		if (!is_str_null(value))
++			wapp_dpp_qr_code(wapp, (const char *)value);
++	}
++	wapp->dpp->qr_cmd = 1;
+ }
+ 
+ int wapp_dpp_set_onboarding_type(struct wifi_app *wapp, u8 flag)
+@@ -1971,63 +1976,8 @@
+ 	if (conf->ssid_len)
+ 		wpa_printf(MSG_INFO1, DPP_MAP_PREX DPP_EVENT_CONFOBJ_SSID "%s",
+ 			os_ssid_txt(conf->ssid, conf->ssid_len));
+-	if (conf->connector) {
+-		/* TODO: Save the Connector and consider using a command
+-		 * to fetch the value instead of sending an event with
+-		 * it. The Connector could end up being larger than what
+-		 * most clients are ready to receive as an event
+-		 * message. */
+-		wpa_printf(MSG_DEBUG, DPP_MAP_PREX DPP_EVENT_CONNECTOR "%s",
+-			conf->connector);
+-	} else if (conf->passphrase[0]) {
+-		char hex[64 * 2 + 1];
+-		os_snprintf_hex(hex, sizeof(hex),
+-				 (const u8 *) conf->passphrase,
+-				 os_strlen(conf->passphrase));
+-		wpa_printf(MSG_INFO1, DPP_MAP_PREX DPP_EVENT_CONFOBJ_PASS "%s",
+-			hex);
+-	} else if (conf->psk_set) {
+-		char hex[PMK_LEN * 2 + 1];
+-		os_snprintf_hex(hex, sizeof(hex), conf->psk, PMK_LEN);
+-		wpa_printf(MSG_INFO1, DPP_MAP_PREX DPP_EVENT_CONFOBJ_PSK "%s",
+-			hex);
+-	}
+-	if (auth->c_sign_key) {
+-		char *hex;
+-		size_t hexlen;
+-
+-		hexlen = 2 * wpabuf_len(auth->c_sign_key) + 1;
+-		hex = os_malloc(hexlen);
+-		if (hex) {
+-			os_snprintf_hex(hex, hexlen,
+-					 wpabuf_head(auth->c_sign_key),
+-					 wpabuf_len(auth->c_sign_key));
+-			wpa_printf(MSG_DEBUG, DPP_MAP_PREX
+-				DPP_EVENT_C_SIGN_KEY "%s", hex);
+-			os_free(hex);
+-		}
+-	}
+-	if (auth->net_access_key) {
+-		char *hex;
+-		size_t hexlen;
+-
+-		hexlen = 2 * wpabuf_len(auth->net_access_key) + 1;
+-		hex = os_malloc(hexlen);
+-		if (hex) {
+-			os_snprintf_hex(hex, hexlen,
+-					 wpabuf_head(auth->net_access_key),
+-					 wpabuf_len(auth->net_access_key));
+-			if (auth->net_access_key_expiry)
+-				wpa_printf(MSG_DEBUG, DPP_MAP_PREX
+-					DPP_EVENT_NET_ACCESS_KEY "%s %lu", hex,
+-					(unsigned long)
+-					auth->net_access_key_expiry);
+-			else
+-				wpa_printf(MSG_DEBUG, DPP_MAP_PREX
+-					DPP_EVENT_NET_ACCESS_KEY "%s", hex);
+-			os_free(hex);
+-		}
+-	}
++	/* Credentials are intentionally excluded from diagnostic logs. */
++
+ #ifdef MAP_R3 //Not saving for MAP_R3
+ 	/* Saving the configuration here */
+ 	if (wapp->map->TurnKeyEnable == 1)
+@@ -2047,82 +1997,8 @@
+ 	if (auth->ssid_len)
+ 		wpa_printf(MSG_INFO1, DPP_MAP_PREX DPP_EVENT_CONFOBJ_SSID "%s",
+ 			os_ssid_txt(auth->ssid, auth->ssid_len));
+-	if (auth->connector) {
+-		/* TODO: Save the Connector and consider using a command
+-		 * to fetch the value instead of sending an event with
+-		 * it. The Connector could end up being larger than what
+-		 * most clients are ready to receive as an event
+-		 * message. */
+-		wpa_printf(MSG_INFO1, DPP_MAP_PREX DPP_EVENT_CONNECTOR "%s",
+-			auth->connector);
+-	} else if (auth->passphrase[0]) {
+-		char hex[64 * 2 + 1];
+-		os_snprintf_hex(hex, sizeof(hex),
+-				 (const u8 *) auth->passphrase,
+-				 os_strlen(auth->passphrase));
+-		wpa_printf(MSG_INFO1, DPP_MAP_PREX DPP_EVENT_CONFOBJ_PASS "%s",
+-			hex);
+-	} else if (auth->psk_set) {
+-		char hex[PMK_LEN * 2 + 1];
+-		os_snprintf_hex(hex, sizeof(hex), auth->psk, PMK_LEN);
+-		wpa_printf(MSG_INFO1, DPP_MAP_PREX DPP_EVENT_CONFOBJ_PSK "%s",
+-			hex);
+-	}
+-	if (auth->c_sign_key) {
+-		char *hex;
+-		size_t hexlen;
+-
+-		hexlen = 2 * wpabuf_len(auth->c_sign_key) + 1;
+-		hex = os_malloc(hexlen);
+-		if (hex) {
+-			os_snprintf_hex(hex, hexlen,
+-					 wpabuf_head(auth->c_sign_key),
+-					 wpabuf_len(auth->c_sign_key));
+-			wpa_printf(MSG_INFO1, DPP_MAP_PREX
+-				DPP_EVENT_C_SIGN_KEY "%s", hex);
+-			os_free(hex);
+-		}
+-	}
+-
+-#ifdef MAP_R3_RECONFIG
+-	if (auth->pp_key) {
+-		char *hex;
+-		size_t hexlen;
+-
+-		hexlen = 2 * wpabuf_len(auth->pp_key) + 1;
+-		hex = os_malloc(hexlen);
+-		if (hex) {
+-			os_snprintf_hex(hex, hexlen,
+-					 wpabuf_head(auth->pp_key),
+-					 wpabuf_len(auth->pp_key));
+-			wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-				DPP_EVENT_PP_KEY "%s", hex);
+-			os_free(hex);
+-		}
+-	}
+-#endif /* MAP_R3 */
+-
+-	if (auth->net_access_key) {
+-		char *hex;
+-		size_t hexlen;
+-
+-		hexlen = 2 * wpabuf_len(auth->net_access_key) + 1;
+-		hex = os_malloc(hexlen);
+-		if (hex) {
+-			os_snprintf_hex(hex, hexlen,
+-					 wpabuf_head(auth->net_access_key),
+-					 wpabuf_len(auth->net_access_key));
+-			if (auth->net_access_key_expiry)
+-				wpa_printf(MSG_INFO1, DPP_MAP_PREX
+-					DPP_EVENT_NET_ACCESS_KEY "%s %lu", hex,
+-					(unsigned long)
+-					auth->net_access_key_expiry);
+-			else
+-				wpa_printf(MSG_INFO1, DPP_MAP_PREX
+-					DPP_EVENT_NET_ACCESS_KEY "%s", hex);
+-			os_free(hex);
+-		}
+-	}
++	/* Credentials are intentionally excluded from diagnostic logs. */
++
+ #ifdef MAP_R3 //Not saving for MAP_R3
+ 	/* Saving the configuration here */
+ 	if (wapp->map && wapp->map->TurnKeyEnable == 1)
+@@ -2439,117 +2315,89 @@
+ void wapp_snd_bss_conn_1905(struct wifi_app *wapp, struct dpp_authentication *auth)
+ {
+ 	struct dpp_configuration *conf = NULL;
+-	struct wpabuf *msg1 = NULL;
+-	struct wpabuf *msg2 = NULL;
+-	char conf_grpid_str[20] = "MAP_GRP_ID";	
+-	size_t group_id_len;
++	struct wpabuf *msg1 = NULL, *msg2 = NULL;
++	char conf_grpid_str[20] = "MAP_GRP_ID";
++	size_t group_id_len, msg1_len, msg2_len, payload_len;
+ 	struct dpp_bss_cred *bss_cred = NULL;
+-	u16 cred_len;
+-	unsigned char * cred_buffer = NULL;
+-	unsigned char * pos = NULL;
+-	char all_zero_mac[MAC_ADDR_LEN]={0};
+-
++	u16 cred_len = 0;
++	char all_zero_mac[MAC_ADDR_LEN] = {0};
++
++	if (!wapp || !auth)
++		return;
+ 	conf = os_zalloc(sizeof(*conf));
+-	if(conf == NULL) {
++	if (!conf) {
+ 		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"conf zalloc failed\n");
+ 		return;
+ 	}
+ 
+ 	group_id_len = os_strlen(conf_grpid_str);
+ 	conf->group_id = os_zalloc(group_id_len + 1);
+-	if(!conf->group_id) {
++	if (!conf->group_id) {
+ 		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"conf group ID zalloc failed\n");
+-		os_free(conf);
+-		return;
++		goto fail;
+ 	}
+ 	os_memcpy(conf->group_id, conf_grpid_str, group_id_len);
+ 
+ 	msg1 = dpp_build_conf_obj_bss(auth, MAP_BACKHAUL_AP, conf);
+ 	msg2 = dpp_build_conf_obj_bss(auth, MAP_FRONTHAUL_AP, conf);
+-	
+-	if (msg1) {
+-		wpa_hexdump_ascii(MSG_DEBUG, DPP_MAP_PREX "DPP: first connector",
+-			wpabuf_head(msg1), wpabuf_len(msg1));
+-	} else {
+-		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"DPP: first connector msg1:NULL\n");
++	if (!msg1 || !msg2)
+ 		goto fail;
+-	}
+-
+-	if (msg2) {
+-		wpa_hexdump_ascii(MSG_DEBUG, DPP_MAP_PREX "DPP: second connector",
+-			  wpabuf_head(msg2), wpabuf_len(msg2));
+-	} else {
+-		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"DPP: second connector msg2:NULL\n");
++
++	msg1_len = wpabuf_len(msg1);
++	msg2_len = wpabuf_len(msg2);
++	if (!msg1_len || !msg2_len || msg1_len > 0xffffU || msg2_len > 0xffffU ||
++	    msg1_len > 0xffffU - msg2_len)
+ 		goto fail;
+-	}
+-
+-	cred_len = sizeof(*bss_cred) + wpabuf_len(msg1) + wpabuf_len(msg2);
++	payload_len = msg1_len + msg2_len;
++	if (sizeof(*bss_cred) > 0xffffU ||
++	    payload_len > 0xffffU - sizeof(*bss_cred))
++		goto fail;
++	cred_len = (u16)(sizeof(*bss_cred) + payload_len);
+ 
+ 	bss_cred = os_zalloc(cred_len);
+-	if(!bss_cred)
++	if (!bss_cred)
+ 		goto fail;
+ 
+-	if(auth->self_sign_auth) {
++	if (auth->self_sign_auth) {
+ 		os_memcpy(bss_cred->enrollee_mac, all_zero_mac, MAC_ADDR_LEN);
+ 		os_memcpy(bss_cred->almac, all_zero_mac, MAC_ADDR_LEN);
+-	}
+-	else {
+-		if(auth->ethernetTrigger == TRUE) {
+-			os_memcpy(bss_cred->enrollee_mac, all_zero_mac, MAC_ADDR_LEN);
+-			os_memcpy(bss_cred->almac, auth->peer_mac_addr, MAC_ADDR_LEN);
+-		}
+-		else {
+-			os_memcpy(bss_cred->enrollee_mac, auth->peer_mac_addr, MAC_ADDR_LEN);
+-			os_memcpy(bss_cred->almac, all_zero_mac, MAC_ADDR_LEN);
+-		}
+-	}
+-
+-	bss_cred->bh_connect_len = (unsigned short)wpabuf_len(msg1);
+-	bss_cred->fh_connect_len = (unsigned short)wpabuf_len(msg2); 
+-	bss_cred->payload_len = bss_cred->bh_connect_len + bss_cred->fh_connect_len;
+-
+-	cred_buffer = os_zalloc(bss_cred->payload_len);
+-	if(!cred_buffer)
+-		goto fail;
+-	
+-	pos = cred_buffer;	
+-	os_memcpy(cred_buffer, wpabuf_head(msg1), bss_cred->bh_connect_len);
+-	cred_buffer += bss_cred->bh_connect_len;
+-	os_memcpy(cred_buffer, wpabuf_head(msg2), bss_cred->fh_connect_len);
+-
+-	os_memcpy(bss_cred->payload, pos, bss_cred->payload_len);
+-
+-	hex_dump_dbg(DPP_MAP_PREX"BSS_connectors= ",(UCHAR *)bss_cred, cred_len);
+-#if 0
+-	/* Save BSS information to a file */
+-	if ((wapp->map->TurnKeyEnable == 1) && auth->self_sign_auth)
+-		dpp_save_bss_to_file(wapp, auth, bss_cred, cred_len);
+-#endif
+-	
++	} else if (auth->ethernetTrigger == TRUE) {
++		os_memcpy(bss_cred->enrollee_mac, all_zero_mac, MAC_ADDR_LEN);
++		os_memcpy(bss_cred->almac, auth->peer_mac_addr, MAC_ADDR_LEN);
++	} else {
++		os_memcpy(bss_cred->enrollee_mac, auth->peer_mac_addr, MAC_ADDR_LEN);
++		os_memcpy(bss_cred->almac, all_zero_mac, MAC_ADDR_LEN);
++	}
++
++	bss_cred->bh_connect_len = (unsigned short)msg1_len;
++	bss_cred->fh_connect_len = (unsigned short)msg2_len;
++	bss_cred->payload_len = (unsigned short)payload_len;
++	os_memcpy(bss_cred->payload, wpabuf_head(msg1), msg1_len);
++	os_memcpy(bss_cred->payload + msg1_len, wpabuf_head(msg2), msg2_len);
++
+ 	if (wapp_send_1905_msg(wapp, WAPP_SEND_BSS_CONNECTOR,
+-		cred_len, (char *)bss_cred) < 0)
++			      cred_len, (char *)bss_cred) < 0)
+ 		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"sending failed\n");
+-	wpabuf_free(msg1);
+-	wpabuf_free(msg2);
+ 
+ fail:
+-	if(bss_cred) {
++	if (bss_cred) {
++		forced_memzero(bss_cred, cred_len);
+ 		os_free(bss_cred);
+-		bss_cred = NULL;
+-	}
+-	if(pos) {
+-		os_free(pos);
+-		pos = NULL;
+-		cred_buffer = NULL;
+-	}
+-	if (conf->group_id) {
++	}
++	if (msg1)
++		wpabuf_clear_free(msg1);
++	if (msg2)
++		wpabuf_clear_free(msg2);
++	if (conf && conf->group_id) {
++		forced_memzero(conf->group_id, group_id_len);
+ 		os_free(conf->group_id);
+ 	}
+-	if(conf) {
++	if (conf) {
++		forced_memzero(conf, sizeof(*conf));
+ 		os_free(conf);
+ 	}
+-	return;
+-}
++}
++
+ #endif /* MAP_R3 */
+ 
+ #ifdef DPP_R2_SUPPORT
+@@ -3571,7 +3419,6 @@
+ 		if (!wdev)
+ 			return;
+ 	}
+-	wpa_hexdump(MSG_MSGDUMP, DPP_MAP_PREX "DPP: Received message attributes", buf, len);
+ 	if (dpp_check_attrs(buf, len) < 0) {
+ 		wpa_printf(MSG_DEBUG, DPP_MAP_PREX DPP_EVENT_RX "src=" MACSTR
+ 			" chan=%u type=%d ignore=invalid-attributes",
+@@ -3672,9 +3519,6 @@
+ 		dpp_auth_deinit(auth);
+ 		return NULL;
+ 	}
+-	wpa_hexdump(MSG_DEBUG, DPP_MAP_PREX
+-		    "DPP: Received Configuration Request (GAS Query Request)",
+-		    query, query_len);
+ 	wpa_printf(MSG_DEBUG, DPP_MAP_PREX DPP_EVENT_CONF_REQ_RX "src=" MACSTR,
+ 		MAC2STR(sa));
+ 	resp = dpp_conf_req_rx(auth, query, query_len);
+@@ -4548,8 +4392,6 @@
+ 	dpp_pkt->payload_len = wpabuf_len(msg_out) - msg_out_pos;
+ 	os_memcpy(dpp_pkt->payload, wpabuf_head_u8(msg_out) + msg_out_pos, dpp_pkt->payload_len);
+ 	
+-	hex_dump_dbg(DPP_MAP_PREX"dpp dump= ",(UCHAR *)dpp_pkt->payload, dpp_pkt->payload_len);
+-	hex_dump_dbg(DPP_MAP_PREX"total dump= ",(UCHAR *)dpp_pkt, len);
+ 	if (wapp_send_1905_msg(wapp, WAPP_SEND_DPP_MSG,
+ 		len , (char *)dpp_pkt) < 0)
+ 		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"sending failed\n");
+@@ -4568,87 +4410,63 @@
+ 
+ struct dpp_sec_cred * wapp_dpp_save_dpp_cred(struct dpp_authentication *auth)
+ {
+-	struct dpp_sec_cred * sec_cred = NULL;
+-	unsigned char * cred_buffer = NULL;
+-	unsigned char * pos = NULL;
+-	unsigned short cred_len=0;
+-                        
+-#if 0
+-	if (auth->connector) {
+-		sec_cred->connector = os_strdup(auth->connector);
+-		if (!sec_cred->connector)
+-			goto fail;
+-		sec_cred->connector_len = os_strlen(sec_cred->connector);
+-	}
+-
+-	if (auth->c_sign_key) {
+-		sec_cred->csign = os_malloc(wpabuf_len(auth->c_sign_key));
+-		if (!sec_cred->csign)
+-			goto fail;
+-		os_memcpy(sec_cred->csign, wpabuf_head(auth->c_sign_key),
+-			  wpabuf_len(auth->c_sign_key));
+-		sec_cred->csign_len = wpabuf_len(auth->c_sign_key);
+-	}
+-
+-	if (auth->net_access_key) {
+-		sec_cred->netaccesskey =
+-			os_malloc(wpabuf_len(auth->net_access_key));
+-		if (!sec_cred->netaccesskey)
+-			goto fail;
+-		os_memcpy(sec_cred->netaccesskey,
+-			  wpabuf_head(auth->net_access_key),
+-			  wpabuf_len(auth->net_access_key));
+-		sec_cred->netaccesskey_len = wpabuf_len(auth->net_access_key);
+-		sec_cred->netaccesskey_expiry = auth->net_access_key_expiry;
+-	}
+-#endif
+-	if (!auth->c_sign_key)
+-		goto fail;
+-	if (!auth->connector)
+-		goto fail;
+-	cred_len = os_strlen(auth->connector) + wpabuf_len(auth->c_sign_key) + wpabuf_len(auth->net_access_key);
+-
+-	sec_cred = os_zalloc(sizeof(*sec_cred) + cred_len);
+-	if(!sec_cred)
+-		goto fail;
+-
+-	sec_cred->payload_len = cred_len;
+-	sec_cred->connector_len = (unsigned short)os_strlen(auth->connector);
+-	sec_cred->csign_len = (unsigned short)wpabuf_len(auth->c_sign_key);
+-	sec_cred->netaccesskey_len = (unsigned short)wpabuf_len(auth->net_access_key);
++	struct dpp_sec_cred *sec_cred;
++	const u8 *csign_key, *net_access_key;
++	size_t connector_len, csign_len, net_access_key_len, payload_len;
++	u8 *pos;
++
++	if (!auth || !auth->connector || !auth->connector[0] ||
++	    !auth->c_sign_key || !auth->net_access_key)
++		return NULL;
++
++	connector_len = os_strlen(auth->connector);
++	csign_len = wpabuf_len(auth->c_sign_key);
++	net_access_key_len = wpabuf_len(auth->net_access_key);
++	csign_key = wpabuf_head(auth->c_sign_key);
++	net_access_key = wpabuf_head(auth->net_access_key);
++	if (!connector_len || !csign_len || !net_access_key_len ||
++	    !csign_key || !net_access_key)
++		return NULL;
++
++	/* Payload fields and the enclosing 1905 message length are 16-bit. */
++	if (connector_len > 0xffffU || csign_len > 0xffffU ||
++	    net_access_key_len > 0xffffU ||
++	    connector_len > 0xffffU - csign_len ||
++	    connector_len + csign_len > 0xffffU - net_access_key_len)
++		return NULL;
++	payload_len = connector_len + csign_len + net_access_key_len;
++	if (sizeof(*sec_cred) > 0xffffU ||
++	    payload_len > 0xffffU - sizeof(*sec_cred))
++		return NULL;
++
++	sec_cred = os_zalloc(sizeof(*sec_cred) + payload_len);
++	if (!sec_cred)
++		return NULL;
++
++	sec_cred->payload_len = (unsigned short)payload_len;
++	sec_cred->connector_len = (unsigned short)connector_len;
++	sec_cred->csign_len = (unsigned short)csign_len;
++	sec_cred->netaccesskey_len = (unsigned short)net_access_key_len;
+ 	sec_cred->netaccesskey_expiry = auth->net_access_key_expiry;
+ 	sec_cred->decrypt_thresold = auth->decrypt_thresold;
+-	
+-	cred_buffer = os_zalloc(sec_cred->payload_len);
+-	if(!cred_buffer)
+-		goto fail;
+-	
+-	pos = cred_buffer;	
+-	os_memcpy(cred_buffer, auth->connector, sec_cred->connector_len);
+-	cred_buffer += sec_cred->connector_len;
+-	os_memcpy(cred_buffer, wpabuf_head(auth->c_sign_key), sec_cred->csign_len);
+-	cred_buffer += sec_cred->csign_len;
+-	os_memcpy(cred_buffer, wpabuf_head(auth->net_access_key), sec_cred->netaccesskey_len);
+-
+-	os_memcpy(sec_cred->payload, pos, sec_cred->payload_len);
+-        if(pos)
+-	{
+-		os_free(pos);
+-		pos=NULL;
+-		cred_buffer=NULL;
+-	}
++
++	pos = sec_cred->payload;
++	os_memcpy(pos, auth->connector, connector_len);
++	pos += connector_len;
++	os_memcpy(pos, csign_key, csign_len);
++	pos += csign_len;
++	os_memcpy(pos, net_access_key, net_access_key_len);
++
+ 	return sec_cred;
+-fail:
+-	if(sec_cred)
+-		os_free(sec_cred);
+-	return NULL;
+ }
+ 
+ static void wapp_dpp_clear_cred(struct dpp_authentication *auth)
+ {
+-	//clearing existing configurations from auth
+-	os_memset(auth->ssid, 0, SSID_MAX_LEN);
+-	os_memset(auth->passphrase, 0, 64);
++	// Clearing existing configurations from auth.
++	if (!auth)
++		return;
++	forced_memzero(auth->ssid, SSID_MAX_LEN);
++	forced_memzero(auth->passphrase, 64);
+ 	auth->ssid_len = 0;
+ }
+ 
+@@ -4889,6 +4707,7 @@
+ 	struct dpp_config *config =  NULL;
+ #ifdef MAP_R3
+ 	struct dpp_sec_cred *cred;
++	u16 cred_len = 0;
+ #endif
+ 
+ 	// TODO kapil, this will be modified for MAP-R2, DPP-R2
+@@ -4903,12 +4722,12 @@
+ 				return 0;
+ 		}
+ 
+-		cred_len = sizeof(*cred) + cred->payload_len; 
+-		hex_dump_dbg(DPP_MAP_PREX"1905_connector= ",(UCHAR *)cred, cred_len);
++		cred_len = (u16)(sizeof(*cred) + cred->payload_len);
+ 		if (wapp_send_1905_msg(wapp, WAPP_SEND_1905_CONNECTOR,
+ 			cred_len, (char *)cred) < 0)
+ 			DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"sending failed\n");
+-		os_free(cred);	
++		forced_memzero(cred, cred_len);
++		os_free(cred);
+ 		return 0;
+ 	}
+ #endif
+@@ -4986,9 +4805,11 @@
+ 	{
+ 		if (auth->c_sign_key) {
+ 			if (wapp->dpp_csign) {
++				forced_memzero(wapp->dpp_csign, wapp->dpp_csign_len);
+ 				os_free(wapp->dpp_csign);
+ 			}
+ 			wapp->dpp_csign = NULL;
++			wapp->dpp_csign_len = 0;
+ 			wapp->dpp_csign = os_malloc(wpabuf_len(auth->c_sign_key));
+ 			if (!wapp->dpp_csign) {
+ 				wpa_printf(MSG_ERROR, DPP_MAP_PREX
+@@ -4999,13 +4820,11 @@
+ 				  wpabuf_len(auth->c_sign_key));
+ 			wapp->dpp_csign_len = wpabuf_len(auth->c_sign_key);
+ 		
+-			wpa_hexdump(MSG_DEBUG, DPP_MAP_PREX "in process config cign key",
+-			    wapp->dpp_csign, wapp->dpp_csign_len);	
+ 		}
+ 
+ 		if (auth->connector) {
+ 			if (wapp->dpp_ctrlconnector) {
+-				wpabuf_free(wapp->dpp_ctrlconnector);
++				wpabuf_clear_free(wapp->dpp_ctrlconnector);
+ 			}
+ 			wapp->dpp_ctrlconnector = NULL;
+ 			wapp->dpp_ctrlconnector = wpabuf_alloc(os_strlen(auth->connector) + 1);
+@@ -5014,8 +4833,6 @@
+ 				wpa_printf(MSG_DEBUG, DPP_MAP_PREX  "DPP: Save DPP connector.with len:%d auth connector:%d strlen:%d\n",
+ 					(int)wpabuf_len(wapp->dpp_ctrlconnector),(int)os_strlen(auth->connector)
+ 					,(int)os_strlen(wpabuf_head(wapp->dpp_ctrlconnector)));
+-			wpa_hexdump_ascii(MSG_DEBUG, DPP_MAP_PREX "in process config connector",
+-			    wapp->dpp_ctrlconnector, (int)wpabuf_len(wapp->dpp_ctrlconnector));	
+ 			}
+ 		}
+ 	}
+@@ -5026,13 +4843,13 @@
+ 			DBGPRINT(RT_DEBUG_ERROR, "%s %d cred is NULL\n", __func__, __LINE__);
+ 			return 0;
+ 		}
+-		cred_len = sizeof(*cred) + cred->payload_len; 
+-		hex_dump_dbg(DPP_MAP_PREX"1905_connector= ",(UCHAR *)cred, cred_len);
++		cred_len = (u16)(sizeof(*cred) + cred->payload_len);
+ 		if (wapp_send_1905_msg(wapp, WAPP_SEND_1905_CONNECTOR,
+ 			cred_len, (char *)cred) < 0)
+ 			DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"sending failed\n");
+ 		auth->is_1905_connector = 0;
+-		os_free(cred);	
++		forced_memzero(cred, cred_len);
++		os_free(cred);
+ 		return 0;
+ 	}
+ #endif
+@@ -5183,10 +5000,6 @@
+ 		goto fail;
+ 	}
+ 
+-	wpa_hexdump_buf(MSG_DEBUG, "DPP: Configuration Response adv_proto",
+-			adv_proto);
+-	wpa_hexdump_buf(MSG_DEBUG, "DPP: Configuration Response (GAS response)",
+-			resp);
+ 
+ 	if (wpabuf_len(adv_proto) != 10 ||
+ 	    !(pos = wpabuf_head(adv_proto)) ||
+@@ -6445,8 +6258,7 @@
+ 						goto  fail;
+ 					os_strlcpy((char *)(dpp->config_ap[i].passphrase), token,
+ 						sizeof((dpp->config_ap[i].passphrase));
+-					DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"config ap passphrase(%d, len:%ld): %s\n", i, pass_len, 
+-						dpp->config_ap[i].passphrase);
++					DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"config ap passphrase(%d) loaded, len:%zu\n", i, pass_len);
+ 					i++;
+ 					if(i >= dpp->dpp_conf_ap_num)
+ 						break;
+@@ -6561,8 +6373,7 @@
+ 					if(!dpp->config_sta[i].passphrase)
+ 						goto  fail;
+ 					os_strlcpy((char *)(dpp->config_sta[i].passphrase), token, sizeof(dpp->config_sta[i].passphrase));
+-					DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"config sta passphrase(%d, len:%ld): %s\n", i, pass_len, 
+-						dpp->config_sta[i].passphrase);
++					DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"config sta passphrase(%d) loaded, len:%zu\n", i, pass_len);
+ 					i++;
+ 					if(i >= dpp->dpp_conf_sta_num)
+ 						break;
+@@ -6971,9 +6782,6 @@
+ 			NdisZeroMemory(strbuf, max_buf_len);
+ 			if (auth->connector) {
+ 				dpp_save_config(wapp, "_1905connector", auth->connector, NULL);
+-				hex_dump_dbg("save 1905 connector", \
+-					(unsigned char *)auth->connector, \
+-					os_strlen(auth->connector));
+ 			}
+ 			NdisZeroMemory(strbuf, max_buf_len);
+ 			if (auth->net_access_key) {
+@@ -7052,8 +6860,6 @@
+ #ifdef MAP_R3_RECONFIG
+ 	NdisZeroMemory(strbuf, max_buf_len);
+ 	if (auth->pp_key && auth->pp_key->buf) {
+-		wpa_printf(MSG_INFO1, DPP_MAP_PREX
+-				DPP_EVENT_PP_KEY "%s", auth->pp_key->buf);
+ 	        os_snprintf_hex(strbuf, max_buf_len, auth->pp_key->buf, auth->pp_key->used);
+         	dpp_save_config(wapp, "_ppkey", strbuf, NULL);
+ 	}
+@@ -7126,40 +6932,39 @@
+ 
+ void dpp_save_dpp_uri_to_file(struct wifi_app *wapp, char *uri_str)
+ {
+-	char param_str[15] = "agt_qr_code";
+-	char qr_param[20] = "";
+-	char *strbuf = NULL;
++	char qr_param[20] = {0};
++	char count_buf[4] = {0};
++	unsigned int current_count = 0, next_count;
+ 	int ret;
+ 
+-	os_alloc_mem(NULL, (UCHAR**)&strbuf, 10);
+-	if (strbuf == NULL) {
+-		DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"Error: QR code could not save to file\n");
+-		return;
+-	}
+-	NdisZeroMemory(strbuf, 10);
+-
+-	NdisZeroMemory(qr_param, 20);
+-
+-	if(wapp->dpp->qr_code_num >= MAP_MAX_DPP_URI_COUNT){
+-		DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"QR code count reached max in file,reset count\n");
+-		wapp->dpp->qr_code_num = 0;
+-	}
+-	wapp->dpp->qr_code_num++;
+-	ret = os_snprintf(qr_param, sizeof(qr_param), "%s_%u", param_str, wapp->dpp->qr_code_num);
++	if (!wapp || !wapp->map || !wapp->dpp || !uri_str || !uri_str[0])
++		return;
++	if (os_strlen(uri_str) >= 150) {
++		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"QR URI exceeds configuration buffer\n");
++		return;
++	}
++	if (dpp_read_qr_count(wapp, &current_count) < 0) {
++		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"invalid qr_count; refusing URI save\n");
++		return;
++	}
++	next_count = current_count >= MAP_MAX_DPP_URI_COUNT ? 1 : current_count + 1;
++	ret = os_snprintf(qr_param, sizeof(qr_param), "agt_qr_code_%u", next_count);
+ 	if (os_snprintf_error(sizeof(qr_param), ret))
+-		DBGPRINT(RT_DEBUG_ERROR, "%s %d snprintf error\n", __func__, __LINE__);
+-	dpp_save_config(wapp, (const char *)qr_param, (const char *)uri_str, NULL);
+-
+-	ret = snprintf(strbuf, 10, "%u", wapp->dpp->qr_code_num);
+-	if (os_snprintf_error(10, ret))
+-		DBGPRINT(RT_DEBUG_ERROR, "%s %d snprintf error\n", __func__, __LINE__);
+-	dpp_save_config(wapp, "qr_count", strbuf, NULL);
+-	NdisZeroMemory(strbuf, 10);
+-
+-	if (strbuf)
+-		os_free_mem(NULL, strbuf);
+-
+-	return;
++		return;
++	ret = os_snprintf(count_buf, sizeof(count_buf), "%u", next_count);
++	if (os_snprintf_error(sizeof(count_buf), ret))
++		return;
++	if (dpp_save_config(wapp, qr_param, uri_str, NULL) < 0) {
++		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"failed to save QR entry %u\n", next_count);
++		return;
++	}
++	if (dpp_save_config(wapp, "qr_count", count_buf, NULL) < 0) {
++		if (dpp_delete_parameter_from_file(wapp, qr_param) < 0)
++			DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"failed to roll back QR entry %u\n", next_count);
++		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"failed to update QR count\n");
++		return;
++	}
++	wapp->dpp->qr_code_num = (u8)next_count;
+ }
+ #endif
+ #ifdef OPENWRT_SUPPORT
+@@ -7248,12 +7053,13 @@
+ 	os_strlcpy(conf->passphrase, buf, sizeof(conf->passphrase));
+ }
+ #else
+-static void dpp_fetch_dpp_akm_param(struct wapp_dev *wdev, struct dpp_authentication *auth,
++static int dpp_fetch_dpp_akm_param(struct wapp_dev *wdev, struct dpp_authentication *auth,
+ 				    struct kvc_context *dat_ctx)
+ {
+ 	char ifparam[50];
+ 	const char *buf;
+-	u8 buftemp[512];
++	u8 buftemp[512] = {0};
++	size_t hex_len, key_len;
+ 	int ret;
+ #if NL80211_SUPPORT
+ 	u8 Enable = 1;
+@@ -7261,67 +7067,92 @@
+ 	char cmd[100];
+ #endif
+ 
++	if (!wdev || !auth || !dat_ctx)
++		return -1;
++
+ 	auth->akm = DPP_AKM_DPP;
+-	NdisZeroMemory(ifparam, 50);
+-	strncat(ifparam, wdev->ifname, strlen(wdev->ifname));
+-	strncat(ifparam, "_connector", strlen("_connector"));
++	NdisZeroMemory(ifparam, sizeof(ifparam));
++	ret = os_snprintf(ifparam, sizeof(ifparam), "%s_connector", wdev->ifname);
++	if (os_snprintf_error(sizeof(ifparam), ret))
++		goto fail;
+ 	buf = kvc_get(dat_ctx, (const char *)ifparam);
+-	if (!buf) {
++	if (!buf || !buf[0]) {
++		DBGPRINT(RT_DEBUG_ERROR, "%s %d connector missing in saved config\n", __func__, __LINE__);
++		goto fail;
++	}
++	auth->connector = os_strdup(buf);
++	if (!auth->connector)
++		goto fail;
++
++	NdisZeroMemory(ifparam, sizeof(ifparam));
++	ret = os_snprintf(ifparam, sizeof(ifparam), "%s_netAccessKey", wdev->ifname);
++	if (os_snprintf_error(sizeof(ifparam), ret))
++		goto fail;
++	buf = kvc_get(dat_ctx, (const char *)ifparam);
++	if (!buf || !buf[0]) {
+ 		DBGPRINT(RT_DEBUG_ERROR, "%s %d Buf is null from kvc_get\n", __func__, __LINE__);
+-		return;
+-	}
+-	auth->connector = os_strdup(buf);
+-
+-	NdisZeroMemory(ifparam, 50);
+-	strncat(ifparam, wdev->ifname, strlen(wdev->ifname));
+-	strncat(ifparam, "_netAccessKey", strlen("_netAccessKey"));
++		goto fail;
++	}
++	hex_len = os_strlen(buf);
++	if (!hex_len || (hex_len & 1) || hex_len > sizeof(buftemp) * 2) {
++		DBGPRINT(RT_DEBUG_ERROR, "%s invalid netAccessKey hex length\n", __func__);
++		goto fail;
++	}
++	key_len = hex_len / 2;
++	NdisZeroMemory(buftemp, sizeof(buftemp));
++	if (hexstr2bin(buf, buftemp, key_len) < 0)
++		goto fail;
++	auth->net_access_key = wpabuf_alloc(key_len);
++	if (!auth->net_access_key)
++		goto fail;
++	wpabuf_put_data(auth->net_access_key, buftemp, key_len);
++	forced_memzero(buftemp, sizeof(buftemp));
++
++	NdisZeroMemory(ifparam, sizeof(ifparam));
++	ret = os_snprintf(ifparam, sizeof(ifparam), "%s_cSignKey", wdev->ifname);
++	if (os_snprintf_error(sizeof(ifparam), ret))
++		goto fail;
+ 	buf = kvc_get(dat_ctx, (const char *)ifparam);
+-	if (!buf) {
+-		DBGPRINT(RT_DEBUG_ERROR, "%s %d Buf is null from kvc_get\n", __func__, __LINE__);
+-		return;
+-	}
+-	NdisZeroMemory(buftemp, 512);
+-	hexstr2bin(buf, buftemp, os_strlen(buf));
+-	auth->net_access_key = wpabuf_alloc(os_strlen(buf));
+-	if (auth->net_access_key) {
+-		NdisCopyMemory(auth->net_access_key->buf, buftemp, os_strlen(buf));
+-		auth->net_access_key->used = os_strlen(buf);
+-	}
+-
+-	NdisZeroMemory(ifparam, 50);
+-	strncat(ifparam, wdev->ifname, strlen(wdev->ifname));
+-	strncat(ifparam, "_cSignKey", strlen("_cSignKey"));
+-	buf = kvc_get(dat_ctx, (const char *)ifparam);
+-	if (!buf) {
+-		DBGPRINT(RT_DEBUG_ERROR, "%s %d Buf is null from kvc_get\n", __func__, __LINE__);
+-		return;
+-	}
+-	NdisZeroMemory(buftemp, 512);
+-	hexstr2bin(buf, buftemp, os_strlen(buf));
+-	auth->c_sign_key = wpabuf_alloc(os_strlen(buf));
+-	if (auth->c_sign_key) {
+-		NdisCopyMemory(auth->c_sign_key->buf, buftemp, os_strlen(buf));
+-		auth->c_sign_key->used = os_strlen(buf);
+-	}
++	if (!buf || !buf[0]) {
++		DBGPRINT(RT_DEBUG_ERROR, "%s %d cSignKey missing in saved config\n", __func__, __LINE__);
++		goto fail;
++	}
++	hex_len = os_strlen(buf);
++	if (!hex_len || (hex_len & 1) || hex_len > sizeof(buftemp) * 2) {
++		DBGPRINT(RT_DEBUG_ERROR, "%s invalid cSignKey hex length\n", __func__);
++		goto fail;
++	}
++	key_len = hex_len / 2;
++	NdisZeroMemory(buftemp, sizeof(buftemp));
++	if (hexstr2bin(buf, buftemp, key_len) < 0)
++		goto fail;
++	auth->c_sign_key = wpabuf_alloc(key_len);
++	if (!auth->c_sign_key)
++		goto fail;
++	wpabuf_put_data(auth->c_sign_key, buftemp, key_len);
++	forced_memzero(buftemp, sizeof(buftemp));
+ 
+ #if NL80211_SUPPORT
+ 	wapp_set_DppEnable(wapp, (const char *)wdev->ifname,
+ 			(char *)&Enable, 1);
+ #else
+-	os_memset(cmd, 0, 100);
+-	ret = snprintf(cmd, 100, "iwpriv %s set DppEnable=1;",
+-			wdev->ifname);
+-	if (os_snprintf_error(100, ret))
+-		DBGPRINT(RT_DEBUG_ERROR, "%s %d snprintf error\n", __func__, __LINE__);
++	os_memset(cmd, 0, sizeof(cmd));
++	ret = os_snprintf(cmd, sizeof(cmd), "iwpriv %s set DppEnable=1;", wdev->ifname);
++	if (os_snprintf_error(sizeof(cmd), ret))
++		goto fail;
+ 	ret = system(cmd);
+-	if (ret != 0)
++	if (ret != 0) {
+ 		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"%s, error status_code:%d\n", __func__, ret);
+-
++		goto fail;
++	}
+ 	DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"%s\n", cmd);
+ #endif
+-
+-}
+-
++	return 0;
++
++fail:
++	forced_memzero(buftemp, sizeof(buftemp));
++	return -1;
++}
+ static void dpp_fetch_psk_akm_param(struct wapp_dev *wdev, struct dpp_authentication *auth,
+ 				    struct kvc_context *dat_ctx)
+ {
+@@ -7470,7 +7301,8 @@
+ 		case DPP_AKM_DPP:
+ 		case DPP_AKM_SAE_DPP:
+ 		case DPP_AKM_PSK_DPP:
+-			dpp_fetch_dpp_akm_param(wdev, auth, dat_ctx);
++			if (dpp_fetch_dpp_akm_param(wdev, auth, dat_ctx) < 0)
++				goto out;
+ 			break;
+ 		case DPP_AKM_PSK:
+ 		case DPP_AKM_PSK_SAE:
+@@ -7491,13 +7323,25 @@
+ #endif /* CONFIG_DPP2 */
+ 	wapp_dpp_process_config(wapp,auth);
+ out:
+-	if (auth)
++	if (auth) {
++		if (auth->connector) {
++			forced_memzero(auth->connector, os_strlen(auth->connector) + 1);
++			os_free(auth->connector);
++			auth->connector = NULL;
++		}
++		wpabuf_clear_free(auth->net_access_key);
++		auth->net_access_key = NULL;
++		wpabuf_clear_free(auth->c_sign_key);
++		auth->c_sign_key = NULL;
++		/* This temporary auth has no msg_ctx and must not use dpp_auth_deinit(). */
++		forced_memzero(auth, sizeof(*auth));
+ 		os_free_mem(NULL, auth);
+ 	if (dat_ctx)
+ 		kvc_unload(dat_ctx);
+ #endif /* OPENWRT_SUPPORT */
+ 		return;
+ }
++	}
+ 
+ #endif /* DPP_R2_MUOBJ */
+ 
+@@ -9030,8 +8874,9 @@
+ #endif
+ void wapp_dpp_send_reconfig_auth_req(struct dpp_authentication *auth, struct wifi_app *wapp, struct wapp_dev * wdev, const u8 *src)
+ {
+-	if (!wapp ) {
+-		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"DPP: input parameter null \n");
++	if (!wapp || !auth || !src || !auth->msg_out || !wpabuf_head(auth->msg_out) ||
++	    !wpabuf_len(auth->msg_out) || (!wdev && !auth->wdev)) {
++		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"DPP: invalid reconfiguration action arguments\n");
+ 		return;
+ 	}
+ 
+@@ -9052,7 +8897,6 @@
+ 	wpa_printf(MSG_INFO1, DPP_MAP_PREX DPP_EVENT_TX "dst=" MACSTR "type=%d",
+ 		MAC2STR(auth->peer_mac_addr), DPP_PA_RECONFIG_AUTH_REQ);
+ 
+-	hex_dump_dbg(DPP_MAP_PREX"dpp frame ",(u8 *)wpabuf_head(auth->msg_out), wpabuf_len(auth->msg_out)+1);
+ 
+ 	wapp_drv_send_action(wapp, auth->wdev, auth->curr_chan, 0, src,
+ 			wpabuf_head(auth->msg_out), wpabuf_len(auth->msg_out));

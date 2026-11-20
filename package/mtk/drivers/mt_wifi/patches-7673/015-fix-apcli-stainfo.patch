@@ -1,6 +1,6 @@
 --- a/mt_wifi/embedded/common/cmm_info.c
 +++ b/mt_wifi/embedded/common/cmm_info.c
-@@ -7303,7 +7303,9 @@ VOID RTMPIoctlGetMacTableStaInfo(
+@@ -7304,7 +7304,9 @@ VOID RTMPIoctlGetMacTableStaInfo(
  			else
  				need_send = FALSE;
  		}

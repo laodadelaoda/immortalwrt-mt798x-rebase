@@ -1,0 +1,120 @@
+--- a/core/conninfra_core.c
++++ b/core/conninfra_core.c
+@@ -18,6 +18,7 @@
+ 
+ #define pr_fmt(fmt) KBUILD_MODNAME "@(%s:%d) " fmt, __func__, __LINE__
+ 
++#include <linux/errno.h>
+ #include "consys_hw.h"
+ #include "conninfra_core.h"
+ #include "msg_thread.h"
+@@ -831,24 +832,28 @@
+ 
+ int conninfra_core_reg_read(unsigned long address, unsigned int *value, unsigned int mask)
+ {
+-	int ret = 0;
++	int ret;
+ 	struct conninfra_ctx *infra_ctx = &g_conninfra_ctx;
+ 
++	if (!value)
++		return -EINVAL;
++	*value = 0;
++
+ 	ret = osal_lock_sleepable_lock(&infra_ctx->core_lock);
+ 	if (ret) {
+-		pr_err("core_lock fail!!\n");
+-		return 0;
++		pr_err("core_lock fail, ret=%d\n", ret);
++		return ret;
+ 	}
+ 
+-	if (infra_ctx->infra_drv_status == DRV_STS_POWER_ON) {
+-		if (consys_reg_mng_is_host_csr(address))
+-			ret = consys_reg_mng_reg_read(address, value, mask);
+-		else if (consys_hw_reg_readable())
+-			ret = consys_reg_mng_reg_read(address, value, mask);
+-		else
+-			pr_info("CR (%lx) is not readable\n", address);
+-	} else
++	if (infra_ctx->infra_drv_status != DRV_STS_POWER_ON) {
+ 		pr_info("CR (%lx) cannot read. conninfra is off\n", address);
++		ret = -EHOSTDOWN;
++	} else if (consys_reg_mng_is_host_csr(address) || consys_hw_reg_readable()) {
++		ret = consys_reg_mng_reg_read(address, value, mask);
++	} else {
++		pr_info("CR (%lx) is not readable\n", address);
++		ret = -EACCES;
++	}
+ 
+ 	osal_unlock_sleepable_lock(&infra_ctx->core_lock);
+ 	return ret;
+@@ -856,28 +861,27 @@
+ 
+ int conninfra_core_reg_write(unsigned long address, unsigned int value, unsigned int mask)
+ {
+-	int ret = 0;
++	int ret;
+ 	struct conninfra_ctx *infra_ctx = &g_conninfra_ctx;
+ 
+ 	ret = osal_lock_sleepable_lock(&infra_ctx->core_lock);
+ 	if (ret) {
+-		pr_err("core_lock fail!!\n");
+-		return 0;
++		pr_err("core_lock fail, ret=%d\n", ret);
++		return ret;
+ 	}
+ 
+-	if (infra_ctx->infra_drv_status == DRV_STS_POWER_ON) {
+-		if (consys_reg_mng_is_host_csr(address))
+-			ret = consys_reg_mng_reg_write(address, value, mask);
+-		else if (consys_hw_reg_readable())
+-			ret = consys_reg_mng_reg_write(address, value, mask);
+-		else
+-			pr_info("CR (%p) is not readable\n", (void*)address);
+-	} else
+-		pr_info("CR (%p) cannot read. conninfra is off\n", (void*)address);
++	if (infra_ctx->infra_drv_status != DRV_STS_POWER_ON) {
++		pr_info("CR (%lx) cannot write. conninfra is off\n", address);
++		ret = -EHOSTDOWN;
++	} else if (consys_reg_mng_is_host_csr(address) || consys_hw_reg_readable()) {
++		ret = consys_reg_mng_reg_write(address, value, mask);
++	} else {
++		pr_info("CR (%lx) is not writable\n", address);
++		ret = -EACCES;
++	}
+ 
+ 	osal_unlock_sleepable_lock(&infra_ctx->core_lock);
+ 	return ret;
+-
+ }
+ 
+ int conninfra_core_lock_rst(void)
+--- a/platform/consys_reg_mng.c
++++ b/platform/consys_reg_mng.c
+@@ -109,10 +109,13 @@
+ {
+ 	void __iomem *vir_addr = NULL;
+ 
++	if (!value)
++		return -EINVAL;
++
+ 	vir_addr = ioremap(addr, 0x100);
+ 	if (!vir_addr) {
+-		pr_err("ioremap fail\n");
+-		return -1;
++		pr_err("ioremap fail for register read\n");
++		return -ENOMEM;
+ 	}
+ 
+ 	*value = (unsigned int)CONSYS_REG_READ(vir_addr) & mask;
+@@ -129,8 +132,8 @@
+ 
+ 	vir_addr = ioremap(addr, 0x100);
+ 	if (!vir_addr) {
+-		pr_err("ioremap fail\n");
+-		return -1;
++		pr_err("ioremap fail for register write\n");
++		return -ENOMEM;
+ 	}
+ 
+ 	CONSYS_REG_WRITE_MASK(vir_addr, value, mask);

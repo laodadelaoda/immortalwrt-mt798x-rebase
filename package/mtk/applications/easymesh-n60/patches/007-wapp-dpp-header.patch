@@ -1,0 +1,17 @@
+--- a/wappd/dpp/dpp.h
++++ b/wappd/dpp/dpp.h
+@@ -813,7 +813,7 @@ struct pmk_cache {
+ 
+ #ifdef DPP_R2_RECONFIG
+ struct dpp_reconfig_id {
+-	const EC_GROUP *group;
++	EC_GROUP *group;
+ 	EC_POINT *e_id; /* E-id */
+ 	EVP_PKEY *csign;
+ 	EVP_PKEY *a_nonce; /* A-NONCE */
+@@ -910,0 +911,3 @@
++int dpp_read_qr_parameter(struct wifi_app *wapp, const char *param,
++			  char *value, size_t value_len);
++int dpp_read_qr_count(struct wifi_app *wapp, unsigned int *count);
+@@ -1264,1 +1264,0 @@
+-EC_KEY * EVP_PKEY_get0_EC_KEY(EVP_PKEY *pkey);

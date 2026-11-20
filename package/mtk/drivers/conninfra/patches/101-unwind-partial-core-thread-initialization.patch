@@ -1,0 +1,115 @@
+--- a/base/msg_thread.c
++++ b/base/msg_thread.c
+@@ -681,6 +681,11 @@
+ 	if (r) {
+ 		pr_err("osal_thread_run(evt_thread 0x%p) fail(%d)\n",
+ 				p_thread, r);
++		osal_thread_destroy(p_thread);
++		for (i = 0; i < MSG_THREAD_OP_BUF_SIZE; i++)
++			osal_signal_deinit(&(ctx->op_q_inst[i].signal));
++		osal_sleepable_lock_deinit(&ctx->free_op_q.lock);
++		osal_sleepable_lock_deinit(&ctx->active_op_q.lock);
+ 		return -2;
+ 	}
+ 	return r;
+--- a/core/conninfra_core.c
++++ b/core/conninfra_core.c
+@@ -1189,56 +1189,63 @@
+ 	osal_sleepable_lock_init(&infra_ctx->core_lock);
+ 	spin_lock_init(&infra_ctx->rst_lock);
+ 
+-
+ 	ret = msg_thread_init(&infra_ctx->msg_ctx, "conninfra_cored",
+-				conninfra_core_opfunc, CONNINFRA_OPID_MAX);
++			      conninfra_core_opfunc, CONNINFRA_OPID_MAX);
+ 	if (ret) {
+ 		pr_err("msg_thread init fail(%d)\n", ret);
+-		return -1;
++		goto err_lock;
+ 	}
+ 
+ 	ret = msg_thread_init(&infra_ctx->cb_ctx, "conninfra_cb",
+-                               conninfra_core_cb_opfunc, CONNINFRA_CB_OPID_MAX);
++			      conninfra_core_cb_opfunc, CONNINFRA_CB_OPID_MAX);
+ 	if (ret) {
+ 		pr_err("callback msg thread init fail(%d)\n", ret);
+-		return -1;
++		goto err_core;
+ 	}
+ 
+-	/* init subsys drv state */
+ 	for (i = 0; i < CONNDRV_TYPE_MAX; i++) {
+-		ret += msg_thread_init(&infra_ctx->drv_inst[i].msg_ctx,
+-				drv_thread_name[i], infra_subdrv_opfunc,
+-				INFRA_SUBDRV_OPID_MAX);
++		ret = msg_thread_init(&infra_ctx->drv_inst[i].msg_ctx,
++				      drv_thread_name[i], infra_subdrv_opfunc,
++				      INFRA_SUBDRV_OPID_MAX);
++		if (ret) {
++			pr_err("subsys callback thread init fail at %d (%d)\n", i, ret);
++			goto err_subdrv;
++		}
+ 	}
+ 
+-	if (ret) {
+-		pr_err("subsys callback thread init fail.\n");
+-		return -1;
+-	}
++	return 0;
+ 
++err_subdrv:
++	while (i-- > 0)
++		msg_thread_deinit(&infra_ctx->drv_inst[i].msg_ctx);
++	msg_thread_deinit(&infra_ctx->cb_ctx);
++err_core:
++	msg_thread_deinit(&infra_ctx->msg_ctx);
++err_lock:
++	osal_sleepable_lock_deinit(&infra_ctx->core_lock);
+ 	return ret;
+ }
+ 
+ int conninfra_core_deinit(void)
+ {
+-	int ret, i;
++	int ret = 0, tmp, i;
+ 	struct conninfra_ctx *infra_ctx = &g_conninfra_ctx;
+ 
+ 	for (i = 0; i < CONNDRV_TYPE_MAX; i++) {
+-		ret = msg_thread_deinit(&infra_ctx->drv_inst[i].msg_ctx);
+-		if (ret)
+-			pr_warn("subdrv [%d] msg_thread deinit fail (%d)\n",
+-						i, ret);
++		tmp = msg_thread_deinit(&infra_ctx->drv_inst[i].msg_ctx);
++		if (tmp && !ret)
++			ret = tmp;
+ 	}
+ 
+-	ret = msg_thread_deinit(&infra_ctx->msg_ctx);
+-	if (ret) {
+-		pr_err("msg_thread_deinit fail(%d)\n", ret);
+-		return -1;
+-	}
++	tmp = msg_thread_deinit(&infra_ctx->cb_ctx);
++	if (tmp && !ret)
++		ret = tmp;
++
++	tmp = msg_thread_deinit(&infra_ctx->msg_ctx);
++	if (tmp && !ret)
++		ret = tmp;
+ 
+ 	osal_sleepable_lock_deinit(&infra_ctx->core_lock);
+-
+-	return 0;
++	return ret;
+ }
+ 
+--- a/src/conninfra_dev.c
++++ b/src/conninfra_dev.c
+@@ -267,7 +267,6 @@
+ 	if (iret) {
+ 		pr_err("conninfra init fail, ret=%d\n", iret);
+ 		init_ret = -3;
+-		conninfra_core_deinit();
+ 		mtk_conninfra_drv_deinit();
+ 		goto err3;
+ 	}

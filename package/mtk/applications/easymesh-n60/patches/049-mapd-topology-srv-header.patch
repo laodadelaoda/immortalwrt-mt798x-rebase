@@ -1,0 +1,42 @@
+--- a/mapd/src/topologySrv/topologySrv.h
++++ b/mapd/src/topologySrv/topologySrv.h
+@@ -1462,9 +1462,7 @@
+ struct _1905_map_device *topo_srv_get_1905_by_iface_addr(struct own_1905_device *ctx, unsigned char *ifaddr);
+ int topo_srv_update_ap_cap(struct own_1905_device *ctx, struct ap_capability *cap);
+ int get_band_from_channel(int chan);
+-#ifdef MAP_6E_SUPPORT
+ unsigned char get_band_6E(struct _1905_map_device *dev, unsigned char chan, unsigned char op);
+-#endif
+ int get_band_from_channel_dual_band(int chan);
+ int topo_srv_update_channel_info(struct own_1905_device *ctx, struct bss_info_db *bss);
+ void topo_srv_start_1905_timer(void *eloop_ctx, void *timeout_ctx);
+@@ -1488,8 +1486,8 @@
+ struct radio_info_db *topo_srv_get_radio_by_chan_op(struct _1905_map_device *_1905_device, unsigned char chan, unsigned char op);
+ #endif
+ struct radio_info_db *topo_srv_get_radio_by_band(struct _1905_map_device *_1905_device, unsigned char chan);
+-#ifdef MAP_6E_SUPPORT
+ struct radio_info_db *topo_srv_get_radio_by_band_type(struct _1905_map_device *_1905_device, unsigned char band);
++#ifdef MAP_6E_SUPPORT
+ struct radio_info_db *topo_srv_get_radio_by_chan_op(struct _1905_map_device *_1905_device, unsigned char chan,
+ 	unsigned char op);
+ #endif
+@@ -1862,6 +1860,8 @@
+ #ifdef MAP_6E_SUPPORT
+ u8  get_device_type_dual_tri(struct _1905_map_device *dev);
++#endif
+ Boolean match_channel_from_ch_grp(uint8_t *ch_grp, uint8_t channel);
++#ifdef MAP_6E_SUPPORT
+ Boolean check_is_6E(struct _1905_map_device *dev);
+ void reorder_bh_entry(struct mapd_global *global);
+ #endif
+@@ -1869,9 +1869,8 @@
+ void combined_controller_skip_list6G(struct own_1905_device *ctx,
+ 		struct channel_report_resp_tlv *chan_rept);
+ void combined_controller_skip_list_recreate6G(struct own_1905_device *ctx);
+-int topo_srv_get_relation_dev(struct own_1905_device *ctx, unsigned char *curr_bssid, unsigned char *almac);
+-
+ #endif
++int topo_srv_get_relation_dev(struct own_1905_device *ctx, unsigned char *curr_bssid, unsigned char *almac);
+ int parse_bh_assoc_ctrl_policy_tlv(unsigned char *buf,
+ 		struct own_1905_device *ctx);
+ 

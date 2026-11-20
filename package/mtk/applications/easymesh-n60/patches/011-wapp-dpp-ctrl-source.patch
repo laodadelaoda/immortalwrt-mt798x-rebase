@@ -1,0 +1,19 @@
+--- a/wappd/dpp/dpp_ctrl.c
++++ b/wappd/dpp/dpp_ctrl.c
+@@ -218,9 +218,13 @@
+ 		if (wapp->dpp->dpp_configurator_supported) {
+ 			DBGPRINT(RT_DEBUG_TRACE, DPP_MAP_PREX"updating the BSS configurations from UCC");
+ 			wapp->dpp->bss_config_num = 0;
+-			wapp_read_wts_map_config(wapp, MAPD_WTS_FILE,
+-				wapp->dpp->bss_config, MAX_SET_BSS_INFO_NUM, &wapp->dpp->bss_config_num);
+-			DBGPRINT(RT_DEBUG_WARN, DPP_MAP_PREX"Setting configurator\n");
++			if (wapp_read_wts_map_config(wapp, MAPD_WTS_FILE,
++					wapp->dpp->bss_config, MAX_SET_BSS_INFO_NUM, &wapp->dpp->bss_config_num) < 0) {
++				DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"UCC WTS configuration rejected\n");
++				reply_len = -1;
++			} else {
++				DBGPRINT(RT_DEBUG_WARN, DPP_MAP_PREX"Setting configurator\n");
++			}
+ 		}
+ 		else{
+ 			DBGPRINT(RT_DEBUG_WARN, DPP_MAP_PREX"Device is not configurator\n");

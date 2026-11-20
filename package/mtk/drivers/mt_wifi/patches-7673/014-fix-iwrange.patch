@@ -64,7 +64,7 @@
  		}
 --- a/mt_wifi/embedded/ap/ap_cfg.c
 +++ b/mt_wifi/embedded/ap/ap_cfg.c
-@@ -30244,6 +30244,9 @@ BOOLEAN wdev_down_exec_ioctl(RTMP_IOCTL_
+@@ -30308,6 +30308,9 @@ BOOLEAN wdev_down_exec_ioctl(RTMP_IOCTL_
  		}
  	}
  

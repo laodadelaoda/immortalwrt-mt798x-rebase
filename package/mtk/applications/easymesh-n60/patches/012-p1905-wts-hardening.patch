@@ -1,0 +1,21 @@
+--- a/1905daemon/inc/p1905_managerd.h
++++ b/1905daemon/inc/p1905_managerd.h
+@@ -38,6 +38,8 @@
+ #ifndef P1905_MANAGERD_H
+ #define P1905_MANAGERD_H
+ 
++#include <stddef.h>
++
+ #include <linux/if_packet.h>
+ #include <netinet/in.h>
+ #include <net/if.h>
+@@ -58,6 +60,9 @@
+ #include "mapfilter_if.h"
+ #include "list.h"
+ 
++/* Shared secure clearing helper implemented in dpp.c. */
++void forced_memzero(void *ptr, size_t len);
++
+ #define VERSION_1905 "v3.0.2.0"
+ #define CONTROLLER 0
+ #define AGENT 1

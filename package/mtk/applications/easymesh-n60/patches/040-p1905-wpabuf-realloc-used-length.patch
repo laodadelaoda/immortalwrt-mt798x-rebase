@@ -1,0 +1,53 @@
+--- a/1905daemon/src/wpabuf.c
++++ b/1905daemon/src/wpabuf.c
+@@ -67,39 +67,42 @@
+ #endif /* WPA_TRACE */
+ 
+ 	if (buf->used + add_len > buf->size) {
++		size_t used = buf->used;
+ 		unsigned char *nbuf;
+ 		if (buf->flags & WPABUF_FLAG_EXT_DATA) {
+-			nbuf = os_realloc(buf->buf, buf->used + add_len);
++			nbuf = os_realloc(buf->buf, used + add_len);
+ 			if (nbuf == NULL)
+ 				return -1;
+-			os_memset(nbuf + buf->used, 0, add_len);
++			os_memset(nbuf + used, 0, add_len);
+ 			buf->buf = nbuf;
+ 		} else {
+ #ifdef WPA_TRACE
+ 			nbuf = os_realloc(trace, sizeof(struct wpabuf_trace) +
+-					  sizeof(struct wpabuf) +
+-					  buf->used + add_len);
++					  sizeof(struct wpabuf) +
++					  used + add_len);
+ 			if (nbuf == NULL)
+ 				return -1;
+ 			os_memset(nbuf + sizeof(struct wpabuf_trace) +
+-				  sizeof(struct wpabuf) + buf->used, 0,
++				  sizeof(struct wpabuf) + used, 0,
+ 				  add_len);
+ 			trace = (struct wpabuf_trace *) nbuf;
+ 			buf = (struct wpabuf *) (trace + 1);
+ #else /* WPA_TRACE */
+ 			nbuf = os_realloc(buf, sizeof(struct wpabuf) +
+-					  buf->used + add_len);
++					  used + add_len);
+ 			if (nbuf == NULL)
+ 				return -1;
+-			os_memset(nbuf + sizeof(struct wpabuf) + buf->used, 0,
++			os_memset(nbuf + sizeof(struct wpabuf) + used, 0,
+ 				  add_len);
+ 			buf = (struct wpabuf *) nbuf;
+ #endif /* WPA_TRACE */
+ 			buf->buf = (u8 *) (buf + 1);
++			buf->size = used + add_len;
+ 			*_buf = buf;
+ 		}
+-		buf->size = buf->used + add_len;
++		if (buf->flags & WPABUF_FLAG_EXT_DATA)
++			buf->size = used + add_len;
+ 	}
+ 
+ 	return 0;
+ }

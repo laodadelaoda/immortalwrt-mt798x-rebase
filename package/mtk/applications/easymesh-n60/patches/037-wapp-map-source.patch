@@ -1,0 +1,9 @@
+--- a/wappd/map/map.c
++++ b/wappd/map/map.c
+@@ -43,2 +43,6 @@
+ #include "wapp_cmm.h"
++#ifdef MAP_R3
++/* Single definition for the MAP R3 DPP onboarding flag. */
++u8 dpp_onboarding_dis;
++#endif
+ #include "driver_wext.h"

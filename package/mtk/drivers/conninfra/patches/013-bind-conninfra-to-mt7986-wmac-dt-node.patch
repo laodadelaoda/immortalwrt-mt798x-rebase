@@ -1,0 +1,13 @@
+--- a/platform/consys_hw_plat_data.c
++++ b/platform/consys_hw_plat_data.c
+@@ -23,6 +23,10 @@
+ 		.compatible = "mediatek,mt7986-consys",
+ 		.data = (void*)&mt7986_plat_data,
+ 	},
++	{
++		.compatible = "mediatek,mt7986-wmac",
++		.data = (void*)&mt7986_plat_data,
++	},
+ 	{}
+ };
+ #endif

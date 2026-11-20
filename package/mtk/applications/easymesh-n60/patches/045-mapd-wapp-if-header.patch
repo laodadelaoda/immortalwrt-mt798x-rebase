@@ -1,0 +1,10 @@
+--- a/mapd/src/dot11_if/wapp_if.h
++++ b/mapd/src/dot11_if/wapp_if.h
+@@ -17,1 +17,1 @@
+-struct wapp_usr_intf_ctrl *wapp_ctrl;
++extern struct wapp_usr_intf_ctrl *wapp_ctrl;
+@@ -177,3 +177,3 @@
+ void topo_srv_parse_wapp_assoc_status_notif(struct mapd_global * global,
+-	struct assoc_notification *assoc);
++	struct assoc_notification *assoc, unsigned short assoc_len);
+ 

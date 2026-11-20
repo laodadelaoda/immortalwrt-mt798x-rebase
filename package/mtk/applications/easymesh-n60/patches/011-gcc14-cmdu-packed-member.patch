@@ -1,0 +1,16 @@
+--- a/1905daemon/src/cmdu.c
++++ b/1905daemon/src/cmdu.c
+@@ -1095,6 +1095,9 @@
+  * \param  buffer   cmdu buffer for sending.
+  * \return error code
+  */
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
++
+ int cmdu_send(struct p1905_managerd_ctx *ctx, unsigned char *dmac,
+                      unsigned char *smac, msgtype mtype, unsigned short mid,
+                      unsigned char *buffer, unsigned char *ifname)
+@@ -1590,1 +1593,3 @@
++#pragma GCC diagnostic pop
++
+ int cmdu_bridge_relay(struct p1905_managerd_ctx *ctx,

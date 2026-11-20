@@ -1,6 +1,6 @@
 --- a/mt_wifi/include/os/rt_linux.h
 +++ b/mt_wifi/include/os/rt_linux.h
-@@ -725,7 +725,11 @@ typedef struct os_cookie	*POS_COOKIE;
+@@ -727,7 +727,11 @@ typedef struct os_cookie	*POS_COOKIE;
  #if (KERNEL_VERSION(4, 10, 0) > LINUX_VERSION_CODE)
  #define MTWF_PRINT	printk
  #else

@@ -1,0 +1,11 @@
+--- a/1905daemon/Makefile
++++ b/1905daemon/Makefile
+@@ -149,7 +149,7 @@ all: $(ETH_OPS_LIB_DIR) $(BIN) $(EXPORT_LIB) $(CTRL_EXEC)
+ 
+ eth_ops_lib:
+ 	cd $(ETH_OPS_LIB_DIR) && $(MAKE) clean
+-	make -C $(ETH_OPS_LIB_DIR)
++	$(MAKE) -C $(ETH_OPS_LIB_DIR) AR="$(AR)" RANLIB="$(RANLIB)" CC="$(CC)" CFLAGS="$(CFLAGS) $(EXTRA_CFLAGS)" LDFLAGS="$(LDFLAGS)" INCLUDE="$(INCLUDES)"
+ 
+ ifeq ($(MAP_R3_SUPPORT),y)
+ $(BIN): $(OBJS) eth_ops_lib $(CRYPTO_LIB) sp_ut

@@ -1,0 +1,1 @@
+Vendor audit trigger: restore Make variable escaping in native strict patch command.

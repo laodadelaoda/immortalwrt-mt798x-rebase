@@ -1,0 +1,38 @@
+--- a/wappd/hotspot/hotspot.c
++++ b/wappd/hotspot/hotspot.c
+@@ -3255,7 +3255,7 @@
+ 				continue;
+ 			}
+ 
+-			os_memset(vname_duple_new + size, 0, more_size);
++			os_memset((u8 *)vname_duple_new + size, 0, more_size);
+ 			vname_duple = vname_duple_new;
+ 
+ 			os_memcpy(vname_duple->venue_name, pos, more_size);
+@@ -3333,7 +3333,7 @@
+ 					continue;
+ 				}
+ 
+-				os_memset(realm_data_new + size, 0, more_size);
++				os_memset((u8 *)realm_data_new + size, 0, more_size);
+ 				realm_data = realm_data_new;
+ 
+ 				dl_list_init(&realm_data->eap_method_list);
+@@ -3391,7 +3391,7 @@
+ 							continue;
+ 						}
+ 
+-						os_memset(authparam_new + size, 0, more_size);
++						os_memset((u8 *)authparam_new + size, 0, more_size);
+ 						authparam = authparam_new;
+ 
+ 						os_memcpy(authparam->auth_param_value, pos, more_size);
+@@ -3530,7 +3530,7 @@
+ 				continue;
+ 			}
+ 
+-			os_memset(op_name_duple + size, 0, more_size);
++			os_memset((u8 *)op_name_duple_new + size, 0, more_size);
+ 			op_name_duple = op_name_duple_new;
+ 
+ 			os_memcpy(op_name_duple->operator_name, pos, more_size);

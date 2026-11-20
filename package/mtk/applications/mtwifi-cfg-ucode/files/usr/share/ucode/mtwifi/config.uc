@@ -171,7 +171,9 @@ export function setup(uci_cfg, all_devs) {
 		let vifs = driver.scan_related_vifs(all_devs[devname]);
 		log.debug(`[Main] UP vifs related to ${devname}: ${vifs}, need restore: ${need_restore}`);
 		for (let vif in vifs) {
-			driver.ifdown(vif);
+			// Do not flap an already-UP VIF when UCI converts to identical DAT.
+			// A changed profile still requires the existing down/write/up sequence.
+			if (diff_res.is_changed) driver.ifdown(vif);
 			if (need_restore) push(restore_vifs, vif);
 		}
 	}

@@ -1,0 +1,55 @@
+{
+  "schema_version": 2,
+  "status": "VERIFIED",
+  "baseline_id": "openssl-1.1.1w-to-3.5.9",
+  "run": {
+    "id": 42832853849,
+    "attempt": 1,
+    "git_sha": "53fb8c0ac8abe05675874620fe3e635ac835eb0e",
+    "url": "https://github.com/laodadelaoda/immortalwrt-mt798x-rebase/actions/runs/42832853849"
+  },
+  "artifact": {
+    "id": 13772257337,
+    "name": "n60-openssl-1111w-to-359-header-baseline",
+    "sha256": "536b6c77ac09b3fe52680330b1c59839fcec11e6065a67cf80a4d0b4e177003b"
+  },
+  "input_sha256": {
+    "migration_lock": "03d49ed10ff20877dd089c79101e64dc3a093f68cfba9b8bbfa210ad76ff8662",
+    "migration_map": "a13a43366fc96cc878c072d2e3aa20e6379e194dfe3414be709f1d34e1a02c35",
+    "openssl_package_makefile": "4b911200b312e9a873967a3cce83b9bb700450fd6d1c4a4cebd5b43c695c4152",
+    "api_inventory_script": "1decca30da800bfffb5a689f6ddb47c35a87374d5e4d861ca971d006194dbb68",
+    "api_inventory_selftest": "6fb4842ccd4fcce9c6eb2fa3aed3111ea0ff99b0a86388f1ce0921232b104301",
+    "baseline_auditor_script": "4851608a97e3a2711b3d4925c3a313ae60421a1c378636a819590786258ef8a7",
+    "baseline_auditor_selftest": "d6b517982c9a8e1754134655cc9ce3c6651af2dd47e6132bfaa121a2509fd904",
+    "api_policy": "2242a77ec0a8ee1e3c066afb1f4d2881311c2e6493a41921095c963473c2fcc8"
+  },
+  "source": {
+    "from_version": "1.1.1w",
+    "to_version": "3.5.9",
+    "archive_sha256": {
+      "1.1.1w": "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8",
+      "3.5.9": "603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a"
+    },
+    "header_tree_sha256": {
+      "1.1.1w": "ec23141cd37e6118b92f5075e47a0cf392f5bc6ae19fde6ff234634bc325fa04",
+      "3.5.9": "2b496a96cac9c2c1f0d45ee88be9758e1cbedd62c3d1dae8378fb20ca2fe483a"
+    }
+  },
+  "results": {
+    "header_api_names": {
+      "1.1.1w": 3886,
+      "3.5.9": 4627
+    },
+    "deprecated_api_declarations_3_5_9": 953,
+    "migration_map_rows": 68,
+    "migration_map_apis_present_in_1_1_1w": 68,
+    "migration_map_apis_deprecated_in_3_5_9": 68,
+    "migration_map_apis_present_and_deprecated_in_3_5_9": 68,
+    "migration_map_apis_with_1_1_1w_deprecation_annotation": 7,
+    "failures": []
+  },
+  "limitations": [
+    "Header symbol presence and deprecation annotations do not prove source-level call reachability or semantic equivalence.",
+    "All 68 migration map rows remain UNREVIEWED/approval=false; this credential authorizes no source migration."
+  ]
+}

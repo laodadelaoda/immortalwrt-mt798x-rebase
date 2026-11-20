@@ -1,0 +1,57 @@
+#!/bin/sh
+# N60 Pro WAPP startup using the audited 7.6.7.3 command-line ABI.
+
+LOG_TAG="wapp-n60"
+WAPP_LOG=/tmp/wapp-n60-startup.log
+
+log_msg() {
+    logger -t "$LOG_TAG" "$*"
+}
+
+# WAPP diagnostics can contain vendor BSS credentials. Keep the file private.
+umask 077
+: > "$WAPP_LOG"
+chmod 600 "$WAPP_LOG"
+
+# Match the previously successful N60 process lifecycle.
+killall wapp 2>/dev/null || true
+killall WAPP 2>/dev/null || true
+sleep 2
+
+for iface in ra0 rax0; do
+    if [ ! -d "/sys/class/net/$iface" ]; then
+        log_msg "ERROR: required interface $iface is missing; WAPP not started"
+        exit 1
+    fi
+done
+
+if [ ! -s /etc/wapp_ap.conf ] ||
+   ! grep -Fq '/etc/wapp_ap_ra0.conf' /etc/wapp_ap.conf ||
+   ! grep -Fq '/etc/wapp_ap_rax0.conf' /etc/wapp_ap.conf; then
+    log_msg "ERROR: /etc/wapp_ap.conf does not contain both N60 Pro band configs"
+    exit 1
+fi
+
+# Validate every WTS field consumed independently by WAPP and P1905.
+if ! /usr/sbin/easymesh-n60-validate-wts /etc/map/wts_bss_info_config >> "$WAPP_LOG" 2>&1; then
+    log_msg "ERROR: N60 WTS validation failed; WAPP not started (see $WAPP_LOG)"
+    exit 1
+fi
+
+log_msg "Starting WAPP for ra0 and rax0 in OPMODE_AP / RA_WEXT on br-lan; stdout/stderr: $WAPP_LOG"
+
+# WAPP 7.6.7.3 ABI, verified against the tracked ELF option string:
+# -f AP config list; -F MAP config; -u MAP user config.
+# -e/-w override vendor br0 defaults; repeated -c values are IAPP ioctl interfaces.
+# P1905 reads its own 1905d.cfg in the separate init service.
+/usr/bin/wapp -m OPMODE_AP -i RA_WEXT -d1 -v2 -f /etc/wapp_ap.conf -F /etc/map/mapd_cfg -u /etc/map/mapd_user.cfg -e br-lan -w br-lan -c ra0 -c rax0 >> "$WAPP_LOG" 2>&1
+wapp_rc=$?
+
+# Some vendor builds daemonize after the parent exits. Keep procd attached
+# until the complete WAPP process set exits.
+while pidof wapp >/dev/null 2>&1 || pidof WAPP >/dev/null 2>&1; do
+    sleep 2
+done
+
+log_msg "WAPP process set exited (rc=$wapp_rc); diagnostics: $WAPP_LOG"
+exit "$wapp_rc"

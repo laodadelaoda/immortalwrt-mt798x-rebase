@@ -51,3 +51,14 @@ define KernelPackage/switch-rtl8367s
 endef
 
 $(eval $(call KernelPackage,switch-rtl8367s))
+
+define KernelPackage/mediatek-hnat
+  SUBMENU:=Network Devices
+  TITLE:=MediaTek hardware NAT support
+  DEPENDS:=@TARGET_mediatek_filogic +kmod-ipt-nat
+  KCONFIG:=CONFIG_NET_MEDIATEK_HNAT
+  FILES:=$(LINUX_DIR)/drivers/net/ethernet/mediatek/mtk_hnat/mtkhnat.ko
+  AUTOLOAD:=$(call AutoProbe,mtkhnat)
+endef
+
+$(eval $(call KernelPackage,mediatek-hnat))

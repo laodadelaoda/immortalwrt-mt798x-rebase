@@ -1,0 +1,5 @@
+--- a/wappd/include/map.h
++++ b/wappd/include/map.h
+@@ -466 +466 @@
+-	u8 dpp_onboarding_dis;
++	extern u8 dpp_onboarding_dis;

@@ -6,13 +6,17 @@
 #
 
 include $(TOPDIR)/rules.mk
+
+# Keep native OpenWrt package patching as strict as Vendor Audit.
+export PATCH := patch --fuzz=0
 include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=conninfra
-PKG_VERSION:=20231229
-PKG_SOURCE:=mt79xx_conninfra_20231229-f2fa25.tar.xz
-PKG_SOURCE_URL:=https://raw.githubusercontent.com/hanwckf/immortalwrt-mt798x/refs/heads/openwrt-21.02/dl
-PKG_HASH:=672929de84ff2828ab8caef7ae56b6b3aac91210d5700c568559ebfa2d3cd176
+PKG_VERSION:=20250408
+PKG_SOURCE:=mt79xx_conninfra_20250408-f2fa25.tar.xz
+PKG_SOURCE_URL:=https://raw.githubusercontent.com/immortalwrt-mt798x/immortalwrt/refs/heads/openwrt-21.02/dl
+PKG_HASH:=3a82cfa69e68c8e584723b604dda565b2c085239ba1ac834d6d3b0ebd987e58c
+PATCH_DIR:=patches
 PKG_BUILD_DIR:=$(KERNEL_BUILD_DIR)/$(PKG_NAME)
 PKG_MAINTAINER:=Kun-Ze Syue<kun-ze.syue@mediatek.com>
 

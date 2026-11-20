@@ -1,0 +1,15 @@
+--- a/fwdd/fwdd.c
++++ b/fwdd/fwdd.c
+@@ -613,8 +613,10 @@
+ 		return -1;
+ 
+ 	memset(pwrq->ifr_name, 0, sizeof(pwrq->ifr_name));
+-	strncpy(pwrq->ifr_name, ifname, MIN((sizeof(pwrq->ifr_name)-1), strlen(ifname)));
+-	return (ioctl(skfd, request, pwrq));
++	size_t ifname_len = strnlen(ifname, sizeof(pwrq->ifr_name) - 1);
++	memcpy(pwrq->ifr_name, ifname, ifname_len);
++	pwrq->ifr_name[ifname_len] = '\0';
++	return ioctl(skfd, request, pwrq);
+ }
+ 
+ static inline char *lks2str(char s)

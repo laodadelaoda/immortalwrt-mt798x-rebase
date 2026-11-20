@@ -1,0 +1,6 @@
+--- a/1905daemon/inc/multi_ap.h
++++ b/1905daemon/inc/multi_ap.h
+@@ -0,0 +1,3 @@
++/* Opaque WF6 capability types used by pointer prototypes before their definitions. */
++struct ap_wf6_cap_roles;
++struct ap_wf6_role_db;

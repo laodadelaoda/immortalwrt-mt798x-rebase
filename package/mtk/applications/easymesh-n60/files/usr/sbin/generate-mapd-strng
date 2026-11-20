@@ -1,0 +1,46 @@
+#!/bin/sh
+# Build MAPD's optional string/steering config from the existing N60 Pro
+# MAPD configuration. Do not import upstream sample values or credentials.
+set -eu
+
+src=/etc/map/mapd_cfg
+dst=/etc/mapd_strng.conf
+tmp="${dst}.tmp.$$"
+
+cleanup() {
+    rm -f "$tmp"
+}
+trap cleanup EXIT HUP INT TERM
+
+if [ ! -r "$src" ]; then
+    echo "generate-mapd-strng: cannot read $src" >&2
+    exit 1
+fi
+
+# These two options are present in the existing N60 Pro mapd_cfg and are
+# also emitted by upstream uci2map.lua's mapd_strng conversion. Preserve the
+# user's configured values; do not fill missing options with guessed defaults.
+awk -F= '
+    /^[[:space:]]*#/ || NF < 2 { next }
+    {
+        key = $1
+        value = substr($0, index($0, "=") + 1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+        if ((key == "LowRSSIAPSteerEdge_RE" || key == "MetricRepIntv") && value != "") {
+            print key "=" value
+            found[key] = 1
+        }
+    }
+    END {
+        if (!found["LowRSSIAPSteerEdge_RE"] || !found["MetricRepIntv"])
+            exit 1
+    }
+' "$src" > "$tmp" || {
+    echo "generate-mapd-strng: required existing settings are missing in $src" >&2
+    exit 1
+}
+
+chmod 0644 "$tmp"
+mv -f "$tmp" "$dst"
+trap - EXIT HUP INT TERM

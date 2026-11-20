@@ -1,0 +1,15 @@
+From: N60 Pro EasyMesh patch maintenance
+Subject: [PATCH] easymesh: fix MAPD unused locals and cent_str_en condition
+
+Keep both MAPD source corrections together because they modify the same
+source file. Mark the assigned-but-unused local as intentionally unused,
+and test cent_str_en's value rather than its always-non-NULL address.
+
+--- a/mapd/mapd.c
++++ b/mapd/mapd.c
+@@ -2805 +2805 @@
+-	int bands;
++	int bands __attribute__((unused));
+@@ -5484 +5484 @@
+-	if (&global->dev.cent_str_en) {
++	if (global->dev.cent_str_en) {

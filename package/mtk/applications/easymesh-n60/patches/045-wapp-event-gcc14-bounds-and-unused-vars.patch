@@ -1,0 +1,115 @@
+--- a/mapd/src/topologySrv/wappEvent.c
++++ b/mapd/src/topologySrv/wappEvent.c
+@@ -1240,10 +1240,6 @@
+ 	struct channel_report *tmp_chan_report;
+ 	struct own_1905_device *ctx = &global->dev;
+ 	struct _1905_context *_1905_ctrl = global->_1905_ctrl;
+-#ifdef MAP_R4_SPT
+-	struct _1905_map_device *dev = NULL, *t_dev = NULL;
+-	unsigned char controller_version = 0;
+-#endif
+ 	/* update own radio info */
+ 	topo_srv_update_own_radio_info(ctx, (unsigned char *)chan_report);
+ 	global->wapp_get_radio_status = TRUE;
+@@ -1291,12 +1287,6 @@
+ #endif
+ 				, 0);
+ 	}
+-#ifdef MAP_R4_SPT
+-	SLIST_FOREACH_SAFE(dev, &ctx->_1905_dev_head, next_1905_device, t_dev){
+-		if(dev->device_role == DEVICE_ROLE_CONTROLLER)
+-			controller_version = dev->map_version;
+-	}
+-#endif
+ #ifdef MAP_RADIO_TEARDOWN
+ 	if (ctx->config_status != DEVICE_CONFIGURED) {
+ 		err(CH_PLANING_PREX"check status of autoconfig = %d\n", ctx->config_status);
+@@ -2001,40 +1991,68 @@
+ }
+ 
+ /*WAPP_ASSOC_STATUS_NOTIFICATION*/
+-void topo_srv_parse_wapp_assoc_status_notif(struct mapd_global * global,
+-	struct assoc_notification *assoc)
++void topo_srv_parse_wapp_assoc_status_notif(struct mapd_global *global,
++	struct assoc_notification *assoc, unsigned short assoc_len)
+ {
+-	struct own_1905_device *ctx = &global->dev;
+-	struct _1905_map_device *own_dev = NULL;
++	struct own_1905_device *ctx;
++	struct _1905_map_device *own_dev;
+ 	struct bss_info_db *bss, *tbss = NULL;
+-	struct _1905_context *_1905_ctrl = global->_1905_ctrl;
+-	int i, j;
+-	if (!assoc)
++	struct _1905_context *_1905_ctrl;
++	const u8 *pos;
++	size_t remaining, entries_len;
++	unsigned int i, j;
++
++	if (!global || !assoc || assoc_len < sizeof(assoc->notification_tlv_num))
+ 		return;
++
++	ctx = &global->dev;
++	_1905_ctrl = global->_1905_ctrl;
+ 	own_dev = topo_srv_get_1905_device(ctx, NULL);
+-	for (i = 0;i < assoc->notification_tlv_num;i++) {
+-		for (j = 0;j < assoc->tlv[i].bssid_num;j++) {
++	if (!own_dev)
++		return;
++
++	pos = (const u8 *)assoc + sizeof(assoc->notification_tlv_num);
++	remaining = assoc_len - sizeof(assoc->notification_tlv_num);
++	/* Validate the complete variable-length TLV sequence before side effects. */
++	for (i = 0; i < assoc->notification_tlv_num; i++) {
++		const struct notification_tlv *tlv;
++
++		if (remaining < sizeof(*tlv))
++			return;
++		tlv = (const struct notification_tlv *)pos;
++		entries_len = (size_t)tlv->bssid_num * sizeof(struct status);
++		if (entries_len > remaining - sizeof(*tlv))
++			return;
++		pos += sizeof(*tlv) + entries_len;
++		remaining -= sizeof(*tlv) + entries_len;
++	}
++	if (remaining != 0)
++		return;
++
++	pos = (const u8 *)assoc + sizeof(assoc->notification_tlv_num);
++	for (i = 0; i < assoc->notification_tlv_num; i++) {
++		const struct notification_tlv *tlv = (const struct notification_tlv *)pos;
++		const struct status *tlv_status =
++			(const struct status *)(pos + sizeof(*tlv));
++
++		for (j = 0; j < tlv->bssid_num; j++) {
+ 			SLIST_FOREACH_SAFE(bss, &own_dev->first_bss, next_bss, tbss) {
+-				if (os_memcmp(assoc->tlv[i].tlv_status[j].bssid, bss->bssid, ETH_ALEN)== 0) {
+-					if (assoc->tlv[i].tlv_status[j].status == 0)
+-						bss->status = 1;
+-					else
+-						bss->status = 0;
+-				}
++				if (os_memcmp(tlv_status[j].bssid, bss->bssid, ETH_ALEN) == 0)
++					bss->status = (tlv_status[j].status == 0) ? 1 : 0;
+ 			}
+ 		}
++		entries_len = (size_t)tlv->bssid_num * sizeof(struct status);
++		pos += sizeof(*tlv) + entries_len;
+ 	}
+-	map_1905_Send_Assoc_Status_Notification_Message(_1905_ctrl,
+-							NULL,
+-							assoc);
++
++	map_1905_Send_Assoc_Status_Notification_Message(_1905_ctrl, NULL, assoc);
+ }
+ void insert_tunneled_own_info(struct own_1905_device *ctx, struct tunneled_msg * tunneled)
+ {
+ 	struct mapd_global *global = ctx->back_ptr;
+-	struct _1905_map_device *own_dev = NULL;
+ 	struct client *cli = NULL;
+ 
+-	own_dev = topo_srv_get_1905_device(ctx, NULL);
++	(void)topo_srv_get_1905_device(ctx, NULL);
+ 	dl_list_for_each(cli, &global->dev.sta_seen_list, struct client, sta_seen_entry) {
+ 		if (os_memcmp(cli->mac_addr, tunneled->sta_mac, ETH_ALEN) == 0)
+ 			break;

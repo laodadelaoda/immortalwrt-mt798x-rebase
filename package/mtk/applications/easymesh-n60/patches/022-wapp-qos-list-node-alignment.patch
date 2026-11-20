@@ -1,0 +1,32 @@
+--- a/wappd/include/qos.h
++++ b/wappd/include/qos.h
+@@ -276,7 +276,8 @@
+ 	tclas_element tclas_elem[MAX_TCLAS_NUM];
+ };
+ 
+-struct GNU_PACKED scs_configuration {
++/* In-memory list container: preserve native dl_list pointer alignment. */
++struct scs_configuration {
+ 	struct dl_list list;
+ 	struct scs_classifier_parameter scsparam;
+ };
+@@ -344,7 +345,8 @@
+ 	u16 endp;
+ };
+ 
+-struct GNU_PACKED dscp_policy_db {
++/* In-memory list container: preserve native dl_list pointer alignment. */
++struct dscp_policy_db {
+ 	struct dl_list list;
+ 	struct dscp_policy_attribute policyattri;
+ 	union {
+@@ -380,7 +382,8 @@
+ 	unsigned char data[0];
+ };
+ 
+-struct GNU_PACKED mscs_configuration {
++/* In-memory list container: preserve native dl_list pointer alignment. */
++struct mscs_configuration {
+ 	struct dl_list list;
+ 	struct classifier_parameter csparam;
+ };

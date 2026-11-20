@@ -1,0 +1,32 @@
+--- a/ethernet/mediatek_DSA/libbridge/libbridge_init.c
++++ b/ethernet/mediatek_DSA/libbridge/libbridge_init.c
+@@ -29,7 +29,7 @@
+ #include "libbridge_private.h"
+ 
+ int br_socket_fd = -1;
+-#define PATH_MAX 128
++#define BRIDGE_SYSFS_PATH_SIZE 128
+ 
+ int br_init(void)
+ {
+@@ -47,7 +47,7 @@
+ /* If /sys/class/net/XXX/bridge exists then it must be a bridge */
+ static int isbridge(const struct dirent *entry)
+ {
+-	char path[PATH_MAX];
++	char path[BRIDGE_SYSFS_PATH_SIZE];
+ 	struct stat st;
+ 	int ret, saved_errno;
+ 
+@@ -57,9 +57,9 @@
+ 		    && entry->d_name[2] == '\0')))
+ 		return 0;
+ 
+-	ret = snprintf(path, PATH_MAX,
++	ret = snprintf(path, BRIDGE_SYSFS_PATH_SIZE,
+ 				   SYSFS_CLASS_NET "%s/bridge", entry->d_name);
+-	if (ret < 0 || ret >= PATH_MAX)
++	if (ret < 0 || ret >= BRIDGE_SYSFS_PATH_SIZE)
+ 		dprintf("[%d]snprintf fail!\n", __LINE__);
+ 
+ 	/* Workaround old glibc breakage.

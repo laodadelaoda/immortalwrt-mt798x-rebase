@@ -1,0 +1,18 @@
+--- a/1905daemon/src/cmdu_message_parse.c
++++ b/1905daemon/src/cmdu_message_parse.c
+@@ -1664,7 +1664,6 @@
+ {
+ 	unsigned char *type = NULL;
+ 	unsigned short len = 0;
+-	unsigned char *value = NULL;
+ 	unsigned int tlv_len = 0;
+ 	int ret = 0;
+ 	unsigned char map_profile = MAP_PROFILE_R1;
+@@ -1673,7 +1672,6 @@
+ 
+ 	while (1) {
+ 		len = get_tlv_len(type);
+-		value = type + 3;
+ 		tlv_len = len + 3;
+ 		if (left_tlv_len < tlv_len) {
+ 			debug(DEBUG_ERROR, "[%d] Error TLV len, type = %d, left_tlv_length %d less than tlv_len %d\n",

@@ -1,0 +1,132 @@
+From: OpenAI
+Subject: [PATCH] easymesh: keep generic MAPD topology APIs available
+
+Keep the generic topology peer-relation implementation available in
+non-6E builds, matching its unconditional public header declaration. The
+function uses only topology graph lookups and root-distance comparisons.
+
+Keep the generic channel-group matcher, N60 non-6E band classifier, and
+existing topology, logging, and GCC14 fixes in this single-source patch.
+
+--- a/mapd/src/topologySrv/topologySrv.c
++++ b/mapd/src/topologySrv/topologySrv.c
+@@ -245,9 +245,9 @@
+ 	else
+ 		return BAND_5GL;
+ }
+-#ifdef MAP_6E_SUPPORT
+ unsigned char get_band_6E(struct _1905_map_device *dev, unsigned char chan, unsigned char op)
+ {
++#ifdef MAP_6E_SUPPORT
+ 	struct radio_info_db *radio = NULL, *tradio = NULL;
+ 	u8 is_triband_6G = 0, is_triband = 0;
+ 
+@@ -286,6 +286,26 @@
+ 
+ 
+ 	}
++#else
++	if (!dev) {
++		err("return due to Null Dev");
++		return BAND_UNKNOWN;
++	}
++	/* Preserve vendor band enum semantics on N60 without 6 GHz support. */
++	if (check_is_triband(dev)) {
++		if (IS_MAP_CH_24G(chan) && IS_OP_CLASS_24G(op))
++			return BAND_2G;
++		else if (IS_MAP_CH_5GL(chan) && IS_OP_CLASS_5GL(op))
++			return BAND_5GL;
++		else if (IS_MAP_CH_5GH(chan) && IS_OP_CLASS_5GH(op))
++			return BAND_5GH;
++	} else {
++		if (IS_MAP_CH_24G(chan) && IS_OP_CLASS_24G(op))
++			return BAND_2G;
++		else if (IS_MAP_CH_5G(chan) && IS_OP_CLASS_5G(op))
++			return BAND_5GL;
++	}
++#endif
+ 	return BAND_UNKNOWN;
+ }
+ Boolean match_channel_from_ch_grp(uint8_t *ch_grp, uint8_t channel)
+@@ -298,7 +318,6 @@
+ 	}
+ 	return FALSE;
+ }
+-#endif
+ #undef MAX_CHAN_NUMBER_2G
+ #undef MAX_CHAN_5GL
+ 
+@@ -1052,7 +1071,6 @@
+ 	return tear_down;
+ }
+ #endif
+-#ifdef MAP_6E_SUPPORT
+ struct radio_info_db *topo_srv_get_radio_by_band_type(struct _1905_map_device *_1905_device, unsigned char band)
+ {
+ 	struct radio_info_db *radio = NULL;
+@@ -1069,7 +1087,6 @@
+ 
+ 	return NULL;
+ }
+-#endif
+ struct radio_info_db *topo_srv_get_radio_by_band(struct _1905_map_device *_1905_device, unsigned char chan)
+ {
+ 	struct radio_info_db *radio = NULL;
+@@ -1779,7 +1796,7 @@
+ 	if(bss->auth_mode != 0) {
+ 		always("auth_mode=%u\n", bss->auth_mode);
+ 		always("encrypt_type=%u\n", bss->enc_type);
+-		always("key=%s\n", bss->key);
++		always("key is configured\n");
+ 	}
+ 	always("map_vendor_extn=%u\n", bss->map_vendor_extn);
+ }
+@@ -3073,19 +3090,17 @@
+-#ifdef MAP_6E_SUPPORT
+ int topo_srv_get_relation_dev(struct own_1905_device *ctx, unsigned char *curr_bssid, unsigned char *almac)
+ {
+ 	struct _1905_map_device *tmp_dev, *cli_dev;
+ 
+ 	cli_dev = topo_srv_get_1905_by_bssid(ctx, curr_bssid);
+ 	tmp_dev = topo_srv_get_1905_device(ctx, almac);
+ 	if (!tmp_dev || !cli_dev) {
+ 		err("device not found");
+ 		return -1;
+ 	}
+ 	if (tmp_dev->root_distance < cli_dev->root_distance)
+ 		return 0;
+ 	if (tmp_dev->root_distance == cli_dev->root_distance)
+ 		return 1;
+ 
+ 	return 2;
+ }
+-#endif
+@@ -11709,7 +11726,7 @@
+ {
+ 	struct channel_scan_req *scan_req = NULL;
+ 	u8 buf[8000] = {0};
+-	u32 len;
++	u32 len __attribute__((unused));
+ 	struct radio_info_db *radio = NULL, *tradio = NULL;
+ 	struct radio_scan_capab_db *radio_param = NULL;
+ 	struct scan_body *scan_req_body = NULL;
+@@ -12062,7 +12079,7 @@
+ int mapd_mbo_parse_sta_npc_element(u8 *buf, u8 len, struct client *cli)
+ {
+ #ifdef MAP_R2
+-	u8 empty_npc = 0, i = 0;
++	u8 empty_npc __attribute__((unused)) = 0, i = 0;
+ 	u8 np_list_len = 0;
+ 	if (len == 0) {
+ 		empty_npc = 1;
+@@ -13613,8 +13630,8 @@
+ 	struct _1905_map_device *dev = NULL;
+ 	unsigned short length = 0;
+ 	unsigned char sta_mac[6] = {0};
+-	unsigned short status = 0;
+-	unsigned short reason = 0;
++	unsigned short status __attribute__((unused)) = 0;
++	unsigned short reason __attribute__((unused)) = 0;
+ 	unsigned short tmp_len = len;
+ 
+ 	if (!ctx || !buf) {

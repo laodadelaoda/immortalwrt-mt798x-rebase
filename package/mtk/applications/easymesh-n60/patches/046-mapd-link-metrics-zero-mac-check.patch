@@ -1,0 +1,18 @@
+From: OpenAI
+Subject: [PATCH] easymesh: reject zero client MAC in link metrics
+
+Do not create link-metrics state for an all-zero client address. Keep this
+patch limited to the metrics input validation; closed-library topology ABI
+compatibility is maintained by patch 049.
+
+--- a/mapd/src/topologySrv/metrics.c
++++ b/mapd/src/topologySrv/metrics.c
+@@ -1361,7 +1361,7 @@ int insert_new_link_metrics_info(struct _1905_context *_1905_ctrl,struct own_190
+ 		info = &metrics_info->info[i];
+ 		metrics_ctx = topo_srv_get_associate_client(ctx, NULL, info->mac);
+ 		if (!metrics_ctx) {
+-			if (info->mac != NULL) {
++			if (!is_zero_ether_addr(info->mac)) {
+ 				topo_srv_create_new_sta(ctx, info);
+ 			}
+ 			continue;

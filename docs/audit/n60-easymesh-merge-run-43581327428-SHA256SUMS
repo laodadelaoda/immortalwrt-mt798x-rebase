@@ -1,0 +1,7 @@
+ad884aebc4278d312225e3cb3a5afb050ef2e877255c16f8e70627c7b800e3f5  008-dpp-parser-bounds-and-secret-redaction.patch
+19147bd2ca08a1f6ae12bf08e9737550f6085b8d7295b4db92b7bfb6307dd5cb  010-dpp-wdev-config-allocation-rollback.patch
+4bba91423c5efef66fd211e112a2f2dbf20971af85d0cd45b652787a74e5d1d0  015-dpp-config-lookup-null-and-error-guard.patch
+a717fd3bc0a17220e223419cfddbf31aa73538343931332a58505f0ea514b0a1  016-dpp-qr-count-boundaries-and-error-propagation.patch
+c678772c08bc92c0727dd3170d31e65225c740d6af54d40b0bdd8140c4f4ccae  MERGE-REPORT.md
+18699a6feaaa1105d787bb3ea789631e21ad9c754f49ab70bd53ab50f66fa340  merge-credential.json
+d910d12d76a436d6253342545f2813431f4ca4d37b9c2fbf49192c5d19b49137  vendor-sources.lock.json

@@ -1,6 +1,6 @@
 --- a/mt_wifi/embedded/ap/ap_cfg.c
 +++ b/mt_wifi/embedded/ap/ap_cfg.c
-@@ -12113,6 +12113,39 @@ INT RTMPAPQueryInformation(
+@@ -12118,6 +12118,39 @@ INT RTMPAPQueryInformation(
  			os_free_mem(chn_list);
  			break;
  		}

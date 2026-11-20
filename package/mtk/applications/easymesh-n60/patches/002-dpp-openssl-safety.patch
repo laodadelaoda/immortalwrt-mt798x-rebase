@@ -1,0 +1,2234 @@
+--- a/wappd/dpp/dpp.c
++++ b/wappd/dpp/dpp.c
+@@ -7,11 +7,13 @@
+  */
+ 
+ #include "types.h"
++#include <limits.h>
+ #include <openssl/opensslv.h>
+ #include <openssl/err.h>
+ #include <openssl/asn1.h>
+ #include <openssl/asn1t.h>
+ #include <openssl/evp.h>
++#include "../../dpp_evp.h"
+ #include "crypto/evp.h"
+ #include "wapp_cmm.h"
+ 
+@@ -28,6 +30,7 @@
+ #include "crypto/sha384.h"
+ #include "crypto/sha512.h"
+ #include "dpp.h"
++#include "../../dpp_evp.h"
+ #include "dpp_wdev.h"
+ #include "debug.h"
+ #include "utils/wpabuf.h"
+@@ -73,6 +76,9 @@
+ #endif
+ 
+ 
++
++/* OpenSSL 3 provider-native DPP EC key accessors. Returned objects are owned
++ * by the caller; private scalar values must be released with BN_clear_free(). */
+ const struct dpp_curve_params dpp_curves[] = {
+ 	/* The mandatory to support and the default NIST P-256 curve needs to
+ 	 * be the first entry on this list. */
+@@ -308,7 +314,7 @@
+ 	x = BN_new();
+ 	y = BN_new();
+ 	if (!ctx || !x || !y ||
+-	    EC_POINT_get_affine_coordinates_GFp(group, point, x, y, ctx) != 1)
++	    EC_POINT_get_affine_coordinates(group, point, x, y, ctx) != 1)
+ 		goto fail;
+ 
+ 	x_str = BN_bn2hex(x);
+@@ -406,39 +412,30 @@
+ 
+ struct wpabuf * dpp_get_pubkey_point(EVP_PKEY *pkey, int prefix)
+ {
+-	int len, res;
+-	EC_KEY *eckey;
++	size_t len;
++	unsigned char *encoded = NULL;
+ 	struct wpabuf *buf;
+ 	unsigned char *pos;
+ 
+-	eckey = EVP_PKEY_get1_EC_KEY(pkey);
+-	if (!eckey)
++	if (!pkey)
+ 		return NULL;
+-	EC_KEY_set_conv_form(eckey, POINT_CONVERSION_UNCOMPRESSED);
+-	len = i2o_ECPublicKey(eckey, NULL);
+-	if (len <= 0) {
++	len = EVP_PKEY_get1_encoded_public_key(pkey, &encoded);
++	if (!encoded || !len || len > INT_MAX) {
+ 		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+ 			   "DDP: Failed to determine public key encoding length");
+-		EC_KEY_free(eckey);
++		OPENSSL_free(encoded);
+ 		return NULL;
+ 	}
+ 
+ 	buf = wpabuf_alloc(len);
+ 	if (!buf) {
+-		EC_KEY_free(eckey);
++		OPENSSL_free(encoded);
+ 		return NULL;
+ 	}
+ 
+ 	pos = wpabuf_put(buf, len);
+-	res = i2o_ECPublicKey(eckey, &pos);
+-	EC_KEY_free(eckey);
+-	if (res != len) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "DDP: Failed to encode public key (res=%d/%d)",
+-			   res, len);
+-		wpabuf_free(buf);
+-		return NULL;
+-	}
++	os_memcpy(pos, encoded, len);
++	OPENSSL_free(encoded);
+ 
+ 	if (!prefix) {
+ 		/* Remove 0x04 prefix to match DPP definition */
+@@ -452,99 +449,48 @@
+ 
+ 
+ EVP_PKEY * dpp_set_pubkey_point_group(const EC_GROUP *group,
+-					     const u8 *buf_x, const u8 *buf_y,
+-					     size_t len)
+-{
+-	EC_KEY *eckey = NULL;
+-	BN_CTX *ctx;
++				     const u8 *buf_x, const u8 *buf_y,
++				     size_t len)
++{
++	BN_CTX *ctx = NULL;
+ 	EC_POINT *point = NULL;
+ 	BIGNUM *x = NULL, *y = NULL;
+ 	EVP_PKEY *pkey = NULL;
+ 
++	if (!group || !buf_x || !buf_y || !len || len > INT_MAX)
++		return NULL;
+ 	ctx = BN_CTX_new();
+-	if (!ctx) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX "DPP: Out of memory");
+-		return NULL;
+-	}
+-
+ 	point = EC_POINT_new(group);
+-	x = BN_bin2bn(buf_x, len, NULL);
+-	y = BN_bin2bn(buf_y, len, NULL);
+-	if (!point || !x || !y) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX "DPP: Out of memory");
+-		goto fail;
+-	}
+-
+-	if (!EC_POINT_set_affine_coordinates_GFp(group, point, x, y, ctx)) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "DPP: OpenSSL: EC_POINT_set_affine_coordinates_GFp failed: %s",
+-			   ERR_error_string(ERR_get_error(), NULL));
+-		goto fail;
+-	}
+-
+-	if (!EC_POINT_is_on_curve(group, point, ctx) ||
+-	    EC_POINT_is_at_infinity(group, point)) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX "DPP: Invalid point");
+-		goto fail;
+-	}
++	x = BN_bin2bn(buf_x, (int) len, NULL);
++	y = BN_bin2bn(buf_y, (int) len, NULL);
++	if (!ctx || !point || !x || !y ||
++	    EC_POINT_set_affine_coordinates(group, point, x, y, ctx) != 1 ||
++	    EC_POINT_is_at_infinity(group, point) ||
++	    EC_POINT_is_on_curve(group, point, ctx) != 1)
++		goto out;
+ 	dpp_debug_print_point("DPP: dpp_set_pubkey_point_group", group, point);
+-
+-	eckey = EC_KEY_new();
+-	if (!eckey ||
+-	    EC_KEY_set_group(eckey, group) != 1 ||
+-	    EC_KEY_set_public_key(eckey, point) != 1) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "DPP: Failed to set EC_KEY: %s",
+-			   ERR_error_string(ERR_get_error(), NULL));
+-		goto fail;
+-	}
+-	EC_KEY_set_asn1_flag(eckey, OPENSSL_EC_NAMED_CURVE);
+-
+-	pkey = EVP_PKEY_new();
+-	if (!pkey || EVP_PKEY_set1_EC_KEY(pkey, eckey) != 1) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX "DPP: Could not create EVP_PKEY");
+-		goto fail;
+-	}
+-
++	pkey = dpp_pkey_from_ec_group_point(group, point);
+ out:
+-	BN_free(x);
+-	BN_free(y);
+-	EC_KEY_free(eckey);
+-	EC_POINT_free(point);
++	BN_clear_free(x);
++	BN_clear_free(y);
++	EC_POINT_clear_free(point);
+ 	BN_CTX_free(ctx);
+ 	return pkey;
+-fail:
+-	EVP_PKEY_free(pkey);
+-	pkey = NULL;
+-	goto out;
+ }
+ 
+ 
+ EVP_PKEY * dpp_set_pubkey_point(EVP_PKEY *group_key,
+ 				       const u8 *buf, size_t len)
+ {
+-	EC_KEY *eckey;
+-	const EC_GROUP *group;
++	EC_GROUP *group = NULL;
+ 	EVP_PKEY *pkey = NULL;
+ 
+-	if (len & 1)
+-		return NULL;
+-
+-	eckey = EVP_PKEY_get1_EC_KEY(group_key);
+-	if (!eckey) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "DPP: Could not get EC_KEY from group_key");
+-		return NULL;
+-	}
+-
+-	group = EC_KEY_get0_group(eckey);
+-	if (group)
+-		pkey = dpp_set_pubkey_point_group(group, buf, buf + len / 2,
+-						  len / 2);
+-	else
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX "DPP: Could not get EC group");
+-
+-	EC_KEY_free(eckey);
++	if (!group_key || !buf || (len & 1) || !len || len / 2 > INT_MAX ||
++	    dpp_pkey_get_group(group_key, &group) < 0)
++		goto out;
++	pkey = dpp_set_pubkey_point_group(group, buf, buf + len / 2, len / 2);
++out:
++	EC_GROUP_free(group);
+ 	return pkey;
+ }
+ 
+@@ -1162,7 +1108,6 @@
+ #if defined(DPP_AUTOTEST) || defined(MAP_R3)
+ static void dpp_gen_privkey_from_pubkey(EVP_PKEY *key, unsigned char **privtemp)
+ {
+-	EC_KEY *eckey;
+ 	BIO *out;
+ 	size_t rlen;
+ 	char *txt;
+@@ -1186,11 +1131,9 @@
+ 	}
+ 	BIO_free(out);
+ 
+-	eckey = EVP_PKEY_get1_EC_KEY(key);
+-	if (!eckey)
++	if (!key)
+ 		return;
+-
+-	der_len = i2d_ECPrivateKey(eckey, &der);
++	der_len = i2d_PrivateKey(key, &der);
+ 	if (der_len > 0) {
+ 		*privtemp = os_zalloc(der_len * 2 + 1);
+ 		if(*privtemp) {
+@@ -1199,109 +1142,52 @@
+ 	}
+ 	OPENSSL_free(der);
+ 
+-	EC_KEY_free(eckey);
+ }
+ #endif /* DPP_AUTOTEST || MAP_R3 */
+ 
+ void dpp_debug_print_key(const char *title, EVP_PKEY *key)
+ {
+-	EC_KEY *eckey;
+-	BIO *out;
+-	size_t rlen;
+-	char *txt;
+-	int res;
+-	unsigned char *der = NULL;
+-	int der_len;
+-	const EC_GROUP *group;
+-	const EC_POINT *point;
+-
+-	out = BIO_new(BIO_s_mem());
+-	if (!out)
+-		return;
+-
+-	EVP_PKEY_print_private(out, key, 0, NULL);
+-	rlen = BIO_ctrl_pending(out);
+-	txt = os_malloc(rlen + 1);
+-	if (txt) {
+-		res = BIO_read(out, txt, rlen);
+-		if (res > 0) {
+-			txt[res] = '\0';
+-			wpa_printf(MSG_DEBUG, DPP_MAP_PREX "%s: %s", title, txt);
+-		}
+-		os_free(txt);
+-	}
+-	BIO_free(out);
+-
+-	eckey = EVP_PKEY_get1_EC_KEY(key);
+-	if (!eckey)
+-		return;
+-
+-	group = EC_KEY_get0_group(eckey);
+-	point = EC_KEY_get0_public_key(eckey);
+-	if (group && point)
+-		dpp_debug_print_point(title, group, point);
+-
+-	der_len = i2d_ECPrivateKey(eckey, &der);
+-	if (der_len > 0)
+-		wpa_hexdump_key(MSG_INFO1, DPP_MAP_PREX "DPP: ECPrivateKey", der, der_len);
+-	OPENSSL_free(der);
+-	if (der_len <= 0) {
+-		der = NULL;
+-		der_len = i2d_EC_PUBKEY(eckey, &der);
+-		if (der_len > 0)
+-			wpa_hexdump(MSG_DEBUG, DPP_MAP_PREX "DPP: EC_PUBKEY", der, der_len);
+-		OPENSSL_free(der);
+-	}
+-
+-	EC_KEY_free(eckey);
++	EC_GROUP *group = NULL;
++	EC_POINT *point = NULL;
++
++	if (!key || dpp_pkey_get_group(key, &group) < 0 ||
++	    dpp_pkey_get_public_point(key, group, &point) < 0)
++		goto out;
++	dpp_debug_print_point(title, group, point);
++out:
++	EC_POINT_clear_free(point);
++	EC_GROUP_free(group);
+ }
+ 
+ 
+ EVP_PKEY * dpp_gen_keypair(const struct dpp_curve_params *curve)
+ {
+ 	EVP_PKEY_CTX *kctx = NULL;
+-	EC_KEY *ec_params;
+-	EVP_PKEY *params = NULL, *key = NULL;
+-	int nid;
+-
++	EVP_PKEY *key = NULL;
++	OSSL_PARAM params[2];
++	char *group_name;
++
++	if (!curve || !curve->name)
++		return NULL;
++	group_name = (char *) curve->name;
+ 	wpa_printf(MSG_DEBUG, DPP_MAP_PREX "DPP: Generating a keypair");
+-
+-	nid = OBJ_txt2nid(curve->name);
+-	if (nid == NID_undef) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX "DPP: Unsupported curve %s", curve->name);
+-		return NULL;
+-	}
+-
+-	ec_params = EC_KEY_new_by_curve_name(nid);
+-	if (!ec_params) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "DPP: Failed to generate EC_KEY parameters");
+-		goto fail;
+-	}
+-	EC_KEY_set_asn1_flag(ec_params, OPENSSL_EC_NAMED_CURVE);
+-	params = EVP_PKEY_new();
+-	if (!params || EVP_PKEY_set1_EC_KEY(params, ec_params) != 1) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "DPP: Failed to generate EVP_PKEY parameters");
+-		goto fail;
+-	}
+-
+-	kctx = EVP_PKEY_CTX_new(params, NULL);
+-	if (!kctx ||
+-	    EVP_PKEY_keygen_init(kctx) != 1 ||
+-	    EVP_PKEY_keygen(kctx, &key) != 1) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX "DPP: Failed to generate EC key");
+-		goto fail;
+-	}
+-
++	kctx = EVP_PKEY_CTX_new_from_name(NULL, "EC", NULL);
++	if (!kctx || EVP_PKEY_keygen_init(kctx) <= 0)
++		goto fail;
++	params[0] = OSSL_PARAM_construct_utf8_string(
++		OSSL_PKEY_PARAM_GROUP_NAME, group_name, 0);
++	params[1] = OSSL_PARAM_construct_end();
++	if (EVP_PKEY_CTX_set_params(kctx, params) <= 0 ||
++	    EVP_PKEY_generate(kctx, &key) <= 0) {
++		wpa_printf(MSG_ERROR, "DPP: Failed to generate provider EC key");
++		goto fail;
++	}
+ 	dpp_debug_print_key("Own generated key: ", key);
+-
+-	EVP_PKEY_free(params);
+ 	EVP_PKEY_CTX_free(kctx);
+ 	return key;
+ fail:
++	EVP_PKEY_free(key);
+ 	EVP_PKEY_CTX_free(kctx);
+-	EVP_PKEY_free(params);
+ 	return NULL;
+ }
+ 
+@@ -1338,45 +1224,28 @@
+ EVP_PKEY * dpp_set_keypair(const struct dpp_curve_params **curve,
+ 				  const u8 *privkey, size_t privkey_len)
+ {
+-	EVP_PKEY *pkey;
+-	EC_KEY *eckey;
+-	const EC_GROUP *group;
++	EVP_PKEY *pkey = NULL;
++	char group_name[80] = { 0 };
++	size_t group_name_len = 0;
++	const unsigned char *pos = privkey;
+ 	int nid;
+ 
+-	pkey = EVP_PKEY_new();
+-	if (!pkey)
++	if (!curve || !privkey || !privkey_len || privkey_len > LONG_MAX)
+ 		return NULL;
+-	eckey = d2i_ECPrivateKey(NULL, &privkey, privkey_len);
+-	if (!eckey) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "DPP: OpenSSL: d2i_ECPrivateKey() failed: %s",
+-			   ERR_error_string(ERR_get_error(), NULL));
+-		EVP_PKEY_free(pkey);
+-		return NULL;
+-	}
+-	group = EC_KEY_get0_group(eckey);
+-	if (!group) {
+-		EC_KEY_free(eckey);
+-		EVP_PKEY_free(pkey);
+-		return NULL;
+-	}
+-	nid = EC_GROUP_get_curve_name(group);
++	pkey = d2i_AutoPrivateKey(NULL, &pos, (long) privkey_len);
++	if (!pkey || pos != privkey + privkey_len ||
++	    !EVP_PKEY_is_a(pkey, "EC") ||
++	    EVP_PKEY_get_group_name(pkey, group_name, sizeof(group_name),
++				    &group_name_len) != 1)
++		goto fail;
++	nid = OBJ_txt2nid(group_name);
+ 	*curve = dpp_get_curve_nid(nid);
+-	if (!*curve) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "DPP: Unsupported curve (nid=%d) in pre-assigned key",
+-			   nid);
+-		EC_KEY_free(eckey);
+-		EVP_PKEY_free(pkey);
+-		return NULL;
+-	}
+-
+-	if (EVP_PKEY_assign_EC_KEY(pkey, eckey) != 1) {
+-		EC_KEY_free(eckey);
+-		EVP_PKEY_free(pkey);
+-		return NULL;
+-	}
++	if (!*curve)
++		goto fail;
+ 	return pkey;
++fail:
++	EVP_PKEY_free(pkey);
++	return NULL;
+ }
+ 
+ 
+@@ -1400,64 +1269,54 @@
+ {
+ 	unsigned char *der = NULL;
+ 	int der_len;
+-	EC_KEY *eckey;
+ 	struct wpabuf *ret = NULL;
+ 	size_t len;
+-	const EC_GROUP *group;
+-	const EC_POINT *point;
+-	BN_CTX *ctx;
++	EC_GROUP *group = NULL;
++	EC_POINT *point = NULL;
++	BN_CTX *ctx = NULL;
+ 	DPP_BOOTSTRAPPING_KEY *bootstrap = NULL;
+ 	int nid;
+ 
++	if (!key)
++		return NULL;
+ 	ctx = BN_CTX_new();
+-	eckey = EVP_PKEY_get1_EC_KEY(key);
+-	if (!ctx || !eckey)
+-		goto fail;
+-
+-	group = EC_KEY_get0_group(eckey);
+-	point = EC_KEY_get0_public_key(eckey);
+-	if (!group || !point)
++	if (!ctx || dpp_pkey_get_group(key, &group) < 0 ||
++	    dpp_pkey_get_public_point(key, group, &point) < 0)
+ 		goto fail;
+ 	dpp_debug_print_point("DPP: bootstrap public key", group, point);
+ 	nid = EC_GROUP_get_curve_name(group);
+-
++	if (nid == NID_undef)
++		goto fail;
+ 	bootstrap = DPP_BOOTSTRAPPING_KEY_new();
+ 	if (!bootstrap ||
+ 	    X509_ALGOR_set0(bootstrap->alg, OBJ_nid2obj(EVP_PKEY_EC),
+ 			    V_ASN1_OBJECT, (void *) OBJ_nid2obj(nid)) != 1)
+ 		goto fail;
+-
+ 	len = EC_POINT_point2oct(group, point, POINT_CONVERSION_COMPRESSED,
+ 				 NULL, 0, ctx);
+-	if (len == 0)
+-		goto fail;
+-
++	if (!len || len > INT_MAX)
++		goto fail;
+ 	der = OPENSSL_malloc(len);
+-	if (!der)
+-		goto fail;
+-	len = EC_POINT_point2oct(group, point, POINT_CONVERSION_COMPRESSED,
+-				 der, len, ctx);
+-
++	if (!der || EC_POINT_point2oct(group, point, POINT_CONVERSION_COMPRESSED,
++				       der, len, ctx) != len)
++		goto fail;
+ 	OPENSSL_free(bootstrap->pub_key->data);
+ 	bootstrap->pub_key->data = der;
+ 	der = NULL;
+-	bootstrap->pub_key->length = len;
+-	/* No unused bits */
++	bootstrap->pub_key->length = (int) len;
+ 	bootstrap->pub_key->flags &= ~(ASN1_STRING_FLAG_BITS_LEFT | 0x07);
+ 	bootstrap->pub_key->flags |= ASN1_STRING_FLAG_BITS_LEFT;
+-
+ 	der_len = i2d_DPP_BOOTSTRAPPING_KEY(bootstrap, &der);
+ 	if (der_len <= 0) {
+-		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+-			   "DDP: Failed to build DER encoded public key");
+-		goto fail;
+-	}
+-
++		wpa_printf(MSG_ERROR, "DPP: Failed to build DER encoded public key");
++		goto fail;
++	}
+ 	ret = wpabuf_alloc_copy(der, der_len);
+ fail:
+ 	DPP_BOOTSTRAPPING_KEY_free(bootstrap);
+ 	OPENSSL_free(der);
+-	EC_KEY_free(eckey);
++	EC_POINT_clear_free(point);
++	EC_GROUP_free(group);
+ 	BN_CTX_free(ctx);
+ 	return ret;
+ }
+@@ -2689,49 +2548,50 @@
+ }
+ 
+ 
++
+ static int dpp_auth_derive_l_responder(struct dpp_authentication *auth)
+ {
+-	const EC_GROUP *group;
+-	EC_POINT *l = NULL;
+-	EC_KEY *BI = NULL, *bR = NULL, *pR = NULL;
+-	const EC_POINT *BI_point;
+-	BN_CTX *bnctx;
+-	BIGNUM *lx, *sum, *q;
+-	const BIGNUM *bR_bn, *pR_bn;
++	EC_GROUP *group = NULL, *own_group = NULL;
++	EC_POINT *l = NULL, *BI_point = NULL;
++	BN_CTX *bnctx = NULL;
++	BIGNUM *lx = NULL, *sum = NULL, *q = NULL;
++	BIGNUM *bR_bn = NULL, *pR_bn = NULL;
+ 	int ret = -1;
+ 
+ 	/* L = ((bR + pR) modulo q) * BI */
++	if (!auth || !auth->peer_bi || !auth->peer_bi->pubkey ||
++	    !auth->own_bi || !auth->own_bi->pubkey ||
++	    !auth->own_protocol_key)
++		return -1;
+ 
+ 	bnctx = BN_CTX_new();
+ 	sum = BN_new();
+ 	q = BN_new();
+ 	lx = BN_new();
+-	if (!bnctx || !sum || !q || !lx)
+-		goto fail;
+-	BI = EVP_PKEY_get1_EC_KEY(auth->peer_bi->pubkey);
+-	if (!BI)
+-		goto fail;
+-	BI_point = EC_KEY_get0_public_key(BI);
+-	group = EC_KEY_get0_group(BI);
+-	if (!group)
+-		goto fail;
+-
+-	bR = EVP_PKEY_get1_EC_KEY(auth->own_bi->pubkey);
+-	pR = EVP_PKEY_get1_EC_KEY(auth->own_protocol_key);
+-	if (!bR || !pR)
+-		goto fail;
+-	bR_bn = EC_KEY_get0_private_key(bR);
+-	pR_bn = EC_KEY_get0_private_key(pR);
+-	if (!bR_bn || !pR_bn)
+-		goto fail;
++	if (!bnctx || !sum || !q || !lx ||
++	    dpp_pkey_get_group(auth->peer_bi->pubkey, &group) < 0 ||
++	    dpp_pkey_get_public_point(auth->peer_bi->pubkey, group,
++					   &BI_point) < 0 ||
++	    dpp_pkey_get_group(auth->own_bi->pubkey, &own_group) < 0 ||
++	    EC_GROUP_cmp(group, own_group, NULL) != 0)
++		goto fail;
++	EC_GROUP_free(own_group);
++	own_group = NULL;
++	if (dpp_pkey_get_group(auth->own_protocol_key, &own_group) < 0 ||
++	    EC_GROUP_cmp(group, own_group, NULL) != 0 ||
++	    EVP_PKEY_get_bn_param(auth->own_bi->pubkey,
++				  OSSL_PKEY_PARAM_PRIV_KEY, &bR_bn) != 1 ||
++	    EVP_PKEY_get_bn_param(auth->own_protocol_key,
++				  OSSL_PKEY_PARAM_PRIV_KEY, &pR_bn) != 1)
++		goto fail;
++
+ 	if (EC_GROUP_get_order(group, q, bnctx) != 1 ||
+ 	    BN_mod_add(sum, bR_bn, pR_bn, q, bnctx) != 1)
+ 		goto fail;
+ 	l = EC_POINT_new(group);
+ 	if (!l ||
+ 	    EC_POINT_mul(group, l, NULL, BI_point, sum, bnctx) != 1 ||
+-	    EC_POINT_get_affine_coordinates_GFp(group, l, lx, NULL,
+-						bnctx) != 1) {
++	    EC_POINT_get_affine_coordinates(group, l, lx, NULL, bnctx) != 1) {
+ 		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+ 			   "OpenSSL: failed: %s",
+ 			   ERR_error_string(ERR_get_error(), NULL));
+@@ -2740,17 +2600,20 @@
+ 
+ 	if (dpp_bn2bin_pad(lx, auth->Lx, auth->secret_len) < 0)
+ 		goto fail;
+-	wpa_hexdump_key(MSG_DEBUG, DPP_MAP_PREX "DPP: L.x", auth->Lx, auth->secret_len);
++	wpa_hexdump_key(MSG_DEBUG, DPP_MAP_PREX "DPP: L.x", auth->Lx,
++			auth->secret_len);
+ 	auth->Lx_len = auth->secret_len;
+ 	ret = 0;
+ fail:
+ 	EC_POINT_clear_free(l);
+-	EC_KEY_free(BI);
+-	EC_KEY_free(bR);
+-	EC_KEY_free(pR);
++	EC_POINT_clear_free(BI_point);
++	EC_GROUP_free(group);
++	EC_GROUP_free(own_group);
+ 	BN_clear_free(lx);
+ 	BN_clear_free(sum);
+-	BN_free(q);
++	BN_clear_free(q);
++	BN_clear_free(bR_bn);
++	BN_clear_free(pR_bn);
+ 	BN_CTX_free(bnctx);
+ 	return ret;
+ }
+@@ -2758,42 +2621,37 @@
+ 
+ static int dpp_auth_derive_l_initiator(struct dpp_authentication *auth)
+ {
+-	const EC_GROUP *group;
++	EC_GROUP *group = NULL;
+ 	EC_POINT *l = NULL, *sum = NULL;
+-	EC_KEY *bI = NULL, *BR = NULL, *PR = NULL;
+-	const EC_POINT *BR_point, *PR_point;
+-	BN_CTX *bnctx;
+-	BIGNUM *lx;
+-	const BIGNUM *bI_bn;
++	EC_POINT *BR_point = NULL, *PR_point = NULL;
++	BN_CTX *bnctx = NULL;
++	BIGNUM *lx = NULL, *bI_bn = NULL;
+ 	int ret = -1;
+ 
+ 	/* L = bI * (BR + PR) */
++	if (!auth || !auth->peer_bi || !auth->peer_bi->pubkey ||
++	    !auth->peer_protocol_key || !auth->own_bi ||
++	    !auth->own_bi->pubkey)
++		return -1;
+ 
+ 	bnctx = BN_CTX_new();
+ 	lx = BN_new();
+-	if (!bnctx || !lx)
+-		goto fail;
+-	BR = EVP_PKEY_get1_EC_KEY(auth->peer_bi->pubkey);
+-	PR = EVP_PKEY_get1_EC_KEY(auth->peer_protocol_key);
+-	if (!BR || !PR)
+-		goto fail;
+-	BR_point = EC_KEY_get0_public_key(BR);
+-	PR_point = EC_KEY_get0_public_key(PR);
+-
+-	bI = EVP_PKEY_get1_EC_KEY(auth->own_bi->pubkey);
+-	if (!bI)
+-		goto fail;
+-	group = EC_KEY_get0_group(bI);
+-	bI_bn = EC_KEY_get0_private_key(bI);
+-	if (!group || !bI_bn)
+-		goto fail;
++	if (!bnctx || !lx ||
++	    dpp_pkey_get_group(auth->own_bi->pubkey, &group) < 0 ||
++	    dpp_pkey_get_public_point(auth->peer_bi->pubkey, group,
++					   &BR_point) < 0 ||
++	    dpp_pkey_get_public_point(auth->peer_protocol_key, group,
++					   &PR_point) < 0 ||
++	    EVP_PKEY_get_bn_param(auth->own_bi->pubkey,
++				  OSSL_PKEY_PARAM_PRIV_KEY, &bI_bn) != 1)
++		goto fail;
++
+ 	sum = EC_POINT_new(group);
+ 	l = EC_POINT_new(group);
+ 	if (!sum || !l ||
+ 	    EC_POINT_add(group, sum, BR_point, PR_point, bnctx) != 1 ||
+ 	    EC_POINT_mul(group, l, NULL, sum, bI_bn, bnctx) != 1 ||
+-	    EC_POINT_get_affine_coordinates_GFp(group, l, lx, NULL,
+-						bnctx) != 1) {
++	    EC_POINT_get_affine_coordinates(group, l, lx, NULL, bnctx) != 1) {
+ 		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+ 			   "OpenSSL: failed: %s",
+ 			   ERR_error_string(ERR_get_error(), NULL));
+@@ -2802,20 +2660,21 @@
+ 
+ 	if (dpp_bn2bin_pad(lx, auth->Lx, auth->secret_len) < 0)
+ 		goto fail;
+-	wpa_hexdump_key(MSG_DEBUG, DPP_MAP_PREX "DPP: L.x", auth->Lx, auth->secret_len);
++	wpa_hexdump_key(MSG_DEBUG, DPP_MAP_PREX "DPP: L.x", auth->Lx,
++			auth->secret_len);
+ 	auth->Lx_len = auth->secret_len;
+ 	ret = 0;
+ fail:
+ 	EC_POINT_clear_free(l);
+ 	EC_POINT_clear_free(sum);
+-	EC_KEY_free(bI);
+-	EC_KEY_free(BR);
+-	EC_KEY_free(PR);
++	EC_POINT_clear_free(BR_point);
++	EC_POINT_clear_free(PR_point);
++	EC_GROUP_free(group);
+ 	BN_clear_free(lx);
++	BN_clear_free(bI_bn);
+ 	BN_CTX_free(bnctx);
+ 	return ret;
+ }
+-
+ 
+ static int dpp_auth_build_resp_ok(struct dpp_authentication *auth)
+ {
+@@ -4163,8 +4022,8 @@
+ 				os_strlcpy((char *)auth->config_sta[idx]->group_id, dpp->config_sta[idx].group_id,
+ 					sizeof(auth->config_sta[idx]->group_id));
+ 
+-				DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"sta (idx:%d) ssid:%s, pass :%s, group id:%s \n", idx,
+-					auth->config_sta[idx]->ssid, auth->config_sta[idx]->passphrase, auth->config_sta[idx]->group_id);
++				DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"sta (idx:%d) ssid:%s, passphrase_len:%zu, group id:%s \n", idx,
++					auth->config_sta[idx]->ssid, os_strlen(auth->config_sta[idx]->passphrase), auth->config_sta[idx]->group_id);
+ 			}
+ 			DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"sta num:%d, idx:%d\n", dpp->dpp_conf_sta_num, idx);
+ 		}
+@@ -4193,8 +4052,8 @@
+ 				os_strlcpy((char *)auth->config_ap[idx]->group_id, dpp->config_ap[idx].group_id,
+ 					sizeof(auth->config_ap[idx]->group_id));
+ 
+-				DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"ap (idx:%d) ssid:%s, pass :%s, group id:%s \n", idx, 
+-					auth->config_ap[idx]->ssid, auth->config_sta[idx]->passphrase, auth->config_sta[idx]->group_id);
++				DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"ap (idx:%d) ssid:%s, passphrase_len:%zu, group id:%s \n", idx,
++					auth->config_ap[idx]->ssid, os_strlen(auth->config_ap[idx]->passphrase), auth->config_ap[idx]->group_id);
+ 			}
+ 			DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"ap num:%d, idx:%d\n", dpp->dpp_conf_ap_num, idx);
+ 		}
+@@ -4464,7 +4323,6 @@
+ 	const char *pos = NULL;
+ 
+ 	if (cmd) {
+-		wpa_printf(MSG_DEBUG, DPP_MAP_PREX "DPP: Set configurator parameters: %s", cmd);
+ 		pos = os_strstr(cmd, "configurator=");
+ 	}
+ 
+@@ -4552,8 +4410,14 @@
+ 		dpp_conf_obj_free( &(auth->conf_obj[idx]));
+ 	}
+ 	//os_free(auth->connector);
+-	wpabuf_free(auth->net_access_key);
+-	wpabuf_free(auth->c_sign_key);
++	wpabuf_clear_free(auth->net_access_key);
++	auth->net_access_key = NULL;
++	wpabuf_clear_free(auth->c_sign_key);
++	auth->c_sign_key = NULL;
++#ifdef MAP_R3
++	wpabuf_clear_free(auth->pp_key);
++	auth->pp_key = NULL;
++#endif /* MAP_R3 */
+ 	dpp_bootstrap_info_free(auth->tmp_own_bi);
+ 	bin_clear_free(auth, sizeof(*auth));
+ 	auth = NULL;
+@@ -4654,10 +4518,19 @@
+ #endif /* MAP_R4 */
+ 	wpabuf_free(auth->resp_msg);
+ 	auth->resp_msg = NULL;
+-	if (auth->connector)
++	if (auth->connector) {
++		forced_memzero(auth->connector, os_strlen(auth->connector) + 1);
+ 		os_free(auth->connector);
+-	wpabuf_free(auth->net_access_key);
+-	wpabuf_free(auth->c_sign_key);
++		auth->connector = NULL;
++	}
++	wpabuf_clear_free(auth->net_access_key);
++	auth->net_access_key = NULL;
++	wpabuf_clear_free(auth->c_sign_key);
++	auth->c_sign_key = NULL;
++#ifdef MAP_R3
++	wpabuf_clear_free(auth->pp_key);
++	auth->pp_key = NULL;
++#endif /* MAP_R3 */
+ 	dpp_bootstrap_info_free(auth->tmp_own_bi);
+ 	bin_clear_free(auth, sizeof(*auth));
+ 	auth = NULL;
+@@ -4877,8 +4750,6 @@
+ 			      tm.hour, tm.min, tm.sec);
+ 	}
+ 	wpabuf_put_u8(dppcon, '}');
+-	wpa_printf(MSG_DEBUG, DPP_MAP_PREX "DPP: dppCon: %s",
+-		   (const char *) wpabuf_head(dppcon));
+ 
+ 	os_snprintf(jws_prot_hdr, sizeof(jws_prot_hdr),
+ 		    "{\"typ\":\"dppCon\",\"kid\":\"%s\",\"alg\":\"%s\"}",
+@@ -5092,8 +4963,6 @@
+ 			      tm.hour, tm.min, tm.sec);
+ 	}
+ 	wpabuf_put_u8(dppcon, '}');
+-	wpa_printf(MSG_DEBUG, DPP_MAP_PREX "DPP: dppCon: %s",
+-		   (const char *) wpabuf_head(dppcon));
+ 
+ 	os_snprintf(jws_prot_hdr, sizeof(jws_prot_hdr),
+ 		    "{\"typ\":\"dppCon\",\"kid\":\"%s\",\"alg\":\"%s\"}",
+@@ -6914,7 +6783,11 @@
+ 			goto fail;
+ 		dpp_debug_print_key("DPP: Received netAccessKey", key);
+ 
++#if OPENSSL_VERSION_NUMBER >= 0x30000000L
++		if (EVP_PKEY_eq(key, auth->own_protocol_key) != 1) {
++#else
+ 		if (EVP_PKEY_cmp(key, auth->own_protocol_key) != 1) {
++#endif
+ 			wpa_printf(MSG_DEBUG, DPP_MAP_PREX
+ 					"DPP: netAccessKey in connector does not match own protocol key");
+ 			goto fail;
+@@ -6974,7 +6847,7 @@
+ 	der_len = i2d_PUBKEY(csign, &der);
+ 	if (der_len <= 0)
+ 		return;
+-	wpabuf_free(auth->c_sign_key);
++	wpabuf_clear_free(auth->c_sign_key);
+ 	auth->c_sign_key = wpabuf_alloc_copy(der, der_len);
+ 	OPENSSL_free(der);
+ }
+@@ -7027,16 +6900,19 @@
+ 	char param[64] = {0};
+ 	char value[512] = {0};
+ 	int ret;
++	size_t hex_len, key_len;
+ 	unsigned char buf_temp[1024] = {0};
+ 
++	if (!wapp || !wdev_config)
++		return 0;
+ 	ret = os_snprintf(param, sizeof(param), "_1905valid");
+ 	if (os_snprintf_error(sizeof(param), ret)) {
+ 		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"%s %d os_snprintf error1\n", __func__, __LINE__);
+ 		return 0;
+ 	}
+ 
+-	ret = 0;
+-	get_dpp_parameters(wapp->map, param, value, sizeof(value));
++	if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
++		return 0;
+ 	if(os_strcmp(value,"1") != 0) {
+ 		DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"no config found for 1905\n");
+ 		return 0;
+@@ -7049,10 +6925,15 @@
+ 		return 0;
+ 	}
+ 
+-	ret = 0;
+-	get_dpp_parameters(wapp->map, param, value, sizeof(value));
+-	hexstr2bin(value, buf_temp, os_strlen(value));
+-	wdev_config->dpp_netaccesskey_len = os_strlen(value) / 2;
++	if (get_dpp_parameters(wapp->map, param, value, sizeof(value)) < 0)
++		return 0;
++	hex_len = os_strlen(value);
++	if (!hex_len || (hex_len & 1) || hex_len / 2 > sizeof(buf_temp))
++		return 0;
++	key_len = hex_len / 2;
++	if (hexstr2bin(value, buf_temp, key_len) < 0)
++		return 0;
++	wdev_config->dpp_netaccesskey_len = key_len;
+ 	wdev_config->dpp_netaccesskey = os_zalloc(wdev_config->dpp_netaccesskey_len + 1);
+ 	if(!wdev_config->dpp_netaccesskey) {
+ 		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"net access key malloc falied\n");
+@@ -7072,7 +6953,7 @@
+ 	der_len = i2d_PUBKEY(ppkey, &der);
+ 	if (der_len <= 0)
+ 		return;
+-	wpabuf_free(auth->pp_key);
++	wpabuf_clear_free(auth->pp_key);
+ 	auth->pp_key = wpabuf_alloc_copy(der, der_len);
+ 	OPENSSL_free(der);
+ }
+@@ -7101,21 +6982,17 @@
+ {
+ 	unsigned char *der = NULL;
+ 	int der_len;
+-	EC_KEY *eckey;
+-
+-	eckey = EVP_PKEY_get1_EC_KEY(auth->own_protocol_key);
+-	if (!eckey)
++
++	if (!auth || !auth->own_protocol_key)
+ 		return;
+-
+-	der_len = i2d_ECPrivateKey(eckey, &der);
++	der_len = i2d_PrivateKey(auth->own_protocol_key, &der);
+ 	if (der_len <= 0) {
+-		EC_KEY_free(eckey);
++		OPENSSL_free(der);
+ 		return;
+ 	}
+-	wpabuf_free(auth->net_access_key);
++	wpabuf_clear_free(auth->net_access_key);
+ 	auth->net_access_key = wpabuf_alloc_copy(der, der_len);
+ 	OPENSSL_free(der);
+-	EC_KEY_free(eckey);
+ }
+ 
+ #if 0
+@@ -7141,15 +7018,10 @@
+ 	ECDSA_SIG *sig = NULL;
+ 	BIGNUM *r = NULL, *s = NULL;
+ 	const struct dpp_curve_params *curve;
+-	EC_KEY *eckey;
+-	const EC_GROUP *group;
++	EC_GROUP *group = NULL;
+ 	int nid;
+ 
+-	eckey = EVP_PKEY_get1_EC_KEY(csign_pub);
+-	if (!eckey)
+-		goto fail;
+-	group = EC_KEY_get0_group(eckey);
+-	if (!group)
++	if (dpp_pkey_get_group(csign_pub, &group) < 0)
+ 		goto fail;
+ 	nid = EC_GROUP_get_curve_name(group);
+ 	curve = dpp_get_curve_nid(nid);
+@@ -7279,7 +7151,7 @@
+ 
+ 	ret = DPP_STATUS_OK;
+ fail:
+-	EC_KEY_free(eckey);
++	EC_GROUP_free(group);
+ 	EVP_MD_CTX_destroy(md_ctx);
+ 	os_free(prot_hdr);
+ 	wpabuf_free(kid);
+@@ -7955,39 +7827,6 @@
+ 			connector_len);
+ 	wdev_config->dpp_connector[connector_len] = '\0';
+ 
+-	if(wdev_config->dpp_connector)
+-	wpa_printf(MSG_INFO1, DPP_MAP_PREX DPP_EVENT_CONNECTOR "After: %s",
+-		wdev_config->dpp_connector);
+-
+-	if(wdev_config->dpp_csign) {
+-		char *hex;
+-		size_t hexlen;
+-
+-		hexlen = 2 * wdev_config->dpp_csign_len + 1;
+-		hex = os_malloc(hexlen);
+-		if (hex) {
+-			os_snprintf_hex(hex, hexlen,
+-				wdev_config->dpp_csign, wdev_config->dpp_csign_len);
+-			wpa_printf(MSG_INFO1, DPP_MAP_PREX
+-				DPP_EVENT_C_SIGN_KEY "%s", hex);
+-			os_free(hex);
+-		}
+-	}
+-
+-	if(wdev_config->dpp_netaccesskey) {
+-		char *hex;
+-		size_t hexlen;
+-
+-		hexlen = 2 * wdev_config->dpp_netaccesskey_len + 1;
+-		hex = os_malloc(hexlen);
+-		if (hex) {
+-			os_snprintf_hex(hex, hexlen,
+-				wdev_config->dpp_netaccesskey, wdev_config->dpp_netaccesskey_len);
+-			wpa_printf(MSG_INFO1, DPP_MAP_PREX
+-				DPP_EVENT_NET_ACCESS_KEY "%s", hex);
+-			os_free(hex);
+-		}
+-	}
+ 	ret = 0;
+ fail:
+ 	EVP_PKEY_free(csign_pub);
+@@ -8325,22 +8164,14 @@
+ int dpp_configurator_get_key(const struct dpp_configurator *conf, char *buf,
+ 			     size_t buflen)
+ {
+-	EC_KEY *eckey;
+ 	int key_len, ret = -1;
+ 	unsigned char *key = NULL;
+ 
+-	if (!conf->csign)
++	if (!conf || !conf->csign || !buf)
+ 		return -1;
+-
+-	eckey = EVP_PKEY_get1_EC_KEY(conf->csign);
+-	if (!eckey)
+-		return -1;
+-
+-	key_len = i2d_ECPrivateKey(eckey, &key);
++	key_len = i2d_PrivateKey(conf->csign, &key);
+ 	if (key_len > 0)
+ 		ret = os_snprintf_hex(buf, buflen, key, key_len);
+-
+-	EC_KEY_free(eckey);
+ 	OPENSSL_free(key);
+ 	return ret;
+ }
+@@ -8961,14 +8792,18 @@
+ 	group = EC_GROUP_new_by_curve_name(OBJ_txt2nid(curve->name));
+ 	if (!group)
+ 		return NULL;
+-	return dpp_set_pubkey_point_group(group, x, y, len);
++	{
++		EVP_PKEY *key = dpp_set_pubkey_point_group(group, x, y, len);
++		EC_GROUP_free(group);
++		return key;
++	}
+ }
+ 
+ 
+ static EC_POINT * dpp_pkex_derive_Qi(const struct dpp_curve_params *curve,
+ 				     const u8 *mac_init, const char *code,
+ 				     const char *identifier, BN_CTX *bnctx,
+-				     const EC_GROUP **ret_group)
++				     EC_GROUP **ret_group)
+ {
+ 	u8 hash[DPP_MAX_HASH_LEN];
+ 	const u8 *addr[3];
+@@ -8976,11 +8811,9 @@
+ 	unsigned int num_elem = 0;
+ 	EC_POINT *Qi = NULL;
+ 	EVP_PKEY *Pi = NULL;
+-	EC_KEY *Pi_ec = NULL;
+-	const EC_POINT *Pi_point;
++	EC_POINT *Pi_point = NULL;
+ 	BIGNUM *hash_bn = NULL;
+-	const EC_GROUP *group = NULL;
+-	EC_GROUP *group2 = NULL;
++	EC_GROUP *group = NULL, *group2 = NULL;
+ 
+ 	/* Qi = H(MAC-Initiator | [identifier |] code) * Pi */
+ 
+@@ -9008,22 +8841,15 @@
+ 	if (!Pi)
+ 		goto fail;
+ 	dpp_debug_print_key("DPP: Pi", Pi);
+-	Pi_ec = EVP_PKEY_get1_EC_KEY(Pi);
+-	if (!Pi_ec)
+-		goto fail;
+-	Pi_point = EC_KEY_get0_public_key(Pi_ec);
+-
+-	group = EC_KEY_get0_group(Pi_ec);
+-	if (!group)
++	if (dpp_pkey_get_group(Pi, &group) < 0 ||
++	    dpp_pkey_get_public_point(Pi, group, &Pi_point) < 0)
+ 		goto fail;
+ 	group2 = EC_GROUP_dup(group);
+ 	if (!group2)
+ 		goto fail;
+ 	Qi = EC_POINT_new(group2);
+-	if (!Qi) {
+-		EC_GROUP_free(group2);
+-		goto fail;
+-	}
++	if (!Qi)
++		goto fail;
+ 	hash_bn = BN_bin2bn(hash, curve->hash_len, NULL);
+ 	if (!hash_bn ||
+ 	    EC_POINT_mul(group2, Qi, NULL, Pi_point, hash_bn, bnctx) != 1)
+@@ -9034,11 +8860,16 @@
+ 	}
+ 	dpp_debug_print_point("DPP: Qi", group, Qi);
+ out:
+-	EC_KEY_free(Pi_ec);
++	EC_POINT_clear_free(Pi_point);
++	EC_GROUP_free(group);
+ 	EVP_PKEY_free(Pi);
+ 	BN_clear_free(hash_bn);
+-	if (ret_group)
++	if (ret_group && Qi) {
+ 		*ret_group = group2;
++		group2 = NULL;
++	}
++	EC_GROUP_free(group2);
++	forced_memzero(hash, sizeof(hash));
+ 	return Qi;
+ fail:
+ 	EC_POINT_free(Qi);
+@@ -9050,7 +8881,7 @@
+ static EC_POINT * dpp_pkex_derive_Qr(const struct dpp_curve_params *curve,
+ 				     const u8 *mac_resp, const char *code,
+ 				     const char *identifier, BN_CTX *bnctx,
+-				     const EC_GROUP **ret_group)
++				     EC_GROUP **ret_group)
+ {
+ 	u8 hash[DPP_MAX_HASH_LEN];
+ 	const u8 *addr[3];
+@@ -9058,11 +8889,9 @@
+ 	unsigned int num_elem = 0;
+ 	EC_POINT *Qr = NULL;
+ 	EVP_PKEY *Pr = NULL;
+-	EC_KEY *Pr_ec = NULL;
+-	const EC_POINT *Pr_point;
++	EC_POINT *Pr_point = NULL;
+ 	BIGNUM *hash_bn = NULL;
+-	const EC_GROUP *group = NULL;
+-	EC_GROUP *group2 = NULL;
++	EC_GROUP *group = NULL, *group2 = NULL;
+ 
+ 	/* Qr = H(MAC-Responder | | [identifier | ] code) * Pr */
+ 
+@@ -9090,22 +8919,15 @@
+ 	if (!Pr)
+ 		goto fail;
+ 	dpp_debug_print_key("DPP: Pr", Pr);
+-	Pr_ec = EVP_PKEY_get1_EC_KEY(Pr);
+-	if (!Pr_ec)
+-		goto fail;
+-	Pr_point = EC_KEY_get0_public_key(Pr_ec);
+-
+-	group = EC_KEY_get0_group(Pr_ec);
+-	if (!group)
++	if (dpp_pkey_get_group(Pr, &group) < 0 ||
++	    dpp_pkey_get_public_point(Pr, group, &Pr_point) < 0)
+ 		goto fail;
+ 	group2 = EC_GROUP_dup(group);
+ 	if (!group2)
+ 		goto fail;
+ 	Qr = EC_POINT_new(group2);
+-	if (!Qr) {
+-		EC_GROUP_free(group2);
+-		goto fail;
+-	}
++	if (!Qr)
++		goto fail;
+ 	hash_bn = BN_bin2bn(hash, curve->hash_len, NULL);
+ 	if (!hash_bn ||
+ 	    EC_POINT_mul(group2, Qr, NULL, Pr_point, hash_bn, bnctx) != 1)
+@@ -9116,11 +8938,16 @@
+ 	}
+ 	dpp_debug_print_point("DPP: Qr", group, Qr);
+ out:
+-	EC_KEY_free(Pr_ec);
++	EC_POINT_clear_free(Pr_point);
++	EC_GROUP_free(group);
+ 	EVP_PKEY_free(Pr);
+ 	BN_clear_free(hash_bn);
+-	if (ret_group)
++	if (ret_group && Qr) {
+ 		*ret_group = group2;
++		group2 = NULL;
++	}
++	EC_GROUP_free(group2);
++	forced_memzero(hash, sizeof(hash));
+ 	return Qr;
+ fail:
+ 	EC_POINT_free(Qr);
+@@ -9130,10 +8957,9 @@
+ 
+ static struct wpabuf * dpp_pkex_build_exchange_req(struct dpp_pkex *pkex)
+ {
+-	EC_KEY *X_ec = NULL;
+-	const EC_POINT *X_point;
++	EC_POINT *X_point = NULL;
+ 	BN_CTX *bnctx = NULL;
+-	const EC_GROUP *group;
++	EC_GROUP *group = NULL;
+ 	EC_POINT *Qi = NULL, *M = NULL;
+ 	struct wpabuf *M_buf = NULL;
+ 	BIGNUM *Mx = NULL, *My = NULL;
+@@ -9158,11 +8984,7 @@
+ 		goto fail;
+ 
+ 	/* M = X + Qi */
+-	X_ec = EVP_PKEY_get1_EC_KEY(pkex->x);
+-	if (!X_ec)
+-		goto fail;
+-	X_point = EC_KEY_get0_public_key(X_ec);
+-	if (!X_point)
++	if (dpp_pkey_get_public_point(pkex->x, group, &X_point) < 0)
+ 		goto fail;
+ 	dpp_debug_print_point("DPP: X", group, X_point);
+ 	M = EC_POINT_new(group);
+@@ -9170,7 +8992,7 @@
+ 	My = BN_new();
+ 	if (!M || !Mx || !My ||
+ 	    EC_POINT_add(group, M, X_point, Qi, bnctx) != 1 ||
+-	    EC_POINT_get_affine_coordinates_GFp(group, M, Mx, My, bnctx) != 1)
++	    EC_POINT_get_affine_coordinates(group, M, Mx, My, bnctx) != 1)
+ 		goto fail;
+ 	dpp_debug_print_point("DPP: M", group, M);
+ 
+@@ -9208,7 +9030,8 @@
+ 
+ out:
+ 	wpabuf_free(M_buf);
+-	EC_KEY_free(X_ec);
++	EC_POINT_clear_free(X_point);
++	EC_GROUP_free(group);
+ 	EC_POINT_free(M);
+ 	EC_POINT_free(Qi);
+ 	BN_clear_free(Mx);
+@@ -9391,10 +9214,9 @@
+ 	struct dpp_pkex *pkex = NULL;
+ 	EC_POINT *Qi = NULL, *Qr = NULL, *M = NULL, *X = NULL, *N = NULL;
+ 	BN_CTX *bnctx = NULL;
+-	const EC_GROUP *group;
++	EC_GROUP *group = NULL;
+ 	BIGNUM *Mx = NULL, *My = NULL;
+-	EC_KEY *Y_ec = NULL, *X_ec = NULL;;
+-	const EC_POINT *Y_point;
++	EC_POINT *Y_point = NULL;
+ 	BIGNUM *Nx = NULL, *Ny = NULL;
+ 	u8 Kx[DPP_MAX_SHARED_SECRET_LEN];
+ 	size_t Kx_len;
+@@ -9462,7 +9284,7 @@
+ 	Mx = BN_bin2bn(attr_key, attr_key_len / 2, NULL);
+ 	My = BN_bin2bn(attr_key + attr_key_len / 2, attr_key_len / 2, NULL);
+ 	if (!X || !M || !Mx || !My ||
+-	    EC_POINT_set_affine_coordinates_GFp(group, M, Mx, My, bnctx) != 1 ||
++	    EC_POINT_set_affine_coordinates(group, M, Mx, My, bnctx) != 1 ||
+ 	    EC_POINT_is_at_infinity(group, M) ||
+ 	    !EC_POINT_is_on_curve(group, M, bnctx) ||
+ 	    EC_POINT_invert(group, Qi, bnctx) != 1 ||
+@@ -9494,14 +9316,8 @@
+ 
+ 	os_memcpy(pkex->Mx, attr_key, attr_key_len / 2);
+ 
+-	X_ec = EC_KEY_new();
+-	if (!X_ec ||
+-	    EC_KEY_set_group(X_ec, group) != 1 ||
+-	    EC_KEY_set_public_key(X_ec, X) != 1)
+-		goto fail;
+-	pkex->x = EVP_PKEY_new();
+-	if (!pkex->x ||
+-	    EVP_PKEY_set1_EC_KEY(pkex->x, X_ec) != 1)
++	pkex->x = dpp_pkey_from_point(bi->pubkey, group, X);
++	if (!pkex->x)
+ 		goto fail;
+ 
+ 	/* Qr = H(MAC-Responder | | [identifier | ] code) * Pr */
+@@ -9515,11 +9331,7 @@
+ 		goto fail;
+ 
+ 	/* N = Y + Qr */
+-	Y_ec = EVP_PKEY_get1_EC_KEY(pkex->y);
+-	if (!Y_ec)
+-		goto fail;
+-	Y_point = EC_KEY_get0_public_key(Y_ec);
+-	if (!Y_point)
++	if (dpp_pkey_get_public_point(pkex->y, group, &Y_point) < 0)
+ 		goto fail;
+ 	dpp_debug_print_point("DPP: Y", group, Y_point);
+ 	N = EC_POINT_new(group);
+@@ -9527,7 +9339,7 @@
+ 	Ny = BN_new();
+ 	if (!N || !Nx || !Ny ||
+ 	    EC_POINT_add(group, N, Y_point, Qr, bnctx) != 1 ||
+-	    EC_POINT_get_affine_coordinates_GFp(group, N, Nx, Ny, bnctx) != 1)
++	    EC_POINT_get_affine_coordinates(group, N, Nx, Ny, bnctx) != 1)
+ 		goto fail;
+ 	dpp_debug_print_point("DPP: N", group, N);
+ 
+@@ -9577,8 +9389,9 @@
+ 	EC_POINT_free(M);
+ 	EC_POINT_free(N);
+ 	EC_POINT_free(X);
+-	EC_KEY_free(X_ec);
+-	EC_KEY_free(Y_ec);
++	EC_POINT_clear_free(Y_point);
++	EC_GROUP_free(group);
++	forced_memzero(Kx, sizeof(Kx));
+ 	return pkex;
+ fail:
+ 	wpa_printf(MSG_DEBUG, DPP_MAP_PREX "DPP: PKEX Exchange Request processing failed");
+@@ -9654,14 +9467,14 @@
+ {
+ 	const u8 *attr_status, *attr_id, *attr_key, *attr_group;
+ 	u16 attr_status_len, attr_id_len, attr_key_len, attr_group_len;
+-	const EC_GROUP *group;
++	EC_GROUP *group = NULL;
+ 	BN_CTX *bnctx = NULL;
+ 	struct wpabuf *msg = NULL, *A_pub = NULL, *X_pub = NULL, *Y_pub = NULL;
+ 	const struct dpp_curve_params *curve = pkex->own_bi->curve;
+ 	EC_POINT *Qr = NULL, *Y = NULL, *N = NULL;
+ 	BIGNUM *Nx = NULL, *Ny = NULL;
+ 	EVP_PKEY_CTX *ctx = NULL;
+-	EC_KEY *Y_ec = NULL;
++
+ 	size_t Jx_len, Kx_len;
+ 	u8 Jx[DPP_MAX_SHARED_SECRET_LEN], Kx[DPP_MAX_SHARED_SECRET_LEN];
+ 	const u8 *addr[4];
+@@ -9734,7 +9547,7 @@
+ 	Nx = BN_bin2bn(attr_key, attr_key_len / 2, NULL);
+ 	Ny = BN_bin2bn(attr_key + attr_key_len / 2, attr_key_len / 2, NULL);
+ 	if (!Y || !N || !Nx || !Ny ||
+-	    EC_POINT_set_affine_coordinates_GFp(group, N, Nx, Ny, bnctx) != 1 ||
++	    EC_POINT_set_affine_coordinates(group, N, Nx, Ny, bnctx) != 1 ||
+ 	    EC_POINT_is_at_infinity(group, N) ||
+ 	    !EC_POINT_is_on_curve(group, N, bnctx) ||
+ 	    EC_POINT_invert(group, Qr, bnctx) != 1 ||
+@@ -9751,14 +9564,8 @@
+ 	pkex->exchange_done = 1;
+ 
+ 	/* ECDH: J = a * Y??*/
+-	Y_ec = EC_KEY_new();
+-	if (!Y_ec ||
+-	    EC_KEY_set_group(Y_ec, group) != 1 ||
+-	    EC_KEY_set_public_key(Y_ec, Y) != 1)
+-		goto fail;
+-	pkex->y = EVP_PKEY_new();
+-	if (!pkex->y ||
+-	    EVP_PKEY_set1_EC_KEY(pkex->y, Y_ec) != 1)
++	pkex->y = dpp_pkey_from_point(pkex->own_bi->pubkey, group, Y);
++	if (!pkex->y)
+ 		goto fail;
+ 	ctx = EVP_PKEY_CTX_new(pkex->own_bi->pubkey, NULL);
+ 	if (!ctx ||
+@@ -9836,9 +9643,11 @@
+ 	EC_POINT_free(N);
+ 	BN_free(Nx);
+ 	BN_free(Ny);
+-	EC_KEY_free(Y_ec);
++	EC_GROUP_free(group);
+ 	EVP_PKEY_CTX_free(ctx);
+ 	BN_CTX_free(bnctx);
++	forced_memzero(Jx, sizeof(Jx));
++	forced_memzero(Kx, sizeof(Kx));
+ 	return msg;
+ fail:
+ 	wpa_printf(MSG_DEBUG, DPP_MAP_PREX "DPP: PKEX Exchange Response processing failed");
+@@ -10229,7 +10038,11 @@
+ 		return;
+ 
+ 	os_free(pkex->identifier);
+-	os_free(pkex->code);
++	if (pkex->code) {
++		forced_memzero(pkex->code, os_strlen(pkex->code));
++		os_free(pkex->code);
++	}
++	forced_memzero(pkex->z, sizeof(pkex->z));
+ 	EVP_PKEY_free(pkex->x);
+ 	EVP_PKEY_free(pkex->y);
+ 	EVP_PKEY_free(pkex->peer_bootstrap_key);
+@@ -10378,35 +10191,106 @@
+ }
+ 
+ #ifdef MAP_R3
++int dpp_read_qr_parameter(struct wifi_app *wapp, const char *param,
++			  char *value, size_t value_len)
++{
++	if (!wapp || !wapp->map || !param || !value || !value_len)
++		return -1;
++	value[0] = '\0';
++#ifdef OPENWRT_SUPPORT
++	{
++		struct kvc_context *dat_ctx;
++		const char *stored;
++		size_t len;
++		int ret = -1;
++
++		dat_ctx = dat_load(DPP_CFG_FILE);
++		if (!dat_ctx)
++			return -1;
++		stored = kvc_get(dat_ctx, param);
++		if (!stored) {
++			ret = 1;
++			goto out;
++		}
++		len = os_strlen(stored);
++		if (len >= value_len)
++			goto out;
++		os_memcpy(value, stored, len + 1);
++		ret = 0;
++out:
++		kvc_unload(dat_ctx);
++		return ret;
++	}
++#else
++	if (get_dpp_parameters(wapp->map, (char *)param, value, value_len) < 0)
++		return -1;
++	return 0;
++#endif
++}
++
++int dpp_read_qr_count(struct wifi_app *wapp, unsigned int *count)
++{
++	char value[16] = {0};
++	size_t len, i;
++	unsigned int parsed = 0;
++	int ret;
++
++	if (!count)
++		return -1;
++	*count = 0;
++	ret = dpp_read_qr_parameter(wapp, "qr_count", value, sizeof(value));
++	if (ret == 1)
++		return 0;
++	if (ret < 0)
++		return -1;
++	len = os_strlen(value);
++	if (!len || len > 3)
++		return -1;
++	for (i = 0; i < len; i++) {
++		unsigned int digit;
++
++		if (value[i] < '0' || value[i] > '9')
++			return -1;
++		digit = (unsigned int)(value[i] - '0');
++		parsed = parsed * 10 + digit;
++		if (parsed > MAP_MAX_DPP_URI_COUNT)
++			return -1;
++	}
++	*count = parsed;
++	return 0;
++}
++
+ int  dpp_reset_dpp_config_file(struct wifi_app *wapp)
+ {
+-
+-   	char param[50]="0";
+-	char qr_param[20] = "0";
+-	char value[150] = "0";
+-	char param_str[15] = "agt_qr_code";
+-	char uri_num = 1;
+-	int uri_cnt = 0;
++	char param[50] = "0";
++	char qr_param[20] = {0};
++	char value[150] = {0};
++	const char *param_str = "agt_qr_code";
++	unsigned int uri_num, uri_cnt = 0;
+ 	int res = 0;
+-	
++
+ 	char required_parameters[20][30]={"_akm","dpp_private_key","_1905valid","_1905connector",
+         "_1905netAccessKey","_1905cSignKey","_netKeyExpiry","_decryptThreshold","_ppkey","_bsscred",
+ 	"_bsscredlen","_bhcredlen","_fhcredlen","_valid","_ssid","_passPhrase","_connector",
+ 	"_netAccessKey","_cSignKey","qr_count"};
+ 
+-	get_dpp_parameters(wapp->map, "qr_count", value, sizeof(value));
+-	uri_cnt = atoi(value);
+-	if(uri_cnt != 0) {
+-		for(uri_num = 1; uri_num <= uri_cnt; uri_num++) {
+-			os_memset(qr_param, 0, 20);
+-			res = os_snprintf(qr_param, sizeof(qr_param), "%s_%u", param_str, uri_num);
+-			if (os_snprintf_error(sizeof(qr_param), res)) {
+-				DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"%s %d os_snprintf error\n", __func__, __LINE__);
+-				continue;
+-			}
+-
+-			dpp_delete_parameter_from_file(wapp, (const char *)qr_param);
+-		}
++	if (!wapp || !wapp->map)
++		return -1;
++	if (dpp_read_qr_count(wapp, &uri_cnt) < 0) {
++		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"invalid qr_count; refusing partial DPP reset\n");
++		return -1;
++	}
++	for (uri_num = 1; uri_num <= uri_cnt; uri_num++) {
++		int read_ret;
++
++		res = os_snprintf(qr_param, sizeof(qr_param), "%s_%u", param_str, uri_num);
++		if (os_snprintf_error(sizeof(qr_param), res))
++			return -1;
++		read_ret = dpp_read_qr_parameter(wapp, qr_param, value, sizeof(value));
++		if (read_ret < 0)
++			return -1;
++		if (read_ret == 0 && dpp_delete_parameter_from_file(wapp, qr_param) < 0)
++			return -1;
+ 	}
+ 
+ 	for( int i=0;i<20;i++)
+@@ -10416,15 +10300,16 @@
+ 
+ #ifdef OPENWRT_SUPPORT
+ 		struct kvc_context *dat_ctx = NULL;
+-		char *ifparam;
++		char *ifparam = NULL;
+ 		int ret = 0;
+ 
+-		os_alloc_mem(NULL, (UCHAR**)&ifparam, os_strlen(param)+1);
+-		if(ifparam == NULL) {
++		os_alloc_mem(NULL, (UCHAR**)&ifparam, os_strlen(param) + 1);
++		if (!ifparam) {
+ 			DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"%s, mem alloc fail \n", __func__);
++			ret = -1;
+ 			goto out;
+ 		}
+-		NdisZeroMemory(ifparam, os_strlen(param));
++		NdisZeroMemory(ifparam, os_strlen(param) + 1);
+ 
+ 		strncat(ifparam, param,os_strlen(param));
+ 		dat_ctx = dat_load(DPP_CFG_FILE);
+@@ -10456,6 +10341,8 @@
+ 			    return -1;
+ #endif /* OPENWRT_SUPPORT */
+ 	}
++	if (wapp->dpp)
++		wapp->dpp->qr_code_num = 0;
+ 	return dpp_reset_mapd_user_config_file(wapp);
+ }
+ 
+@@ -10477,15 +10364,16 @@
+ 
+ #ifdef OPENWRT_SUPPORT
+ 		struct kvc_context *dat_ctx = NULL;
+-		char *ifparam;
++		char *ifparam = NULL;
+ 		int ret = 0;
+ 
+-		os_alloc_mem(NULL, (UCHAR **)&ifparam, os_strlen(param)+1);
+-		if (ifparam == NULL) {
++		os_alloc_mem(NULL, (UCHAR **)&ifparam, os_strlen(param) + 1);
++		if (!ifparam) {
+ 			DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"%s, mem alloc fail\n", __func__);
++			ret = -1;
+ 			goto out;
+ 		}
+-		NdisZeroMemory(ifparam, os_strlen(param));
++		NdisZeroMemory(ifparam, os_strlen(param) + 1);
+ 
+ 		strncat(ifparam, param, os_strlen(param));
+ 		dat_ctx = dat_load(MAPD_USER_CFG_FILE);
+@@ -10525,98 +10413,82 @@
+ #endif /*MAP R3 */
+ void  dpp_remove_uri_from_file(struct wifi_app *wapp, unsigned int id , const char *uri_temp)
+ {
+-    
+-    char qr_param[20] = "0";
+-	char value[150] = "0";
+-	char param_str[15] = "agt_qr_code";
+-	char uri_num = 1;
+-	int uri_cnt = 0, ret = 0;
+-
+-	char *strbuf = NULL;
+-   
+-	os_alloc_mem(NULL, (UCHAR**)&strbuf, 10);
+-	if (strbuf == NULL) {
+-		DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX"Error: Memory allocation failed \n");
++#ifdef MAP_R3
++	char qr_param[20] = {0};
++	char count_buf[4] = {0};
++	char (*uri_values)[150] = NULL;
++	unsigned int uri_cnt = 0, uri_num, found = 0;
++	int ret;
++
++	(void)id;
++	if (!wapp || !wapp->map || !wapp->dpp || !uri_temp || !uri_temp[0])
+ 		return;
+-	}
+-	
+-	NdisZeroMemory(strbuf, 10);
+-
+-	get_dpp_parameters(wapp->map, "qr_count", value, sizeof(value));
+-	uri_cnt = atoi(value);
+-	
+-	int found =0;
+-	//If passed URI found , overwritng it with succesive URI 
+-	//Also updating the successive URIs in the same manner
+-	if(uri_cnt != 0) {
+-		for(uri_num = 1; uri_num <= uri_cnt; uri_num++)
+-			{
+-			  
+-			os_memset(qr_param, 0, 20);
+-			os_memset(value, 0, 150);
+-			ret = os_snprintf(qr_param, sizeof(qr_param), "%s_%u", param_str, uri_num);
+-			if (os_snprintf_error(sizeof(qr_param), ret))
+-				DBGPRINT(RT_DEBUG_TRACE, DPP_MAP_PREX"%s %d os_snprintf error1\n", __func__, __LINE__);
+-
+-			 get_dpp_parameters(wapp->map, qr_param, value, sizeof(value));
+-			
+-			 if(memcmp(uri_temp,value,strlen(value))==0)
+-			 	{
+-			 	  DBGPRINT(RT_DEBUG_TRACE, DPP_MAP_PREX"strings matched : going to update qr codes \n");
+-			 	found=1;
+-			for (uri_num = uri_num+1; uri_num <= uri_cnt; uri_num++) {
+-			os_memset(qr_param, 0, 20);
+-			os_memset(value, 0, 150);
+-			ret = os_snprintf(qr_param, sizeof(qr_param), "%s_%u", param_str, uri_num);
+-			if (os_snprintf_error(sizeof(qr_param), ret))
+-				DBGPRINT(RT_DEBUG_TRACE, DPP_MAP_PREX"%s %d os_snprintf error2\n", __func__, __LINE__);
+-
+-			get_dpp_parameters(wapp->map, qr_param, value, sizeof(value));
+-			if(!is_str_null(value))
+-			
+-			{
+-				os_memset(qr_param, 0, 20);
+-				ret = os_snprintf(qr_param, sizeof(qr_param), "%s_%u", param_str, (uri_num-1));
+-				if (os_snprintf_error(sizeof(qr_param), ret))
+-					DBGPRINT(RT_DEBUG_TRACE, DPP_MAP_PREX"%s %d os_snprintf error3\n", __func__, __LINE__);
+-
+-				dpp_save_config(wapp, (const char *)qr_param, (const char *)value, NULL);
+-				os_memset(value, 0, 150);
+-				get_dpp_parameters(wapp->map, qr_param, value, sizeof(value));
+-			}
+-			
+-		  	}
+-		 	}
+-			 if(found==1)
+-			 	break;
+-			
+-		}
+-		}
+-	 
+-     //updating/deleting last qr parameter 
+-     if(found ==1){
+-		os_memset(qr_param, 0, 20);
+-		ret = os_snprintf(qr_param, sizeof(qr_param), "%s_%u", param_str, uri_cnt);
++	if (os_strlen(uri_temp) >= 150)
++		return;
++	if (dpp_read_qr_count(wapp, &uri_cnt) < 0) {
++		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"invalid qr_count; refusing URI removal\n");
++		return;
++	}
++
++	uri_values = os_zalloc(sizeof(*uri_values) * uri_cnt);
++	if (!uri_values)
++		return;
++
++	/* Read and validate the complete bounded list before modifying the file. */
++	for (uri_num = 1; uri_num <= uri_cnt; uri_num++) {
++		ret = os_snprintf(qr_param, sizeof(qr_param), "agt_qr_code_%u", uri_num);
+ 		if (os_snprintf_error(sizeof(qr_param), ret))
+-			DBGPRINT(RT_DEBUG_TRACE, DPP_MAP_PREX"%s %d os_snprintf error4\n", __func__, __LINE__);
+-
+-		dpp_delete_parameter_from_file(wapp, (const char *)qr_param);
+-
+-         //updating the QR count
+-		 wapp->dpp->qr_code_num--;
+-		ret = os_snprintf(strbuf, 10, "%u", wapp->dpp->qr_code_num);
+-		if (os_snprintf_error(10, ret))
+-			DBGPRINT(RT_DEBUG_TRACE, DPP_MAP_PREX"%s %d os_snprintf error5\n", __func__, __LINE__);
+-
+-		dpp_save_config(wapp, "qr_count", strbuf, NULL);
+-		NdisZeroMemory(strbuf, 10);
+-
+-		
+-      	}
+-	    if (strbuf)
+-		   os_free_mem(NULL, strbuf);
+-		
+-		return;
++			goto out;
++		ret = dpp_read_qr_parameter(wapp, qr_param, uri_values[uri_num - 1],
++					    sizeof(uri_values[uri_num - 1]));
++		if (ret != 0)
++			goto out;
++		if (!found && uri_values[uri_num - 1][0] &&
++		    os_strcmp(uri_temp, uri_values[uri_num - 1]) == 0)
++			found = uri_num;
++	}
++	if (!found)
++		goto out;
++
++	for (uri_num = found + 1; uri_num <= uri_cnt; uri_num++) {
++		ret = os_snprintf(qr_param, sizeof(qr_param), "agt_qr_code_%u", uri_num - 1);
++		if (os_snprintf_error(sizeof(qr_param), ret))
++			goto rollback;
++		if (dpp_save_config(wapp, qr_param, uri_values[uri_num - 1], NULL) < 0)
++			goto rollback;
++	}
++
++	ret = os_snprintf(qr_param, sizeof(qr_param), "agt_qr_code_%u", uri_cnt);
++	if (os_snprintf_error(sizeof(qr_param), ret))
++		goto rollback;
++	if (dpp_delete_parameter_from_file(wapp, qr_param) < 0)
++		goto rollback;
++	ret = os_snprintf(count_buf, sizeof(count_buf), "%u", uri_cnt - 1);
++	if (os_snprintf_error(sizeof(count_buf), ret))
++		goto rollback;
++	if (dpp_save_config(wapp, "qr_count", count_buf, NULL) < 0)
++		goto rollback;
++	wapp->dpp->qr_code_num = (u8)(uri_cnt - 1);
++	goto out;
++rollback:
++	/* Restore the original list if any write in the compaction fails. */
++	for (uri_num = found; uri_num <= uri_cnt; uri_num++) {
++		ret = os_snprintf(qr_param, sizeof(qr_param), "agt_qr_code_%u", uri_num);
++		if (os_snprintf_error(sizeof(qr_param), ret) ||
++		    dpp_save_config(wapp, qr_param, uri_values[uri_num - 1], NULL) < 0)
++			DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"failed to roll back QR entry %u\\n", uri_num);
++	}
++	ret = os_snprintf(count_buf, sizeof(count_buf), "%u", uri_cnt);
++	if (os_snprintf_error(sizeof(count_buf), ret) ||
++	    dpp_save_config(wapp, "qr_count", count_buf, NULL) < 0)
++		DBGPRINT(RT_DEBUG_ERROR, DPP_MAP_PREX"failed to roll back QR count\\n");
++out:
++	os_free(uri_values);
++#else
++	(void)wapp;
++	(void)id;
++	(void)uri_temp;
++#endif /* MAP_R3 */
+ }
+ 
+ 
+@@ -10938,7 +10810,7 @@
+ 	dpp_gen_privkey_from_pubkey(bi->pubkey, &priv_temp);
+ 
+ 	if(priv_temp != NULL) {
+-		DBGPRINT(RT_DEBUG_WARN, DPP_MAP_PREX"dpp_private_key=%s\n",priv_temp);
++		DBGPRINT(RT_DEBUG_WARN, DPP_MAP_PREX"DPP private key generated and stored\n");
+ 		dpp_save_config(wapp, "dpp_private_key", (const char *)priv_temp, NULL);
+ 		//wpa_write_config_file(DPP_CFG_FILE, buf, strlen(buf));
+ 		/* Saving in the buffer for future use */
+@@ -11011,7 +10883,6 @@
+ 	unsigned int id_val;
+ #ifdef MAP_R3
+ 	struct dpp_bootstrap_info *bi, *tmp;
+-	int found = 0;
+ 	char qr_param[20] = "0";
+ 	int ret = 0;
+ #endif /* MAP_R3 */
+@@ -11035,7 +10906,6 @@
+ 			struct dpp_bootstrap_info, list) {
+ 		if (id_val && bi->id != id_val)
+ 			continue;
+-		found = 1;
+ 		ChirpTLV_1905_send(wapp, bi, 0);
+ 	}
+ #endif
+@@ -11609,15 +11479,6 @@
+ #ifdef DPP_R2_SUPPORT
+ #ifdef DPP_R2_RECONFIG
+ #ifndef OPENSSL_NO_EC
+-EC_KEY * EVP_PKEY_get0_EC_KEY(EVP_PKEY *pkey)
+-{
+-	if (EVP_PKEY_base_id(pkey) != EVP_PKEY_EC) {
+-		wpa_printf(MSG_ERROR, "DPP: Could not create EVP_PKEY_base_id");
+-		return NULL;
+-	}
+-
+-	return pkey->pkey.ec;
+-}
+ #endif /* OPENSSL_NO_EC */
+ 
+ struct dpp_reconfig_id * dpp_gen_reconfig_id(const u8 *csign_key,
+@@ -11630,45 +11491,35 @@
+ 	struct dpp_reconfig_id *id = NULL;
+ 	BN_CTX *ctx = NULL;
+ 	BIGNUM *bn = NULL, *q = NULL;
+-	const EC_KEY *eckey;
+-	const EC_GROUP *group;
++	EC_GROUP *group = NULL, *pp_group = NULL;
+ 	EC_POINT *e_id = NULL;
+ 
+ 	p = csign_key;
+ 	csign = d2i_PUBKEY(NULL, &p, csign_key_len);
+-	if (!csign)
+-		goto fail;
+-
+-	if (!pp_key)
++	if (!csign || !pp_key)
+ 		goto fail;
+ 	p = pp_key;
+ 	ppkey = d2i_PUBKEY(NULL, &p, pp_key_len);
+-	if (!ppkey)
+-		goto fail;
+-
+-	eckey = EVP_PKEY_get0_EC_KEY(csign);
+-	if (!eckey)
+-		goto fail;
+-	group = EC_KEY_get0_group(eckey);
+-	if (!group)
+-		goto fail;
+-
++	if (!ppkey || dpp_pkey_get_group(csign, &group) < 0 ||
++	    dpp_pkey_get_group(ppkey, &pp_group) < 0 ||
++	    EC_GROUP_cmp(group, pp_group, NULL) != 0)
++		goto fail;
++	/* E-id = r * G; the group is owned independently of the provider key. */
+ 	e_id = EC_POINT_new(group);
+ 	ctx = BN_CTX_new();
+ 	bn = BN_new();
+ 	q = BN_new();
+ 	if (!e_id || !ctx || !bn || !q ||
+ 	    !EC_GROUP_get_order(group, q, ctx) ||
+-	    !BN_rand_range(bn, q) ||
++	    !BN_priv_rand_range(bn, q) || BN_is_zero(bn) ||
+ 	    !EC_POINT_mul(group, e_id, bn, NULL, NULL, ctx))
+ 		goto fail;
+-
+ 	dpp_debug_print_point("DPP: Generated random point E-id", group, e_id);
+-
+ 	id = os_zalloc(sizeof(*id));
+ 	if (!id)
+ 		goto fail;
+ 	id->group = group;
++	group = NULL;
+ 	id->e_id = e_id;
+ 	e_id = NULL;
+ 	id->csign = csign;
+@@ -11676,153 +11527,116 @@
+ 	id->pp_key = ppkey;
+ 	ppkey = NULL;
+ fail:
+-	EC_POINT_free(e_id);
++	EC_GROUP_free(group);
++	EC_GROUP_free(pp_group);
++	EC_POINT_clear_free(e_id);
+ 	EVP_PKEY_free(csign);
+ 	EVP_PKEY_free(ppkey);
+ 	BN_clear_free(bn);
++	BN_clear_free(q);
+ 	BN_CTX_free(ctx);
+-        if (q)
+-		BN_clear_free(q);
+-	
+ 	return id;
+ }
+-
+-static EVP_PKEY * dpp_pkey_from_point(const EC_GROUP *group,
+-				      const EC_POINT *point)
+-{
+-	EC_KEY *eckey;
+-	EVP_PKEY *pkey = NULL;
+-
+-	eckey = EC_KEY_new();
+-	if (!eckey ||
+-	    EC_KEY_set_group(eckey, group) != 1 ||
+-	    EC_KEY_set_public_key(eckey, point) != 1) {
+-		wpa_printf(MSG_ERROR,
+-			   "DPP: Failed to set EC_KEY: %s",
+-			   ERR_error_string(ERR_get_error(), NULL));
+-		goto fail;
+-	}
+-	EC_KEY_set_asn1_flag(eckey, OPENSSL_EC_NAMED_CURVE);
+-
+-	pkey = EVP_PKEY_new();
+-	if (!pkey || EVP_PKEY_set1_EC_KEY(pkey, eckey) != 1) {
+-		wpa_printf(MSG_ERROR, "DPP: Could not create EVP_PKEY");
+-		EVP_PKEY_free(pkey);
+-		pkey = NULL;
+-		goto fail;
+-	}
+-
+-fail:
+-	EC_KEY_free(eckey);
+-	return pkey;
+-}
+-
+ 
+ int dpp_update_reconfig_id(struct dpp_reconfig_id *id)
+ {
+ 	BN_CTX *ctx = NULL;
+ 	BIGNUM *bn = NULL, *q = NULL;
+-	EC_POINT *e_prime_id = NULL, *a_nonce = NULL;
++	EC_POINT *e_prime_id = NULL, *a_nonce = NULL, *pp_point = NULL;
++	EVP_PKEY *new_a_nonce = NULL, *new_e_prime_id = NULL;
+ 	int ret = -1;
+-	const EC_KEY *pp;
+-	const EC_POINT *pp_point;
+-
+-	pp = EVP_PKEY_get0_EC_KEY(id->pp_key);
+-	if (!pp)
+-		goto fail;
+-	pp_point = EC_KEY_get0_public_key(pp);
++
++	if (!id || !id->group || !id->csign || !id->pp_key || !id->e_id)
++		return -1;
++	if (dpp_pkey_get_public_point(id->pp_key, id->group, &pp_point) < 0)
++		goto fail;
+ 	e_prime_id = EC_POINT_new(id->group);
+ 	a_nonce = EC_POINT_new(id->group);
+ 	ctx = BN_CTX_new();
+ 	bn = BN_new();
+ 	q = BN_new();
+-	/* Generate random 0 <= a-nonce < q
+-	 * A-NONCE = a-nonce * G
+-	 * E'-id = E-id + a-nonce * P_pk */
+-	if (!pp_point || !e_prime_id || !a_nonce || !ctx || !bn || !q ||
++	/* A-NONCE = a-nonce * G; E'-id = E-id + a-nonce * P_pk. */
++	if (!e_prime_id || !a_nonce || !ctx || !bn || !q ||
+ 	    !EC_GROUP_get_order(id->group, q, ctx) ||
+-	    !BN_rand_range(bn, q) || /* bn = a-nonce */
++	    !BN_priv_rand_range(bn, q) || BN_is_zero(bn) ||
+ 	    !EC_POINT_mul(id->group, a_nonce, bn, NULL, NULL, ctx) ||
+ 	    !EC_POINT_mul(id->group, e_prime_id, NULL, pp_point, bn, ctx) ||
+ 	    !EC_POINT_add(id->group, e_prime_id, id->e_id, e_prime_id, ctx))
+ 		goto fail;
+-
+ 	dpp_debug_print_point("DPP: Generated A-NONCE", id->group, a_nonce);
+-	dpp_debug_print_point("DPP: Encrypted E-id to E'-id",
+-			      id->group, e_prime_id);
+-
++	dpp_debug_print_point("DPP: Encrypted E-id to E'-id", id->group, e_prime_id);
++	new_a_nonce = dpp_pkey_from_point(id->csign, id->group, a_nonce);
++	new_e_prime_id = dpp_pkey_from_point(id->csign, id->group, e_prime_id);
++	if (!new_a_nonce || !new_e_prime_id)
++		goto fail;
+ 	EVP_PKEY_free(id->a_nonce);
+ 	EVP_PKEY_free(id->e_prime_id);
+-	id->a_nonce = dpp_pkey_from_point(id->group, a_nonce);
+-	id->e_prime_id = dpp_pkey_from_point(id->group, e_prime_id);
+-	if (!id->a_nonce || !id->e_prime_id)
+-		goto fail;
+-
++	id->a_nonce = new_a_nonce;
++	id->e_prime_id = new_e_prime_id;
++	new_a_nonce = NULL;
++	new_e_prime_id = NULL;
+ 	ret = 0;
+-
+ fail:
+-	EC_POINT_free(e_prime_id);
+-	EC_POINT_free(a_nonce);
++	EVP_PKEY_free(new_a_nonce);
++	EVP_PKEY_free(new_e_prime_id);
++	EC_POINT_clear_free(pp_point);
++	EC_POINT_clear_free(e_prime_id);
++	EC_POINT_clear_free(a_nonce);
+ 	BN_clear_free(bn);
++	BN_clear_free(q);
+ 	BN_CTX_free(ctx);
+-	if (q)
+-		BN_clear_free(q);
+ 	return ret;
+ }
+ 
+ void dpp_free_reconfig_id(struct dpp_reconfig_id *id)
+ {
+-	if (id) {
+-		EC_POINT_clear_free(id->e_id);
+-		EVP_PKEY_free(id->csign);
+-		EVP_PKEY_free(id->a_nonce);
+-		EVP_PKEY_free(id->e_prime_id);
+-		EVP_PKEY_free(id->pp_key);
+-		os_free(id);
+-	}
++	if (!id)
++		return;
++	EC_GROUP_free(id->group);
++	EC_POINT_clear_free(id->e_id);
++	EVP_PKEY_free(id->csign);
++	EVP_PKEY_free(id->a_nonce);
++	EVP_PKEY_free(id->e_prime_id);
++	EVP_PKEY_free(id->pp_key);
++	forced_memzero(id, sizeof(*id));
++	os_free(id);
+ }
+ 
+ EC_POINT * dpp_decrypt_e_id(EVP_PKEY *ppkey, EVP_PKEY *a_nonce,
+ 			    EVP_PKEY *e_prime_id)
+ {
+-	const EC_KEY *pp_ec, *a_nonce_ec, *e_prime_id_ec;
+-	const BIGNUM *pp_bn;
+-	const EC_GROUP *group;
+-	EC_POINT *e_id = NULL;
+-	const EC_POINT *a_nonce_point, *e_prime_id_point;
++	BIGNUM *pp_bn = NULL;
++	EC_GROUP *group = NULL;
++	EC_POINT *e_id = NULL, *a_nonce_point = NULL, *e_prime_id_point = NULL;
+ 	BN_CTX *ctx = NULL;
+ 
+-	if (!ppkey)
+-		return NULL;
+-
+-	/* E-id = E'-id - s_C * A-NONCE */
+-	pp_ec = EVP_PKEY_get0_EC_KEY(ppkey);
+-	a_nonce_ec = EVP_PKEY_get0_EC_KEY(a_nonce);
+-	e_prime_id_ec = EVP_PKEY_get0_EC_KEY(e_prime_id);
+-	if (!pp_ec || !a_nonce_ec || !e_prime_id_ec)
+-		return NULL;
+-	pp_bn = EC_KEY_get0_private_key(pp_ec);
+-	group = EC_KEY_get0_group(pp_ec);
+-	a_nonce_point = EC_KEY_get0_public_key(a_nonce_ec);
+-	e_prime_id_point = EC_KEY_get0_public_key(e_prime_id_ec);
++	/* E-id = E'-id - s_C * A-NONCE. */
++	if (!ppkey || !a_nonce || !e_prime_id ||
++	    dpp_pkey_get_group(ppkey, &group) < 0 ||
++	    dpp_pkey_get_public_point(a_nonce, group, &a_nonce_point) < 0 ||
++	    dpp_pkey_get_public_point(e_prime_id, group, &e_prime_id_point) < 0 ||
++	    EVP_PKEY_get_bn_param(ppkey, OSSL_PKEY_PARAM_PRIV_KEY, &pp_bn) != 1)
++		goto fail;
+ 	ctx = BN_CTX_new();
+-	if (!pp_bn || !group || !a_nonce_point || !e_prime_id_point || !ctx)
+-		goto fail;
+ 	e_id = EC_POINT_new(group);
+-	if (!e_id ||
++	if (!ctx || !e_id ||
+ 	    !EC_POINT_mul(group, e_id, NULL, a_nonce_point, pp_bn, ctx) ||
+ 	    !EC_POINT_invert(group, e_id, ctx) ||
+ 	    !EC_POINT_add(group, e_id, e_prime_id_point, e_id, ctx)) {
+ 		EC_POINT_clear_free(e_id);
+-		goto fail;
+-	}
+-
++		e_id = NULL;
++		goto fail;
++	}
+ 	dpp_debug_print_point("DPP: Decrypted E-id", group, e_id);
+-
+ fail:
++	BN_clear_free(pp_bn);
++	EC_GROUP_free(group);
++	EC_POINT_clear_free(a_nonce_point);
++	EC_POINT_clear_free(e_prime_id_point);
+ 	BN_CTX_free(ctx);
+ 	return e_id;
+ }
++
+ #endif
+ struct wpabuf * dpp_build_annouce_frame(struct dpp_global *dpp, struct dpp_bootstrap_info *dpp_bi)
+ {
+@@ -14454,37 +14268,28 @@
+ 
+ static int dpp_auth_derive_m_I(struct dpp_authentication *auth)
+ {
+-	const EC_GROUP *group;
++	EC_GROUP *group = NULL;
+ 	EC_POINT *M = NULL, *sum = NULL;
+-	EC_KEY *cI = NULL, *CR = NULL, *PR = NULL;
+-	const EC_POINT *CR_point = NULL, *PR_point = NULL;
++	EC_POINT *CR_point = NULL, *PR_point = NULL;
+ 	BN_CTX *bnctx = NULL;
+-	BIGNUM *mx = NULL;
+-	const BIGNUM *cI_bn = NULL;
++	BIGNUM *mx = NULL, *cI_bn = NULL;
+ 	int ret = -1;
+ 
+ 	/* M = cI * (CR + PR) */
+-	if(!auth || !auth->peer_connector_key || !auth->peer_protocol_key || !auth->own_connector_key)
++	if (!auth || !auth->peer_connector_key || !auth->peer_protocol_key ||
++	    !auth->own_connector_key)
+ 		return -1;
++
+ 	bnctx = BN_CTX_new();
+ 	mx = BN_new();
+-	if (!bnctx || !mx)
+-		goto fail;
+-
+-	CR = EVP_PKEY_get1_EC_KEY(auth->peer_connector_key);
+-	PR = EVP_PKEY_get1_EC_KEY(auth->peer_protocol_key);
+-	if (!CR || !PR)
+-		goto fail;
+-
+-	CR_point = EC_KEY_get0_public_key(CR);
+-	PR_point = EC_KEY_get0_public_key(PR);
+-	cI = EVP_PKEY_get1_EC_KEY(auth->own_connector_key);
+-	if (!cI)
+-		goto fail;
+-
+-	group = EC_KEY_get0_group(cI);
+-	cI_bn = EC_KEY_get0_private_key(cI);
+-	if (!group || !cI_bn)
++	if (!bnctx || !mx ||
++	    dpp_pkey_get_group(auth->own_connector_key, &group) < 0 ||
++	    dpp_pkey_get_public_point(auth->peer_connector_key, group,
++					   &CR_point) < 0 ||
++	    dpp_pkey_get_public_point(auth->peer_protocol_key, group,
++					   &PR_point) < 0 ||
++	    EVP_PKEY_get_bn_param(auth->own_connector_key,
++				  OSSL_PKEY_PARAM_PRIV_KEY, &cI_bn) != 1)
+ 		goto fail;
+ 
+ 	sum = EC_POINT_new(group);
+@@ -14492,28 +14297,30 @@
+ 	if (!sum || !M ||
+ 	    EC_POINT_add(group, sum, CR_point, PR_point, bnctx) != 1 ||
+ 	    EC_POINT_mul(group, M, NULL, sum, cI_bn, bnctx) != 1 ||
+-	    EC_POINT_get_affine_coordinates_GFp(group, M, mx, NULL,
+-						bnctx) != 1) {
++	    EC_POINT_get_affine_coordinates(group, M, mx, NULL, bnctx) != 1) {
+ 		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+ 			   "OpenSSL: failed: %s",
+ 			   ERR_error_string(ERR_get_error(), NULL));
+ 		goto fail;
+ 	}
+ 
+-	auth->secret_len = dpp_auth_derive_secret_len(auth->own_connector_key, auth->peer_protocol_key);
+-	wpa_printf(MSG_INFO1, DPP_MAP_PREX  "DPP: derive secret len: %zu",
+-			    auth->secret_len);
++	auth->secret_len = dpp_auth_derive_secret_len(auth->own_connector_key,
++						     auth->peer_protocol_key);
++	wpa_printf(MSG_INFO1, DPP_MAP_PREX "DPP: derive secret len: %zu",
++		   auth->secret_len);
+ 	if (dpp_bn2bin_pad(mx, auth->Mx, auth->secret_len) < 0)
+ 		goto fail;
+-	wpa_hexdump_key(MSG_INFO1, DPP_MAP_PREX "DPP: M.x", auth->Mx, auth->secret_len);
++	wpa_hexdump_key(MSG_INFO1, DPP_MAP_PREX "DPP: M.x", auth->Mx,
++			auth->secret_len);
+ 	auth->Mx_len = auth->secret_len;
+ 	ret = 0;
+ fail:
+ 	EC_POINT_clear_free(M);
+ 	EC_POINT_clear_free(sum);
+-	EC_KEY_free(cI);
+-	EC_KEY_free(CR);
+-	EC_KEY_free(PR);
++	EC_POINT_clear_free(CR_point);
++	EC_POINT_clear_free(PR_point);
++	EC_GROUP_free(group);
++	BN_clear_free(cI_bn);
+ 	BN_clear_free(mx);
+ 	BN_CTX_free(bnctx);
+ 	return ret;
+@@ -14521,41 +14328,36 @@
+ 
+ static int dpp_auth_derive_m_R(struct dpp_authentication *auth)
+ {
+-	const EC_GROUP *group = NULL;
+-	EC_POINT *M = NULL;
+-	EC_KEY *CI = NULL, *cR = NULL, *pR = NULL;
+-	const EC_POINT *CI_point = NULL;
++	EC_GROUP *group = NULL, *own_group = NULL;
++	EC_POINT *M = NULL, *CI_point = NULL;
+ 	BN_CTX *bnctx = NULL;
+ 	BIGNUM *mx = NULL, *sum = NULL, *q = NULL;
+-	const BIGNUM *cR_bn = NULL, *pR_bn = NULL;
++	BIGNUM *cR_bn = NULL, *pR_bn = NULL;
+ 	int ret = -1;
+ 
+-	if(!auth || !auth->peer_connector_key || !auth->own_connector_key || !auth->own_protocol_key)
++	if (!auth || !auth->peer_connector_key || !auth->own_connector_key ||
++	    !auth->own_protocol_key)
+ 		return -1;
+ 	/* M = (cR + pR) * CI */
+ 	bnctx = BN_CTX_new();
+ 	sum = BN_new();
+ 	q = BN_new();
+ 	mx = BN_new();
+-	if (!bnctx || !sum || !q || !mx)
+-		goto fail;
+-
+-	CI = EVP_PKEY_get1_EC_KEY(auth->peer_connector_key);
+-	if (!CI)
+-		goto fail;
+-	CI_point = EC_KEY_get0_public_key(CI);
+-	group = EC_KEY_get0_group(CI);
+-	if (!group)
+-		goto fail;
+-
+-	cR = EVP_PKEY_get1_EC_KEY(auth->own_connector_key);
+-	pR = EVP_PKEY_get1_EC_KEY(auth->own_protocol_key);
+-	if (!cR || !pR )
+-		goto fail;
+-
+-	cR_bn = EC_KEY_get0_private_key(cR);
+-	pR_bn = EC_KEY_get0_private_key(pR);
+-	if (!cR_bn || !pR_bn)
++	if (!bnctx || !sum || !q || !mx ||
++	    dpp_pkey_get_group(auth->peer_connector_key, &group) < 0 ||
++	    dpp_pkey_get_public_point(auth->peer_connector_key, group,
++					   &CI_point) < 0 ||
++	    dpp_pkey_get_group(auth->own_connector_key, &own_group) < 0 ||
++	    EC_GROUP_cmp(group, own_group, NULL) != 0)
++		goto fail;
++	EC_GROUP_free(own_group);
++	own_group = NULL;
++	if (dpp_pkey_get_group(auth->own_protocol_key, &own_group) < 0 ||
++	    EC_GROUP_cmp(group, own_group, NULL) != 0 ||
++	    EVP_PKEY_get_bn_param(auth->own_connector_key,
++				  OSSL_PKEY_PARAM_PRIV_KEY, &cR_bn) != 1 ||
++	    EVP_PKEY_get_bn_param(auth->own_protocol_key,
++				  OSSL_PKEY_PARAM_PRIV_KEY, &pR_bn) != 1)
+ 		goto fail;
+ 
+ 	if (EC_GROUP_get_order(group, q, bnctx) != 1 ||
+@@ -14563,32 +14365,35 @@
+ 		goto fail;
+ 
+ 	M = EC_POINT_new(group);
+-
+ 	if (!M ||
+ 	    EC_POINT_mul(group, M, NULL, CI_point, sum, bnctx) != 1 ||
+-	    EC_POINT_get_affine_coordinates_GFp(group, M, mx, NULL,
+-						bnctx) != 1) {
++	    EC_POINT_get_affine_coordinates(group, M, mx, NULL, bnctx) != 1) {
+ 		wpa_printf(MSG_ERROR, DPP_MAP_PREX
+ 			   "OpenSSL: failed: %s",
+ 			   ERR_error_string(ERR_get_error(), NULL));
+ 		goto fail;
+ 	}
+ 
+-	auth->secret_len = dpp_auth_derive_secret_len(auth->own_protocol_key, auth->peer_connector_key);
+-	wpa_printf(MSG_INFO1, DPP_MAP_PREX  "DPP: derive secret len: %zu", auth->secret_len);
++	auth->secret_len = dpp_auth_derive_secret_len(auth->own_protocol_key,
++						     auth->peer_connector_key);
++	wpa_printf(MSG_INFO1, DPP_MAP_PREX "DPP: derive secret len: %zu",
++		   auth->secret_len);
+ 	if (dpp_bn2bin_pad(mx, auth->Mx, auth->secret_len) < 0)
+ 		goto fail;
+-	wpa_hexdump_key(MSG_INFO1, DPP_MAP_PREX "DPP: M.x", auth->Mx, auth->secret_len);
++	wpa_hexdump_key(MSG_INFO1, DPP_MAP_PREX "DPP: M.x", auth->Mx,
++			auth->secret_len);
+ 	auth->Mx_len = auth->secret_len;
+ 	ret = 0;
+ fail:
+ 	EC_POINT_clear_free(M);
+-	EC_KEY_free(CI);
+-	EC_KEY_free(cR);
+-	EC_KEY_free(pR);
++	EC_POINT_clear_free(CI_point);
++	EC_GROUP_free(group);
++	EC_GROUP_free(own_group);
+ 	BN_clear_free(mx);
+ 	BN_clear_free(sum);
+-	BN_free(q);
++	BN_clear_free(q);
++	BN_clear_free(cR_bn);
++	BN_clear_free(pR_bn);
+ 	BN_CTX_free(bnctx);
+ 	return ret;
+ }
+@@ -14644,7 +14449,6 @@
+ {
+ 	struct wpabuf *msg = NULL;
+ 	struct wpabuf *connector  = NULL;
+-	int lenmsg = 0;
+ 
+ 	if(!auth)
+ 		return msg;
+@@ -14662,7 +14466,6 @@
+ 	msg = dpp_alloc_msg(DPP_PA_RECONFIG_AUTH_REQ,
+ 			    5 + 5 + 4 + wpabuf_len(connector) + 4 + auth->curve->nonce_len);
+ 
+-	lenmsg = (5 + 5 + 4 + wpabuf_len(connector) + 4 + auth->curve->nonce_len);
+ 
+ 	if (!msg) {
+ 		if (connector)
+@@ -14865,7 +14668,7 @@
+ 	const u8 *c_nonce, u16 c_nonce_len, const u8 *trans_id, const u8 *version)
+ {
+ 	struct json_token *root = NULL, *token = NULL, *own_root = NULL;
+-	enum dpp_status_error ret = 255, res;
++	enum dpp_status_error res;
+ 	//const struct dpp_curve_params *own_curve;
+ 	struct dpp_signed_connector_info info;
+ 	const unsigned char *p;
+@@ -14909,14 +14712,12 @@
+ 
+ 	res = dpp_process_signed_connector(&info, csign, signed_connector);
+ 	if (res != DPP_STATUS_OK) {
+-		ret = res;
+ 		goto fail;
+ 	}
+ 
+ 	root = json_parse((const char *) info.payload, info.payload_len);
+ 	if (!root) {
+ 		wpa_printf(MSG_ERROR, "DPP: JSON parsing of connector failed");
+-		ret = DPP_STATUS_INVALID_CONNECTOR;
+ 		goto fail;
+ 	}
+ 

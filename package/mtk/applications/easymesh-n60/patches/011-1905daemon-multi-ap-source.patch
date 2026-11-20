@@ -1,0 +1,16 @@
+--- a/1905daemon/src/multi_ap.c
++++ b/1905daemon/src/multi_ap.c
+@@ -10914,11 +10914,11 @@
+ 			memcpy(ctx->bss_config[j].key, conf->key, 65);
+ 			memcpy(ctx->bss_config[j].oper_class, opclass[k], 4);
+ 			debug(DEBUG_OFF, "add bss, mac="MACSTR", opclass=%s,"
+-				" ssid=%s, authmode=%04x, encrytype=%04x, key=%s, bh_bss=%s, fh_bss=%s"
++				" ssid=%s, authmode=%04x, encrytype=%04x, key is configured, bh_bss=%s, fh_bss=%s"
+ 				"hidden_ssid=%d\n",
+ 				PRINT_MAC(ctx->bss_config[j].mac), ctx->bss_config[j].oper_class,
+ 				ctx->bss_config[j].ssid, ctx->bss_config[j].authmode, ctx->bss_config[j].encryptype,
+-				ctx->bss_config[j].key,
++
+ 				ctx->bss_config[j].wfa_vendor_extension & BIT_BH_BSS ? "1" : "0",
+ 				ctx->bss_config[j].wfa_vendor_extension & BIT_FH_BSS ? "1" : "0",
+ 				ctx->bss_config[j].hidden_ssid);

@@ -1,0 +1,952 @@
+name: N60 Pro Quick precompile Package Prepare audit
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prepare-audit:
+    name: Native Package Prepare and EasyMesh source contract tests (no compile)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout exact audited revision
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Download attestation from this workflow run
+        uses: actions/download-artifact@v6
+        with:
+          name: n60-vendor-audit-attestation
+          path: .audit-attestation
+
+      - name: Enforce exact audited source revision and Lock
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 package/mtk/applications/easymesh-n60/scripts/verify-vendor-audit-attestation.py verify \
+            --repo "$GITHUB_WORKSPACE" \
+            --attestation .audit-attestation/vendor-audit-attestation.json \
+            --expected-run-id "$GITHUB_RUN_ID" \
+            --expected-run-attempt "$GITHUB_RUN_ATTEMPT"
+
+      - name: Install feeds and configure N60 Pro
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          cp config/n60pro-1001.config .config
+          make defconfig
+
+      - name: Apply the complete Linux 6.12 kernel patch stack before kernel configuration
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export LC_ALL=C
+          KERNEL_PATCH_LOG="$RUNNER_TEMP/n60-linux-6.12-patch-prepare.log"
+          echo "===== OpenWrt Kernel/Prepare: pristine source plus generic and MediaTek patch stacks ====="
+          python3 target/linux/mediatek/tests/audit-kernel-patch-stack.py inventory --repo "$GITHUB_WORKSPACE" --output-dir "$GITHUB_WORKSPACE/kernel-patch-audit"
+          PATCH_WRAPPER="$RUNNER_TEMP/n60-patch-snapshot-wrapper"
+          cat > "$PATCH_WRAPPER" <<'PATCH_WRAPPER_EOF'
+          #!/usr/bin/env bash
+          set -u
+          patch_input="$(mktemp)"
+          trap 'rm -f "$patch_input"' EXIT
+
+          targetdir="."
+          patch_file=""
+          args=("$@")
+          for ((i = 0; i < ${#args[@]}; i++)); do
+            case "${args[$i]}" in
+              -d|--directory)
+                if (( i + 1 < ${#args[@]} )); then targetdir="${args[$((i + 1))]}"; fi
+                ;;
+              -i|--input)
+                if (( i + 1 < ${#args[@]} )); then patch_file="${args[$((i + 1))]}"; fi
+                ;;
+              -i?*)
+                patch_file="${args[$i]#-i}"
+                ;;
+            esac
+          done
+          targetdir="$(cd "$targetdir" && pwd)"
+          if [[ -n "$patch_file" && -f "$patch_file" ]]; then
+            cp -f "$patch_file" "$patch_input"
+          else
+            cat > "$patch_input"
+          fi
+
+          # PPE stage identification is based on the resulting source tree,
+          # not patch command-line spelling or mail-header text. OpenWrt may
+          # invoke patch with stdin, -i, or normalized input.
+          stage=""
+
+          snapshot_sources() {
+            local name="$1"
+            local out="$GITHUB_WORKSPACE/kernel-patch-audit/ppe-reconstruction/$name"
+            mkdir -p "$out"
+            for rel in \
+              drivers/net/ethernet/mediatek/mtk_ppe_offload.c \
+              drivers/net/ethernet/mediatek/mtk_ppe_debugfs.c \
+              drivers/net/ethernet/mediatek/mtk_ppe.c \
+              drivers/net/ethernet/mediatek/mtk_ppe.h \
+              drivers/net/ethernet/mediatek/mtk_eth_soc.h \
+              include/net/flow_offload.h \
+              include/net/netfilter/nf_conntrack_extend.h \
+              include/net/netfilter/nf_conntrack_qos.h \
+              include/net/netfilter/nf_flow_table.h \
+              include/net/netns/conntrack.h \
+              net/netfilter/nf_conntrack_core.c \
+              net/netfilter/nf_conntrack_extend.c \
+              net/netfilter/nf_conntrack_netlink.c \
+              net/netfilter/nf_conntrack_standalone.c \
+              net/netfilter/nf_flow_table_core.c \
+              net/netfilter/nf_flow_table_ip.c \
+              net/netfilter/nf_flow_table_offload.c \
+              net/netfilter/xt_FLOWOFFLOAD.c; do
+              if [[ -s "$targetdir/$rel" ]]; then
+                mkdir -p "$out/$(dirname "$rel")"
+                cp -f "$targetdir/$rel" "$out/$rel"
+                [[ ! -s "$targetdir/$rel.rej" ]] || cp -f "$targetdir/$rel.rej" "$out/$rel.rej"
+                [[ ! -s "$targetdir/$rel.orig" ]] || cp -f "$targetdir/$rel.orig" "$out/$rel.orig"
+              fi
+            done
+            cp -f "$GITHUB_WORKSPACE/target/linux/mediatek/patches-6.12/999-ppe-04-mtk_ppe-change-to-internal-QoS-mode.patch" "$out/"
+            if [[ "$stage" == "after-05" || "$name" == "before-05" || "$name" == "failed-05-partial" ]]; then
+              cp -f "$GITHUB_WORKSPACE/target/linux/mediatek/patches-6.12/999-ppe-05-xt_FLOWOFFLOAD-add-DSCP-learning-flow.patch" "$out/"
+            fi
+            (cd "$out" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+            echo "Captured PPE source snapshot: $name"
+          }
+
+          ppe_offload="$targetdir/drivers/net/ethernet/mediatek/mtk_ppe_offload.c"
+          ppe_core="$targetdir/drivers/net/ethernet/mediatek/mtk_ppe.c"
+          ppe_eth_header="$targetdir/drivers/net/ethernet/mediatek/mtk_eth_soc.h"
+          after04_snapshot="$GITHUB_WORKSPACE/kernel-patch-audit/ppe-reconstruction/after-04/drivers/net/ethernet/mediatek/mtk_ppe_offload.c"
+          before05_snapshot="$GITHUB_WORKSPACE/kernel-patch-audit/ppe-reconstruction/before-05/drivers/net/ethernet/mediatek/mtk_ppe_offload.c"
+          after05_snapshot="$GITHUB_WORKSPACE/kernel-patch-audit/ppe-reconstruction/after-05/drivers/net/ethernet/mediatek/mtk_ppe_offload.c"
+
+          # The first patch invocation after PPE-04 is the pre-05 boundary.
+          # Capture it before applying that next patch, while the QoS mode
+          # change is present and the DSCP setter has not yet appeared.
+          if [[ -s "$after04_snapshot" && ! -s "$before05_snapshot" ]] &&
+             [[ -s "$ppe_eth_header" ]] && grep -Fq 'qos_toggle' "$ppe_eth_header" &&
+             [[ -s "$ppe_offload" ]] && ! grep -Fq 'mtk_foe_entry_set_dscp' "$ppe_offload"; then
+            stage="before-05"
+            snapshot_sources "before-05"
+          fi
+
+          # Capture the complete netdevice.h state immediately before and after
+          # every patch that touches it. This preserves the actual application chain,
+          # rather than relying on reconstructed context from a failed hunk.
+          snapshot_netdevice() {
+            local phase="$1"
+            local patch_name="$2"
+            local out="$GITHUB_WORKSPACE/kernel-patch-audit/netdevice-chain/$patch_name/$phase"
+            mkdir -p "$out"
+            test -s "$targetdir/include/linux/netdevice.h" || return 0
+            cp -f "$targetdir/include/linux/netdevice.h" "$out/netdevice.h"
+            if [[ -s "$targetdir/include/linux/netdevice.h.rej" ]]; then
+              cp -f "$targetdir/include/linux/netdevice.h.rej" "$out/netdevice.h.rej"
+            fi
+            cp -f "$patch_input" "$out/applied.patch"
+            (cd "$out" && sha256sum netdevice.h applied.patch *.rej 2>/dev/null > SHA256SUMS || sha256sum netdevice.h applied.patch > SHA256SUMS)
+            echo "NETDEVICE SNAPSHOT: $patch_name / $phase"
+            cat "$out/SHA256SUMS"
+          }
+
+          netdevice_patch=0
+          patch_digest="$(sha256sum "$patch_input" | awk '{print $1}')"
+          patch_name="$(basename "${patch_file:-stdin.patch}")-${patch_digest:0:16}"
+          if grep -Fq 'include/linux/netdevice.h' "$patch_input"; then
+            netdevice_patch=1
+            snapshot_netdevice "pre" "$patch_name"
+          fi
+
+          # Enforce the acceptance contract at invocation time, not only by log inspection.
+          strict_args=()
+          drop_fuzz_value=0
+          for arg in "${args[@]}"; do
+            if (( drop_fuzz_value )); then
+              drop_fuzz_value=0
+              continue
+            fi
+            case "$arg" in
+              --fuzz|-F) drop_fuzz_value=1 ;;
+              --fuzz=*|-F[0-9]*) ;;
+              *) strict_args+=("$arg") ;;
+            esac
+          done
+          strict_args+=(--verbose --fuzz=0 --batch --forward)
+
+          if [[ -n "$patch_file" && -f "$patch_file" ]]; then
+            /usr/bin/patch "${strict_args[@]}"
+            rc=$?
+          else
+            /usr/bin/patch "${strict_args[@]}" < "$patch_input"
+            rc=$?
+          fi
+          if (( rc != 0 )); then
+            if (( netdevice_patch )); then snapshot_netdevice "failed" "$patch_name"; fi
+            if [[ "$stage" == "after-05" ]]; then snapshot_sources "failed-05-partial"; fi
+            exit "$rc"
+          fi
+
+          if (( netdevice_patch )); then snapshot_netdevice "post" "$patch_name"; fi
+
+          # Capture the exact post-application source states at the PPE-04
+          # and PPE-05 boundaries. These signatures are introduced by the
+          # respective patches and remain independent of patch(1) arguments.
+          if [[ ! -s "$after04_snapshot" ]] &&
+             [[ -s "$ppe_eth_header" ]] && grep -Fq 'qos_toggle' "$ppe_eth_header" &&
+             [[ -s "$ppe_offload" ]] && grep -Fq 'mtk_flow_set_output_device' "$ppe_offload"; then
+            stage="after-04"
+            snapshot_sources "after-04"
+          fi
+          if [[ ! -s "$after05_snapshot" ]] &&
+             [[ -s "$ppe_core" ]] && grep -Fq 'mtk_foe_entry_set_dscp' "$ppe_core" &&
+             [[ -s "$ppe_offload" ]] && grep -Fq 'mtk_foe_entry_set_dscp' "$ppe_offload"; then
+            stage="after-05"
+            snapshot_sources "after-05"
+          fi
+          PATCH_WRAPPER_EOF
+          chmod +x "$PATCH_WRAPPER"
+          PATCH_BIN="$RUNNER_TEMP/n60-patch-bin"
+          mkdir -p "$PATCH_BIN"
+          ln -sf "$PATCH_WRAPPER" "$PATCH_BIN/patch"
+          export PATH="$PATCH_BIN:$PATH"
+          unset PATCH
+          echo "PATCH wrapper: $(command -v patch)"
+          echo "Patch wrapper is injected through PATH so scripts invoking literal patch are also captured."
+          if ! make target/linux/prepare V=s 2>&1 | tee "$KERNEL_PATCH_LOG"; then
+            echo "::error::Linux 6.12 source preparation or complete kernel patch application failed."
+            tail -n 250 "$KERNEL_PATCH_LOG"
+            for reject in $(find build_dir -type f -name "*.rej"); do
+              echo "===== $reject ====="
+              sed -n "1,220p" "$reject"
+            done
+            for source in $(find build_dir -type f -path "*/drivers/pci/controller/pcie-mediatek-gen3.c"); do
+              mkdir -p kernel-patch-audit/failure-source
+              cp -f "$source" kernel-patch-audit/failure-source/pcie-mediatek-gen3.c
+              if test -s "$source.rej"; then cp -f "$source.rej" kernel-patch-audit/failure-source/pcie-mediatek-gen3.c.rej; fi
+              cp -f target/linux/mediatek/patches-6.12/999-pcie-02-pcie-mediatek-gen3-Add-PCIe-IRQ-affinity-support.patch kernel-patch-audit/failure-source/
+              sha256sum kernel-patch-audit/failure-source/* || true
+              echo "===== ACTUAL PCIe IRQ teardown context ($source) ====="
+              grep -n -B 45 -A 70 "static void mtk_pcie_irq_teardown" "$source" || true
+              echo "===== ACTUAL PCIe IRQ handler/setup context ($source) ====="
+              sed -n '880,1035p' "$source"
+              echo "===== ACTUAL PATCHED SOURCE: mtk_pcie_irq_handler ($source) ====="
+              grep -n -B 12 -A 65 "static void mtk_pcie_irq_handler" "$source" || true
+              echo "===== ACTUAL PATCHED SOURCE: mtk_pcie_setup_irq ($source) ====="
+              grep -n -B 12 -A 35 "static int mtk_pcie_setup_irq" "$source" || true
+              echo "===== ACTUAL PATCHED SOURCE: mtk_pcie_msi_handler ($source) ====="
+              grep -n -B 8 -A 45 "static void mtk_pcie_msi_handler" "$source" || true
+            done
+            for source in $(find build_dir -type f -path "*/drivers/net/ethernet/mediatek/mtk_ppe_offload.c"); do
+              mkdir -p kernel-patch-audit/failure-source/ppe
+              cp -f "$source" kernel-patch-audit/failure-source/ppe/mtk_ppe_offload.c
+              if test -s "$source.rej"; then cp -f "$source.rej" kernel-patch-audit/failure-source/ppe/mtk_ppe_offload.c.rej; fi
+              cp -f target/linux/mediatek/patches-6.12/999-ppe-*.patch kernel-patch-audit/failure-source/ppe/
+              cp -f target/linux/mediatek/patches-6.12/999-wed-07-mtk-wed-add-hwpath-wmm-support.patch kernel-patch-audit/failure-source/ppe/
+              echo "===== ACTUAL PPE output-device function after failed patch application ($source) ====="
+              grep -n -B 30 -A 100 "mtk_flow_set_output_device" "$source" || true
+              echo "===== ACTUAL PPE conntrack QoS extension helper ====="
+              grep -n -B 12 -A 25 "nf_ct_qos_ext_add" build_dir/target-*/linux-*/linux-6.12.112/include/net/netfilter/nf_conntrack_qos.h 2>/dev/null || true
+              sha256sum kernel-patch-audit/failure-source/ppe/* || true
+            done
+            for source in $(find build_dir -type f -path "*/net/netfilter/nf_flow_table_core.c"); do
+              mkdir -p kernel-patch-audit/failure-source/ppe
+              cp -f "$source" kernel-patch-audit/failure-source/ppe/nf_flow_table_core.c
+              if test -s "$source.rej"; then cp -f "$source.rej" kernel-patch-audit/failure-source/ppe/nf_flow_table_core.c.rej; fi
+              echo "===== ACTUAL nf_flow_table_module_exit after failed PPE patch ($source) ====="
+              grep -n -B 25 -A 45 "static void __exit nf_flow_table_module_exit" "$source" || true
+              sha256sum kernel-patch-audit/failure-source/ppe/nf_flow_table_core.c*
+            done
+            for source in $(find build_dir -type f -path "*/include/linux/netdevice.h"); do
+              out="kernel-patch-audit/failure-source/netdevice"
+              mkdir -p "$out"
+              cp -f "$source" "$out/netdevice.h.pre-wed"
+              cp -f "$source.rej" "$out/netdevice.h.rej" 2>/dev/null || true
+              cp -f target/linux/mediatek/patches-6.12/999-hnat-13-netdevice-add-ndo_flow_offload_stats64_add-for-offload-stats-correction.patch "$out/"
+              cp -f target/linux/mediatek/patches-6.12/999-net-01-netdevice-add-macvlan-device-path-type.patch "$out/"
+              cp -f target/linux/mediatek/patches-6.12/999-net-02-netdevice-add-dslite-device-path-type.patch "$out/"
+              cp -f target/linux/mediatek/patches-6.12/999-net-02-netdevice-add-npu-device-path-type.patch "$out/"
+              cp -f target/linux/mediatek/patches-6.12/999-net-03-netdevice-add-tnl-device-path-type.patch "$out/"
+              cp -f target/linux/mediatek/patches-6.12/999-ppe-01-xt_FLOWOFFLOAD-add-bridging-support.patch "$out/"
+              cp -f target/linux/mediatek/patches-6.12/999-wed-07-mtk-wed-add-hwpath-wmm-support.patch "$out/"
+              sed -n '835,930p' "$source" > "$out/netdevice-path-context.txt"
+              (cd "$out" && sha256sum netdevice.h.pre-wed netdevice.h.rej *.patch netdevice-path-context.txt 2>/dev/null > SHA256SUMS)
+              echo "===== PRE-WED netdevice.h SHA256 and complete path layout ($source) ====="
+              cat "$out/SHA256SUMS"
+              cat "$out/netdevice-path-context.txt"
+              echo "===== ACTUAL SOURCE: net_device_path_type ($source) ====="
+              grep -n -B 5 -A 18 "enum net_device_path_type" "$source" || true
+            done
+            for source in $(find build_dir -type f -path "*/drivers/net/ethernet/mediatek/mtk_eth_soc.c"); do
+              echo "===== ACTUAL PATCHED SOURCE: mtk_tx_timeout ($source) ====="
+              grep -n -B 12 -A 28 "static void mtk_tx_timeout" "$source" || true
+              echo "===== ACTUAL PATCHED SOURCE: mtk_get_irqs ($source) ====="
+              grep -n -B 8 -A 42 "static int mtk_get_irqs" "$source" || true
+              echo "===== ALL pending_work scheduling sites ($source) ====="
+              grep -n -B 5 -A 5 "schedule_work(&eth->pending_work)" "$source" || true
+            done
+            KERNEL_MAKEFILE_DIAG="$(find build_dir -path "*/linux-6.12.112/Makefile" -print -quit)"
+            if test -n "$KERNEL_MAKEFILE_DIAG"; then
+              KERNEL_SRC_DIAG="$(dirname "$KERNEL_MAKEFILE_DIAG")"
+              source="$KERNEL_SRC_DIAG/drivers/net/phy/air_en8811h.c"
+              if test -e "$source"; then
+                mkdir -p kernel-patch-audit/failure-source/phy
+                cp -Lf "$source" kernel-patch-audit/failure-source/phy/air_en8811h.c
+                if test -s "$source.rej"; then cp -f "$source.rej" kernel-patch-audit/failure-source/phy/air_en8811h.c.rej; fi
+                cp -f target/linux/generic/backport-6.12/720-09-v6.14-net-phy-Constify-struct-mdio_device_id.patch kernel-patch-audit/failure-source/phy/
+                cp -f target/linux/generic/backport-6.12/788-v7.3-net-phy-air_en8811h-move-LED-GPIO-configuration-to-config_init.patch kernel-patch-audit/failure-source/phy/
+                echo "===== ACTUAL PHY SOURCE AROUND en8811h_config_init ($source) ====="
+                sed -n '820,930p' "$source"
+                sha256sum kernel-patch-audit/failure-source/phy/*
+              else
+                echo "::warning::PHY source snapshot not found at $source"
+              fi
+              source="$KERNEL_SRC_DIAG/drivers/net/ethernet/mediatek/mtk_ppe.c"
+              if test -e "$source"; then
+                mkdir -p kernel-patch-audit/failure-source/ppe
+                cp -Lf "$source" kernel-patch-audit/failure-source/ppe/mtk_ppe.c
+                if test -s "$source.rej"; then cp -f "$source.rej" kernel-patch-audit/failure-source/ppe/mtk_ppe.c.rej; fi
+                cp -f target/linux/mediatek/patches-6.12/999-ppe-14-mtk_ppe-add-PPE-cache-preserved-line-lock.patch kernel-patch-audit/failure-source/ppe/
+                cp -f target/linux/mediatek/patches-6.12/999-ppe-20-mtk_ppe-add-adaptive-PPPQ-mode.patch kernel-patch-audit/failure-source/ppe/
+                echo "===== ACTUAL PPE source around __mtk_foe_entry_clear ($source) ====="
+                grep -n -B 12 -A 55 "__mtk_foe_entry_clear" "$source" || true
+                echo "===== ACTUAL PPE source around __mtk_foe_entry_commit ($source) ====="
+                grep -n -B 12 -A 55 "__mtk_foe_entry_commit" "$source" || true
+                sha256sum kernel-patch-audit/failure-source/ppe/mtk_ppe.c*
+              else
+                echo "::warning::PPE source snapshot not found at $source"
+              fi
+            else
+              echo "::warning::Linux 6.12.112 source root not found for failure snapshots"
+            fi
+            exit 1
+          fi
+          if grep -Eiq "with fuzz [1-9]|fuzz [1-9]" "$KERNEL_PATCH_LOG"; then
+            echo "::error::Non-zero patch fuzz detected in kernel patch log."
+            exit 1
+          fi
+          KERNEL_MAKEFILE="$(find build_dir -type f -path "*/linux-6.12.112/Makefile" -print -quit)"
+          test -n "$KERNEL_MAKEFILE" || { echo "::error::Expected Linux 6.12.112 source tree was not prepared."; exit 1; }
+          grep -q "^VERSION = 6$" "$KERNEL_MAKEFILE"
+          grep -q "^PATCHLEVEL = 12$" "$KERNEL_MAKEFILE"
+          grep -q "^SUBLEVEL = 112$" "$KERNEL_MAKEFILE"
+          KERNEL_SRC="$(dirname "$KERNEL_MAKEFILE")"
+          # Intermediate PPE snapshots are diagnostic evidence only. Their
+          # capture depends on observing OpenWrt's patch(1) invocation boundary
+          # and must never override the authoritative final-tree checks below.
+          # The PPE overlap contract is enforced against the fully patched
+          # Linux source by test-ppe-qos-overlap.py in the next audit step.
+          for stage in after-04 before-05 after-05; do
+            snapshot="$GITHUB_WORKSPACE/kernel-patch-audit/ppe-reconstruction/$stage/drivers/net/ethernet/mediatek/mtk_ppe_offload.c"
+            if test -s "$snapshot"; then
+              echo "===== Optional PPE diagnostic snapshot: $stage ====="
+              sha256sum "$snapshot"
+            else
+              echo "::warning::Optional PPE diagnostic snapshot unavailable: $stage (final-tree semantic audit remains mandatory)."
+            fi
+          done
+          KERNEL_ARCHIVE="$GITHUB_WORKSPACE/dl/linux-6.12.112.tar.xz"
+          test -s "$KERNEL_ARCHIVE" || { echo "::error::Pinned Linux 6.12.112 source archive is missing."; exit 1; }
+          python3 target/linux/mediatek/tests/audit-kernel-patch-stack.py attest \
+            --repo "$GITHUB_WORKSPACE" --output-dir "$GITHUB_WORKSPACE/kernel-patch-audit" \
+            --kernel-src "$KERNEL_SRC" --patch-log "$KERNEL_PATCH_LOG" --kernel-archive "$KERNEL_ARCHIVE" \
+            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
+          echo "PASS: complete OpenWrt generic and MediaTek kernel patch stacks applied to Linux 6.12.112 with zero fuzz, before kernel_oldconfig and compilation."
+
+      - name: Audit MT7530 DSA Netlink declarations, bounds and lifecycle
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          KERNEL_MAKEFILE="$(find build_dir -type f -path "*/linux-6.12.112/Makefile" -print -quit)"
+          test -n "$KERNEL_MAKEFILE" || { echo "::error::Patched Linux 6.12.112 source tree is missing."; exit 1; }
+          KERNEL_SRC="$(dirname "$KERNEL_MAKEFILE")"
+          python3 target/linux/mediatek/tests/test-dsa-mt7530-netlink.py "$KERNEL_SRC"
+
+      - name: Audit PCIe Gen3 MSI bounds and soft-power IRQ lifecycle
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          KERNEL_MAKEFILE="$(find build_dir -type f -path "*/linux-6.12.112/Makefile" -print -quit)"
+          test -n "$KERNEL_MAKEFILE" || { echo "::error::Patched Linux 6.12.112 source tree is missing."; exit 1; }
+          python3 target/linux/mediatek/tests/test-pcie-gen3-irq-lifecycle.py "$(dirname "$KERNEL_MAKEFILE")"
+
+      - name: Audit PPE overlapping QoS, DSCP and WDMA patch contracts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          KERNEL_MAKEFILE="$(find build_dir -type f -path "*/linux-6.12.112/Makefile" -print -quit)"
+          test -n "$KERNEL_MAKEFILE" || { echo "::error::Patched Linux 6.12.112 source tree is missing."; exit 1; }
+          python3 target/linux/mediatek/tests/test-ppe-qos-overlap.py "$(dirname "$KERNEL_MAKEFILE")"
+
+      - name: Verify actual GNU Make package variables and fetch manual EasyMesh archives
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py verify-packages --repo "$GITHUB_WORKSPACE"
+          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py download \
+            --repo "$GITHUB_WORKSPACE" --dl-dir "$GITHUB_WORKSPACE/dl" \
+            --ids wappd mapd 1905daemon libmapd
+
+      - name: Download native OpenWrt Package sources and verify Lock hashes
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for pkg in \
+            package/mtk/drivers/warp \
+            package/mtk/drivers/conninfra \
+            package/mtk/drivers/mt_wifi \
+            package/mtk/applications/datconf \
+            package/kernel/mapfilter \
+            package/libs/openssl \
+            package/libs/libnl-tiny; do
+            echo "===== Native download: $pkg ====="
+            make -C "$pkg" TOPDIR="$GITHUB_WORKSPACE" download V=s
+          done
+          python3 package/mtk/applications/easymesh-n60/scripts/n60-vendor-lock.py verify-downloads \
+            --repo "$GITHUB_WORKSPACE" --dl-dir "$GITHUB_WORKSPACE/dl" \
+            --ids mtwifi conninfra warp datconf mapfilter
+
+      - name: Verify executable build-system scripts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for script in scripts/feeds scripts/download.pl scripts/patch-kernel.sh; do
+            test -x "$script" || { echo "::error::Required OpenWrt build script is not executable: $script"; exit 1; }
+          done
+
+      - name: Build the OpenWrt host decompressor required by native OpenSSL Prepare
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "===== Build only the declared OpenWrt host decompressor prerequisite ====="
+          make tools/libdeflate/compile V=s
+          test -x staging_dir/host/bin/libdeflate-gzip || {
+            echo "::error::OpenWrt host libdeflate-gzip was not installed after tools/libdeflate/compile."
+            exit 1
+          }
+          sha256sum staging_dir/host/bin/libdeflate-gzip
+
+      - name: Run native Build Prepare for all fixed vendor packages (no compile)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for pkg in \
+            package/mtk/drivers/warp \
+            package/mtk/drivers/conninfra \
+            package/mtk/drivers/mt_wifi \
+            package/kernel/mapfilter \
+            package/mtk/applications/datconf \
+            package/libs/openssl \
+            package/mtk/applications/easymesh-n60; do
+            echo "===== Native Build/Prepare only: $pkg ====="
+            make -C "$pkg" TOPDIR="$GITHUB_WORKSPACE" -j1 prepare V=s
+          done
+          echo "PASS: all fixed vendor Package Build/Prepare targets completed; no compile target was invoked."
+
+      - name: Assert MT Wi-Fi 026 after Quick Prepare
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 package/mtk/drivers/mt_wifi/tests/test-026-prandom-u32-prepare.py \
+            --repo "$GITHUB_WORKSPACE" \
+            --evidence-dir "$RUNNER_TEMP/mtwifi-026-quick-prepare"
+
+      - name: Upload MT Wi-Fi 026 Quick Prepare evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-mtwifi-026-quick-prepare-evidence
+          path: ${{ runner.temp }}/mtwifi-026-quick-prepare/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Capture exact native EasyMesh source trees for 40-API migration
+        id: openssl_source_capture
+        if: success()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mapfile -t BUILD_DIRS < <(find "$GITHUB_WORKSPACE/build_dir" -mindepth 2 -maxdepth 2 -type d -name 'easymesh-n60-7.6.7.3' -print | sort)
+          [[ "${#BUILD_DIRS[@]}" -eq 1 ]] || {
+            echo "::error::Expected exactly one native EasyMesh Prepare tree for source capture; found ${#BUILD_DIRS[@]}."
+            printf '%s\n' "${BUILD_DIRS[@]}"
+            exit 1
+          }
+          BUILD_DIR="${BUILD_DIRS[0]}"
+          PRISTINE_DIR="${BUILD_DIR}-openssl-pristine"
+          OUT="artifacts/easymesh-openssl-production-source"
+          mkdir -p "$OUT/prepared" "$OUT/pristine"
+          for component in wappd 1905daemon; do
+            test -d "$BUILD_DIR/$component" || {
+              echo "::error::Native prepared source is missing: $BUILD_DIR/$component"; exit 1;
+            }
+            test -d "$PRISTINE_DIR/$component" || {
+              echo "::error::Pristine source snapshot is missing: $PRISTINE_DIR/$component"; exit 1;
+            }
+            cp -a "$BUILD_DIR/$component" "$OUT/prepared/$component"
+            cp -a "$PRISTINE_DIR/$component" "$OUT/pristine/$component"
+          done
+          # Assert the actual native Build/Prepare output, not a duplicated test implementation.
+          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-production-source-migration.py "$BUILD_DIR"
+          # Keep symlinks intact; GitHub artifact ZIP extraction may not preserve them.
+          tar -czf "$OUT/source-trees.tar.gz" -C "$OUT" prepared pristine
+          tar -tzf "$OUT/source-trees.tar.gz" >/dev/null
+          python3 - "$GITHUB_WORKSPACE" "$OUT" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          repo, out, git_sha, run_id, attempt = map(str, sys.argv[1:])
+          repo, out = Path(repo), Path(out)
+          lock_path = repo / "package/mtk/vendor-sources.lock.json"
+          lock = json.loads(lock_path.read_text(encoding="utf-8"))
+          def sha256(path):
+              h = hashlib.sha256()
+              with path.open("rb") as f:
+                  for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                      h.update(chunk)
+              return h.hexdigest()
+          def tree_digest(root):
+              h = hashlib.sha256()
+              files = 0
+              symlinks = []
+              for p in sorted(root.rglob("*")):
+                  rel = p.relative_to(root).as_posix()
+                  if p.is_symlink():
+                      target = str(p.readlink())
+                      h.update(b"L\0" + rel.encode() + b"\0" + target.encode() + b"\n")
+                      symlinks.append({"path": rel, "target": target})
+                      files += 1
+                  elif p.is_file():
+                      h.update(b"F\0" + rel.encode() + b"\0" + bytes.fromhex(sha256(p)) + b"\n")
+                      files += 1
+              return {"sha256": h.hexdigest(), "entries": files, "symlinks": symlinks}
+          sources = {x["id"]: x for x in lock["sources"] if x["id"] in {"wappd", "1905daemon"}}
+          if set(sources) != {"wappd", "1905daemon"}:
+              raise SystemExit("vendor Lock does not contain both EasyMesh source archives")
+          patchset = next(x for x in lock["patch_sets"] if x["id"] == "easymesh")
+          ordered = patchset["application_order"] + patchset.get("post_normalize_order", [])
+          patch_dir = repo / patchset["directory"]
+          patches = []
+          for name in ordered:
+              p = patch_dir / name
+              if not p.is_file():
+                  raise SystemExit(f"Lock-ordered EasyMesh patch is missing: {p}")
+              patches.append({"name": name, "sha256": sha256(p)})
+          manifest = {
+              "schema_version": 2,
+              "purpose": "source evidence only; no firmware or EasyMesh component compile",
+              "git_sha": git_sha,
+              "run": {"id": int(run_id), "attempt": int(attempt)},
+              "native_openwrt_build_prepare": True,
+              "firmware_compile_invoked": False,
+              "vendor_lock": {
+                  "path": "package/mtk/vendor-sources.lock.json",
+                  "sha256": sha256(lock_path),
+                  "release": lock.get("release")
+              },
+              "source_archives": {
+                  k: {"archive": v["archive"], "sha256": v["sha256"]}
+                  for k, v in sorted(sources.items())
+              },
+              "patch_set": {
+                  "id": "easymesh",
+                  "directory": patchset["directory"],
+                  "ordered_patch_sha256": patches
+              },
+              "source_trees_archive": {
+                  "name": "source-trees.tar.gz",
+                  "sha256": sha256(out / "source-trees.tar.gz")
+              },
+              "source_trees": {
+                  kind: {
+                      component: tree_digest(out / kind / component)
+                      for component in ("wappd", "1905daemon")
+                  }
+                  for kind in ("prepared", "pristine")
+              }
+          }
+          (out / "source-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+          print(json.dumps(manifest, indent=2))
+          PY
+
+      - name: Upload native EasyMesh production source evidence
+        if: steps.openssl_source_capture.outcome == 'success'
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-easymesh-openssl-production-sources
+          path: artifacts/easymesh-openssl-production-source/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Generate exact N60 target preprocessor evidence (no firmware build)
+        id: target_preprocessor
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OUT="artifacts/easymesh-openssl-preprocessor-audit"
+          mkdir -p "$OUT"
+
+          # Install the cross-toolchain only. No firmware or EasyMesh binary target is built.
+          make toolchain/install -j"$(nproc)" V=s
+
+          # OpenSSL Configure generates target headers but does not compile OpenSSL.
+          make -C package/libs/openssl TOPDIR="$GITHUB_WORKSPACE" configure V=s
+          OPENSSL_VARS_OUTPUT="$(make -s -C package/libs/openssl TOPDIR="$GITHUB_WORKSPACE" \
+            --eval='dump-openssl-target-vars:; @printf "%s\n" "__PKG_SOURCE__$(PKG_SOURCE)" "__PKG_SOURCE_URL__$(PKG_SOURCE_URL)" "__PKG_HASH__$(PKG_HASH)" "__PKG_BUILD_DIR__$(PKG_BUILD_DIR)" "__PATCH_DIR__$(PATCH_DIR)" "__OPENSSL_OPTIONS__$(OPENSSL_OPTIONS)"' \
+            dump-openssl-target-vars)"
+          while IFS= read -r line; do
+            case "$line" in
+              __PKG_SOURCE__*) PKG_SOURCE="${line#__PKG_SOURCE__}" ;;
+              __PKG_SOURCE_URL__*) PKG_SOURCE_URL="${line#__PKG_SOURCE_URL__}" ;;
+              __PKG_HASH__*) PKG_HASH="${line#__PKG_HASH__}" ;;
+              __PKG_BUILD_DIR__*) PKG_BUILD_DIR="${line#__PKG_BUILD_DIR__}" ;;
+              __PATCH_DIR__*) PATCH_DIR="${line#__PATCH_DIR__}" ;;
+              __OPENSSL_OPTIONS__*) OPENSSL_OPTIONS="${line#__OPENSSL_OPTIONS__}" ;;
+            esac
+          done <<< "$OPENSSL_VARS_OUTPUT"
+          [[ -n "$PKG_SOURCE" && -n "$PKG_SOURCE_URL" && "$PKG_HASH" =~ ^[0-9a-f]{64}$ && -n "$PKG_BUILD_DIR" && -n "$PATCH_DIR" && -n "$OPENSSL_OPTIONS" ]] || {
+            echo "::error::OpenSSL package Make-expanded source/lock/patch/options variables are incomplete."
+            printf '%s\n' "$OPENSSL_VARS_OUTPUT"
+            exit 1
+          }
+          OPENSSL_SOURCE="$(realpath "$PKG_BUILD_DIR")"
+          if [[ "$PATCH_DIR" = /* ]]; then OPENSSL_PATCH_DIR="$(realpath "$PATCH_DIR")"; elif [[ -d "$PATCH_DIR" ]]; then OPENSSL_PATCH_DIR="$(realpath "$PATCH_DIR")"; else OPENSSL_PATCH_DIR="$(realpath "package/libs/openssl/$PATCH_DIR")"; fi
+          test -f "$OPENSSL_SOURCE/Configure"
+          test -d "$OPENSSL_PATCH_DIR"
+          PATCH_COUNT="$(find "$OPENSSL_PATCH_DIR" -type f -name '*.patch' | wc -l)"
+          [[ "$PATCH_COUNT" -gt 0 ]] || { echo "::error::Expanded OpenSSL PATCH_DIR has no patch files."; exit 1; }
+          {
+            printf 'PKG_SOURCE=%s\nPKG_SOURCE_URL=%s\nPKG_HASH=%s\nPKG_BUILD_DIR=%s\nPATCH_DIR=%s\nOPENSSL_OPTIONS=%s\n' \
+              "$PKG_SOURCE" "$PKG_SOURCE_URL" "$PKG_HASH" "$OPENSSL_SOURCE" "$OPENSSL_PATCH_DIR" "$OPENSSL_OPTIONS"
+            echo "patch_count=$PATCH_COUNT"
+            find "$OPENSSL_PATCH_DIR" -type f -name '*.patch' -print0 | sort -z | xargs -0 sha256sum
+          } | tee "$OUT/openssl-target-make-vars-and-patches.txt"
+          # build_generated creates generated public headers (including opensslv.h);
+          # it is source generation, not a C compilation target.
+          make -C "$OPENSSL_SOURCE" build_generated V=s 2>&1 | tee "$OUT/openssl-build-generated.log"
+          (cd "$OPENSSL_SOURCE" && perl configdata.pm --dump) > "$OUT/openssl-configdata-dump.txt"
+
+          # Evaluate the EasyMesh Package Makefile and print its expanded target variables.
+          # This uses the package's own kernel.mk/rules.mk context, not guessed flags.
+          VARS_OUTPUT="$(make -s -C package/mtk/applications/easymesh-n60 TOPDIR="$GITHUB_WORKSPACE" \
+            --eval='dump-n60-target-vars:; @printf "%s\n" "__TARGET_CC__$(TARGET_CC)" "__TARGET_AR__$(TARGET_AR)" "__TARGET_RANLIB__$(TARGET_RANLIB)" "__TARGET_CPPFLAGS__$(TARGET_CPPFLAGS)" "__TARGET_CFLAGS__$(TARGET_CFLAGS)" "__TARGET_LDFLAGS__$(TARGET_LDFLAGS)" "__STAGING_DIR__$(STAGING_DIR)" "__LINUX_DIR__$(LINUX_DIR)" "__TARGET_PATH__$(TARGET_PATH)"' \
+            dump-n60-target-vars)"
+          while IFS= read -r line; do
+            case "$line" in
+              __TARGET_CC__*) TARGET_CC="${line#__TARGET_CC__}" ;;
+              __TARGET_AR__*) TARGET_AR="${line#__TARGET_AR__}" ;;
+              __TARGET_RANLIB__*) TARGET_RANLIB="${line#__TARGET_RANLIB__}" ;;
+              __TARGET_CPPFLAGS__*) TARGET_CPPFLAGS="${line#__TARGET_CPPFLAGS__}" ;;
+              __TARGET_CFLAGS__*) TARGET_CFLAGS="${line#__TARGET_CFLAGS__}" ;;
+              __TARGET_LDFLAGS__*) TARGET_LDFLAGS="${line#__TARGET_LDFLAGS__}" ;;
+              __STAGING_DIR__*) STAGING_DIR="${line#__STAGING_DIR__}" ;;
+              __LINUX_DIR__*) LINUX_DIR="${line#__LINUX_DIR__}" ;;
+              __TARGET_PATH__*) TARGET_PATH="${line#__TARGET_PATH__}" ;;
+            esac
+          done <<< "$VARS_OUTPUT"
+          [[ -n "$TARGET_CC" && -n "$TARGET_AR" && -n "$TARGET_RANLIB" && -n "$TARGET_CFLAGS" && -n "$STAGING_DIR" && -n "$LINUX_DIR" && -n "$TARGET_PATH" ]] || {
+            echo "::error::OpenWrt target compiler/flags/staging variables are incomplete."
+            printf '%s\n' "$VARS_OUTPUT"
+            exit 1
+          }
+          [[ "$TARGET_CC" != *" "* && "$TARGET_AR" != *" "* && "$TARGET_RANLIB" != *" "* ]] || {
+            echo "::error::Compiler/binutils wrappers are not supported by this evidence parser; fail closed."
+            exit 1
+          }
+          export PATH="$TARGET_PATH:$PATH"
+          command -v "$TARGET_CC" >/dev/null
+          command -v "$TARGET_AR" >/dev/null
+          command -v "$TARGET_RANLIB" >/dev/null
+          STAGING_DIR="$(realpath "$STAGING_DIR")"
+          LINUX_DIR="$(realpath "$LINUX_DIR")"
+          TARGET_STAGING="$STAGING_DIR"
+
+          # Export the expanded package Build/Compile recipe as data only.
+          # The recipe is not invoked; GNU make writes it through file() and runs true.
+          make -s -C package/mtk/applications/easymesh-n60 TOPDIR="$GITHUB_WORKSPACE" \
+            --eval='dump-n60-build-compile:; $(file >$(TOPDIR)/artifacts/easymesh-openssl-preprocessor-audit/easymesh-Build-Compile.expanded.txt,$(Build/Compile)) @true' \
+            dump-n60-build-compile
+          test -s "$OUT/easymesh-Build-Compile.expanded.txt"
+
+          # Export the exact expanded Build/Compile recipe without executing it.
+          # GNU make's file() function writes the recipe text; the only shell command is true.
+          make -s -C package/mtk/applications/easymesh-n60 TOPDIR="$GITHUB_WORKSPACE" \
+            --eval='dump-n60-build-compile:; $(file >$(TOPDIR)/artifacts/easymesh-openssl-preprocessor-audit/easymesh-Build-Compile.expanded.txt,$(Build/Compile)) @true' \
+            dump-n60-build-compile
+          test -s "$OUT/easymesh-Build-Compile.expanded.txt"
+
+          # Stage target dependency headers used by the components' actual include paths.
+          # These are dependency packages only, not firmware or EasyMesh binaries.
+          make -C package/mtk/applications/datconf TOPDIR="$GITHUB_WORKSPACE" \
+            CMAKE_OPTIONS="-DLUAPATH=/usr/lib/lua -DBUILD_LUA=OFF" \
+            "$TARGET_STAGING/stamp/.datconf_installed" -j"$(nproc)" V=s
+          make -C package/libs/libnl-tiny TOPDIR="$GITHUB_WORKSPACE" \
+            "$TARGET_STAGING/stamp/.libnl-tiny_installed" -j"$(nproc)" V=s
+
+          # Copy the exact Configure-generated OpenSSL headers into the target staging include path.
+          test -s "$OPENSSL_SOURCE/include/openssl/configuration.h"
+          test -s "$OPENSSL_SOURCE/include/openssl/opensslv.h"
+          rm -rf "$TARGET_STAGING/usr/include/openssl"
+          mkdir -p "$TARGET_STAGING/usr/include"
+          cp -a "$OPENSSL_SOURCE/include/openssl" "$TARGET_STAGING/usr/include/"
+          OPENSSL_HEADERS="$TARGET_STAGING/usr/include/openssl"
+          grep -Eq '^[[:space:]]*#[[:space:]]*define[[:space:]]+OPENSSL_VERSION_MAJOR[[:space:]]+3([[:space:]]|$)' "$OPENSSL_HEADERS/opensslv.h"
+          grep -Eq '^[[:space:]]*#[[:space:]]*define[[:space:]]+OPENSSL_VERSION_MINOR[[:space:]]+5([[:space:]]|$)' "$OPENSSL_HEADERS/opensslv.h"
+          grep -Eq '^[[:space:]]*#[[:space:]]*define[[:space:]]+OPENSSL_VERSION_PATCH[[:space:]]+9([[:space:]]|$)' "$OPENSSL_HEADERS/opensslv.h"
+          {
+            echo "OpenSSL source: $OPENSSL_SOURCE"
+            sha256sum "$OPENSSL_HEADERS/configuration.h" "$OPENSSL_HEADERS/opensslv.h"
+            echo "ENGINE-related generated macros (diagnostic only; compiler preprocessing is authoritative):"
+            grep -n 'OPENSSL_NO_ENGINE\|OPENSSL_ENGINE_STUBS\|OPENSSL_NO_DEPRECATED' \
+              "$OPENSSL_HEADERS/configuration.h" "$OPENSSL_HEADERS/opensslconf.h" 2>/dev/null || true
+          } | tee "$OUT/target-openssl-header-evidence.txt"
+
+          test -s "$TARGET_STAGING/usr/include/libdatconf.h"
+          test -s "$TARGET_STAGING/usr/include/libkvcutil.h"
+          test -d "$TARGET_STAGING/usr/include/libnl-tiny"
+          test -n "$(find "$TARGET_STAGING/usr/include/libnl-tiny" -type f -print -quit)"
+          test -s "$LINUX_DIR/include/uapi/linux/wapp/wapp_cmm_type.h"
+          test -s "$LINUX_DIR/include/uapi/linux/wapp/mt_wlan_cmm_oid.h"
+
+          BUILD_DIR_LIST="$(find "$GITHUB_WORKSPACE/build_dir" -mindepth 2 -maxdepth 2 -type d -name 'easymesh-n60-7.6.7.3' -print | sort)"
+          BUILD_DIR_COUNT="$(printf '%s\n' "$BUILD_DIR_LIST" | grep -c . || true)"
+          [[ "$BUILD_DIR_COUNT" -eq 1 ]] || {
+            echo "::error::Expected exactly one EasyMesh Prepare tree; found $BUILD_DIR_COUNT."
+            printf '%s\n' "$BUILD_DIR_LIST"
+            exit 1
+          }
+          BUILD_DIR="$BUILD_DIR_LIST"
+          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py
+          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py
+          python3 package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py \
+            --repo-dir "$GITHUB_WORKSPACE" --build-dir "$BUILD_DIR" \
+            --cc "$TARGET_CC" --ar "$TARGET_AR" --ranlib "$TARGET_RANLIB" \
+            --cppflags "$TARGET_CPPFLAGS" --cflags "$TARGET_CFLAGS" --ldflags "$TARGET_LDFLAGS" \
+            --staging-dir "$TARGET_STAGING" --linux-dir "$LINUX_DIR" --output-dir "$OUT" \
+            --openssl-source-dir "$OPENSSL_SOURCE" --openssl-patch-dir "$OPENSSL_PATCH_DIR" \
+            --openssl-pkg-source "$PKG_SOURCE" --openssl-pkg-source-url "$PKG_SOURCE_URL" \
+            --openssl-pkg-hash "$PKG_HASH" --openssl-options "$OPENSSL_OPTIONS" \
+            --target-config "$GITHUB_WORKSPACE/.config" \
+            --package-compile-recipe "$OUT/easymesh-Build-Compile.expanded.txt"
+
+      - name: Preflight OpenSSL audit implementation inputs after MT Wi-Fi 026
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for input in \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py \
+            package/mtk/applications/easymesh-n60/scripts/openssl-target-preprocessor-audit.py \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py \
+            package/mtk/applications/easymesh-n60/scripts/enforce-openssl-target-api-gate.py \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py \
+            package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json \
+            package/mtk/applications/easymesh-n60/tests/openssl-40-active-api-semantic-review.csv \
+            package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv \
+            package/mtk/applications/easymesh-n60/tests/openssl-easymesh-scope.json \
+            package/mtk/applications/easymesh-n60/tests/openssl-migration-baseline.lock.json \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-provider-runtime.c \
+            package/mtk/applications/easymesh-n60/scripts/run-openssl-provider-runtime.sh \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regressions.c \
+            package/mtk/applications/easymesh-n60/tests/openssl-40-api-regression-matrix.json \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regression-matrix.py \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-des-internal-regression.c \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-hmac-production-regression.c \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-hmac-production-regression.py \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-production-source-migration.py \
+            package/mtk/applications/easymesh-n60/scripts/verify-openssl-api-migration-attestation.py; do
+            test -s "$input" || {
+              echo "::error::Required OpenSSL audit input is missing or empty: $input"
+              exit 1
+            }
+          done
+          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-target-preprocessor-audit.py
+          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-target-api-gate.py
+          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regression-matrix.py \
+            --review package/mtk/applications/easymesh-n60/tests/openssl-40-active-api-semantic-review.csv \
+            --matrix package/mtk/applications/easymesh-n60/tests/openssl-40-api-regression-matrix.json \
+            --test-source package/mtk/applications/easymesh-n60/tests/test-openssl-api-migration-regressions.c \
+            --additional-test-source package/mtk/applications/easymesh-n60/tests/test-openssl-des-internal-regression.c \
+            --additional-test-source package/mtk/applications/easymesh-n60/tests/test-openssl-hmac-production-regression.c
+          bash -n package/mtk/applications/easymesh-n60/scripts/run-openssl-provider-runtime.sh
+          python3 -m py_compile package/mtk/applications/easymesh-n60/scripts/verify-openssl-api-migration-attestation.py package/mtk/applications/easymesh-n60/tests/test-openssl-hmac-production-regression.py
+          ruby -e 'require "yaml"; %w[.github/workflows/quick-prepare-audit.yml .github/workflows/easymesh-quick.yml .github/workflows/main.yml .github/workflows/openssl-migration-baseline-audit.yml].each { |p| YAML.parse_file(p); puts "PASS: YAML parsed: #{p}" }'
+          echo "PASS: OpenSSL inventory, preprocessor audit, exact 40-API regression matrix and workflow YAML inputs are valid after native Prepare and MT Wi-Fi 026 evidence."
+
+      - name: Run Provider-native OpenSSL 3.5.9 runtime regression tests
+        id: openssl_provider_runtime
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mapfile -t OPENSSL_CONFIGURES < <(find "$GITHUB_WORKSPACE/build_dir" -type f -path '*/openssl-3.5.9/Configure' -print | sort)
+          [[ "${#OPENSSL_CONFIGURES[@]}" -eq 1 ]] || {
+            echo "::error::Expected exactly one native OpenSSL 3.5.9 source tree; found ${#OPENSSL_CONFIGURES[@]}."
+            printf '%s\n' "${OPENSSL_CONFIGURES[@]}"
+            exit 1
+          }
+          OPENSSL_SOURCE="$(dirname "${OPENSSL_CONFIGURES[0]}")"
+          bash package/mtk/applications/easymesh-n60/scripts/run-openssl-provider-runtime.sh \
+            "$OPENSSL_SOURCE" \
+            package/mtk/applications/easymesh-n60/tests/test-openssl-provider-runtime.c \
+            "$RUNNER_TEMP/n60-openssl-provider-runtime" \
+            "$GITHUB_WORKSPACE"
+
+      - name: Enforce strict OpenSSL 3.5.9 API migration and const-correctness gate
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mapfile -t BUILD_DIRS < <(find "$GITHUB_WORKSPACE/build_dir" -mindepth 2 -maxdepth 2 -type d -name 'easymesh-n60-7.6.7.3' -print | sort)
+          [[ "${#BUILD_DIRS[@]}" -eq 1 ]] || {
+            echo "::error::Expected exactly one native EasyMesh Prepare tree; found ${#BUILD_DIRS[@]}."
+            printf '%s\n' "${BUILD_DIRS[@]}"
+            exit 1
+          }
+          BUILD_DIR="${BUILD_DIRS[0]}"
+          for component in wappd mapd 1905daemon libmapd; do
+            test -d "$BUILD_DIR/$component" || {
+              echo "::error::Prepared EasyMesh component is missing: $BUILD_DIR/$component"; exit 1;
+            }
+            test -d "${BUILD_DIR}-openssl-pristine/$component" || {
+              echo "::error::Pristine OpenSSL audit input is missing: ${BUILD_DIR}-openssl-pristine/$component"; exit 1;
+            }
+          done
+          mapfile -t OPENSSL_CONFIGURES < <(find "$GITHUB_WORKSPACE/build_dir" -type f -path '*/openssl-3.5.9/Configure' -print | sort)
+          [[ "${#OPENSSL_CONFIGURES[@]}" -eq 1 ]] || {
+            echo "::error::Expected exactly one native OpenSSL 3.5.9 source tree; found ${#OPENSSL_CONFIGURES[@]}."
+            printf '%s\n' "${OPENSSL_CONFIGURES[@]}"
+            exit 1
+          }
+          OPENSSL_CONFIGURE="${OPENSSL_CONFIGURES[0]}"
+          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory-selftest.py
+          python3 package/mtk/applications/easymesh-n60/tests/test-openssl-api-inventory.py \
+            --strict \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --source-root "$BUILD_DIR" \
+            --pristine-root "${BUILD_DIR}-openssl-pristine" \
+            --openssl-source "$(dirname "$OPENSSL_CONFIGURE")" \
+            --policy package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json \
+            --output-dir artifacts/easymesh-openssl-api-audit
+          python3 package/mtk/applications/easymesh-n60/scripts/enforce-openssl-target-api-gate.py \
+            --inventory artifacts/easymesh-openssl-api-audit/openssl-api-inventory.csv \
+            --callsites artifacts/easymesh-openssl-preprocessor-audit/callsite-reachability.json \
+            --noncalls artifacts/easymesh-openssl-preprocessor-audit/openssl-non-call-reference-reachability.json \
+            --summary artifacts/easymesh-openssl-preprocessor-audit/openssl-target-preprocessor-summary.json \
+            --macros artifacts/easymesh-openssl-preprocessor-audit/macro-reference-reachability.json \
+            --migration-map package/mtk/applications/easymesh-n60/tests/openssl-111-to-359-migration-map.csv \
+            --review package/mtk/applications/easymesh-n60/tests/openssl-40-active-api-semantic-review.csv \
+            --delta artifacts/easymesh-openssl-api-audit/openssl-api-delta.csv \
+            --scope-manifest package/mtk/applications/easymesh-n60/tests/openssl-easymesh-scope.json \
+            --policy package/mtk/applications/easymesh-n60/tests/openssl-api-policy.json \
+            --source-root "$BUILD_DIR" --repo-root "$GITHUB_WORKSPACE" \
+            --output artifacts/easymesh-openssl-api-audit/openssl-target-api-gate.json
+
+      - name: Upload OpenSSL API inventory and Provider runtime evidence
+        id: openssl_api_evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-openssl-3.5.9-api-and-provider-audit
+          path: |
+            artifacts/easymesh-openssl-api-audit/
+            artifacts/easymesh-openssl-preprocessor-audit/
+            ${{ runner.temp }}/n60-openssl-provider-runtime/
+          if-no-files-found: error
+          retention-days: 30
+          include-hidden-files: true
+
+      - name: Enforce Provider runtime regression result
+        if: always() && steps.openssl_provider_runtime.outcome == 'failure'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          RESULT="$RUNNER_TEMP/n60-openssl-provider-runtime/provider-runtime-result.json"
+          API_RESULT="$RUNNER_TEMP/n60-openssl-provider-runtime/openssl-api-regression-results.json"
+          for file in "$RESULT" "$API_RESULT"; do
+            test -s "$file" || {
+              echo "::error::OpenSSL runtime runner did not preserve structured failure evidence: $file"
+              exit 1
+            }
+          done
+          python3 - "$RESULT" "$API_RESULT" <<'PY'
+          import json, sys
+          from pathlib import Path
+          for name in sys.argv[1:]:
+              data = json.loads(Path(name).read_text(encoding="utf-8"))
+              print(json.dumps({"file": name, "status": data.get("result", data.get("status")),
+                                "failure": data.get("failure")}, sort_keys=True))
+          PY
+          echo "::error::Provider-native OpenSSL 3.5.9 runtime regression gate failed; see the structured failure record above."
+          exit 1
+
+
+
+
+      - name: Enforce target preprocessor evidence completion
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ "${{ steps.target_preprocessor.outcome }}" != "success" ]]; then
+            echo "::error::Target preprocessor audit failed or retained UNKNOWN_FAIL_CLOSED callsites."
+            test ! -s artifacts/easymesh-openssl-preprocessor-audit/openssl-target-preprocessor-summary.json || \
+              cat artifacts/easymesh-openssl-preprocessor-audit/openssl-target-preprocessor-summary.json
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("artifacts/easymesh-openssl-preprocessor-audit/openssl-target-preprocessor-summary.json")
+          data=json.loads(p.read_text())
+          assert data.get("firmware_compile_invoked") is False
+          assert data.get("complete") is True
+          assert data.get("callsite_counts", {}).get("UNKNOWN_FAIL_CLOSED") == 0
+          print("PASS: direct deprecated source occurrences have target-preprocessor evidence.")
+          PY
+
+      - name: Create immutable target-scope OpenSSL compatibility attestation
+        if: success()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 package/mtk/applications/easymesh-n60/scripts/verify-openssl-api-migration-attestation.py create \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --gate-report artifacts/easymesh-openssl-api-audit/openssl-target-api-gate.json \
+            --preprocessor-summary artifacts/easymesh-openssl-preprocessor-audit/openssl-target-preprocessor-summary.json \
+            --regression-results "$RUNNER_TEMP/n60-openssl-provider-runtime/openssl-api-regression-results.json" \
+            --provider-result "$RUNNER_TEMP/n60-openssl-provider-runtime/provider-runtime-result.json" \
+            --vendor-attestation .audit-attestation/vendor-audit-attestation.json \
+            --output artifacts/openssl-api-migration-attestation.json \
+            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --expected-git-sha "$GITHUB_SHA" --ref "$GITHUB_REF" \
+            --artifact-id "${{ steps.openssl_api_evidence.outputs.artifact-id }}" \
+            --artifact-digest "${{ steps.openssl_api_evidence.outputs.artifact-digest }}"
+
+      - name: Upload immutable 40-API OpenSSL migration attestation
+        if: success()
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-openssl-api-migration-attestation
+          path: artifacts/openssl-api-migration-attestation.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Linux kernel patch inventory and attestation
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60-kernel-patch-attestation
+          path: kernel-patch-audit/
+          if-no-files-found: warn
+          retention-days: 30

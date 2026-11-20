@@ -3,7 +3,7 @@ SUBTARGET:=filogic
 BOARDNAME:=Filogic 8x0 (MT798x)
 CPU_TYPE:=cortex-a53
 DEFAULT_PACKAGES += fitblk kmod-crypto-hw-safexcel wpad-openssl uboot-envtools mtk-smp l1util hnat-detect
-KERNELNAME:=Image dtbs
+KERNELNAME:=Image
 DEFAULT_PROFILE:=openwrt_one
 
 define Target/Description
