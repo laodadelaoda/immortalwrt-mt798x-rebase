@@ -57,6 +57,14 @@ def is_transient_python_artifact(path: Path) -> bool:
 def inventory(root: Path) -> dict[str, str]:
     lock = json.loads((root / LOCK).read_text(encoding="utf-8"))
     paths = set(FIXED + [LOCK, TRANSFORM])
+    kernel_patch_dir = root / "target/linux/mediatek/patches-6.12"
+    if not kernel_patch_dir.is_dir():
+        raise SystemExit("FAIL: Linux 6.12 kernel patch directory missing: " + str(kernel_patch_dir))
+    paths.update(
+        p.relative_to(root).as_posix()
+        for p in kernel_patch_dir.glob("*.patch")
+        if p.is_file()
+    )
     for source in lock["sources"]:
         p = source.get("package_makefile")
         if p:

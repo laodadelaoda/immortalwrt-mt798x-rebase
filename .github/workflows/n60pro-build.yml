@@ -13,10 +13,10 @@ on:
   workflow_dispatch:
     inputs:
       run_full:
-        description: Run Full firmware after Vendor Audit and Quick succeed
+        description: Run Full firmware after the canonical Vendor Audit succeeds
         required: true
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: read
@@ -48,12 +48,12 @@ jobs:
         with:
           device: netcore_n60-pro
 
-  # Full firmware starts after Vendor Audit and Quick succeed.
-  # Linux kernel patches are applied by the native OpenWrt firmware build below.
+  # Quick remains an independent diagnostic; it never gates the Full firmware build.
+  # Full consumes the exact-run Vendor Audit attestation before native OpenWrt patching.
   firmware:
     name: Build complete ImmortalWrt firmware for Netcore N60 Pro
-    needs: [vendor-audit, quick]
-    if: needs.vendor-audit.result == 'success' && needs.quick.result == 'success' && (github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_full))
+    needs: [vendor-audit]
+    if: needs.vendor-audit.result == 'success' && (github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_full))
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     concurrency:
@@ -73,6 +73,22 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
           echo "Build revision: $(git rev-parse HEAD)"
+
+      - name: Download canonical Vendor Audit evidence from this run and attempt
+        uses: actions/download-artifact@v6
+        with:
+          name: n60pro-canonical-vendor-audit-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/n60pro-vendor-audit-evidence
+
+      - name: Verify Vendor Audit attestation, Lock, source files and complete kernel patch inventory
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 package/mtk/applications/easymesh-n60/scripts/verify-vendor-audit-attestation.py verify \
+            --repo "$GITHUB_WORKSPACE" \
+            --attestation "$RUNNER_TEMP/n60pro-vendor-audit-evidence/vendor-audit-attestation.json" \
+            --expected-run-id "$GITHUB_RUN_ID" \
+            --expected-run-attempt "$GITHUB_RUN_ATTEMPT"
 
       - name: Free runner disk space
         shell: bash
@@ -140,11 +156,12 @@ jobs:
           test -f "$PATCH_DIR/999-eth-93-mtk_eth_soc-add-internal-SER-notify-event.patch"
           test -f "$PATCH_DIR/999-eth-90-mtk_eth_soc-support-proprietary-debugfs.patch"
           test ! -e "$PATCH_DIR/999-hnat-13-netdevice-add-ndo_flow_offload_stats64_add-for-offload-stats-correction.patch"
-          COUNT="$(find "$PATCH_DIR" -maxdepth 1 -type f -name '*.patch' | wc -l)"
+          mapfile -t PATCHES < <(find "$PATCH_DIR" -maxdepth 1 -type f -name '*.patch' -print | sort)
+          COUNT="${#PATCHES[@]}"
           test "$COUNT" -gt 0
-          echo "All native Linux 6.12 patch files will be applied; no scope filtering."
+          echo "All native Linux 6.12 patch files are covered by the exact-run Vendor Audit attestation."
           echo "Patch count: $COUNT"
-          sha256sum "$PATCH_DIR"/*.patch > "$RUNNER_TEMP/n60pro-kernel-patches.sha256"
+          sha256sum "${PATCHES[@]}" > "$RUNNER_TEMP/n60pro-kernel-patches.sha256"
           sha256sum "$RUNNER_TEMP/n60pro-kernel-patches.sha256"
           cat "$RUNNER_TEMP/n60pro-kernel-patches.sha256"
 
