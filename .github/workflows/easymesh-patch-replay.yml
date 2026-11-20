@@ -514,6 +514,20 @@ jobs:
             --repo "$GITHUB_WORKSPACE" \
             --attestation vendor-audit-attestation.json
 
+      - name: Stage canonical audit diagnostics
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit-artifacts
+          if [ -d "$RUNNER_TEMP/n60-vendor-patch-audit/report" ]; then
+            cp -a "$RUNNER_TEMP/n60-vendor-patch-audit/report/." audit-artifacts/
+          fi
+          if [ -d "$RUNNER_TEMP/mtwifi-026-audit" ]; then
+            mkdir -p audit-artifacts/mtwifi-026
+            cp -a "$RUNNER_TEMP/mtwifi-026-audit/." audit-artifacts/mtwifi-026/
+          fi
+
       - name: Upload canonical audit evidence (single run-bound artifact)
         if: always()
         uses: actions/upload-artifact@v6
@@ -522,7 +536,6 @@ jobs:
           path: |
             vendor-audit-attestation.json
             PATCH-APPLICATION-REPORT.txt
-            ${{ runner.temp }}/n60-vendor-patch-audit/report/**
-            ${{ runner.temp }}/mtwifi-026-audit/**
+            audit-artifacts/**
           if-no-files-found: warn
           retention-days: 30
