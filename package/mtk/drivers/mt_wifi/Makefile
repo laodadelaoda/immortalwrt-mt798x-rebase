@@ -327,6 +327,7 @@ define Build/Compile
 		$(KERNEL_MAKE_FLAGS) \
 		M="$(PKG_BUILD_DIR)/mt_wifi_ap" \
 		LINUX_DIR="$(KERNEL_BUILD_DIR)" \
+		$(if $(CONFIG_MTK_CONNINFRA_APSOC),KBUILD_EXTRA_SYMBOLS="$(KERNEL_BUILD_DIR)/symvers/conninfra.symvers") \
 		$(foreach c, $(PKG_KCONFIG),$(if $(CONFIG_MTK_$c),CONFIG_$(c)=$(CONFIG_MTK_$(c)))) \
 		modules
 endef
