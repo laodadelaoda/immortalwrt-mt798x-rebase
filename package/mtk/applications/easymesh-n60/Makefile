@@ -148,7 +148,8 @@ define Build/Compile
 	test -x $(PKG_BUILD_DIR)/mapd/mapd; \
 	test -x $(PKG_BUILD_DIR)/1905daemon/p1905_managerd; \
 	test -s $(PKG_BUILD_DIR)/1905daemon/ethernet/libeth_1905ops.so; \
-	test -s $(PKG_BUILD_DIR)/libmapd/libmapd_interface_client.so
+	test -s $(PKG_BUILD_DIR)/libmapd/libmapd_interface_client.so; \
+	test -s $(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap.conf || { echo "Missing vendor WAPP runtime config: $(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap.conf" >&2; exit 1; }
 endef
 
 define Package/easymesh-n60/install
@@ -169,7 +170,7 @@ define Package/easymesh-n60/install
 	$(INSTALL_DATA) ./files/etc/map/1905d.cfg $(1)/etc/map/
 	$(INSTALL_DATA) ./files/etc/map/wts_bss_info_config $(1)/etc/map/
 	$(INSTALL_DATA) ./files/etc/ethernet_cfg.txt $(1)/etc/
-	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wapp_ap.conf $(1)/etc/wapp_ap.conf
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap.conf $(1)/etc/wapp_ap.conf
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap_ra0_default.conf $(1)/etc/wapp_ap_ra0.conf
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap_rax0_default.conf $(1)/etc/wapp_ap_rax0.conf
 	$(INSTALL_BIN) ./files/etc/init.d/easymesh $(1)/etc/init.d/
