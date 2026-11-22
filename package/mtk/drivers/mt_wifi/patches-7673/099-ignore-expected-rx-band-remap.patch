@@ -1,5 +1,5 @@
---- a/embedded/common/mlme.c
-+++ b/embedded/common/mlme.c
+--- a/mt_wifi/embedded/common/mlme.c
++++ b/mt_wifi/embedded/common/mlme.c
 @@ -5801,6 +5801,7 @@
  #endif /* CONFIG_AP_SUPPORT */
  	struct wifi_dev *msg_recv_wdev = NULL;
