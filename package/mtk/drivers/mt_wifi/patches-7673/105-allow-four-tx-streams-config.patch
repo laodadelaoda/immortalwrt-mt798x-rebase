@@ -9,13 +9,3 @@
  		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "set wrong parameters\n");
  		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "EX. iwpriv <interface> set CCKTxStream=1 (1~4)\n");
  		return FALSE;
-@@ -7323,7 +7323,7 @@
- 	}
- 
- 	/* sanity check for input parameter range */
--	if (OFDMTxStream >= WF_NUM || !OFDMTxStream) {
-+	if (OFDMTxStream > WF_NUM || !OFDMTxStream) {
- 		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "set wrong parameters\n");
- 		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
- 			"EX. iwpriv <interface> set OFDMTxStream=1 (1~4)\n");
- 		return FALSE;
