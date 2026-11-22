@@ -156,3 +156,24 @@
  	}
  	return warp_entry_acquire(slot_id);
  }
+
+@@ -1007 +1038 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
+-	static char name[MAX_NAME_SIZE] = "";
++	static char name[WARP_WED_NUM][MAX_NAME_SIZE] = {{0}};
+@@ -1018,9 +1049,9 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
+-	ret = snprintf(name, sizeof(name), "%s%d", WHNAT_PLATFORM_DEV_NAME,
+-			warp_ctrl->warp_driver_idx++);
++	if (warp->idx >= ARRAY_SIZE(name))
++		goto err;
++	ret = snprintf(name[warp->idx], sizeof(name[warp->idx]), "%s%d",
++			WHNAT_PLATFORM_DEV_NAME, warp->idx);
+ 	if (ret < 0)
+ 		goto err;
+ 
+ 	pdriver = &warp->pdriver;
+ 	pdriver->probe = warp_probe;
+ 	pdriver->remove = warp_remove;
+-	pdriver->driver.name = name;
++	pdriver->driver.name = name[warp->idx];
+ 	pdriver->driver.owner = THIS_MODULE;
+ 	pdriver->driver.of_match_table = warp_of_ids;
