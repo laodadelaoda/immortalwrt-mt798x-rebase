@@ -1,0 +1,21 @@
+--- a/mt_wifi/embedded/common/cmm_info.c
++++ b/mt_wifi/embedded/common/cmm_info.c
+@@ -4477,8 +4477,8 @@
+ 			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, "debuglevel=%s len=%lu\n", tmpbuf, strlen(tmpbuf));
+ 			strncpy(dbg_level, tmpbuf, strlen(tmpbuf));
+ 		} else
+-			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+-				"debug level setting=%s not found!!\n", key);
++			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO,
++				"optional debug level setting=%s not present; retain default\n", key);
+ 
+ 		os_zero_mem(key, DEBUGLEVEL_PROFILE_MAX_PARAM_SIZE);
+ 		os_zero_mem(tmpbuf, DEBUGLEVEL_PROFILE_MAX_PARAM_SIZE);
+@@ -4500,8 +4500,8 @@
+ 			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, "debugoption=%s len=%lu\n", tmpbuf, strlen(tmpbuf));
+ 			strncpy(dbg_option, tmpbuf, strlen(tmpbuf));
+ 		} else
+-			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+-				"debug option setting=%s not found!!\n", key);
++			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO,
++				"optional debug option setting=%s not present; retain default\n", key);
