@@ -1,6 +1,6 @@
 --- a/warp_main.c
 +++ b/warp_main.c
-@@ -1271,8 +1271,8 @@ warp_isr_handler(void *priv_data)
+@@ -1296,8 +1296,8 @@ warp_isr_handler(void *priv_data)
  		return;
  
  	wed = &warp->wed;
