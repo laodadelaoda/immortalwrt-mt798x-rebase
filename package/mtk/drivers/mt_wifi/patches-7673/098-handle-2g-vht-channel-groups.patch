@@ -11,7 +11,7 @@
  	default:
  		MTWF_DBG(pAd, DBG_CAT_PROTO, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
  			"invalid ch_band %d\n", ch_band);
-@@ -2066,9 +2070,13 @@
+@@ -2066,8 +2070,12 @@
  			}
  			idx++;
  		}
