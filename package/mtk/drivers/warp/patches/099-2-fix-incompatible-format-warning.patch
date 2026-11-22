@@ -1,6 +1,6 @@
 --- a/warp_main.c
 +++ b/warp_main.c
-@@ -438,11 +438,11 @@ warp_probe(struct platform_device *pdev)
+@@ -453,11 +453,11 @@ warp_probe(struct platform_device *pdev)
  		warp_fwdl_get_wo_heartbeat(&warp->woif.fwdl_ctrl, &heart_beat, warp->idx);
  		warp_dbg(WARP_DBG_ERR, "%s()wo heartbeat: 0x%x!\n", __func__, heart_beat);
  		/* dump WO PC LR log for 2 times*/
