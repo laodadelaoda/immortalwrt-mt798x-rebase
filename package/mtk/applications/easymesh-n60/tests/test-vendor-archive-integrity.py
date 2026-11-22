@@ -163,8 +163,86 @@ for rel in ("CMakeLists.txt","datconf/CMakeLists.txt","datconf/datconf.c","datco
             "kvcutil/CMakeLists.txt","kvcutil/libkvcutil.c"):
     need(rel in datconf_files,f"datconf CMake/source input missing: {rel}")
 mtwifi_pkg=(repo/"package/mtk/drivers/mt_wifi/Makefile").read_text()
+# Build/Compile passes both symbol-version files in one quoted,
+# space-separated KBUILD_EXTRA_SYMBOLS value. Check the complete assignment
+# rather than requiring conninfra.symvers to have its own closing quote.
+mtwifi_symvers = re.search(
+    r'(?m)^\s*KBUILD_EXTRA_SYMBOLS="([^"\n]*)"\s*\\?\s*mapfilter_pkg=(repo/"package/kernel/mapfilter/Makefile").read_text()
+need((src/"mapfilter/mapfilter/Makefile").is_file() and "Build/Compile" in mapfilter_pkg,
+     "MAPFILTER source/build rule missing")
+
+# Audit the remaining EasyMesh and auxiliary archives against their pristine
+# extracts, then prove every changed source file is named by the applied patch
+# series. The DSA patch is applied one directory lower than the other patches.
+def verify_component(name, archive_name, prefix, root, base, allowed):
+    archive_path=inp/archive_name
+    need(archive_path.is_file() and root.is_dir() and base.is_dir(),
+         f"{name} archive/source/pristine missing")
+    with tarfile.open(archive_path,"r:*") as tar:
+        members={}
+        for m in tar.getmembers():
+            if not m.isfile(): continue
+            path=m.name
+            if prefix:
+                need(path.startswith(prefix),f"{name} unexpected archive root: {path}")
+                path=path[len(prefix):]
+            need(path and path not in members,f"{name} duplicate archive member: {path}")
+            members[path]=m
+        original=inventory(base)
+        need(set(original)==set(members),
+             f"{name} archive manifest mismatch: missing={sorted(set(members)-set(original))} extra={sorted(set(original)-set(members))}")
+        for path,m in members.items():
+            stream=tar.extractfile(m)
+            need(stream is not None and hashlib.sha256(stream.read()).hexdigest()==sha(original[path]),
+                 f"{name} pristine file differs from pinned archive: {path}")
+    before,after=inventory(base),inventory(root)
+    reject=[p.relative_to(root).as_posix() for p in root.rglob("*.rej") if p.is_file()]
+    need(not reject,f"{name} rejected patch files remain: {reject}")
+    backups=[p.relative_to(root).as_posix() for p in root.rglob("*.orig") if p.is_file()]
+    for backup in backups:
+        rel=backup[:-5]
+        need(rel in allowed and rel in before and (root/backup).stat().st_size>0,
+             f"{name} unexpected/empty patch backup: {backup}")
+    changed=set()
+    for rel in set(before)|set(after):
+        if rel.endswith(".orig"): continue
+        if rel not in before or rel not in after or sha(before[rel])!=sha(after[rel]):
+            changed.add(rel)
+    need(not (changed-allowed),
+         f"{name} changed outside declared patch targets: {sorted(changed-allowed)}")
+    print(f"ARCHIVE/PATCH PASS: {name}: archive_files={len(members)} changed={len(changed)} targets={len(allowed)} backups={len(backups)}")
+
+easy_targets=patch_targets(repo/"package/mtk/applications/easymesh-n60/patches")
+easy_specs=[
+ ("wappd","wappd-80ca5724.tar.bz2","wappd/",src/"easymesh/wappd",pristine/"wappd","wappd/"),
+ ("mapd","mapd-6eca4331.tar.bz2","mapd/",src/"easymesh/mapd",pristine/"mapd","mapd/"),
+ ("1905daemon","1905daemon-35234223.tar.bz2","1905daemon/",src/"easymesh/1905daemon",pristine/"1905daemon","1905daemon/"),
+ ("libmapd","libmapd-0132d199.tar.bz2","libmapd/",src/"easymesh/libmapd",pristine/"libmapd","libmapd/"),
+]
+for name,archive_name,prefix,root,base,patch_prefix in easy_specs:
+    allowed={p[len(patch_prefix):] for p in easy_targets if p.startswith(patch_prefix)}
+    if name=="1905daemon":
+        # 001-dsa-use-linux-mii-ioctl.patch is applied with -d 1905daemon.
+        allowed.update(p for p in easy_targets if p.startswith("ethernet/"))
+    verify_component(name,archive_name,prefix,root,base,allowed)
+
+aux_targets=patch_targets(repo/"package/mtk/applications/easymesh-n60/auxiliary-patches")
+verify_component("bndstrg_plus","bndstrg_plus-8350508d.tar.bz2","bndstrg_plus/",
+                 src/"bndstrg/bndstrg_plus",pristine/"bndstrg_plus",
+                 {p[len("bndstrg_plus/"):] for p in aux_targets if p.startswith("bndstrg_plus/")})
+verify_component("fwdd","fwdd-bcbae0e4.tar.bz2","fwdd/",
+                 src/"fwdd/fwdd",pristine/"fwdd",
+                 {p[len("fwdd/"):] for p in aux_targets if p.startswith("fwdd/")})
+
+print("BUILD RULES PASS: datconf CMake, mt_wifi->Conninfra/WARP, MAPFILTER source/module mapping")
+print("PASS: archive hashes/manifests, patch-only source deltas, and kernel package build references.")
+,
+    mtwifi_pkg,
+)
 need("PKG_BUILD_DEPENDS:=warp conninfra" in mtwifi_pkg and
-     'KBUILD_EXTRA_SYMBOLS="$(KERNEL_BUILD_DIR)/symvers/conninfra.symvers"' in mtwifi_pkg,
+     mtwifi_symvers is not None and
+     "$(KERNEL_BUILD_DIR)/symvers/warp.symvers" in mtwifi_symvers.group(1) and
+     "$(KERNEL_BUILD_DIR)/symvers/conninfra.symvers" in mtwifi_symvers.group(1),
      "mt_wifi Conninfra/WARP dependency or modpost edge missing")
 need('M="$(PKG_BUILD_DIR)/mt_wifi_ap"' in mtwifi_pkg and
      (src/"mtwifi/mt_wifi_ap/Makefile").is_file(),
