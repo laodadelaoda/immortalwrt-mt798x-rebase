@@ -172,10 +172,63 @@ jobs:
           make download -j8
 
       - name: Compile complete firmware
+        id: full-compile
         shell: bash
         run: |
           set -Eeuo pipefail
-          make -j"$(nproc)" V=s
+          LOG="$RUNNER_TEMP/n60pro-full-build.log"
+          if make -j"$(nproc)" V=s >"$LOG" 2>&1; then
+            tail -n 100 "$LOG"
+          else
+            rc=$?
+            python3 - "$LOG" "$RUNNER_TEMP/n60pro-full-build-diagnostics.txt" <<'PY'
+          from pathlib import Path
+          import re, sys
+
+          source = Path(sys.argv[1])
+          target = Path(sys.argv[2])
+          lines = source.read_text(encoding="utf-8", errors="replace").splitlines()
+          pattern = re.compile(
+              r"fatal error:|\\berror:|undefined reference|undefined symbol|"
+              r"No rule to make target|No such file or directory|Hunk FAILED|"
+              r"patch: \\*\\*\\*\\*|collect2: error|Killed signal|"
+              r"No space left on device|make(?:\\[\\d+\\])?: \\*\\*\\*",
+              re.I,
+          )
+          hits = [i for i, line in enumerate(lines) if pattern.search(line)]
+          ranges = []
+          for i in hits:
+              start, end = max(0, i - 150), min(len(lines), i + 151)
+              if ranges and start <= ranges[-1][1]:
+                  ranges[-1] = (ranges[-1][0], max(ranges[-1][1], end))
+              else:
+                  ranges.append((start, end))
+          with target.open("w", encoding="utf-8") as out:
+              out.write(f"LOG_LINES={len(lines)}\\nMATCH_COUNT={len(hits)}\\n")
+              for start, end in ranges:
+                  out.write(f"\\n===== LOG LINES {start + 1}-{end} =====\\n")
+                  for n in range(start, end):
+                      out.write(f"{n + 1}: {lines[n]}\\n")
+              out.write("\\n===== FINAL 250 LOG LINES =====\\n")
+              for n in range(max(0, len(lines) - 250), len(lines)):
+                  out.write(f"{n + 1}: {lines[n]}\\n")
+          print(f"Full log saved: {source} ({len(lines)} lines)")
+          print(f"Failure context saved: {target} ({len(hits)} diagnostic matches)")
+          PY
+            tail -n 200 "$RUNNER_TEMP/n60pro-full-build-diagnostics.txt"
+            exit "$rc"
+          fi
+
+      - name: Upload Full failure diagnostics
+        if: failure() && steps.full-compile.outcome == 'failure'
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60pro-full-build-failure-${{ github.run_number }}-attempt-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/n60pro-full-build.log
+            ${{ runner.temp }}/n60pro-full-build-diagnostics.txt
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Confirm firmware output exists
         shell: bash
