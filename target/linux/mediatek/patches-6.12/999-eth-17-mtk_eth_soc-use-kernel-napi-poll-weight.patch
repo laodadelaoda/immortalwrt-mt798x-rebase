@@ -1,19 +1,20 @@
 ---
-[v1] net: ethernet: mtk_eth_soc: change NAPI poll weight to 256
+[v2] net: ethernet: mtk_eth_soc: respect the kernel NAPI poll weight
 
-Change NAPI poll weight from default to 256 for improved throughput. This tuning
-parameter significantly affects peak performance of the software receive path,
-optimizing packet processing per NAPI poll cycle.
+Use the kernel's documented NAPI_POLL_WEIGHT (64) for all TX/RX NAPI contexts.
+Linux 6.12 reports an error-level netdev warning when a driver registers a
+larger weight. Keep the explicit registration helper while respecting the
+kernel's recommended poll budget.
 ---
-v1: Change TX/RX NAPI poll weight to 256.
+v2: Bound TX/RX NAPI poll weight to NAPI_POLL_WEIGHT.
 ---
 
 From 9be90bb153b9a7cdd1fa0ef0b47414b5ddb36d63 Mon Sep 17 00:00:00 2001
 From: Mason Chang <mason-cw.chang@mediatek.com>
 Date: Mon, 22 Sep 2025 11:12:08 +0800
-Subject: [PATCH] net: ethernet: mtk_eth_soc: change napi poll weight to 256
+Subject: [PATCH] net: ethernet: mtk_eth_soc: respect NAPI_POLL_WEIGHT
 
-This parameter will strongly affect the peak throughput of the SW path.
+Use the kernel-recommended NAPI poll budget to avoid netif_napi_add_weight warnings.
 ---
  drivers/net/ethernet/mediatek/mtk_eth_soc.c | 13 +++++++------
  drivers/net/ethernet/mediatek/mtk_eth_soc.h |  1 +
@@ -54,7 +55,7 @@ This parameter will strongly affect the peak throughput of the SW path.
  #define MTK_DMA_SIZE(x)		(SZ_##x)
  #define MTK_FQ_DMA_HEAD		32
  #define MTK_FQ_DMA_LENGTH	2048
-+#define MTK_NAPI_WEIGHT		256
++#define MTK_NAPI_WEIGHT		NAPI_POLL_WEIGHT
  #define MTK_RX_ETH_HLEN		(VLAN_ETH_HLEN + VLAN_HLEN + ETH_FCS_LEN)
  #define MTK_RX_HLEN		(NET_SKB_PAD + MTK_RX_ETH_HLEN + NET_IP_ALIGN)
  #define MTK_DMA_DUMMY_DESC	0xffffffff

@@ -1,0 +1,15 @@
+--- a/mt_wifi/embedded/sta/sta.c
++++ b/mt_wifi/embedded/sta/sta.c
+@@ -2427,6 +2427,12 @@
+ 		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Error  ifIdx=%d\n", ifIdx);
+ 		return FALSE;
+ 	}
++	if (APCLI_IF_UP_CHECK(pAd, ifIdx) != TRUE) {
++		pStaCfg->ApCliAutoConnectRunning = FALSE;
++		MTWF_DBG(pAd, DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_INFO,
++			 "Skip APCLI auto-connect while interface is down\n");
++		return TRUE;
++	}
+ 
+ 	if (pStaCfg->ApcliInfStat.AutoConnectFlag != TRUE)
+ 		return FALSE;

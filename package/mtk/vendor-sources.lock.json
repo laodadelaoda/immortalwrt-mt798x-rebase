@@ -304,7 +304,9 @@
         "102-log-not-ready-beacon-update-as-nonfatal.patch",
         "103-optional-debug-profile-keys-nonfatal.patch",
         "104-allow-four-tx-streams.patch",
-        "105-allow-four-tx-streams-config.patch"
+        "105-allow-four-tx-streams-config.patch",
+        "106-optional-l1-profile-indexes-nonfatal.patch",
+        "107-apcli-autoconnect-interface-state-guard.patch"
       ],
       "scope": "MT Wi-Fi 7.6.7.3 patch series",
       "application_stage_order": 2

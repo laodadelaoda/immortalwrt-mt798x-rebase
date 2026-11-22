@@ -360,7 +360,7 @@ Signed-off-by: SkyLake.Huang <skylake.huang@mediatek.com>
 +		return final_ret;
 +
 +	if (check_ret) {
-+		dev_err(dev, "CASN page check failed\n");
++		dev_dbg(dev, "CASN page check failed; falling back to NAND ID\n");
 +		return check_ret;
 +	}
 +
