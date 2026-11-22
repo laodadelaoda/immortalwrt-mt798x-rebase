@@ -140,7 +140,7 @@
  }
  
  
-@@ -988,6 +1010,15 @@
+@@ -986,6 +1008,15 @@
  		slot_id = warp_get_pcie_slot((struct pci_dev *) dev);
  		if (wed_id)
  			slot_id = wed_id;
