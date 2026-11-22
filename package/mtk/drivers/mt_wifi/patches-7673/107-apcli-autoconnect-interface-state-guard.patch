@@ -1,6 +1,6 @@
 --- a/mt_wifi/embedded/sta/sta.c
 +++ b/mt_wifi/embedded/sta/sta.c
-@@ -2427,6 +2427,12 @@
+@@ -2432,6 +2432,12 @@
  		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Error  ifIdx=%d\n", ifIdx);
  		return FALSE;
  	}
