@@ -1,5 +1,5 @@
---- a/embedded/common/bcn.c
-+++ b/embedded/common/bcn.c
+--- a/mt_wifi/embedded/common/bcn.c
++++ b/mt_wifi/embedded/common/bcn.c
 @@ -2068,8 +2068,8 @@
  	}
  
