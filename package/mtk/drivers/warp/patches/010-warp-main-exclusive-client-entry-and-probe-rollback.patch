@@ -1,6 +1,13 @@
 --- a/warp_main.c
 +++ b/warp_main.c
-@@ -162,23 +162,31 @@
+@@ -74,6 +74,4 @@
+ static const struct of_device_id warp_of_ids[] = {
+-	{	.compatible = "mediatek,wed", },
+-	{	.compatible = "mediatek,wed2", },
+ 	{	.compatible = "mediatek,wed3", },
+ 	{ },
+ };
+@@ -162,23 +160,31 @@
  /*
  *
  */
@@ -36,7 +43,7 @@
  	return NULL;
  }
  
-@@ -189,21 +197,26 @@
+@@ -189,21 +195,26 @@
  warp_entry_release(struct warp_entry *warp)
  {
  	struct wifi_entry *wifi;
@@ -65,7 +72,7 @@
  {
  	u8 i;
  	struct warp_ctrl *warp_ctrl = warp_ctrl_get();
-@@ -212,10 +225,12 @@
+@@ -212,10 +223,12 @@
  	for (i = 0; i < warp_ctrl->warp_num; i++) {
  		entry = &warp_ctrl->entry[i];
  
@@ -80,7 +87,7 @@
  		}
  	}
  
-@@ -352,8 +367,9 @@
+@@ -352,8 +365,9 @@
  	warp = warp_entry_get_by_pdev(pdev);
  
  	if (warp == NULL) {
@@ -92,7 +99,7 @@
  	}
  
  	memset(&warp->wdma.res_ctrl, 0, sizeof(warp->wdma.res_ctrl));
-@@ -372,14 +387,14 @@
+@@ -372,14 +385,14 @@
  			dev_info(&pdev->dev, "Using 32bit DMA for streaming map\n");
  		} else {
  			dev_err(&pdev->dev, "No usable streaming DMA configuration, aborting\n");
@@ -109,7 +116,7 @@
  		}
  	}
  
-@@ -391,7 +406,7 @@
+@@ -391,7 +404,7 @@
  			dev_info(&pdev->dev, "Using 32bit DMA for coherent map\n");
  		} else {
  			dev_err(&pdev->dev, "No usable coherent DMA configuration, aborting\n");
@@ -118,7 +125,7 @@
  		}
  	} else {
  		if (!dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(32))) {
-@@ -399,7 +414,7 @@
+@@ -399,7 +412,7 @@
  		} else {
  
  			dev_err(&pdev->dev, "No usable coherent DMA configuration, aborting\n");
@@ -127,7 +134,7 @@
  		}
  	}
  
-@@ -447,6 +463,12 @@
+@@ -447,6 +461,12 @@
  #endif
  	warp_dbg(WARP_DBG_INF, "%s(): platform device probe is done\n", __func__);
  	return 0;
@@ -140,7 +147,7 @@
  }
  
  
-@@ -986,6 +1008,15 @@
+@@ -986,6 +1006,15 @@
  		slot_id = warp_get_pcie_slot((struct pci_dev *) dev);
  		if (wed_id)
  			slot_id = wed_id;
@@ -156,14 +163,22 @@
  	}
  	return warp_entry_acquire(slot_id);
  }
-@@ -1000,2 +1031,3 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
+@@ -1000,2 +1029,3 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
  	int ret = 0;
 +	unsigned long flags;
  	struct warp_ctrl *warp_ctrl = warp_ctrl_get();
-@@ -1005 +1037 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
+@@ -1005 +1035,9 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
 -	static char name[MAX_NAME_SIZE] = "";
++	static const struct of_device_id warp_of_ids_wed0[] = {
++		{ .compatible = "mediatek,wed", },
++		{ },
++	};
++	static const struct of_device_id warp_of_ids_wed2[] = {
++		{ .compatible = "mediatek,wed2", },
++		{ },
++	};
 +	static char name[WARP_WED_NUM][MAX_NAME_SIZE] = {{0}};
-@@ -1016,11 +1048,13 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
+@@ -1016,11 +1054,25 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
 -	ret = snprintf(name, sizeof(name), "%s%d", WHNAT_PLATFORM_DEV_NAME,
 -			warp_ctrl->warp_driver_idx++);
 +	if (warp->idx >= ARRAY_SIZE(name))
@@ -179,8 +194,21 @@
 -	pdriver->driver.name = name;
 +	pdriver->driver.name = name[warp->idx];
  	pdriver->driver.owner = THIS_MODULE;
- 	pdriver->driver.of_match_table = warp_of_ids;
-@@ -1028,5 +1062,15 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
+-	pdriver->driver.of_match_table = warp_of_ids;
++	switch (warp->slot_id) {
++	case 0:
++		pdriver->driver.of_match_table = warp_of_ids_wed0;
++		break;
++	case 1:
++		pdriver->driver.of_match_table = warp_of_ids_wed2;
++		break;
++	case 2:
++		pdriver->driver.of_match_table = warp_of_ids;
++		break;
++	default:
++		goto err;
++	}
+@@ -1028,5 +1080,15 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
  	warp_increase_ref();
  
 -	return platform_driver_register(pdriver);
