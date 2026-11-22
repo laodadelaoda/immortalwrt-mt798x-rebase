@@ -1,6 +1,6 @@
 --- a/mt_wifi/embedded/common/rtmp_init.c
 +++ b/mt_wifi/embedded/common/rtmp_init.c
-@@ -3159,6 +3159,7 @@
+@@ -3159,7 +3159,8 @@
  
  	/* TODO: shiang-7603 */
  	if (IS_HIF_TYPE(pAd, HIF_MT)) {
@@ -9,3 +9,4 @@
 +			"Antenna configuration helper is not supported on HIF_MT; retain chip defaults\n");
  		return;
  	}
+ 
