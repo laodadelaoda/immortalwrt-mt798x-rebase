@@ -28,27 +28,6 @@ jobs:
     permissions:
       contents: read
 
-  quick:
-    name: N60 Pro Quick Build
-    needs: vendor-audit
-    runs-on: ubuntu-24.04
-    timeout-minutes: 360
-    concurrency:
-      group: n60-pro-quick-${{ github.ref }}
-      cancel-in-progress: true
-    steps:
-      - name: Checkout exact audited source revision
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 1
-
-      - name: Build EasyMesh from source
-        uses: ./.github/actions/easymesh-quick
-        with:
-          device: netcore_n60-pro
-
-  # Quick remains an independent diagnostic; it never gates the Full firmware build.
   # Full consumes the exact-run Vendor Audit attestation before native OpenWrt patching.
   firmware:
     name: Build complete ImmortalWrt firmware for Netcore N60 Pro
