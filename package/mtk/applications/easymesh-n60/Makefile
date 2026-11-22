@@ -22,6 +22,38 @@ define Package/easymesh-n60/description
 endef
 
 # Canonical lock owns archive hashes; verify before extracting any vendor source.
+# Register the four manually assembled vendor archives with OpenWrt's native
+# download target. Archive names, URLs and hashes remain sourced only from Lock.
+easymesh_lock_field = $(shell python3 -c 'import json; d=json.load(open("$(TOPDIR)/package/mtk/vendor-sources.lock.json")); print(next(s["$(2)"] for s in d["sources"] if s["id"]=="$(1)"))')
+
+define Download/easymesh-wappd
+  FILE:=$(call easymesh_lock_field,wappd,archive)
+  URL:=$(call easymesh_lock_field,wappd,url)
+  HASH:=$(call easymesh_lock_field,wappd,sha256)
+endef
+$(eval $(call Download,easymesh-wappd))
+
+define Download/easymesh-mapd
+  FILE:=$(call easymesh_lock_field,mapd,archive)
+  URL:=$(call easymesh_lock_field,mapd,url)
+  HASH:=$(call easymesh_lock_field,mapd,sha256)
+endef
+$(eval $(call Download,easymesh-mapd))
+
+define Download/easymesh-1905daemon
+  FILE:=$(call easymesh_lock_field,1905daemon,archive)
+  URL:=$(call easymesh_lock_field,1905daemon,url)
+  HASH:=$(call easymesh_lock_field,1905daemon,sha256)
+endef
+$(eval $(call Download,easymesh-1905daemon))
+
+define Download/easymesh-libmapd
+  FILE:=$(call easymesh_lock_field,libmapd,archive)
+  URL:=$(call easymesh_lock_field,libmapd,url)
+  HASH:=$(call easymesh_lock_field,libmapd,sha256)
+endef
+$(eval $(call Download,easymesh-libmapd))
+
 define Build/Prepare
 	set -eu; \
 	python3 ./scripts/n60-vendor-source-transforms.py verify-lock "$(TOPDIR)" --downloads "$(DL_DIR)"; \
