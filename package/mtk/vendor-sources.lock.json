@@ -306,7 +306,12 @@
         "104-allow-four-tx-streams.patch",
         "105-allow-four-tx-streams-config.patch",
         "106-optional-l1-profile-indexes-nonfatal.patch",
-        "107-apcli-autoconnect-interface-state-guard.patch"
+        "107-apcli-autoconnect-interface-state-guard.patch",
+        "108-mt7986-calibration-fallback-nonfatal.patch",
+        "109-txpower-unsupported-stubs-nonfatal.patch",
+        "110-antcfg-hif-mt-nonfatal.patch",
+        "111-red-command-status-propagation.patch",
+        "112-ipmac-table-idempotent-init-nonfatal.patch"
       ],
       "scope": "MT Wi-Fi 7.6.7.3 patch series",
       "application_stage_order": 2

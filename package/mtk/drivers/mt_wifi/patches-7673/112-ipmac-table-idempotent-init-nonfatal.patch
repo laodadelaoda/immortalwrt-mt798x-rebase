@@ -1,0 +1,12 @@
+--- a/mt_wifi/embedded/common/cmm_mat_iparp.c
++++ b/mt_wifi/embedded/common/cmm_mat_iparp.c
+@@ -345,7 +345,8 @@
+ 		pIPMacTable->hash[IPMAC_TB_HASH_INDEX_OF_BCAST] = pEntry;
+ 		pIPMacTable->valid = TRUE;
+ 	} else
+-		MTWF_DBG(NULL, DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_ERROR, "IPMacTable already inited!\n");
++		MTWF_DBG(NULL, DBG_CAT_PROTO, CATPROTO_MAT, DBG_LVL_DEBUG,
++			"IP/MAC table already initialized; keeping existing table\n");
+ 
+ 	return TRUE;
+ }

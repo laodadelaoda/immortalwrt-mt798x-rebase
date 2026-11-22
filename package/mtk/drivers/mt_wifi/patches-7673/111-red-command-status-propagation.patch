@@ -1,0 +1,55 @@
+--- a/mt_wifi/embedded/common/ra_ac_q_mgmt.c
++++ b/mt_wifi/embedded/common/ra_ac_q_mgmt.c
+@@ -910,14 +910,19 @@
+ 
+ 	Ret = chip_cmd_tx(pAd, msg);
+ 
+-	MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+-		"%s: (ret = %d)\n", __func__, Ret);
++	if (Ret)
++		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
++			"%s: command failed (ret = %d)\n", __func__, Ret);
++	else
++		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_DEBUG,
++			"%s: command accepted\n", __func__);
+ 	return Ret;
+ }
+ 
+ BOOLEAN SendRedCmd(RTMP_ADAPTER *pAd, UINT_8 ucOpMode, UINT_8 *pr_red_param, UINT_16 sta_num)
+ {
+ 	BOOLEAN ret = FALSE;
++	INT32 cmd_ret;
+ 	UINT_8 u1BandIdx;
+ 	PUINT_8 param = NULL;
+ 	UINT_32 *param_in;
+@@ -931,7 +936,7 @@
+ 	P_RED_CTRL_T prRedCtrl;
+ 
+ 	if (!pAd->red_mcu_offload)
+-		goto error;
++		return FALSE;
+ 
+ 	u4ExtSize = sizeof(CMD_RED_HEADER_T);
+ 	if ((ucOpMode == RED_SET_GLOBAL_WATERMARK) || (ucOpMode == RED_SET_GLOBAL_TOKEN_WATERMARK) ||
+@@ -1041,12 +1046,18 @@
+ 	param_header->ucCmdVer = 0;
+ 	param_header->u2CmdLen = u4ExtSize;
+ 
+-	MtCmdCr4RedSet(pAd, WA_SET_OPTION_RED_SETTING_CMD, u4ExtSize, (PUINT_8)param);
++	cmd_ret = MtCmdCr4RedSet(pAd, WA_SET_OPTION_RED_SETTING_CMD, u4ExtSize, (PUINT_8)param);
+ 	os_free_mem(param);
++	if (cmd_ret)
++		goto error;
+ 	ret = TRUE;
+ error:
+-	MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+-			 "%s:(ret = %d)\n", __func__, ret);
++	if (ret)
++		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_DEBUG,
++			 "%s: command accepted\n", __func__);
++	else
++		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
++			 "%s: command failed\n", __func__);
+ 
+ 	return ret;
+ }
