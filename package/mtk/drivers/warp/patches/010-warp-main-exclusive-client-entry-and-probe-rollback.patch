@@ -208,7 +208,7 @@
 +	default:
 +		goto err;
 +	}
-@@ -1028,5 +1080,15 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
+@@ -1028,5 +1080,22 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
  	warp_increase_ref();
  
 -	return platform_driver_register(pdriver);
@@ -224,4 +224,11 @@
 +	}
 +	return ret;
  err:
++	if (warp) {
++		spin_lock_irqsave(&warp_ctrl->warp_lock, flags);
++		wifi->ops = NULL;
++		wifi->hw.priv = NULL;
++		memset(&warp->pdriver, 0, sizeof(warp->pdriver));
++		spin_unlock_irqrestore(&warp_ctrl->warp_lock, flags);
++	}
  	return -1;
