@@ -9,12 +9,3 @@
  		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "set wrong parameters\n");
  		return FALSE;
  	}
-@@ -21029,7 +21029,7 @@
- 		"u1OFDMTxStream = %d\n", u1OFDMTxStream);
- 
- 	/* sanity check for input parameter range */
--	if (u1OFDMTxStream >= WF_NUM) {
-+	if (u1OFDMTxStream > WF_NUM) {
- 		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "set wrong parameters\n");
- 		return FALSE;
- 	}
