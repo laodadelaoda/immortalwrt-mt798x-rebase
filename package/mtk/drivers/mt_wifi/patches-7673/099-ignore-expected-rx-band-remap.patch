@@ -23,7 +23,7 @@
  								if (msg_recv_wdev->DevInfo.WdevActive)
  									break;
  							}
-@@ -6183,1 +6186,2 @@
+@@ -6180,1 +6183,2 @@
 -	if (HcGetBandByWdev(orig_wdev) != HcGetBandByWdev(msg_recv_wdev)) {
 +	if (!bWdevRemappedByRxChannel &&
 +	    HcGetBandByWdev(orig_wdev) != HcGetBandByWdev(msg_recv_wdev)) {
