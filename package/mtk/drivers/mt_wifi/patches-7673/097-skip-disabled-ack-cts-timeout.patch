@@ -1,5 +1,5 @@
---- a/embedded/common/cmm_cfg.c
-+++ b/embedded/common/cmm_cfg.c
+--- a/mt_wifi/embedded/common/cmm_cfg.c
++++ b/mt_wifi/embedded/common/cmm_cfg.c
 @@ -13627,6 +13627,10 @@
  	}
  
