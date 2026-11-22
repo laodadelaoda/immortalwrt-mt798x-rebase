@@ -138,9 +138,7 @@
 +	warp_entry_release_pdev(warp);
 +	return -EIO;
  }
-
-@@ -987,6 +987,14 @@
- 	if (bus_type == BUS_TYPE_PCIE) {
+@@ -988,6 +988,15 @@
  		slot_id = warp_get_pcie_slot((struct pci_dev *) dev);
  		if (wed_id)
  			slot_id = wed_id;
@@ -149,7 +147,7 @@
 +
 +		if (wed_id >= warp_ctrl->warp_num) {
 +			warp_dbg(WARP_DBG_ERR, "%s(): invalid AXI WED index %u (entries: %u)\n",
-+				 __func__, wed_id, warp_ctrl->warp_num);
++				 __func__, (unsigned int)wed_id, warp_ctrl->warp_num);
 +			return NULL;
 +		}
 +		slot_id = wed_get_slot_map(wed_id);
