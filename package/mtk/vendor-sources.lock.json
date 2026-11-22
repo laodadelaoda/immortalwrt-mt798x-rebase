@@ -302,7 +302,9 @@
         "100-skip-phy-adjust-until-channel-selected.patch",
         "101-ignore-channel-zero-band-lookup.patch",
         "102-log-not-ready-beacon-update-as-nonfatal.patch",
-        "103-optional-debug-profile-keys-nonfatal.patch"
+        "103-optional-debug-profile-keys-nonfatal.patch",
+        "104-allow-four-tx-streams.patch",
+        "105-allow-four-tx-streams-config.patch"
       ],
       "scope": "MT Wi-Fi 7.6.7.3 patch series",
       "application_stage_order": 2
