@@ -25,31 +25,34 @@ endef
 # Register the four manually assembled vendor archives with OpenWrt's native
 # download target. Archive names, URLs and hashes remain sourced only from Lock.
 easymesh_lock_field = $(shell python3 -c 'import json; d=json.load(open("$(TOPDIR)/package/mtk/vendor-sources.lock.json")); print(next(s["$(2)"] for s in d["sources"] if s["id"]=="$(1)"))')
+# OpenWrt download.pl appends FILE to each URL; the lock intentionally stores
+# the canonical full asset URL, so pass its containing directory to Download.
+easymesh_lock_url_base = $(patsubst %/$(call easymesh_lock_field,$(1),archive),%,$(call easymesh_lock_field,$(1),url))
 
 define Download/easymesh-wappd
   FILE:=$(call easymesh_lock_field,wappd,archive)
-  URL:=$(call easymesh_lock_field,wappd,url)
+  URL:=$(call easymesh_lock_url_base,wappd)
   HASH:=$(call easymesh_lock_field,wappd,sha256)
 endef
 $(eval $(call Download,easymesh-wappd))
 
 define Download/easymesh-mapd
   FILE:=$(call easymesh_lock_field,mapd,archive)
-  URL:=$(call easymesh_lock_field,mapd,url)
+  URL:=$(call easymesh_lock_url_base,mapd)
   HASH:=$(call easymesh_lock_field,mapd,sha256)
 endef
 $(eval $(call Download,easymesh-mapd))
 
 define Download/easymesh-1905daemon
   FILE:=$(call easymesh_lock_field,1905daemon,archive)
-  URL:=$(call easymesh_lock_field,1905daemon,url)
+  URL:=$(call easymesh_lock_url_base,1905daemon)
   HASH:=$(call easymesh_lock_field,1905daemon,sha256)
 endef
 $(eval $(call Download,easymesh-1905daemon))
 
 define Download/easymesh-libmapd
   FILE:=$(call easymesh_lock_field,libmapd,archive)
-  URL:=$(call easymesh_lock_field,libmapd,url)
+  URL:=$(call easymesh_lock_url_base,libmapd)
   HASH:=$(call easymesh_lock_field,libmapd,sha256)
 endef
 $(eval $(call Download,easymesh-libmapd))
