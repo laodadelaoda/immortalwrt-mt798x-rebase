@@ -1,5 +1,5 @@
---- a/embedded/mgmt/mgmt_vht.c
-+++ b/embedded/mgmt/mgmt_vht.c
+--- a/mt_wifi/embedded/mgmt/mgmt_vht.c
++++ b/mt_wifi/embedded/mgmt/mgmt_vht.c
 @@ -1977,6 +1977,10 @@
  		}
  		break;
