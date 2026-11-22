@@ -1,5 +1,5 @@
---- a/embedded/hw_ctrl/hdev_ctrl.c
-+++ b/embedded/hw_ctrl/hdev_ctrl.c
+--- a/mt_wifi/embedded/hw_ctrl/hdev_ctrl.c
++++ b/mt_wifi/embedded/hw_ctrl/hdev_ctrl.c
 @@ -1231,6 +1231,10 @@
  	struct radio_dev *rdev = NULL;
  	UCHAR BandIdx;
