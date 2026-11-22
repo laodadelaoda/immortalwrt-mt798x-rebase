@@ -181,7 +181,7 @@
 +	pdriver->driver.name = name[warp->idx];
  	pdriver->driver.owner = THIS_MODULE;
  	pdriver->driver.of_match_table = warp_of_ids;
-@@ -1029,5 +1063,16 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
+@@ -1029,5 +1063,15 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
  	warp_increase_ref();
  
 -	return platform_driver_register(pdriver);
