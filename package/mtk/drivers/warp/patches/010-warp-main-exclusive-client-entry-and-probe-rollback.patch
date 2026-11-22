@@ -86,8 +86,9 @@
  	if (warp == NULL) {
 -		warp_dbg(WARP_DBG_ERR, "%s(): probe fail since warp is full!\n", __func__);
 -		return -1;
-+		dev_err(&pdev->dev, "no free WARP entry for platform probe\n");
-+		return -ENOSPC;
++		/* This WED node belongs to a different registered WARP client. */
++		dev_dbg(&pdev->dev, "WARP entry is reserved by another client; skip this node\n");
++		return -ENODEV;
  	}
  
  	memset(&warp->wdma.res_ctrl, 0, sizeof(warp->wdma.res_ctrl));
@@ -137,5 +138,21 @@
 +	warp_entry_release_pdev(warp);
 +	return -EIO;
  }
- 
- 
+
+@@ -987,6 +987,14 @@
+ 	if (bus_type == BUS_TYPE_PCIE) {
+ 		slot_id = warp_get_pcie_slot((struct pci_dev *) dev);
+ 		if (wed_id)
+ 			slot_id = wed_id;
++	} else if (bus_type == BUS_TYPE_AXI) {
++		struct warp_ctrl *warp_ctrl = warp_ctrl_get();
++
++		if (wed_id >= warp_ctrl->warp_num) {
++			warp_dbg(WARP_DBG_ERR, "%s(): invalid AXI WED index %u (entries: %u)\n",
++				 __func__, wed_id, warp_ctrl->warp_num);
++			return NULL;
++		}
++		slot_id = wed_get_slot_map(wed_id);
+ 	}
+ 	return warp_entry_acquire(slot_id);
+ }
