@@ -126,7 +126,7 @@
  		}
  	}
  
-@@ -447,6 +462,12 @@
+@@ -447,5 +462,11 @@
  #endif
  	warp_dbg(WARP_DBG_INF, "%s(): platform device probe is done\n", __func__);
  	return 0;
