@@ -30,6 +30,7 @@ easymesh_lock_field = $(shell python3 -c 'import json; d=json.load(open("$(TOPDI
 easymesh_lock_url_base = $(patsubst %/$(call easymesh_lock_field,$(1),archive),%,$(call easymesh_lock_field,$(1),url))
 
 define Download/easymesh-wappd
+  PROTO:=default
   FILE:=$(call easymesh_lock_field,wappd,archive)
   URL:=$(call easymesh_lock_url_base,wappd)
   HASH:=$(call easymesh_lock_field,wappd,sha256)
@@ -37,6 +38,7 @@ endef
 $(eval $(call Download,easymesh-wappd))
 
 define Download/easymesh-mapd
+  PROTO:=default
   FILE:=$(call easymesh_lock_field,mapd,archive)
   URL:=$(call easymesh_lock_url_base,mapd)
   HASH:=$(call easymesh_lock_field,mapd,sha256)
@@ -44,6 +46,7 @@ endef
 $(eval $(call Download,easymesh-mapd))
 
 define Download/easymesh-1905daemon
+  PROTO:=default
   FILE:=$(call easymesh_lock_field,1905daemon,archive)
   URL:=$(call easymesh_lock_url_base,1905daemon)
   HASH:=$(call easymesh_lock_field,1905daemon,sha256)
@@ -51,6 +54,7 @@ endef
 $(eval $(call Download,easymesh-1905daemon))
 
 define Download/easymesh-libmapd
+  PROTO:=default
   FILE:=$(call easymesh_lock_field,libmapd,archive)
   URL:=$(call easymesh_lock_url_base,libmapd)
   HASH:=$(call easymesh_lock_field,libmapd,sha256)
