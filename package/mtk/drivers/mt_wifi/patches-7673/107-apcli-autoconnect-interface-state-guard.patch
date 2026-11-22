@@ -13,17 +13,16 @@
  
  	if (pStaCfg->ApcliInfStat.AutoConnectFlag != TRUE)
  		return FALSE;
-@@ -2619,7 +2625,13 @@
+@@ -2606,6 +2612,12 @@
+ 
  	if (ifIdx >= MAX_APCLI_NUM) {
  		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Error  ifIdx=%d\n", ifIdx);
- 		return;
- 	}
++		return;
++	}
 +	if (APCLI_IF_UP_CHECK(pAd, ifIdx) != TRUE) {
 +		pAd->StaCfg[ifIdx].ApCliAutoConnectRunning = FALSE;
 +		MTWF_DBG(pAd, DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_INFO,
 +			 "Skip APCLI candidate switch while interface is down\n");
-+		return;
-+	}
- 
- 	if (pAd->StaCfg[ifIdx].ApcliInfStat.AutoConnectFlag != TRUE)
  		return;
+ 	}
+ 
