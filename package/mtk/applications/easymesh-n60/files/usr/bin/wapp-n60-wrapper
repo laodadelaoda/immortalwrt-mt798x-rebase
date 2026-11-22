@@ -16,7 +16,15 @@ chmod 600 "$WAPP_LOG"
 # Match the previously successful N60 process lifecycle.
 killall wapp 2>/dev/null || true
 killall WAPP 2>/dev/null || true
-sleep 2
+waited=0
+while { pidof wapp >/dev/null 2>&1 || pidof WAPP >/dev/null 2>&1; } && [ "$waited" -lt 10 ]; do
+    sleep 1
+    waited=$((waited + 1))
+done
+if pidof wapp >/dev/null 2>&1 || pidof WAPP >/dev/null 2>&1; then
+    log_msg "ERROR: previous WAPP process did not exit after SIGTERM; refusing duplicate startup"
+    exit 1
+fi
 
 for iface in ra0 rax0; do
     if [ ! -d "/sys/class/net/$iface" ]; then
