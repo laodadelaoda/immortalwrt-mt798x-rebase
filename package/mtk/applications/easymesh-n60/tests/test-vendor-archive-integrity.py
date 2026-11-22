@@ -164,10 +164,20 @@ for rel in ("CMakeLists.txt","datconf/CMakeLists.txt","datconf/datconf.c","datco
     need(rel in datconf_files,f"datconf CMake/source input missing: {rel}")
 mtwifi_pkg=(repo/"package/mtk/drivers/mt_wifi/Makefile").read_text()
 # Build/Compile passes both symbol-version files in one quoted,
-# space-separated KBUILD_EXTRA_SYMBOLS value. Check the complete assignment
-# rather than requiring conninfra.symvers to have its own closing quote.
-mtwifi_symvers = re.search(
-    r'(?m)^\s*KBUILD_EXTRA_SYMBOLS="([^"\n]*)"\s*\\?\s*mapfilter_pkg=(repo/"package/kernel/mapfilter/Makefile").read_text()
+# space-separated KBUILD_EXTRA_SYMBOLS value. Check the complete value.
+mtwifi_symvers = re.search(r'KBUILD_EXTRA_SYMBOLS="([^"]*)"', mtwifi_pkg)
+need("PKG_BUILD_DEPENDS:=warp conninfra" in mtwifi_pkg and
+     mtwifi_symvers is not None and
+     "$(KERNEL_BUILD_DIR)/symvers/warp.symvers" in mtwifi_symvers.group(1) and
+     "$(KERNEL_BUILD_DIR)/symvers/conninfra.symvers" in mtwifi_symvers.group(1),
+     "mt_wifi Conninfra/WARP dependency or modpost edge missing")
+need('M="$(PKG_BUILD_DIR)/mt_wifi_ap"' in mtwifi_pkg and
+     (src/"mtwifi/mt_wifi_ap/Makefile").is_file(),
+     "mt_wifi_ap Kbuild entrypoint referenced by Build/Compile is missing")
+need((src/"mtwifi/mt_wifi/embedded/plug_in/warp_proxy/Makefile").is_file(),
+     "mt_wifi WARP proxy Kbuild entrypoint is missing")
+
+mapfilter_pkg=(repo/"package/kernel/mapfilter/Makefile").read_text()
 need((src/"mapfilter/mapfilter/Makefile").is_file() and "Build/Compile" in mapfilter_pkg,
      "MAPFILTER source/build rule missing")
 
