@@ -1,0 +1,17 @@
+From: N60 Pro platform integration
+Subject: [PATCH] arm64: dts: mediatek: keep MT7986 WED under Logan WARP control
+
+The MT7986 vendor WARP implementation registers its own platform drivers
+for the Logan WED nodes.  Do not also pass those nodes to the upstream WED
+attach path in the Ethernet driver: the MT7988 Logan-WARP DTS conversion
+already removes this property for the same reason.
+
+--- a/arch/arm64/boot/dts/mediatek/mt7986a.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt7986a.dtsi
+@@ -611,7 +611,6 @@
+ 			mediatek,ethsys = <&ethsys>;
+ 			mediatek,sgmiisys = <&sgmiisys0>, <&sgmiisys1>;
+ 			mediatek,wed-pcie = <&wed_pcie>;
+-			mediatek,wed = <&wed>, <&wed2>;
+ 			status = "disabled";
+ 		};
