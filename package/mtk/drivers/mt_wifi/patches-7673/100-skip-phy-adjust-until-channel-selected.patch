@@ -1,5 +1,5 @@
---- a/embedded/mgmt/be_phy.c
-+++ b/embedded/mgmt/be_phy.c
+--- a/mt_wifi/embedded/mgmt/be_phy.c
++++ b/mt_wifi/embedded/mgmt/be_phy.c
 @@ -362,6 +362,13 @@
  
  	ad = (struct _RTMP_ADAPTER *)wdev->sys_handle;
