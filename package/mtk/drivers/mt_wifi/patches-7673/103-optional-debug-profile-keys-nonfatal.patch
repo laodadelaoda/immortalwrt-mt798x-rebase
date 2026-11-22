@@ -12,13 +12,13 @@
  		os_zero_mem(key, DEBUGLEVEL_PROFILE_MAX_PARAM_SIZE);
  		os_zero_mem(tmpbuf, DEBUGLEVEL_PROFILE_MAX_PARAM_SIZE);
 @@ -4500,8 +4500,8 @@
- 			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, "debugoption=%s len=%lu\\n", tmpbuf, strlen(tmpbuf));
+ 			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, "debugoption=%s len=%lu\n", tmpbuf, strlen(tmpbuf));
  			strncpy(dbg_option, tmpbuf, strlen(tmpbuf));
  		} else
 -			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
--				"debug option setting=%s not found!!\\n", key);
+-				"debug option setting=%s not found!!\n", key);
 +			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO,
-+				"optional debug option setting=%s not present; retain default\\n", key);
++				"optional debug option setting=%s not present; retain default\n", key);
  	} else {
  		retval = NDIS_STATUS_FAILURE;
  		MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
