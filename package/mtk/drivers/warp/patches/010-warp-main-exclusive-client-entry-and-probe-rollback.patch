@@ -156,7 +156,6 @@
  	}
  	return warp_entry_acquire(slot_id);
  }
-
 @@ -1002,2 +1033,3 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
  	int ret = 0;
 +	unsigned long flags;
