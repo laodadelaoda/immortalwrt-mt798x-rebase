@@ -1,0 +1,22 @@
+--- a/embedded/mgmt/mgmt_vht.c
++++ b/embedded/mgmt/mgmt_vht.c
+@@ -1977,6 +1977,10 @@
+ 		}
+ 		break;
+ 
++	case CMD_CH_BAND_24G:
++		/* 2.4 GHz does not use VHT80/160 channel groups. */
++		break;
++
+ 	default:
+ 		MTWF_DBG(pAd, DBG_CAT_PROTO, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+ 			"invalid ch_band %d\n", ch_band);
+@@ -2066,6 +2070,10 @@
+ 			}
+ 			idx++;
+ 		}
++		break;
++
++	case CMD_CH_BAND_24G:
++		/* 2.4 GHz does not use VHT80/160 channel groups. */
+ 		break;

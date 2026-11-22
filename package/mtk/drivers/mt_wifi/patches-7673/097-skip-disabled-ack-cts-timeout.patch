@@ -1,0 +1,13 @@
+--- a/embedded/common/cmm_cfg.c
++++ b/embedded/common/cmm_cfg.c
+@@ -13627,6 +13627,10 @@
+ 	}
+ 
+ 	for (idx = 0; idx < DBDC_BAND_NUM; idx++) {
++		/* Keep firmware defaults when ACK/CTS timeout is disabled for this band. */
++		if (!pAd->CommonCfg.ack_cts_enable[idx])
++			continue;
++
+ 		if (pAd->CommonCfg.distance[idx] > 0) {
+ 			value = pAd->CommonCfg.distance[idx];
+ 			value = (value / LIGHT_SPEED * 2) & MAX_ACK_TIMEOUT;

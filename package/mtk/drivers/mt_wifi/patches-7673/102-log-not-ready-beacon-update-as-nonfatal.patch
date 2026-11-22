@@ -1,0 +1,13 @@
+--- a/embedded/common/bcn.c
++++ b/embedded/common/bcn.c
+@@ -2068,8 +2068,8 @@
+ 	}
+ 
+ 	if (WDEV_BSS_STATE(wdev) < BSS_READY) {
+-		MTWF_DBG(pAd, DBG_CAT_AP, CATAP_BCN, DBG_LVL_ERROR,
+-				 "wdev(%d) bss not ready (state:%d, caller:%pS)!!\n",
++		MTWF_DBG(pAd, DBG_CAT_AP, CATAP_BCN, DBG_LVL_INFO,
++				 "skip beacon update for wdev(%d): BSS state %d is not ready (caller:%pS)\n",
+ 				 wdev->wdev_idx, WDEV_BSS_STATE(wdev), OS_TRACE);
+ 		goto end;
+ 	}

@@ -1,0 +1,13 @@
+--- a/embedded/hw_ctrl/hdev_ctrl.c
++++ b/embedded/hw_ctrl/hdev_ctrl.c
+@@ -1231,6 +1231,10 @@
+ 	struct radio_dev *rdev = NULL;
+ 	UCHAR BandIdx;
+ 
++	/* Channel 0 is the unconfigured ACS placeholder; preserve band-0 default. */
++	if (Channel == 0)
++		return 0;
++
+ 	rdev = RcGetHdevByChannel(ctrl, Channel);
+ 
+ 	if (!rdev) {

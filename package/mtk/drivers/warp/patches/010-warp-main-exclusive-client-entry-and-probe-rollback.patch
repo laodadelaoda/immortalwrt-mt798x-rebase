@@ -1,0 +1,141 @@
+--- a/warp_main.c
++++ b/warp_main.c
+@@ -162,23 +162,31 @@
+ /*
+ *
+ */
++static int warp_probe(struct platform_device *pdev);
++
+ static struct wifi_hw *
+ warp_entry_acquire(u32 slot_id)
+ {
+ 	int i;
++	unsigned long flags;
+ 	struct warp_ctrl *warp_ctrl = warp_ctrl_get();
+ 	struct warp_entry *entry = NULL;
+ 
+-	/*check is acquired or not*/
++	/* Reserve one client per hardware slot before exposing the entry. */
++	spin_lock_irqsave(&warp_ctrl->warp_lock, flags);
+ 	for (i = 0; i < warp_ctrl->warp_num; i++) {
+ 		entry = &warp_ctrl->entry[i];
+-		if (entry->slot_id == slot_id) {
++		if (entry->slot_id == slot_id &&
++		    !entry->wifi.hw.priv && !entry->pdriver.probe) {
++			entry->pdriver.probe = warp_probe;
++			spin_unlock_irqrestore(&warp_ctrl->warp_lock, flags);
+ 			warp_dbg(WARP_DBG_OFF,
+-				 "%s(): bus slot:%d, hook to WARP, entry id=%d, entry: %p\n", __func__, i,
+-				 entry->idx, entry);
++				 "%s(): bus slot:%d, reserve WARP entry id=%d, entry: %p\n",
++				 __func__, i, entry->idx, entry);
+ 			return &entry->wifi.hw;
+ 		}
+ 	}
++	spin_unlock_irqrestore(&warp_ctrl->warp_lock, flags);
+ 	return NULL;
+ }
+ 
+@@ -189,21 +197,26 @@
+ warp_entry_release(struct warp_entry *warp)
+ {
+ 	struct wifi_entry *wifi;
++	struct warp_ctrl *warp_ctrl = warp_ctrl_get();
++	unsigned long flags;
++	u8 enable = 0;
++
+ 	wifi = &warp->wifi;
+-	u8 enable = 0;
+ 	/* wbsys irq return*/
+ 	wifi->ops->swap_irq(wifi->hw.priv, warp->wifi.hw.irq);
+ 	warp_bus_msi_set(warp->idx, &enable);
+ 
++	spin_lock_irqsave(&warp_ctrl->warp_lock, flags);
+ 	warp->wifi.hw.priv = NULL;
+ 	memset(&warp->pdriver, 0, sizeof(warp->pdriver));
++	spin_unlock_irqrestore(&warp_ctrl->warp_lock, flags);
+ }
+ 
+ /*
+ *
+ */
+ static struct warp_entry *
+-warp_entry_get_by_pdev(void *pdev)
++warp_entry_get_by_pdev(struct platform_device *pdev)
+ {
+ 	u8 i;
+ 	struct warp_ctrl *warp_ctrl = warp_ctrl_get();
+@@ -212,10 +225,12 @@
+ 	for (i = 0; i < warp_ctrl->warp_num; i++) {
+ 		entry = &warp_ctrl->entry[i];
+ 
+-		if (entry->pdev == NULL && entry->pdriver.probe != NULL) {
++		/* A platform driver must only claim the WARP entry that registered it. */
++		if (entry->pdev == NULL && entry->pdriver.probe != NULL &&
++		    &entry->pdriver.driver == pdev->dev.driver) {
+ 			entry->pdev = pdev;
+ 			warp_dbg(WARP_DBG_OFF, "%s(): return entry[%d] \n", __func__, i);
+-			return &warp_ctrl->entry[i];
++			return entry;
+ 		}
+ 	}
+ 
+@@ -352,8 +367,8 @@
+ 	warp = warp_entry_get_by_pdev(pdev);
+ 
+ 	if (warp == NULL) {
+-		warp_dbg(WARP_DBG_ERR, "%s(): probe fail since warp is full!\n", __func__);
+-		return -1;
++		dev_err(&pdev->dev, "no free WARP entry for platform probe\n");
++		return -ENOSPC;
+ 	}
+ 
+ 	memset(&warp->wdma.res_ctrl, 0, sizeof(warp->wdma.res_ctrl));
+@@ -372,14 +387,14 @@
+ 			dev_info(&pdev->dev, "Using 32bit DMA for streaming map\n");
+ 		} else {
+ 			dev_err(&pdev->dev, "No usable streaming DMA configuration, aborting\n");
+-			return -1;
++			goto err_dma;
+ 		}
+ 	} else {
+ 		if (!dma_set_mask(&pdev->dev, DMA_BIT_MASK(32))) {
+ 			dev_info(&pdev->dev, "Using 32bit DMA for streaming map\n");
+ 		} else {
+ 			dev_err(&pdev->dev, "No usable streaming DMA configuration, aborting\n");
+-			return -1;
++			goto err_dma;
+ 		}
+ 	}
+ 
+@@ -391,7 +406,7 @@
+ 			dev_info(&pdev->dev, "Using 32bit DMA for coherent map\n");
+ 		} else {
+ 			dev_err(&pdev->dev, "No usable coherent DMA configuration, aborting\n");
+-			return -1;
++			goto err_dma;
+ 		}
+ 	} else {
+ 		if (!dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(32))) {
+@@ -399,7 +414,7 @@
+ 		} else {
+ 
+ 			dev_err(&pdev->dev, "No usable coherent DMA configuration, aborting\n");
+-			return -1;
++			goto err_dma;
+ 		}
+ 	}
+ 
+@@ -447,6 +462,12 @@
+ #endif
+ 	warp_dbg(WARP_DBG_INF, "%s(): platform device probe is done\n", __func__);
+ 	return 0;
++
++err_dma:
++	/* DMA setup failed after reserving this entry; make it available again. */
++	warp_msg_deinit(warp->idx);
++	warp_entry_release_pdev(warp);
++	return -EIO;
+ }
+ 
+ 

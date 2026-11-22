@@ -1,0 +1,35 @@
+--- a/embedded/common/mlme.c
++++ b/embedded/common/mlme.c
+@@ -5801,6 +5801,7 @@
+ #endif /* CONFIG_AP_SUPPORT */
+ 	struct wifi_dev *msg_recv_wdev = NULL;
+ 	struct wifi_dev *orig_wdev = NULL;
++	BOOLEAN bWdevRemappedByRxChannel = FALSE;
+ 
+ #ifdef MAC_REPEATER_SUPPORT
+ 	REPEATER_CLIENT_ENTRY * rept = NULL;
+@@ -6022,12 +6023,14 @@
+ 						(pAd->ScanCtrl[ChBandIdx].ScanReqwdev) &&
+ 						(pAd->ScanCtrl[ChBandIdx].ScanReqwdev->wdev_type == WDEV_TYPE_STA)) {
+ 						msg_recv_wdev = pAd->ScanCtrl[ChBandIdx].ScanReqwdev;
++						bWdevRemappedByRxChannel = TRUE;
+ 					} else {
+ 						for (i = 0; i < pAd->ApCfg.BssidNum; i++) {
+ 							WdevBandIdx = HcGetBandByWdev(&pAd->ApCfg.MBSSID[i].wdev);
+ 
+ 							if (ChBandIdx == WdevBandIdx) {
+ 								msg_recv_wdev = &pAd->ApCfg.MBSSID[i].wdev;
++								bWdevRemappedByRxChannel = TRUE;
+ 								if (msg_recv_wdev->DevInfo.WdevActive)
+ 									break;
+ 							}
+@@ -6177,7 +6180,8 @@
+ 		NdisReleaseSpinLock(&(Queue->Lock));
+ 		return FALSE;
+ 	}
+-	if (HcGetBandByWdev(orig_wdev) != HcGetBandByWdev(msg_recv_wdev)) {
++	if (!bWdevRemappedByRxChannel &&
++	    HcGetBandByWdev(orig_wdev) != HcGetBandByWdev(msg_recv_wdev)) {
+ 		MTWF_DBG(pAd, DBG_CAT_MLME, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+ 			"orig_wdev(band/channel)=(%d/%d),msg_recv_wdev(band/channel)=(%d/%d)\n",
+ 			HcGetBandByWdev(orig_wdev), orig_wdev->channel,

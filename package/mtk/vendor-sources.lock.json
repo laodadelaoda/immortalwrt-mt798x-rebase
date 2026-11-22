@@ -295,7 +295,13 @@
         "041-fix-cmm_data-header-translated-port-security.patch",
         "094-fix-wnm-fortify.patch",
         "095-fix-wnm-fortify-rsp.patch",
-        "096-wnm-fix-send-btm-req-fortify.patch"
+        "096-wnm-fix-send-btm-req-fortify.patch",
+        "097-skip-disabled-ack-cts-timeout.patch",
+        "098-handle-2g-vht-channel-groups.patch",
+        "099-ignore-expected-rx-band-remap.patch",
+        "100-skip-phy-adjust-until-channel-selected.patch",
+        "101-ignore-channel-zero-band-lookup.patch",
+        "102-log-not-ready-beacon-update-as-nonfatal.patch"
       ],
       "scope": "MT Wi-Fi 7.6.7.3 patch series",
       "application_stage_order": 2
@@ -338,6 +344,7 @@
         "007-unify-FOE_MAGIC_WED2-to-hnat-defination.patch",
         "008-since-v6.11-fix-platform_driver-expect-void-remove-callback.patch",
         "009-since-v6.10-fix-missing-explicitly-include-vmalloc-header.patch",
+        "010-warp-main-exclusive-client-entry-and-probe-rollback.patch",
         "099-1-fix-pointer-conversion-warning.patch",
         "099-2-fix-incompatible-format-warning.patch",
         "099-3-fix-unused-variable-warning.patch"

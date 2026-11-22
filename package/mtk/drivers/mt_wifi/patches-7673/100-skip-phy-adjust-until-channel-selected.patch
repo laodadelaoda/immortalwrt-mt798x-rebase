@@ -1,0 +1,16 @@
+--- a/embedded/mgmt/be_phy.c
++++ b/embedded/mgmt/be_phy.c
+@@ -362,6 +362,13 @@
+ 
+ 	ad = (struct _RTMP_ADAPTER *)wdev->sys_handle;
+ 
++	/* Auto-channel profiles start at channel 0 until ACS selects a channel. */
++	if (cfg->prim_ch == 0) {
++		MTWF_DBG(ad, DBG_CAT_CHN, CATCHN_CHN, DBG_LVL_INFO,
++			 "skip PHY adjustment until primary channel is selected\n");
++		return;
++	}
++
+ 	MTWF_DBG(ad, DBG_CAT_CHN, CATCHN_CHN, DBG_LVL_NOTICE,
+ 			 "oper_cfg: prim_ch(%d), ht_bw(%d), extcha(%d), vht_bw(%d), cen_ch_2(%d), PhyMode=%d!\n",
+ 			  cfg->prim_ch,
