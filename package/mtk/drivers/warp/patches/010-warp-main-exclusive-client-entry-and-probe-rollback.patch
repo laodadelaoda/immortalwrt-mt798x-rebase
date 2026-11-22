@@ -157,10 +157,14 @@
  	return warp_entry_acquire(slot_id);
  }
 
-@@ -1007 +1038 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
+@@ -1002,2 +1033,3 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
+ 	int ret = 0;
++	unsigned long flags;
+ 	struct warp_ctrl *warp_ctrl = warp_ctrl_get();
+@@ -1007 +1039 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
 -	static char name[MAX_NAME_SIZE] = "";
 +	static char name[WARP_WED_NUM][MAX_NAME_SIZE] = {{0}};
-@@ -1018,11 +1049,13 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
+@@ -1018,11 +1050,13 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
 -	ret = snprintf(name, sizeof(name), "%s%d", WHNAT_PLATFORM_DEV_NAME,
 -			warp_ctrl->warp_driver_idx++);
 +	if (warp->idx >= ARRAY_SIZE(name))
@@ -177,3 +181,20 @@
 +	pdriver->driver.name = name[warp->idx];
  	pdriver->driver.owner = THIS_MODULE;
  	pdriver->driver.of_match_table = warp_of_ids;
+@@ -1029,5 +1063,16 @@ warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
+ 	warp_increase_ref();
+ 
+-	return platform_driver_register(pdriver);
++	ret = platform_driver_register(pdriver);
++	if (ret) {
++		warp_entry_proc_exit(warp_ctrl, warp);
++		warp_decrease_ref();
++		spin_lock_irqsave(&warp_ctrl->warp_lock, flags);
++		wifi->ops = NULL;
++		wifi->hw.priv = NULL;
++		memset(&warp->pdriver, 0, sizeof(warp->pdriver));
++		spin_unlock_irqrestore(&warp_ctrl->warp_lock, flags);
++	}
++	return ret;
+ err:
+ 	return -1;
