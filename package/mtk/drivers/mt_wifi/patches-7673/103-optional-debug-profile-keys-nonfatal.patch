@@ -11,7 +11,7 @@
  
  		os_zero_mem(key, DEBUGLEVEL_PROFILE_MAX_PARAM_SIZE);
  		os_zero_mem(tmpbuf, DEBUGLEVEL_PROFILE_MAX_PARAM_SIZE);
-@@ -4500,8 +4500,8 @@
+@@ -4500,5 +4500,5 @@
  			MTWF_DBG(NULL, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, "debugoption=%s len=%lu\n", tmpbuf, strlen(tmpbuf));
  			strncpy(dbg_option, tmpbuf, strlen(tmpbuf));
  		} else
