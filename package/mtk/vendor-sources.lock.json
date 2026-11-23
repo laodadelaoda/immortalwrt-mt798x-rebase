@@ -209,7 +209,8 @@
         "047-mapd-ch-planning-r2-source.patch",
         "047-mapd-ch-planning-source.patch",
         "049-mapd-client-db-header.patch",
-        "049-mapd-topology-srv-header.patch"
+        "049-mapd-topology-srv-header.patch",
+        "050-wapp-main-config-path-bounds.patch"
       ],
       "scope": "EasyMesh Build/Prepare ordered vendor patch series",
       "post_normalize_order": [
