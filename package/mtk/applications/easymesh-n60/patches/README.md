@@ -31,6 +31,11 @@ reflected atomically in the Lock and its audit/workflow consumers.
 | MAPD | `044-mapd-unused-variable-and-cent-str-condition.patch`, `046-*`, `047-mapd-channel-block-prototype-match.patch`, `047-mapd-ch-planning-source.patch`, `049-mapd-client-db-header.patch`, `049-mapd-topology-srv-header.patch` | 044 combines the two MAPD fixes in mapd.c; 047's header/source fixes remain separate by file. 049 separates the client DB typedef correction from the topology header declarations; the latter retains N60's non-6-GHz compatibility guard. |
 | libmapd | `004-libmapd-target-flags.patch` | Independent Makefile-only change. |
 
+The `002-wapp-main-source-safety.patch` also corrects WAPP CLI path-copy bounds:
+`-f` uses the 256-byte AP-config buffer, while `-F` and `-u` use their
+128-byte MAP-config buffers. It removes the pointer-size `sizeof()` mistake
+that truncated paths on 64-bit targets and explicitly NUL-terminates each copy.
+
 ## Maintenance rules
 
 - Keep each patch focused on one source file wherever practical. A patch may
