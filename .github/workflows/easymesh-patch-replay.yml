@@ -44,6 +44,15 @@ jobs:
             echo "FAIL: N60 Pro make defconfig failed" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
             exit 1
           fi
+          # N60 Pro has 2.4/5 GHz RF only. Fail closed if any 6 GHz/6E
+          # driver or Multi-AP feature is enabled by the final Kconfig result.
+          for option in MTK_6G_SUPPORT MTK_6G_AFC_SUPPORT MTK_MAP_R2_6E_SUPPORT MTK_MAP_R3_6E_SUPPORT; do
+            if grep -qx "CONFIG_${option}=y" .config; then
+              echo "FAIL: unsupported N60 Pro 6 GHz/6E option enabled: CONFIG_${option}=y" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+              exit 1
+            fi
+            grep -Fx "# CONFIG_${option} is not set" .config | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+          done
           # Canonical Lock and real GNU Make Package/Prepare evaluation are
           # checked once by the native Package Prepare targets below. Archive
           # bytes are independently checked against Lock SHA256 before extraction.
