@@ -38,7 +38,7 @@
 +			"DPD pre-cal data is available for band %u; loading data\n", (UINT32)SwChCfg.Channel_Band);
  		if (SwChCfg.CentralChannel == 14) {
  			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO,
- 				 "CH 14 don't need DPD , return!!!\n");
+ 					 "CH 14 don't need DPD , return!!!\n");
 @@ -616,9 +631,9 @@
  			}
  		}
