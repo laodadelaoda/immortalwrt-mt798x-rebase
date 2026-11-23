@@ -1128,7 +1128,7 @@
  	struct wifi_app wapp_cfg;
  	struct hotspot hs;
  	struct mbo_cfg mbo;
-@@ -1211,8 +1290,8 @@
+@@ -1290,8 +1369,8 @@
  #ifdef MAP_SUPPORT
  	struct map_info map;
  	char value[10] = {0};
