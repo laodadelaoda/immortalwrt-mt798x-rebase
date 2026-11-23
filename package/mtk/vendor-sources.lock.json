@@ -300,7 +300,7 @@
         "098-handle-2g-vht-channel-groups.patch",
         "099-ignore-expected-rx-band-remap.patch",
         "100-skip-phy-adjust-until-channel-selected.patch",
-        "101-channel-zero-band-default-diagnostic.patch",
+        "101-hdev-ctrl-channel-zero-band0-default.patch",
         "102-beacon-not-ready-diagnostic.patch",
         "103-optional-debug-profile-keys-diagnostic.patch",
         "104-allow-four-cck-tx-streams.patch",

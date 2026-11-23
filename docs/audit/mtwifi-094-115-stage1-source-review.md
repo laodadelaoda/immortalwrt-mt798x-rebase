@@ -20,7 +20,7 @@ The 094–096 and 114–115 group concerns BTM variable-length payloads and even
 
 | Patch | Source-based observation | Provisional classification |
 |---|---|---|
-| 101 | The original `HcGetBandByChannel()` already returns band index 0 when `RcGetHdevByChannel()` finds no radio. The added channel-0 early return preserves that return value and mainly suppresses the existing diagnostic. | Behavior-preserving diagnostic change; not a functional band-selection fix. |
+| 101 | `Channel == 0` is an unconfigured ACS placeholder. Without the early return, `RcGetHdevByChannel()` can match a radio currently holding channel 0 and return its band index (potentially BAND1); the early return consistently chooses BAND0, matching `HcGetBandByChannelRange()`'s default. | Functional default-band correction; not log-only. The patch filename was corrected to describe the actual behavior. |
 | 102 | Changes the BSS-not-ready beacon message from ERROR to INFO and rewrites its text. | Log-only. |
 | 103 | Changes missing optional debug profile-key messages from ERROR to INFO. | Log-only. |
 | 104 | Changes the `SetCCKTxStream()` upper-bound check from `>= WF_NUM` to `> WF_NUM`, but the called `TxCCKStreamCtrl()` still rejects `u1CCKTxStream >= WF_NUM`. `WF_NUM` is 4. Therefore value 4 passes the front-end check but is still rejected by the lower-level control path. | Incomplete functional change; repair must reconcile both validation layers and verify firmware semantics before claiming four-stream support. |
