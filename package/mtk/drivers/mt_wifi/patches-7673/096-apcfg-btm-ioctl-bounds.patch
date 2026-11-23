@@ -1,0 +1,130 @@
+--- a/mt_wifi/embedded/ap/ap_cfg.c
++++ b/mt_wifi/embedded/ap/ap_cfg.c
+@@ -6609,4 +6609,7 @@
+ 
++		if (wrq->u.data.length < sizeof(*cmd_data)) {
++			Status = -EINVAL;
++			break;
++		}
+ 		os_alloc_mem(Buf, (UCHAR **)&Buf, wrq->u.data.length);
+-
+ 		if (!Buf) {
+@@ -6614,10 +6617,18 @@
+ 					"alloc mem fail.\n");
++			Status = -ENOMEM;
++			break;
++		}
++		if (copy_from_user(Buf, wrq->u.data.pointer, wrq->u.data.length)) {
++			Status = -EFAULT;
++			os_free_mem(Buf);
+ 			break;
+ 		}
+-
+-		Status = copy_from_user(Buf, wrq->u.data.pointer, wrq->u.data.length);
+ 		cmd_data = (struct wnm_command *)Buf;
+-		if (cmd_data->command_len > MAX_MGMT_PKT_LEN) {
++		if (cmd_data->command_len > MAX_MGMT_PKT_LEN ||
++		    cmd_data->command_len > wrq->u.data.length - sizeof(*cmd_data)) {
+ 			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+-				"cmd_data->command_len too large, size = %d\n", cmd_data->command_len);
++				"invalid WNM command length=%u\n", cmd_data->command_len);
++			Status = -EINVAL;
++			os_free_mem(Buf);
++			break;
+ 		}
+@@ -6683,8 +6694,23 @@
+ 
++		if (wrq->u.data.length < sizeof(*req_data)) {
++			Status = -EINVAL;
++			break;
++		}
+ 		os_alloc_mem(Buf, (UCHAR **)&Buf, wrq->u.data.length);
+-		Status = copy_from_user(Buf, wrq->u.data.pointer, wrq->u.data.length);
++		if (!Buf) {
++			Status = -ENOMEM;
++			break;
++		}
++		if (copy_from_user(Buf, wrq->u.data.pointer, wrq->u.data.length)) {
++			Status = -EFAULT;
++			os_free_mem(Buf);
++			break;
++		}
+ 		req_data = (struct btm_req_data *)Buf;
+-		if (req_data->btm_req_len > MAX_MGMT_PKT_LEN) {
+-			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+-				"req_data->btm_req_len too large, size = %d\n", req_data->btm_req_len);
++		if (req_data->btm_req_len < sizeof(BTM_REQ_FRAME) ||
++		    req_data->btm_req_len > MAX_MGMT_PKT_LEN - sizeof(HEADER_802_11) - 3 ||
++		    req_data->btm_req_len > wrq->u.data.length - sizeof(*req_data)) {
++			Status = -EINVAL;
++			os_free_mem(Buf);
++			break;
+ 		}
+@@ -6710,5 +6736,14 @@
+ 			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!btm2\n");
+-			pEntry->IsBTMReqValid = TRUE;
++			if (pEntry->ReqbtmData) {
++				os_free_mem(pEntry->ReqbtmData);
++				pEntry->ReqbtmData = NULL;
++			}
+ 			os_alloc_mem(pEntry->ReqbtmData, (UCHAR **)&pEntry->ReqbtmData, sizeof(struct btm_req_data) + req_data->btm_req_len);
+-			memcpy(pEntry->ReqbtmData, Buf, sizeof(struct btm_req_data) + req_data->btm_req_len);
++			if (!pEntry->ReqbtmData) {
++				Status = -ENOMEM;
++				pEntry->IsBTMReqValid = FALSE;
++			} else {
++				memcpy(pEntry->ReqbtmData, Buf, sizeof(struct btm_req_data) + req_data->btm_req_len);
++				pEntry->IsBTMReqValid = TRUE;
++			}
+ 		}
+@@ -6724,8 +6759,22 @@
+ 		struct btm_rsp_data *rsp_data;
++		if (wrq->u.data.length < sizeof(*rsp_data)) {
++			Status = -EINVAL;
++			break;
++		}
+ 		os_alloc_mem(Buf, (UCHAR **)&Buf, wrq->u.data.length);
+-		Status = copy_from_user(Buf, wrq->u.data.pointer, wrq->u.data.length);
++		if (!Buf) {
++			Status = -ENOMEM;
++			break;
++		}
++		if (copy_from_user(Buf, wrq->u.data.pointer, wrq->u.data.length)) {
++			Status = -EFAULT;
++			os_free_mem(Buf);
++			break;
++		}
+ 		rsp_data = (struct btm_rsp_data *)Buf;
+-		if (rsp_data->btm_rsp_len > MAX_MGMT_PKT_LEN) {
+-			MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+-				"rsp_data->btm_rsp_len too large, size = %d\n", rsp_data->btm_rsp_len);
++		if (rsp_data->btm_rsp_len > MAX_MGMT_PKT_LEN ||
++		    rsp_data->btm_rsp_len > wrq->u.data.length - sizeof(*rsp_data)) {
++			Status = -EINVAL;
++			os_free_mem(Buf);
++			break;
+ 		}
+@@ -26779,6 +26828,6 @@
+ {
+-	UCHAR *Buf;
++	UCHAR *Buf = NULL;
+ 	POS_COOKIE pObj = (POS_COOKIE)pAd->OS_Cookie;
+ 	UCHAR APIndex = pObj->ioctl_if;
+-	PWNM_CTRL pWNMCtrl = &pAd->ApCfg.MBSSID[APIndex].WNMCtrl;
++	PWNM_CTRL pWNMCtrl;
+ 	BTM_EVENT_DATA *Event;
+@@ -26789,2 +26838,8 @@
+ 
++	if (!VALID_MBSS(pAd, APIndex) || !PeerMACAddr || !BTMReq ||
++	    BTMReqLen < sizeof(BTM_REQ_FRAME) ||
++	    BTMReqLen > MAX_MGMT_PKT_LEN - sizeof(HEADER_802_11) - 3)
++		return FALSE;
++	pWNMCtrl = &pAd->ApCfg.MBSSID[APIndex].WNMCtrl;
++
+ 	MTWF_PRINT("%s\n", __func__);
+@@ -26846,3 +26901,4 @@
+ 	Len += 2;
+-	NdisMoveMemory(Event->u.BTM_REQ_DATA.BTMReq, BTMReq, BTMReqLen);
++	memcpy((UCHAR *)Event + offsetof(BTM_EVENT_DATA, u.BTM_REQ_DATA.BTMReq),
++		BTMReq, BTMReqLen);
+ 	Len += BTMReqLen;

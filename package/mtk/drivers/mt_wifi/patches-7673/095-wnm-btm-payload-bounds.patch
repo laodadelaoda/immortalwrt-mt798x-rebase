@@ -1,0 +1,327 @@
+--- a/mt_wifi/embedded/common/wnm.c
++++ b/mt_wifi/embedded/common/wnm.c
+@@ -52,3 +52,8 @@
+ 	UINT16 buflen = 0;
+-	char *buf;
++	char *buf = NULL;
++
++	if (!net_dev || !peer_mac_addr || (!btm_query && btm_query_len) ||
++	    btm_query_len > MAX_MGMT_PKT_LEN ||
++	    btm_query_len > 0xffU - sizeof(*query_data))
++		return;
+ 
+@@ -56,2 +61,4 @@
+ 	os_alloc_mem(NULL, (UCHAR **)&buf, buflen);
++	if (!buf)
++		return;
+ 	NdisZeroMemory(buf, buflen);
+@@ -66,3 +73,4 @@
+ 	query_data->btm_query_len	= btm_query_len;
+-	memcpy(query_data->btm_query, btm_query, btm_query_len);
++	if (btm_query_len)
++		memcpy(query_data->btm_query, btm_query, btm_query_len);
+ 
+@@ -84,5 +92,11 @@
+ 	UINT16 buflen = 0;
+-	char *buf;
++	char *buf = NULL;
++	if (!net_dev || !peer_mac_addr || (!btm_query && btm_query_len) ||
++	    btm_query_len > MAX_MGMT_PKT_LEN)
++		return;
++
+ 	buflen = sizeof(*query_data) + btm_query_len;
+ 	os_alloc_mem(NULL, (UCHAR **)&buf, buflen);
++	if (!buf)
++		return;
+ 	NdisZeroMemory(buf, buflen);
+@@ -92,3 +106,4 @@
+ 	query_data->btm_query_len	= btm_query_len;
+-	memcpy(query_data->btm_query, btm_query, btm_query_len);
++	if (btm_query_len)
++		memcpy(query_data->btm_query, btm_query, btm_query_len);
+ 	RtmpOSWrielessEventSend(net_dev, RT_WLAN_EVENT_CUSTOM,
+@@ -152,4 +167,8 @@
+ 	UINT16 buflen = 0;
+-	char *buf;
++	char *buf = NULL;
+ 
++	if (!net_dev || !peer_mac_addr || (!btm_rsp && btm_rsp_len) ||
++	    btm_rsp_len > MAX_MGMT_PKT_LEN ||
++	    btm_rsp_len > 0xffU - sizeof(*rsp_data))
++		return;
+ 
+@@ -157,2 +176,4 @@
+ 	os_alloc_mem(NULL, (UCHAR **)&buf, buflen);
++	if (!buf)
++		return;
+ 	NdisZeroMemory(buf, buflen);
+@@ -168,3 +189,4 @@
+ 	rsp_data->btm_rsp_len	= btm_rsp_len;
+-	memcpy(rsp_data->btm_rsp, btm_rsp, btm_rsp_len);
++	if (btm_rsp_len)
++		memcpy(rsp_data->btm_rsp, btm_rsp, btm_rsp_len);
+ 
+@@ -182,5 +204,11 @@
+ 	UINT16 buflen = 0;
+-	char *buf;
++	char *buf = NULL;
++	if (!net_dev || !peer_mac_addr || (!btm_rsp && btm_rsp_len) ||
++	    btm_rsp_len > MAX_MGMT_PKT_LEN)
++		return;
++
+ 	buflen = sizeof(*rsp_data) + btm_rsp_len;
+ 	os_alloc_mem(NULL, (UCHAR **)&buf, buflen);
++	if (!buf)
++		return;
+ 	NdisZeroMemory(buf, buflen);
+@@ -190,3 +218,4 @@
+ 	rsp_data->btm_rsp_len	= btm_rsp_len;
+-	memcpy(rsp_data->btm_rsp, btm_rsp, btm_rsp_len);
++	if (btm_rsp_len)
++		memcpy(rsp_data->btm_rsp, btm_rsp, btm_rsp_len);
+ 	RtmpOSWrielessEventSend(net_dev, RT_WLAN_EVENT_CUSTOM,
+@@ -225,5 +254,11 @@
+ 	UINT16 buflen = 0;
+-	char *buf;
++	char *buf = NULL;
++	if (!net_dev || !peer_mac_addr || (!btm_req && btm_req_len) ||
++	    btm_req_len > MAX_MGMT_PKT_LEN)
++		return;
++
+ 	buflen = sizeof(*req_data) + btm_req_len;
+ 	os_alloc_mem(NULL, (UCHAR **)&buf, buflen);
++	if (!buf)
++		return;
+ 	NdisZeroMemory(buf, buflen);
+@@ -233,3 +268,4 @@
+ 	req_data->btm_req_len   = btm_req_len;
+-	memcpy(req_data->btm_req, btm_req, btm_req_len);
++	if (btm_req_len)
++		memcpy(req_data->btm_req, btm_req, btm_req_len);
+ 	RtmpOSWrielessEventSend(net_dev, RT_WLAN_EVENT_CUSTOM,
+@@ -1988,6 +2024,24 @@
+ 	BTM_PEER_ENTRY *BTMPeerEntry = NULL;
+-	PWNM_CTRL pWNMCtrl = &pAd->ApCfg.MBSSID[Event->ControlIndex].WNMCtrl;
+-	UINT32 FrameLen = 0, VarLen = Event->u.BTM_REQ_DATA.BTMReqLen;
++	PWNM_CTRL pWNMCtrl;
++	UINT32 FrameLen = 0, VarLen;
+ 	INT32 Ret;
+ 	BOOLEAN Cancelled;
++
++	if (Elem->MsgLen < offsetof(BTM_EVENT_DATA, u.BTM_REQ_DATA.BTMReq)) {
++		MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR,
++			"Truncated BTM request event header\n");
++		return;
++	}
++	if (!VALID_MBSS(pAd, Event->ControlIndex))
++		return;
++	pWNMCtrl = &pAd->ApCfg.MBSSID[Event->ControlIndex].WNMCtrl;
++	VarLen = Event->u.BTM_REQ_DATA.BTMReqLen;
++	if (VarLen < sizeof(BTM_REQ_FRAME) ||
++	    VarLen > MAX_MGMT_PKT_LEN - sizeof(HEADER_802_11) - 3 ||
++	    VarLen > Elem->MsgLen - offsetof(BTM_EVENT_DATA, u.BTM_REQ_DATA.BTMReq)) {
++		MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_WNM, DBG_LVL_ERROR,
++			"Invalid BTM request payload length=%u msg_len=%lu\n", VarLen, Elem->MsgLen);
++		return;
++	}
++
+ 	RTMP_SEM_EVENT_WAIT(&pWNMCtrl->BTMPeerListLock, Ret);
+@@ -2024,5 +2078,5 @@
+ 	FrameLen += 1;
+-	NdisMoveMemory(WNMFrame->u.BTM_REQ.Variable, Event->u.BTM_REQ_DATA.BTMReq,
+-				   Event->u.BTM_REQ_DATA.BTMReqLen);
+-	FrameLen += Event->u.BTM_REQ_DATA.BTMReqLen;
++	memcpy((UCHAR *)WNMFrame + offsetof(WNM_FRAME, u.BTM_REQ.Variable),
++		(UCHAR *)Event + offsetof(BTM_EVENT_DATA, u.BTM_REQ_DATA.BTMReq), VarLen);
++	FrameLen += VarLen;
+ 	BTMSetPeerCurrentState(pAd, Elem, WAIT_PEER_BTM_RSP);
+@@ -2039,3 +2093,4 @@
+ 		if (pEntry != NULL) {
+-			UINT8 *BTMData = (UINT8 *)Event->u.BTM_REQ_DATA.BTMReq;
++			UINT8 *BTMData = (UINT8 *)Event +
++				offsetof(BTM_EVENT_DATA, u.BTM_REQ_DATA.BTMReq);
+ 			if ((*(BTMData) & 0x1C) != 0) {
+@@ -2061,7 +2116,7 @@
+ 	PMAC_TABLE_ENTRY pEntry = NULL;
+-	PWNM_CTRL pWNMCtrl = &pAd->ApCfg.MBSSID[Event->ControlIndex].WNMCtrl;
+-	PUCHAR p_btm_req_data = Event->u.BTM_REQ_DATA.BTMReq;
++	PWNM_CTRL pWNMCtrl;
++	PUCHAR p_btm_req_data;
+ 	PUCHAR pOutBuffer = NULL;
+ 	ULONG FrameLen = 0;
+-	UINT32 btm_reqinfo_len = Event->u.BTM_REQ_DATA.BTMReqLen;
++	UINT32 btm_reqinfo_len;
+ 	INT32 Ret;
+@@ -2071,2 +2126,13 @@
+ 
++	if (Elem->MsgLen < offsetof(BTM_EVENT_DATA, u.BTM_REQ_DATA.BTMReq) ||
++	    !VALID_MBSS(pAd, Event->ControlIndex))
++		return;
++	pWNMCtrl = &pAd->ApCfg.MBSSID[Event->ControlIndex].WNMCtrl;
++	btm_reqinfo_len = Event->u.BTM_REQ_DATA.BTMReqLen;
++	if (btm_reqinfo_len < sizeof(BTM_REQ_FRAME) ||
++	    btm_reqinfo_len > MAX_MGMT_PKT_LEN - sizeof(HEADER_802_11) - 3 ||
++	    btm_reqinfo_len > Elem->MsgLen - offsetof(BTM_EVENT_DATA, u.BTM_REQ_DATA.BTMReq))
++		return;
++	p_btm_req_data = (PUCHAR)Event + offsetof(BTM_EVENT_DATA, u.BTM_REQ_DATA.BTMReq);
++
+ 	RTMP_SEM_EVENT_WAIT(&pWNMCtrl->BTMPeerListLock, Ret);
+@@ -2167,5 +2233,4 @@
+ 	PMAC_TABLE_ENTRY pEntry = NULL;
+-	PWNM_CTRL pWNMCtrl = &pAd->ApCfg.MBSSID[Event->ControlIndex].WNMCtrl;
+-	p_btm_reqinfo_t p_btm_req_data =
+-		(p_btm_reqinfo_t)Event->u.BTM_REQ_DATA.BTMReq;
++	PWNM_CTRL pWNMCtrl;
++	p_btm_reqinfo_t p_btm_req_data;
+ 	PUCHAR pOutBuffer = NULL;
+@@ -2173,3 +2238,3 @@
+ 	UINT32 TmpLen = 0;
+-	UINT32 btm_reqinfo_len = Event->u.BTM_REQ_DATA.BTMReqLen;
++	UINT32 btm_reqinfo_len;
+ 	NDIS_STATUS NStatus = NDIS_STATUS_SUCCESS;
+@@ -2179,2 +2244,16 @@
+ 
++	if (Elem->MsgLen < offsetof(BTM_EVENT_DATA, u.BTM_REQ_DATA.BTMReq) ||
++	    !VALID_MBSS(pAd, Event->ControlIndex))
++		return;
++	btm_reqinfo_len = Event->u.BTM_REQ_DATA.BTMReqLen;
++	if (btm_reqinfo_len < sizeof(*p_btm_req_data) ||
++	    btm_reqinfo_len > MAX_MGMT_PKT_LEN -
++		offsetof(BTM_EVENT_DATA, u.BTM_REQ_DATA.BTMReq) ||
++	    btm_reqinfo_len > Elem->MsgLen -
++		offsetof(BTM_EVENT_DATA, u.BTM_REQ_DATA.BTMReq))
++		return;
++	pWNMCtrl = &pAd->ApCfg.MBSSID[Event->ControlIndex].WNMCtrl;
++	p_btm_req_data = (p_btm_reqinfo_t)((UCHAR *)Event +
++		offsetof(BTM_EVENT_DATA, u.BTM_REQ_DATA.BTMReq));
++
+ 	RTMP_SEM_EVENT_WAIT(&pWNMCtrl->BTMPeerListLock, Ret);
+@@ -2279,5 +2358,17 @@
+ 	BTM_EVENT_DATA *Event = (BTM_EVENT_DATA *)Elem->Msg;
+-	PWNM_CTRL pWNMCtrl = &pAd->ApCfg.MBSSID[Event->ControlIndex].WNMCtrl;
+-	PNET_DEV NetDev = pAd->ApCfg.MBSSID[Event->ControlIndex].wdev.if_dev;
++	PWNM_CTRL pWNMCtrl;
++	PNET_DEV NetDev;
+ 	INT32 Ret;
++	UINT32 rsp_len;
++
++	if (Elem->MsgLen < offsetof(BTM_EVENT_DATA, u.PEER_BTM_RSP_DATA.BTMRsp) ||
++	    !VALID_MBSS(pAd, Event->ControlIndex))
++		return;
++	rsp_len = Event->u.PEER_BTM_RSP_DATA.BTMRspLen;
++	if (rsp_len > MAX_MGMT_PKT_LEN ||
++	    rsp_len > Elem->MsgLen -
++		offsetof(BTM_EVENT_DATA, u.PEER_BTM_RSP_DATA.BTMRsp))
++		return;
++	pWNMCtrl = &pAd->ApCfg.MBSSID[Event->ControlIndex].WNMCtrl;
++	NetDev = pAd->ApCfg.MBSSID[Event->ControlIndex].wdev.if_dev;
+ 
+@@ -2285,4 +2376,5 @@
+ 	/* Send BTM confirm to daemon */
+-	SendBTMConfirmEvent(NetDev, Event->PeerMACAddr, Event->u.PEER_BTM_RSP_DATA.BTMRsp,
+-		Event->u.PEER_BTM_RSP_DATA.BTMRspLen, RA_WEXT);
++	SendBTMConfirmEvent(NetDev, Event->PeerMACAddr,
++		(UCHAR *)Event + offsetof(BTM_EVENT_DATA, u.PEER_BTM_RSP_DATA.BTMRsp),
++		rsp_len, RA_WEXT);
+ 	/* Delete BTM peer entry */
+@@ -2414,2 +2506,11 @@
+ 
++	if (!p_btm_req_data || !VALID_MBSS(pAd, APIndex) ||
++	    btm_req_data_len < offsetof(btm_req_ie_data_t, btm_req) ||
++	    btm_req_data_len > 1000 ||
++	    p_btm_req_data->btm_req_len < sizeof(BTM_REQ_FRAME) ||
++	    p_btm_req_data->btm_req_len > MAX_MGMT_PKT_LEN - sizeof(HEADER_802_11) - 3 ||
++	    p_btm_req_data->btm_req_len >
++		btm_req_data_len - offsetof(btm_req_ie_data_t, btm_req))
++		return NDIS_STATUS_INVALID_DATA;
++
+ 	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, "%s\n", __func__);
+@@ -2423,8 +2524,2 @@
+ 
+-	if (btm_req_data_len > 1000) {
+-		MTWF_DBG(pAd, DBG_CAT_PROTO, CATPROTO_RRM, DBG_LVL_ERROR,
+-			"BTM Req ie len(%d) is too long", btm_req_data_len);
+-		return NDIS_STATUS_FAILURE;
+-	}
+-
+ 	Len = sizeof(*Event) + btm_req_data_len;
+@@ -2497,3 +2592,3 @@
+ 
+-	NdisMoveMemory(Event->u.BTM_REQ_DATA.BTMReq,
++	memcpy((UCHAR *)Event + offsetof(BTM_EVENT_DATA, u.BTM_REQ_DATA.BTMReq),
+ 		p_btm_req_data->btm_req, p_btm_req_data->btm_req_len);
+@@ -2537,2 +2632,11 @@
+ 
++	if (!p_btm_req_data || !VALID_MBSS(pAd, ifIndex) ||
++	    btm_req_data_len < sizeof(*p_btm_req_data) ||
++	    p_btm_req_data->num_candidates > MAX_CANDIDATE_NUM ||
++	    btm_req_data_len != sizeof(*p_btm_req_data) +
++		p_btm_req_data->num_candidates * sizeof(struct nr_info) ||
++	    btm_req_data_len > MAX_MGMT_PKT_LEN -
++		offsetof(BTM_EVENT_DATA, u.BTM_REQ_DATA.BTMReq))
++		return NDIS_STATUS_INVALID_DATA;
++
+ 	pMbss = &pAd->ApCfg.MBSSID[ifIndex];
+@@ -2628,4 +2732,4 @@
+ 	Event->u.BTM_REQ_DATA.BTMReqLen = btm_req_data_len;
+-	NdisMoveMemory(Event->u.BTM_REQ_DATA.BTMReq,
+-		(PUCHAR)p_btm_req_data, btm_req_data_len);
++	memcpy((UCHAR *)Event + offsetof(BTM_EVENT_DATA, u.BTM_REQ_DATA.BTMReq),
++		(UCHAR *)p_btm_req_data, btm_req_data_len);
+ 
+@@ -2660,2 +2764,4 @@
+ 	{
++		if (pCmd_data->command_len < 1)
++			return NDIS_STATUS_INVALID_DATA;
+ 		if (pCmd_data->command_body[0] == 0) {
+@@ -2672,2 +2778,4 @@
+ 	{
++		if (pCmd_data->command_len < 1)
++			return NDIS_STATUS_INVALID_DATA;
+ 		if (pCmd_data->command_body[0] & BTM_ENABLE_OFFSET)
+@@ -2686,3 +2794,14 @@
+ 
++		if (pCmd_data->command_len < offsetof(struct btm_req_data, btm_req)) {
++			status = NDIS_STATUS_INVALID_DATA;
++			break;
++		}
+ 		req_data = (struct btm_req_data *)pCmd_data->command_body;
++		if (req_data->btm_req_len < sizeof(BTM_REQ_FRAME) ||
++		    req_data->btm_req_len > MAX_MGMT_PKT_LEN - sizeof(HEADER_802_11) - 3 ||
++		    req_data->btm_req_len >
++			pCmd_data->command_len - offsetof(struct btm_req_data, btm_req)) {
++			status = NDIS_STATUS_INVALID_DATA;
++			break;
++		}
+ 		pEntry = MacTableLookup(pAd, req_data->peer_mac_addr);
+@@ -2857,3 +2976,3 @@
+ {
+-	UCHAR *Buf;
++	UCHAR *Buf = NULL;
+ 	WNM_FRAME *WNMFrame;
+@@ -2864,4 +2983,14 @@
+ 	BTM_EVENT_DATA *Event = (BTM_EVENT_DATA *)Elem->Msg;
+-	PWNM_CTRL pWNMCtrl = &pAd->StaCfg[Event->ControlIndex].WNMCtrl;
+-	UINT32 VarLen = Event->u.BTM_RSP_DATA.BTMRspLen;
++	PWNM_CTRL pWNMCtrl;
++	UINT32 VarLen;
++
++	if (Elem->MsgLen < offsetof(BTM_EVENT_DATA, u.BTM_RSP_DATA.BTMRsp) ||
++	    Event->ControlIndex >= MAX_APCLI_NUM)
++		return;
++	VarLen = Event->u.BTM_RSP_DATA.BTMRspLen;
++	if (VarLen < 1 ||
++	    VarLen > MAX_MGMT_PKT_LEN - sizeof(HEADER_802_11) - 3 ||
++	    VarLen > Elem->MsgLen - offsetof(BTM_EVENT_DATA, u.BTM_RSP_DATA.BTMRsp))
++		return;
++	pWNMCtrl = &pAd->StaCfg[Event->ControlIndex].WNMCtrl;
+ 
+@@ -2900,5 +3029,5 @@
+ 	FrameLen += 1;
+-	NdisMoveMemory(WNMFrame->u.BTM_RSP.Variable, Event->u.BTM_RSP_DATA.BTMRsp,
+-			Event->u.BTM_RSP_DATA.BTMRspLen);
+-	FrameLen += Event->u.BTM_RSP_DATA.BTMRspLen;
++	memcpy((UCHAR *)WNMFrame + offsetof(WNM_FRAME, u.BTM_RSP.Variable),
++		(UCHAR *)Event + offsetof(BTM_EVENT_DATA, u.BTM_RSP_DATA.BTMRsp), VarLen);
++	FrameLen += VarLen;
+ 	MiniportMMRequest(pAd, (MGMT_USE_QUEUE_FLAG | QID_AC_BE), Buf, FrameLen);

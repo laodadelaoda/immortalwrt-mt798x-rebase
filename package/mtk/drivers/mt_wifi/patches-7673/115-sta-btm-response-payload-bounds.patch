@@ -1,0 +1,26 @@
+--- a/mt_wifi/embedded/sta/sta_cfg.c
++++ b/mt_wifi/embedded/sta/sta_cfg.c
+@@ -10113,6 +10113,6 @@
+ {
+-	UCHAR *Buf;
++	UCHAR *Buf = NULL;
+ 	POS_COOKIE pObj = (POS_COOKIE)pAd->OS_Cookie;
+ 	UCHAR APcliIndex = pObj->ioctl_if;
+-	PWNM_CTRL pWNMCtrl = &pAd->StaCfg[APcliIndex].WNMCtrl;
++	PWNM_CTRL pWNMCtrl;
+ 	BTM_EVENT_DATA *Event;
+@@ -10123,2 +10123,8 @@
+ 
++	if (APcliIndex >= MAX_APCLI_NUM || !PeerMACAddr ||
++	    (!BTMRsp && BTMRspLen) || BTMRspLen < 1 ||
++	    BTMRspLen > MAX_MGMT_PKT_LEN - sizeof(HEADER_802_11) - 3)
++		return FALSE;
++	pWNMCtrl = &pAd->StaCfg[APcliIndex].WNMCtrl;
++
+ 	MTWF_DBG(pAd, DBG_CAT_CFG, DBG_SUBCAT_ALL, DBG_LVL_INFO, "\n");
+@@ -10157,3 +10163,4 @@
+ 	Len += 2;
+-	NdisMoveMemory(Event->u.BTM_RSP_DATA.BTMRsp, BTMRsp, BTMRspLen);
++	memcpy((UCHAR *)Event + offsetof(BTM_EVENT_DATA, u.BTM_RSP_DATA.BTMRsp),
++		BTMRsp, BTMRspLen);
+ 	Len += BTMRspLen;

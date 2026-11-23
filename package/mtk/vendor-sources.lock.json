@@ -293,9 +293,9 @@
         "039-fix-qos-peer_vendor_spec_action-frame-check.patch",
         "040-ap_mgmt_assoc-dont-reject-oversized-supported-channels-ie.patch",
         "041-fix-cmm_data-header-translated-port-security.patch",
-        "094-fix-wnm-fortify.patch",
-        "095-fix-wnm-fortify-rsp.patch",
-        "096-wnm-fix-send-btm-req-fortify.patch",
+        "094-oid-btm-flexible-payloads.patch",
+        "095-wnm-btm-payload-bounds.patch",
+        "096-apcfg-btm-ioctl-bounds.patch",
         "097-skip-disabled-ack-cts-timeout.patch",
         "098-handle-2g-vht-channel-groups.patch",
         "099-ignore-expected-rx-band-remap.patch",
@@ -312,7 +312,9 @@
         "110-antcfg-hif-mt-nonfatal.patch",
         "111-red-command-status-propagation.patch",
         "112-ipmac-table-idempotent-init-nonfatal.patch",
-        "113-apcfg-skip-disabled-apcli-when-interface-down.patch"
+        "113-apcfg-skip-disabled-apcli-when-interface-down.patch",
+        "114-ap-band-steering-btm-neighbor-buffer.patch",
+        "115-sta-btm-response-payload-bounds.patch"
       ],
       "scope": "MT Wi-Fi 7.6.7.3 patch series",
       "application_stage_order": 2

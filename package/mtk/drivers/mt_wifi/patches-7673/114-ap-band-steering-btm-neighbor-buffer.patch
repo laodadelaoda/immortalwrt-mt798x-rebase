@@ -1,0 +1,71 @@
+--- a/mt_wifi/embedded/ap/ap_band_steering.c
++++ b/mt_wifi/embedded/ap/ap_band_steering.c
+@@ -2041,4 +2041,5 @@
+ {
+-	UCHAR *Buf;
++	UCHAR *Buf = NULL;
+ 	BTM_EVENT_DATA *Event;
++	UCHAR *btm_req_payload;
+ 	BTM_PEER_ENTRY *BTMPeerEntry;
+@@ -2057,2 +2058,4 @@
+ 
++	if (!PeerMACAddr)
++		goto error0;
+ 	pEntry = MacTableLookup(pAd, PeerMACAddr);
+@@ -2063,2 +2066,15 @@
+ 		goto error0;
++	if (!VALID_MBSS(pAd, APIndex))
++		goto error0;
++
++#ifdef DOT11K_RRM_SUPPORT
++	if (!BTMReq || BTMReqLen < sizeof(BTM_REQ_FRAME) ||
++	    BTMReqLen > MAX_MGMT_PKT_LEN - sizeof(HEADER_802_11) - 3 -
++		sizeof(RRM_NEIGHBOR_REP_INFO) - 5)
++		goto error0;
++#else
++	if (!BTMReq || BTMReqLen < sizeof(BTM_REQ_FRAME) ||
++	    BTMReqLen > MAX_MGMT_PKT_LEN - sizeof(HEADER_802_11) - 3)
++		goto error0;
++#endif
+ 
+@@ -2102,4 +2118,4 @@
+ #ifdef DOT11K_RRM_SUPPORT
+-	os_alloc_mem(NULL, (UCHAR **)&Buf, sizeof(*Event) + BTMReqLen + sizeof(RRM_NEIGHBOR_REP_INFO) + 3);
+-													/* Size 3 is for the preference sub element in neighbor report*/
++	os_alloc_mem(NULL, (UCHAR **)&Buf, sizeof(*Event) + BTMReqLen + sizeof(RRM_NEIGHBOR_REP_INFO) + 5);
++													/* Two-byte Neighbor Report IE header plus three-byte BSS Preference IE. */
+ #else
+@@ -2114,4 +2130,4 @@
+ #ifdef DOT11K_RRM_SUPPORT
+-	NdisZeroMemory(Buf, sizeof(*Event) + BTMReqLen + sizeof(RRM_NEIGHBOR_REP_INFO) + 3);
+-										/* Size 3 is for the preference sub element in neighbor report*/
++	NdisZeroMemory(Buf, sizeof(*Event) + BTMReqLen + sizeof(RRM_NEIGHBOR_REP_INFO) + 5);
++										/* Two-byte Neighbor Report IE header plus three-byte BSS Preference IE. */
+ #else
+@@ -2121,2 +2137,4 @@
+ 	Event = (BTM_EVENT_DATA *)Buf;
++	btm_req_payload = (UCHAR *)Event +
++		offsetof(BTM_EVENT_DATA, u.BTM_REQ_DATA.BTMReq);
+ 
+@@ -2137,3 +2155,3 @@
+ 
+-	NdisMoveMemory(Event->u.BTM_REQ_DATA.BTMReq, BTMReq, BTMReqLen);
++	memcpy(btm_req_payload, BTMReq, BTMReqLen);
+ 
+@@ -2144,4 +2162,4 @@
+ 	NeighborReport = (RRM_NEIGHBOR_REP_INFO *)BTMReq;
+-	RRM_InsertNeighborRepIE(pAd, (Event->u.BTM_REQ_DATA.BTMReq + BTMReqLen), &FrameLen,
+-		sizeof(RRM_NEIGHBOR_REP_INFO)+3, NeighborReport); /* Neighbor report IE + Preferance Sub-IE length*/
++	RRM_InsertNeighborRepIE(pAd, (btm_req_payload + BTMReqLen), &FrameLen,
++		sizeof(RRM_NEIGHBOR_REP_INFO), NeighborReport); /* Neighbor Report IE; BSS Preference is appended as a separate IE. */
+ 	BTMReqLen += FrameLen;
+@@ -2154,3 +2172,3 @@
+ 
+-		MakeOutgoingFrame((Event->u.BTM_REQ_DATA.BTMReq + BTMReqLen), &TempLen,
++		MakeOutgoingFrame((btm_req_payload + BTMReqLen), &TempLen,
+ 							1,		&IEId,
+@@ -2165,3 +2183,3 @@
+ 	hex_dump("BndStrg_send_BTM_req Enque", (unsigned char *)Buf, Len);
+-	hex_dump("BndStrg_send_BTM_req Event length", (unsigned char *)Event->u.BTM_REQ_DATA.BTMReq, Event->u.BTM_REQ_DATA.BTMReqLen);
++	hex_dump("BndStrg_send_BTM_req Event length", btm_req_payload, Event->u.BTM_REQ_DATA.BTMReqLen);
+ 	ret = MlmeEnqueue(pAd, BTM_STATE_MACHINE, BTM_REQ, Len, Buf, 0);
