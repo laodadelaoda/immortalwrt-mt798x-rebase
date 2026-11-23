@@ -314,7 +314,8 @@
         "112-ipmac-table-repeat-init-diagnostic.patch",
         "113-apcfg-skip-disabled-apcli-when-interface-down.patch",
         "114-ap-band-steering-btm-neighbor-buffer.patch",
-        "115-sta-btm-response-payload-bounds.patch"
+        "115-sta-btm-response-payload-bounds.patch",
+        "116-mask-unsupported-6g-rfic-capability.patch"
       ],
       "scope": "MT Wi-Fi 7.6.7.3 functional fixes plus explicitly named diagnostic-only adjustments",
       "application_stage_order": 2
