@@ -8,7 +8,7 @@
  	UINT8			sendNum = 0;
  	UINT8			ofst = 0;
  	UINT16			Freqofst = 0;
-@@ -568,11 +569,25 @@
+@@ -568,11 +569,22 @@
  
  	chip_ops->eeread(pAd, PRECAL_INDICATION_BYTE, &doCal1);
  
@@ -16,7 +16,7 @@
 -		((doCal1 & (1 << DPD6G_PRECAL_INDN_BIT)) != 0)) &&
 -		((doCal1 & (1 << DPD2G_PRECAL_INDN_BIT)) != 0)) {
 -		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
--			"DPD Pre-Cal finished, load DPD Pre-Cal data\n");
+-			"DPD Pre-Cal finished, load DPD Pre-Cal data\\n");
 +	switch (SwChCfg.Channel_Band) {
 +	case 0:
 +		precal_mask = (1 << DPD2G_PRECAL_INDN_BIT);
@@ -24,31 +24,35 @@
 +	case 1:
 +		precal_mask = (1 << DPD5G_PRECAL_INDN_BIT);
 +		break;
-+	case 2:
-+		precal_mask = (1 << DPD6G_PRECAL_INDN_BIT);
-+		break;
 +	default:
 +		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
-+			"Invalid channel band %u for DPD pre-calibration\n", (UINT32)SwChCfg.Channel_Band);
++			"Unsupported channel band %u for MT7986 DPD pre-calibration\\n", (UINT32)SwChCfg.Channel_Band);
 +		return;
 +	}
 +
 +	if ((doCal1 & precal_mask) == precal_mask) {
 +		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO,
-+			"DPD pre-cal data is available for band %u; loading data\n", (UINT32)SwChCfg.Channel_Band);
++			"DPD pre-cal data is available for band %u; loading data\\n", (UINT32)SwChCfg.Channel_Band);
  		if (SwChCfg.CentralChannel == 14) {
  			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO,
- 					 "CH 14 don't need DPD , return!!!\n");
-@@ -616,9 +631,9 @@
+ 					 "CH 14 don't need DPD , return!!!\\n");
+@@ -616,9 +627,9 @@
  			}
  		}
  	} else {
 -		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
--			"eeprom 0x%2x bit 0 is 0, do runtime cal\n",
+-			"eeprom 0x%2x bit 0 is 0, do runtime cal\\n",
 -			PRECAL_INDICATION_BYTE);
 +		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_DEBUG,
-+			"No DPD pre-cal payload for band %u; continue channel switch without host preload\n",
++			"No DPD pre-cal payload for band %u; continue channel switch without host preload\\n",
 +			(UINT32)SwChCfg.Channel_Band);
  		return;
  	}
  
+@@ -12234,8 +1245,8 @@
+ 	chip_cap->phy_caps = (fPHY_CAP_24G | fPHY_CAP_5G |
+ 			fPHY_CAP_HT | fPHY_CAP_VHT | fPHY_CAP_HE | \
+ 			fPHY_CAP_TXBF | fPHY_CAP_LDPC | \
+ 			fPHY_CAP_BW40 | fPHY_CAP_BW80 | fPHY_CAP_BW160C | \
+ 			fPHY_CAP_BW20_242TONE | fPHY_CAP_HE_SR | \
+ 			fPHY_CAP_HE_PPE_EXIST);
