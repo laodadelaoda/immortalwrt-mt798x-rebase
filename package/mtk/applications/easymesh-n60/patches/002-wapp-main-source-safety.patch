@@ -1119,7 +1119,6 @@
  	return -1;
  
  }
-
 @@ -1203,7 +1282,7 @@
  	int drv_mode;
  	int debug_level = 0;
@@ -1140,4 +1139,3 @@
  #endif
  #ifdef BSSMNGER_SUPPORT
  	struct bss_mnger_cfg bss_mnger;
-
