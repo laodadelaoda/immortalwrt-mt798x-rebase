@@ -1,0 +1,1 @@
+This marker asks the dedicated suppressor workflow to replace only the duplicate pending Full reservation. It must not cancel the active authorized Full job.
