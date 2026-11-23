@@ -22,6 +22,21 @@ permissions:
   contents: read
 
 jobs:
+  # On push/PR or a dispatch that did not explicitly authorize Full, enter the
+  # same concurrency group with cancel-in-progress so any stale queued/running
+  # Full job from an older workflow revision is cancelled before it can build.
+  cancel-stale-full:
+    name: Cancel Full jobs without explicit authorization
+    if: github.event_name != 'workflow_dispatch' || inputs.run_full != true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    concurrency:
+      group: n60pro-full-firmware
+      cancel-in-progress: true
+    steps:
+      - name: Confirm Full is not authorized for this event
+        run: echo "Full requires a successful canonical audit and explicit workflow_dispatch with run_full=true."
+
   vendor-audit:
     name: Canonical vendor and EasyMesh patch audit
     uses: ./.github/workflows/easymesh-patch-replay.yml
