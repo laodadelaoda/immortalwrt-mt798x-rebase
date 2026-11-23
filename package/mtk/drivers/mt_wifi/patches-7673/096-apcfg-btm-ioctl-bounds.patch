@@ -104,7 +104,7 @@
 +			os_free_mem(Buf);
 +			break;
  		}
-@@ -26779,6 +26828,6 @@
+@@ -26835,6 +26884,6 @@
  {
 -	UCHAR *Buf;
 +	UCHAR *Buf = NULL;
@@ -113,7 +113,7 @@
 -	PWNM_CTRL pWNMCtrl = &pAd->ApCfg.MBSSID[APIndex].WNMCtrl;
 +	PWNM_CTRL pWNMCtrl;
  	BTM_EVENT_DATA *Event;
-@@ -26789,2 +26838,8 @@
+@@ -26845,2 +26894,8 @@
  
 +	if (!VALID_MBSS(pAd, APIndex) || !PeerMACAddr || !BTMReq ||
 +	    BTMReqLen < sizeof(BTM_REQ_FRAME) ||
@@ -122,7 +122,7 @@
 +	pWNMCtrl = &pAd->ApCfg.MBSSID[APIndex].WNMCtrl;
 +
  	MTWF_PRINT("%s\n", __func__);
-@@ -26846,3 +26901,4 @@
+@@ -26902,3 +26957,4 @@
  	Len += 2;
 -	NdisMoveMemory(Event->u.BTM_REQ_DATA.BTMReq, BTMReq, BTMReqLen);
 +	memcpy((UCHAR *)Event + offsetof(BTM_EVENT_DATA, u.BTM_REQ_DATA.BTMReq),

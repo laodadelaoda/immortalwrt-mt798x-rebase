@@ -1,21 +1,21 @@
 --- a/mt_wifi/embedded/include/oid.h
 +++ b/mt_wifi/embedded/include/oid.h
-@@ -2370,3 +2370,3 @@
+@@ -2387,3 +2387,3 @@
  	UINT32 btm_req_len;
 -	UINT8 btm_req[0];
 +	UINT8 btm_req[];
  } btm_req_ie_data_t, *p_btm_req_ie_data_t;
-@@ -2377,3 +2377,3 @@
+@@ -2394,3 +2394,3 @@
  	UINT32 btm_req_len;
 -	UCHAR btm_req[0];
 +	UCHAR btm_req[];
  };
-@@ -2384,3 +2384,3 @@
+@@ -2401,3 +2401,3 @@
  	UINT32 btm_query_len;
 -	UCHAR btm_query[0];
 +	UCHAR btm_query[];
  };
-@@ -2391,3 +2391,3 @@
+@@ -2408,3 +2408,3 @@
  	UINT32 btm_rsp_len;
 -	UCHAR btm_rsp[0];
 +	UCHAR btm_rsp[];
