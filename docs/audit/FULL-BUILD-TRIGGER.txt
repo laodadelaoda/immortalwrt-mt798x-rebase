@@ -1,0 +1,1 @@
+One-shot push marker for the Full authorization in FULL-BUILD-APPROVAL.md. The N60 Pro Full job may run only after the canonical vendor audit for this exact commit succeeds. No Quick build is authorized.
