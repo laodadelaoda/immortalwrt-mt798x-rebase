@@ -15,6 +15,8 @@
 -	if ((((doCal1 & (1 << DPD5G_PRECAL_INDN_BIT)) != 0) ||
 -		((doCal1 & (1 << DPD6G_PRECAL_INDN_BIT)) != 0)) &&
 -		((doCal1 & (1 << DPD2G_PRECAL_INDN_BIT)) != 0)) {
+-		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+-			"DPD Pre-Cal finished, load DPD Pre-Cal data\n");
 +	switch (SwChCfg.Channel_Band) {
 +	case 0:
 +		precal_mask = (1 << DPD2G_PRECAL_INDN_BIT);
@@ -32,8 +34,7 @@
 +	}
 +
 +	if ((doCal1 & precal_mask) == precal_mask) {
- 		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO,
--			"DPD Pre-Cal finished, load DPD Pre-Cal data\n");
++		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO,
 +			"DPD pre-cal data is available for band %u; loading data\n", (UINT32)SwChCfg.Channel_Band);
  		if (SwChCfg.CentralChannel == 14) {
  			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO,
