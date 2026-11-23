@@ -46,10 +46,13 @@ The 094–096 and 114–115 group concerns BTM variable-length payloads and even
 - [x] Vendor source archive SHA256 verified against package `PKG_HASH`.
 - [x] Original source extracted and selected function paths inspected.
 - [x] Initial source-based classifications recorded.
-- [x] Patch 104 hunk line corrected to the exact vendor-source location; isolated zero-fuzz/zero-offset dry-run passed.
-- [ ] Full 094–115 patch replay in native package order.
-- [ ] Zero Fuzz, zero Offset, zero Reject, zero partial application proven from replay logs.
-- [ ] Complete dependency/overlap audit, including patch 041 and the 107/113 pair.
+- [x] Full ordered vendor patch replay completed: 146 active patch files, zero patch failures, zero fuzz and zero offset reported.
+- [x] Native OpenWrt Prepare completed for MT Wi-Fi, Conninfra, WARP, MAPFILTER, datconf and EasyMesh; no package compilation was run.
+- [x] MT Wi-Fi 026 exact Prepare-path and patched-function assertions passed.
+- [x] Patch 104 original hunk header retained; full ordered series, not pristine-source-only testing, is the authoritative replay context.
+- [x] Full 094–115 patch replay in native package order (run #45102576748; audited commit ac38289b6945d3273734f5ed0a84cd1bc5501b9b).
+- [x] Zero Fuzz, zero Offset, zero Reject, zero partial application proven for the active vendor patch series by the successful audit gate.
+- [ ] Complete semantic dependency/overlap audit, including patch 041 and the 107/113 pair; successful replay alone does not prove runtime correctness.
 - [ ] Evidence-backed patch corrections and final source replay.
 - [ ] Full build (blocked until all preceding gates pass).
 - [ ] N60 Pro hardware acceptance.
