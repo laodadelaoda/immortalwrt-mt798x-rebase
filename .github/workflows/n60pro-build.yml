@@ -16,7 +16,7 @@ on:
         description: Run Full firmware after the canonical Vendor Audit succeeds
         required: true
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: read
