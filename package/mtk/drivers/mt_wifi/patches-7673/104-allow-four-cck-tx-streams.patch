@@ -1,6 +1,6 @@
 --- a/mt_wifi/embedded/common/cmm_info.c
 +++ b/mt_wifi/embedded/common/cmm_info.c
-@@ -21130,7 +21130,7 @@
+@@ -21002,7 +21002,7 @@
  		u1CCKTxStream = 1;
  
  	/* sanity check for input parameter range */
