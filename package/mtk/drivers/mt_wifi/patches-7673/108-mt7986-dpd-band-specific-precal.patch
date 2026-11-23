@@ -1,0 +1,53 @@
+--- a/mt_wifi/chips/mt7986.c
++++ b/mt_wifi/chips/mt7986.c
+@@ -550,6 +550,7 @@
+ 	UINT8			i = 0;
+ 	UINT8			Band = 0;
+ 	UINT16			CentralFreq = 0;
++	UINT16			precal_mask = 0;
+ 	UINT8			sendNum = 0;
+ 	UINT8			ofst = 0;
+ 	UINT16			Freqofst = 0;
+@@ -568,11 +569,25 @@
+ 
+ 	chip_ops->eeread(pAd, PRECAL_INDICATION_BYTE, &doCal1);
+ 
+-	if ((((doCal1 & (1 << DPD5G_PRECAL_INDN_BIT)) != 0) ||
+-		((doCal1 & (1 << DPD6G_PRECAL_INDN_BIT)) != 0)) &&
+-		((doCal1 & (1 << DPD2G_PRECAL_INDN_BIT)) != 0)) {
++	switch (SwChCfg.Channel_Band) {
++	case 0:
++		precal_mask = (1 << DPD2G_PRECAL_INDN_BIT);
++		break;
++	case 1:
++		precal_mask = (1 << DPD5G_PRECAL_INDN_BIT);
++		break;
++	case 2:
++		precal_mask = (1 << DPD6G_PRECAL_INDN_BIT);
++		break;
++	default:
++		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
++			"Invalid channel band %u for DPD pre-calibration\n", SwChCfg.Channel_Band);
++		return;
++	}
++
++	if ((doCal1 & precal_mask) == precal_mask) {
+ 		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+-			"DPD Pre-Cal finished, load DPD Pre-Cal data\n");
++			"DPD pre-cal data is available for band %u; loading data\n", SwChCfg.Channel_Band);
+ 		if (SwChCfg.CentralChannel == 14) {
+ 			MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_INFO,
+ 				 "CH 14 don't need DPD , return!!!\n");
+@@ -616,9 +631,9 @@
+ 			}
+ 		}
+ 	} else {
+-		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+-			"eeprom 0x%2x bit 0 is 0, do runtime cal\n",
+-			PRECAL_INDICATION_BYTE);
++		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_DEBUG,
++			"No DPD pre-cal payload for band %u; continue channel switch without host preload\n",
++			SwChCfg.Channel_Band);
+ 		return;
+ 	}
+ 
