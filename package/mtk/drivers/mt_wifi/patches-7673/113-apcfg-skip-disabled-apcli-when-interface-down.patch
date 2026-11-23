@@ -1,0 +1,18 @@
+--- a/mt_wifi/embedded/ap/ap_cfg.c
++++ b/mt_wifi/embedded/ap/ap_cfg.c
+@@ -19520,8 +19520,15 @@
+ 	}
+ 
+ 	if (APCLI_IF_UP_CHECK(pAd, ifIndex) != TRUE) {
++		/* Disabling an already-down APCLI is a valid no-op during MAP/WAPP init. */
++		if (flag == FALSE) {
++			pAd->StaCfg[ifIndex].ApcliInfStat.Enable = FALSE;
++			MTWF_DBG(pAd, DBG_CAT_CLIENT, CATCLIENT_APCLI, DBG_LVL_INFO,
++				 "Skip disabling APCLI while interface is down\n");
++			return TRUE;
++		}
+ 		MTWF_DBG(pAd, DBG_CAT_CLIENT, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
+-			"interface is not up, please do ifconfig %s up first\n", wdev->if_dev->name);
++			"cannot enable APCLI while interface %s is down\n", wdev->if_dev->name);
+ 		return FALSE;
+ 	}
