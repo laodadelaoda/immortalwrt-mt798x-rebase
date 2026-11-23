@@ -23,6 +23,7 @@
  		case 'm':
  			cvalue = optarg;
 @@ -219,13 +225,15 @@
+ 		case 'F':
  			cvalue = optarg;
  			if (strlen(cvalue) != 0) {
 -				strncpy(map_cfg, cvalue,  sizeof(map_cfg)-1);
@@ -58,4 +59,4 @@
 +	char map_user_cfg[MAP_CONFIG_PATH_SIZE] = {0};
  #endif
  #ifdef BSSMNGER_SUPPORT
- 	struct bssmnger_cfg bss_mnger;
+ 	struct bss_mnger_cfg bss_mnger;
