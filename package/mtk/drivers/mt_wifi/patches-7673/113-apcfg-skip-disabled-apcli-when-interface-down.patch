@@ -1,6 +1,6 @@
 --- a/mt_wifi/embedded/ap/ap_cfg.c
 +++ b/mt_wifi/embedded/ap/ap_cfg.c
-@@ -19520,8 +19520,15 @@
+@@ -19576,7 +19576,14 @@
  	}
  
  	if (APCLI_IF_UP_CHECK(pAd, ifIndex) != TRUE) {
