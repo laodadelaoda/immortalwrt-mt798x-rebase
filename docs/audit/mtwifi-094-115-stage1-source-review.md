@@ -46,6 +46,7 @@ The 094–096 and 114–115 group concerns BTM variable-length payloads and even
 - [x] Vendor source archive SHA256 verified against package `PKG_HASH`.
 - [x] Original source extracted and selected function paths inspected.
 - [x] Initial source-based classifications recorded.
+- [x] Patch 104 hunk line corrected to the exact vendor-source location; isolated zero-fuzz/zero-offset dry-run passed.
 - [ ] Full 094–115 patch replay in native package order.
 - [ ] Zero Fuzz, zero Offset, zero Reject, zero partial application proven from replay logs.
 - [ ] Complete dependency/overlap audit, including patch 041 and the 107/113 pair.
