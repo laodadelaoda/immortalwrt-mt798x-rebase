@@ -1,6 +1,6 @@
 --- a/mt_wifi/embedded/ap/ap_cfg.c
 +++ b/mt_wifi/embedded/ap/ap_cfg.c
-@@ -19522,5 +19522,15 @@
+@@ -19578,5 +19578,15 @@
  	if (APCLI_IF_UP_CHECK(pAd, ifIndex) != TRUE) {
 +		/* Disabling an already-down APCLI is a valid no-op during MAP/WAPP init. */
 +		if (flag == FALSE) {
