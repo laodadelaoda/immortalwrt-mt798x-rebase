@@ -1,0 +1,36 @@
+--- a/mt_wifi/embedded/common/cmm_cfg.c
++++ b/mt_wifi/embedded/common/cmm_cfg.c
+@@ -332,7 +332,9 @@
+ 		if (*wmode == 0) {
+ 			*wmode = (WMODE_B | WMODE_G | WMODE_GN |
+ 					WMODE_A | WMODE_AN | WMODE_AC |
+-					WMODE_AX_24G | WMODE_AX_5G | WMODE_AX_6G);
++					WMODE_AX_24G | WMODE_AX_5G);
++			if (PHY_CAP_6G(cap->phy_caps))
++				*wmode |= WMODE_AX_6G;
+ 			break;
+ 		} else
+ 			break;
+@@ -7248,6 +7250,13 @@
+ 	if (ucBandIdx >= DBDC_BAND_NUM)
+ 		return FALSE;
+ 
++	/* CCK Tx stream firmware control is implemented only for MT7622. */
++	if (!IS_MT7622(pAd)) {
++		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
++			"CCK Tx stream control is not supported on this chipset\n");
++		return FALSE;
++	}
++
+ 	/* sanity check for input parameter format */
+ 	if (!arg) {
+ 		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "No parameters!!\n");
+@@ -7270,7 +7279,7 @@
+ 	}
+ 
+ 	/* sanity check for input parameter range */
+-	if (u1CCKTxStream >= WF_NUM || !u1CCKTxStream) {
++	if (u1CCKTxStream > WF_NUM || !u1CCKTxStream) {
+ 		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "set wrong parameters\n");
+ 		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "EX. iwpriv <interface> set CCKTxStream=1 (1~4)\n");
+ 		return FALSE;
