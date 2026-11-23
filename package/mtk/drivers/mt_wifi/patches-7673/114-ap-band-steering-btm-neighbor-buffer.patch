@@ -1,12 +1,13 @@
 --- a/mt_wifi/embedded/ap/ap_band_steering.c
 +++ b/mt_wifi/embedded/ap/ap_band_steering.c
-@@ -1951,5 +1951,26 @@
+@@ -1950,8 +1950,28 @@
+ 				MAC_TABLE_ENTRY  *pEntry;
  				unsigned char *request_mode;
  				struct btm_req_data *req_data;
- #define DISASSOC_IMMINENT (0x01 << 2)
 +				size_t command_body_len;
 +				size_t required_tail_len = offsetof(struct btm_req_data, btm_req);
-+
+ #define DISASSOC_IMMINENT (0x01 << 2)
+ 				req_data = (struct btm_req_data *)cmd_data->command_body;
 +				if (wrq->u.data.length <
 +				    offsetof(BNDSTRG_MSG, data.wnm_cmd_data) +
 +				    sizeof(*cmd_data) + offsetof(struct btm_req_data, btm_req))
@@ -16,7 +17,6 @@
 +				    cmd_data->command_len > wrq->u.data.length -
 +				    offsetof(BNDSTRG_MSG, data.wnm_cmd_data))
 +					return BND_STRG_INVALID_ARG;
- 				req_data = (struct btm_req_data *)cmd_data->command_body;
 +				command_body_len = cmd_data->command_len - sizeof(*cmd_data);
 +				if (req_data->btm_req_len < sizeof(BTM_REQ_FRAME))
 +					return BND_STRG_INVALID_ARG;
@@ -27,6 +27,8 @@
 +				    req_data->btm_req_len > command_body_len - required_tail_len)
 +					return BND_STRG_INVALID_ARG;
  				request_mode = (unsigned char *)req_data->btm_req;
+ 				if ((*request_mode) & DISASSOC_IMMINENT) {
+ 					/* imminent dis-assoc BTM Req, delete entry from driver table */
 @@ -2041,4 +2041,5 @@
  {
 -	UCHAR *Buf;
