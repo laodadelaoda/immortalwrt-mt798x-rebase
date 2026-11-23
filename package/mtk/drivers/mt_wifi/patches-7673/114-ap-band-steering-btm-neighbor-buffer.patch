@@ -1,6 +1,6 @@
 --- a/mt_wifi/embedded/ap/ap_band_steering.c
 +++ b/mt_wifi/embedded/ap/ap_band_steering.c
-@@ -1951,7 +1951,28 @@
+@@ -1951,5 +1951,26 @@
  				unsigned char *request_mode;
  				struct btm_req_data *req_data;
  #define DISASSOC_IMMINENT (0x01 << 2)
