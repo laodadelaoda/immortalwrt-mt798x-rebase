@@ -1,0 +1,1 @@
+Single authorized Full restart after the prior Full reservation was cancelled while suppressing the duplicate. This run must pass a fresh canonical vendor audit for its exact commit before Full begins. No Quick build.
