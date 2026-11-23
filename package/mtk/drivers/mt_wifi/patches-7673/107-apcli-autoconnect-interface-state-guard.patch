@@ -1,6 +1,6 @@
 --- a/mt_wifi/embedded/sta/sta.c
 +++ b/mt_wifi/embedded/sta/sta.c
-@@ -2432,6 +2432,12 @@
+@@ -2427,6 +2427,12 @@
  		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Error  ifIdx=%d\n", ifIdx);
  		return FALSE;
  	}
@@ -13,7 +13,7 @@
  
  	if (pStaCfg->ApcliInfStat.AutoConnectFlag != TRUE)
  		return FALSE;
-@@ -2606,6 +2612,12 @@
+@@ -2602,6 +2608,12 @@
  
  	if (ifIdx >= MAX_APCLI_NUM) {
  		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "Error  ifIdx=%d\n", ifIdx);
