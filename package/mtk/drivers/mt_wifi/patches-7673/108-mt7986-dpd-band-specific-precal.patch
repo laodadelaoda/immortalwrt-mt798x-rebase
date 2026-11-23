@@ -49,7 +49,20 @@
  		return;
  	}
  
-@@ -12234,6 +12246,6 @@
+@@ -681,6 +693,12 @@
+ {
+ 	RTMP_CHIP_CAP *cap = hc_get_chip_cap(pAd->hdev_ctrl);
+ 
++	if (SwChCfg.Channel_Band == 2) {
++		MTWF_DBG(pAd, DBG_CAT_CHN, CATCHN_CHN, DBG_LVL_ERROR,
++			"Reject 6 GHz channel switch: MT7986 N60 Pro has no 6 GHz RF path\n");
++		return;
++	}
++
+ 	cap->channelbw = SwChCfg.Bw;
+ 	/* update power limit table */
+ 	MtPwrLimitTblChProc(pAd, SwChCfg.BandIdx, SwChCfg.Channel_Band, SwChCfg.ControlChannel, SwChCfg.CentralChannel);
+@@ -12234,6 +12252,6 @@
 -	chip_cap->phy_caps = (fPHY_CAP_24G | fPHY_CAP_5G | fPHY_CAP_6G |
 +	chip_cap->phy_caps = (fPHY_CAP_24G | fPHY_CAP_5G |
  			fPHY_CAP_HT | fPHY_CAP_VHT | fPHY_CAP_HE | \
