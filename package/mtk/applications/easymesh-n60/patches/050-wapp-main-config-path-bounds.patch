@@ -1,0 +1,61 @@
+--- a/wappd/common/main.c
++++ b/wappd/common/main.c
+@@ -47,6 +47,11 @@
+ #include <libdatconf.h>
+ #endif
+ 
++#define WAPP_CONFIG_PATH_SIZE 256
++#ifdef MAP_SUPPORT
++#define MAP_CONFIG_PATH_SIZE 128
++#endif
++
+ 
+ /*
+ ========================================================================
+@@ -142,7 +147,8 @@
+ 			break;
+ 		case 'f':
+ 			cvalue = optarg;
+-			os_strncpy(filename, cvalue,  sizeof(filename)-1);
++			os_strncpy(filename, cvalue, WAPP_CONFIG_PATH_SIZE - 1);
++			filename[WAPP_CONFIG_PATH_SIZE - 1] = '\0';
+ 			break;
+ 		case 'm':
+ 			cvalue = optarg;
+@@ -219,13 +225,15 @@
+ 			cvalue = optarg;
+ 			if (strlen(cvalue) != 0) {
+-				strncpy(map_cfg, cvalue,  sizeof(map_cfg)-1);
++				strncpy(map_cfg, cvalue, MAP_CONFIG_PATH_SIZE - 1);
++				map_cfg[MAP_CONFIG_PATH_SIZE - 1] = '\0';
+ 			}
+ 			break;
+ 		case 'u':
+ 			cvalue = optarg;
+ 			if (strlen(cvalue) != 0) {
+-				strncpy(map_user_cfg, cvalue, sizeof(map_user_cfg)-1);
++				strncpy(map_user_cfg, cvalue, MAP_CONFIG_PATH_SIZE - 1);
++				map_user_cfg[MAP_CONFIG_PATH_SIZE - 1] = '\0';
+ 			}
+ 			break;
+ #endif
+@@ -1203,7 +1211,7 @@
+ 	int drv_mode;
+ 	int debug_level = 0;
+ 	int version = 2;
+-	char filename[256] = {0};
++	char filename[WAPP_CONFIG_PATH_SIZE] = {0};
+ 	struct wifi_app wapp_cfg;
+ 	struct hotspot hs;
+ 	struct mbo_cfg mbo;
+@@ -1211,8 +1219,8 @@
+ #ifdef MAP_SUPPORT
+ 	struct map_info map;
+ 	char value[10] = {0};
+-	char map_cfg[128]= {0};
+-	char map_user_cfg[128]= {0};
++	char map_cfg[MAP_CONFIG_PATH_SIZE] = {0};
++	char map_user_cfg[MAP_CONFIG_PATH_SIZE] = {0};
+ #endif
+ #ifdef BSSMNGER_SUPPORT
+ 	struct bssmnger_cfg bss_mnger;
