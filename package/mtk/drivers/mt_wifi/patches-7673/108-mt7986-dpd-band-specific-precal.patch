@@ -47,7 +47,7 @@
 -			PRECAL_INDICATION_BYTE);
 +		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_DEBUG,
 +			"No DPD pre-cal payload for band %u; continue channel switch without host preload\n",
-+			SwChCfg.Channel_Band);
++			(UINT32)SwChCfg.Channel_Band);
  		return;
  	}
  
