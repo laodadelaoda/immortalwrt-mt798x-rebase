@@ -12,6 +12,8 @@
 +	}
 +
  	/* sanity check for input parameter format */
+ 	if (!arg) {
+ 		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, "No parameters!!\n");
 @@ -7270,7 +7277,7 @@
  	}
  
