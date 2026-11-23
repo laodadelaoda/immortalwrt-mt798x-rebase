@@ -51,8 +51,17 @@ jobs:
               echo "FAIL: unsupported N60 Pro 6 GHz/6E option enabled: CONFIG_${option}=y" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
               exit 1
             fi
+          done
+          # R3 6E is hidden by Kconfig when R2 6E is disabled, so its
+          # not-enabled check is authoritative even when no .config line exists.
+          for option in MTK_6G_SUPPORT MTK_6G_AFC_SUPPORT MTK_MAP_R2_6E_SUPPORT; do
             grep -Fx "# CONFIG_${option} is not set" .config | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
           done
+          if grep -Fxq "# CONFIG_MTK_MAP_R3_6E_SUPPORT is not set" .config; then
+            echo "# CONFIG_MTK_MAP_R3_6E_SUPPORT is not set" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+          else
+            echo "PASS: MTK_MAP_R3_6E_SUPPORT is not selectable while MTK_MAP_R2_6E_SUPPORT is disabled" | tee -a "$OUT/PATCH-APPLICATION-REPORT.txt"
+          fi
           # Canonical Lock and real GNU Make Package/Prepare evaluation are
           # checked once by the native Package Prepare targets below. Archive
           # bytes are independently checked against Lock SHA256 before extraction.
