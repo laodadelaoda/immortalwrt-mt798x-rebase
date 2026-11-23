@@ -1,6 +1,6 @@
 --- a/mt_wifi/embedded/ap/ap_band_steering.c
 +++ b/mt_wifi/embedded/ap/ap_band_steering.c
-@@ -1951,5 +1951,26 @@
+@@ -1951,5 +1951,34 @@
  				unsigned char *request_mode;
  				struct btm_req_data *req_data;
  #define DISASSOC_IMMINENT (0x01 << 2)
@@ -9,23 +9,31 @@
 +
 +				if (wrq->u.data.length <
 +				    offsetof(BNDSTRG_MSG, data.wnm_cmd_data) +
-+				    sizeof(*cmd_data) + offsetof(struct btm_req_data, btm_req))
++				    sizeof(*cmd_data) + offsetof(struct btm_req_data, btm_req)) {
++					Status = BND_STRG_INVALID_ARG;
 +					break;
++				}
 +				if (cmd_data->command_len < sizeof(*cmd_data) +
 +				    offsetof(struct btm_req_data, btm_req) ||
 +				    cmd_data->command_len > wrq->u.data.length -
-+				    offsetof(BNDSTRG_MSG, data.wnm_cmd_data))
++				    offsetof(BNDSTRG_MSG, data.wnm_cmd_data)) {
++					Status = BND_STRG_INVALID_ARG;
 +					break;
++				}
  				req_data = (struct btm_req_data *)cmd_data->command_body;
 +				command_body_len = cmd_data->command_len - sizeof(*cmd_data);
-+				if (req_data->btm_req_len < sizeof(BTM_REQ_FRAME))
++				if (req_data->btm_req_len < sizeof(BTM_REQ_FRAME)) {
++					Status = BND_STRG_INVALID_ARG;
 +					break;
++				}
 +#ifdef DOT11K_RRM_SUPPORT
 +				required_tail_len += sizeof(BNDSTRG_NEIGHBOR_REP_INFO);
 +#endif
 +				if (command_body_len < required_tail_len ||
-+				    req_data->btm_req_len > command_body_len - required_tail_len)
++				    req_data->btm_req_len > command_body_len - required_tail_len) {
++					Status = BND_STRG_INVALID_ARG;
 +					break;
++				}
  				request_mode = (unsigned char *)req_data->btm_req;
 @@ -2041,4 +2041,5 @@
  {
