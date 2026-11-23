@@ -57,4 +57,4 @@ The 094–096 and 114–115 group concerns BTM variable-length payloads and even
 - [ ] Full build (blocked until all preceding gates pass).
 - [ ] N60 Pro hardware acceptance.
 
-No Full build is authorized by this checkpoint. Do not treat this report as a passed audit credential.
+**Build scheduling exception:** run #45102576748 was triggered by the checkpoint commit before the Full workflow gate was tightened. Its vendor audit completed successfully, and the firmware job is currently queued/pending under the older workflow revision. The connected GitHub actions controls available in this session do not expose a cancel-run operation, so this already-created job cannot be cancelled here. The branch workflow has since been changed so future pushes/PRs cannot start Full; a future Full requires manual workflow dispatch with `run_full=true` (the input defaults to false). Do not interpret the queued job as authorization to start Full before semantic review is complete.
