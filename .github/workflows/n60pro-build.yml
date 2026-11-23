@@ -32,7 +32,7 @@ jobs:
   firmware:
     name: Build complete ImmortalWrt firmware for Netcore N60 Pro
     needs: [vendor-audit]
-    if: needs.vendor-audit.result == 'success' && (github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_full))
+    if: needs.vendor-audit.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.run_full
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     concurrency:
