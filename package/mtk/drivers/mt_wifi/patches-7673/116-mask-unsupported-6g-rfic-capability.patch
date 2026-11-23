@@ -1,0 +1,11 @@
+--- a/mt_wifi/embedded/hw_ctrl/hdev/radio_ctrl.c
++++ b/mt_wifi/embedded/hw_ctrl/hdev/radio_ctrl.c
+@@ -695,6 +695,8 @@
+ 			phy_ctrl->rf_band_cap = RFIC_6GHZ;
+ 		else
+ 			phy_ctrl->rf_band_cap = rcGetBandSupport(ctrl, dbdc_mode, i);
++		if (!PHY_CAP_6G(ctrl->chip_cap.phy_caps))
++			phy_ctrl->rf_band_cap &= ~RFIC_6GHZ;
+ 		radio_ctrl->BandIdx = i;
+ 		radio_ctrl->ExtCha = EXTCHA_NOASSIGN;
+ 		rc_set_radio_default(radio_ctrl, phy_ctrl->rf_band_cap);
