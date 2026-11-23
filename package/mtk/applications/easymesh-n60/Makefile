@@ -171,6 +171,10 @@ define Package/easymesh-n60/install
 	$(INSTALL_DATA) ./files/etc/map/wts_bss_info_config $(1)/etc/map/
 	$(INSTALL_DATA) ./files/etc/ethernet_cfg.txt $(1)/etc/
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap.conf $(1)/etc/wapp_ap.conf
+	# N60 Pro uses both MTK radios; WAPP's conf_list parser separates files with semicolons.
+	grep -q '^conf_list=' $(1)/etc/wapp_ap.conf
+	sed -i 's#^conf_list=.*#conf_list=/etc/wapp_ap_ra0.conf;/etc/wapp_ap_rax0.conf#' $(1)/etc/wapp_ap.conf
+	grep -Fqx 'conf_list=/etc/wapp_ap_ra0.conf;/etc/wapp_ap_rax0.conf' $(1)/etc/wapp_ap.conf
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap_ra0_default.conf $(1)/etc/wapp_ap_ra0.conf
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wappd/config_and_icon_files/wapp_ap_rax0_default.conf $(1)/etc/wapp_ap_rax0.conf
 	$(INSTALL_BIN) ./files/etc/init.d/easymesh $(1)/etc/init.d/
