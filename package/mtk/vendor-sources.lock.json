@@ -169,7 +169,7 @@
       "directory": "package/mtk/applications/easymesh-n60/patches",
       "application_order": [
         "011-gcc14-cmdu-packed-member.patch",
-        "002-dpp-parser-safety.patch",
+        "002-wapp-main-source-safety.patch",
         "002-map-1905-config-safety.patch",
         "002-dpp-openssl-safety.patch",
         "007-wapp-dpp-header.patch",
@@ -209,8 +209,7 @@
         "047-mapd-ch-planning-r2-source.patch",
         "047-mapd-ch-planning-source.patch",
         "049-mapd-client-db-header.patch",
-        "049-mapd-topology-srv-header.patch",
-        "050-wapp-main-config-path-bounds.patch"
+        "049-mapd-topology-srv-header.patch"
       ],
       "scope": "EasyMesh Build/Prepare ordered vendor patch series",
       "post_normalize_order": [
