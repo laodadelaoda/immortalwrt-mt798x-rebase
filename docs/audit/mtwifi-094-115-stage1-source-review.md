@@ -19,6 +19,20 @@ The `patches-7673` directory contains the active 001–041 and 094–115 patches
 - 107 and 113 jointly govern APCLI interface-down/autoconnect behavior.
 - 114 and 115 extend the BTM payload/bounds path and must remain ordered after the shared BTM definitions/handlers.
 
+## Earlier-series file overlaps and dependencies
+
+The 001–041 inventory was cross-checked for shared source files with 094–115:
+
+| Earlier patch(es) | Shared source file with later patch(es) | Dependency assessment |
+|---|---|---|
+| 002, 003, 006, 007, 008, 009, 013, 015, 016 | `cmm_info.c` with 104 | These earlier edits change the source line positions before the CCK stream control function. Patch 104's line 21130 is correct only in the complete lexical series; applying it to the pristine archive alone is an invalid test. |
+| 017 | `oid.h` with 094 | Security-info structure changes precede the BTM flexible-array declarations. They affect different members; full ordered replay confirms no conflict. |
+| 011, 014 | `ap_cfg.c` with 096 | Earlier WEXT power/range handlers and later WNM BTM IOCTL handling are separate paths; full ordered replay confirms clean application. |
+| 012 | `mt7986.c` with 108 | Earlier memory-shrink changes and later DPD per-band preload logic are separate functions; full ordered replay confirms clean application. |
+| 041 | `cmm_data.c` only | RX-WCID header-translation port-security fix; no shared BTM structures or direct dependency with 094–115. |
+
+The full ordered replay is authoritative for patch placement. A single patch tested against the pristine archive can report a false offset when earlier patches in the same source file intentionally change line positions.
+
 ## Source-based patch classification
 
 | Patch | Source finding | Classification / disposition |
