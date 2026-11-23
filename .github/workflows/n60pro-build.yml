@@ -29,7 +29,7 @@ jobs:
     name: Cancel Full jobs without explicit authorization
     if: >-
       (github.event_name != 'workflow_dispatch' || inputs.run_full != true) &&
-      !(github.event_name == 'push' && contains(github.event.head_commit.message, '[N60PRO-FULL]'))
+      !(github.event_name == 'push' && (contains(github.event.head_commit.message, '[N60PRO-FULL]') || contains(github.event.head_commit.message, '[N60PRO-SUPPRESS-SECOND]')))
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     concurrency:
