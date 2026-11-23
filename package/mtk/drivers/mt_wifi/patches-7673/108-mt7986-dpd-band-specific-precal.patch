@@ -62,7 +62,20 @@
  	cap->channelbw = SwChCfg.Bw;
  	/* update power limit table */
  	MtPwrLimitTblChProc(pAd, SwChCfg.BandIdx, SwChCfg.Channel_Band, SwChCfg.ControlChannel, SwChCfg.CentralChannel);
-@@ -12234,6 +12252,6 @@
+@@ -3751,6 +3769,12 @@
+ 		return FALSE;
+ 	}
+ 
++	if (op == PREK_DPD_6G_PROC) {
++		MTWF_DBG(pAd, DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR,
++			"Reject 6 GHz DPD calibration: MT7986 N60 Pro has no 6 GHz RF path\n");
++		return FALSE;
++	}
++
+ 	pAd->bPreCalMode = TRUE;
+ 
+ 	if (op == PREK_DPD_CLEAN) {
+@@ -12234,6 +12258,6 @@
 -	chip_cap->phy_caps = (fPHY_CAP_24G | fPHY_CAP_5G | fPHY_CAP_6G |
 +	chip_cap->phy_caps = (fPHY_CAP_24G | fPHY_CAP_5G |
  			fPHY_CAP_HT | fPHY_CAP_VHT | fPHY_CAP_HE | \
