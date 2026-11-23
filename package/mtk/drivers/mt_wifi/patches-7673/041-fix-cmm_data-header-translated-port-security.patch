@@ -39,7 +39,7 @@ Signed-off-by: chasey-dev <ellenyoung0912@gmail.com>
 +		 * duplicates the RX-WCID lookup. pEntry is already the peer selected for
 +		 * this RX WCID, so use it to keep port security bound to the RX peer.
 +		 */
-+		tr_entry = &tr_ctl->tr_entry[pEntry->wcid];
++		tr_entry = &tr_ctl->tr_entry[pEntry->tr_tb_idx];
 +		if ((tr_entry->PortSecured != WPA_802_1X_PORT_SECURED) &&
 +			!RTMPCheckWPAframe(pAd, pEntry, pData, data_len, wdev_idx, eth_frame)) {
 +			RELEASE_NDIS_PACKET(pAd, pRxBlk->pRxPacket, NDIS_STATUS_FAILURE);
