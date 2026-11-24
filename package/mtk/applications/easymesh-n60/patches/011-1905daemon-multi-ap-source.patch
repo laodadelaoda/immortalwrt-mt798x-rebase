@@ -151,11 +151,10 @@
  	}
  #ifdef SINGLE_BAND_SUPPORT
  	ctx->wifi_present = 0;
- 	return 0;
-+#else
-+	return -1;
+-	return 0;
  #endif
 -	return -1;
++	return -1;
  }
  
  int init_wireless_interface(struct p1905_managerd_ctx *ctx,
