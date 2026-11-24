@@ -1,6 +1,6 @@
 --- a/wappd/dpp/dpp.c
 +++ b/wappd/dpp/dpp.c
-@@ -10758,7 +10758,8 @@
+@@ -10630,7 +10630,8 @@
  
  	bi->type = DPP_BOOTSTRAP_QR_CODE;
  
