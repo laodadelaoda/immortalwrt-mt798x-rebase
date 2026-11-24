@@ -222,7 +222,8 @@
         "050-mapd-client-mon-abi-callers.patch",
         "050-mapd-main-abi-assert-and-callers.patch",
         "051-mapd-ap-est-unlink-query-buffer-size.patch",
-        "052-mapd-interface-ctrl-abi-layout.patch"
+        "052-mapd-interface-ctrl-abi-layout.patch",
+        "053-p1905-managerd-socket-fd-init.patch"
       ],
       "scope": "EasyMesh Build/Prepare ordered vendor patch series",
       "post_normalize_order": [

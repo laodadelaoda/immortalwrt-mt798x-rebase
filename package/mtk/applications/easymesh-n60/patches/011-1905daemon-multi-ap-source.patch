@@ -1,6 +1,50 @@
 --- a/1905daemon/src/multi_ap.c
 +++ b/1905daemon/src/multi_ap.c
-@@ -10914,11 +10914,11 @@
+@@ -8921,20 +8921,35 @@
+ 	case LIB_WIRELESS_INTERFACE_INFO:
+ 	{
+ 		struct interface_info_list_hdr *info = NULL;
+-		unsigned short real_len = 0;
++		size_t real_len = 0;
++		int ret = 0;
+ 
++		if (wapp_event->length < sizeof(struct interface_info_list_hdr)) {
++			debug(DEBUG_ERROR, "short LIB_WIRELESS_INTERFACE_INFO header: %u\n",
++				wapp_event->length);
++			return -1;
++		}
+ 		info = (struct interface_info_list_hdr *)wapp_event->buffer;
+-		real_len = sizeof(struct interface_info_list_hdr) + \
+-			info->interface_count * sizeof(struct interface_info);
+-		/*event length check*/
++		real_len = sizeof(*info) +
++			(size_t)info->interface_count * sizeof(struct interface_info);
+ 		if (wapp_event->length != real_len) {
+ 			debug(DEBUG_ERROR, "length check fail for LIB_WIRELESS_INTERFACE_INFO! "
+-				"recv length(%u) real length(%u)\n", wapp_event->length, real_len);
+-			break;
++				"recv length(%u) real length(%zu)\n", wapp_event->length, real_len);
++			return -1;
++		}
++		debug(DEBUG_ERROR, "wireless interface info received: count=%u\n",
++			info->interface_count);
++		ret = init_wireless_interface(ctx, info);
++		if (ret < 0) {
++			debug(DEBUG_ERROR, "wireless interface initialization failed: %d\n", ret);
++			return ret;
+ 		}
+-		init_wireless_interface(ctx, info);
+ 		set_bss_config_priority_by_str(ctx);
+-		common_info_init(ctx);
++		ret = common_info_init(ctx);
++		if (ret < 0) {
++			debug(DEBUG_ERROR, "common 1905 interface initialization failed: %d\n", ret);
++			return ret;
++		}
+ #ifdef MAP_R3
+ 		eloop_register_timeout(2, 0, report_akm_suit_cap_to_mapd, (void *)ctx, NULL);
+ 		eloop_register_timeout(2, 0, report_1905_secure_cap_to_mapd, (void *)ctx, NULL);
+@@ -10914,11 +10929,11 @@
  			memcpy(ctx->bss_config[j].key, conf->key, 65);
  			memcpy(ctx->bss_config[j].oper_class, opclass[k], 4);
  			debug(DEBUG_OFF, "add bss, mac="MACSTR", opclass=%s,"
@@ -14,3 +58,127 @@
  				ctx->bss_config[j].wfa_vendor_extension & BIT_BH_BSS ? "1" : "0",
  				ctx->bss_config[j].wfa_vendor_extension & BIT_FH_BSS ? "1" : "0",
  				ctx->bss_config[j].hidden_ssid);
+@@ -18306,18 +18321,24 @@
+ 
+ int init_interface_socket(struct p1905_managerd_ctx *ctx)
+ {
+-	unsigned int i = 0;
++	unsigned int i = 0, j = 0;
+ 	struct sockaddr_ll sll;
+ 	struct ifreq ifr;
+ 	int ret = 0;
++	unsigned char opened[ITF_NUM] = {0};
+ 
+ 	for (i = 0; i < ctx->itf_number; i++) {
++		/* Keep sockets established for interfaces already initialized. */
++		if (ctx->sock_inf_recv_1905[i] >= 0)
++			continue;
++
+ 		ctx->sock_inf_recv_1905[i] = socket(AF_PACKET, SOCK_RAW, ETH_P_1905);
+ 		if (ctx->sock_inf_recv_1905[i] < 0) {
+ 			debug(DEBUG_ERROR, "cannot open socket on %s (%s)", ctx->itf[i].if_name,
+ 				strerror(errno));
+ 			goto fail;
+ 		}
++		opened[i] = 1;
+ 
+ 		os_memset(&ifr, 0, sizeof(ifr));
+ 		ret = snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", ctx->itf[i].if_name);
+@@ -18325,7 +18346,7 @@
+ 			debug(DEBUG_ERROR, "[%d]snprintf fail!\n", __LINE__);
+ 			goto fail;
+ 		}
+-		if ((ioctl(ctx->sock_inf_recv_1905[i], SIOCGIFINDEX, &ifr)) == -1) {
++		if (ioctl(ctx->sock_inf_recv_1905[i], SIOCGIFINDEX, &ifr) == -1) {
+ 			debug(DEBUG_ERROR, "cannot get interface %s index (%s) i=%d\n",
+ 				ctx->itf[i].if_name, strerror(errno), i);
+ 			goto fail;
+@@ -18336,16 +18357,15 @@
+ 		sll.sll_ifindex = ifr.ifr_ifindex;
+ 		sll.sll_protocol = host_to_be16(ETH_P_1905);
+ 
+-		/*Get interface mac address*/
+-		if ((ioctl(ctx->sock_inf_recv_1905[i], SIOCGIFHWADDR, &ifr)) == -1) {
++		if (ioctl(ctx->sock_inf_recv_1905[i], SIOCGIFHWADDR, &ifr) == -1) {
+ 			debug(DEBUG_ERROR, "cannot get interface %s mac address (%s)",
+ 				ctx->itf[i].if_name, strerror(errno));
+ 			goto fail;
+ 		}
+ 		ether_addr_copy(ctx->itf[i].mac_addr, ifr.ifr_hwaddr.sa_data);
+ 
+-		if ((bind(ctx->sock_inf_recv_1905[i], (struct sockaddr *)&sll,
+-			sizeof(struct sockaddr_ll))) == -1) {
++		if (bind(ctx->sock_inf_recv_1905[i], (struct sockaddr *)&sll,
++			sizeof(struct sockaddr_ll)) == -1) {
+ 			debug(DEBUG_ERROR, "cannot bind raw socket to interface %s (%s)",
+ 				ctx->itf[i].if_name, strerror(errno));
+ 			goto fail;
+@@ -18359,13 +18379,19 @@
+ #endif
+ 	return 0;
+ fail:
+-	if (ctx->sock_inf_recv_1905[i] > 0) {
+-		close(ctx->sock_inf_recv_1905[i]);
+-		ctx->sock_inf_recv_1905[i] = -1;
++	/* Roll back only descriptors created by this invocation. */
++	for (j = 0; j < ctx->itf_number; j++) {
++		if (opened[j]) {
++			close(ctx->sock_inf_recv_1905[j]);
++			ctx->sock_inf_recv_1905[j] = -1;
++		}
+ 	}
+ #ifdef SINGLE_BAND_SUPPORT
+ 	ctx->wifi_present = 0;
+ 	return 0;
++#else
++	return -1;
+ #endif
+-	return -1;
+ }
+ 
+ int init_wireless_interface(struct p1905_managerd_ctx *ctx,
+@@ -18376,9 +18402,10 @@
+ 	int i = 0;
+ 	unsigned int itf_idx = 0;
+ 
+-	if (info->interface_count > ITF_NUM-5) {
+-		debug(DEBUG_ERROR, "intf num [%d] bigger than maxmum [%d]\n",
+-			info->interface_count, ITF_NUM-5);
++	if (ctx->itf_number > ITF_NUM ||
++		info->interface_count > ITF_NUM - ctx->itf_number) {
++		debug(DEBUG_ERROR, "wireless interface count [%u] exceeds remaining slots [%u]\n",
++			info->interface_count, ITF_NUM - ctx->itf_number);
+ 		return -1;
+ 	}
+ 	for (i = 0; i < info->interface_count; i++) {
+@@ -18484,10 +18511,15 @@
+ 						debug(DEBUG_ERROR, "set almac to forward module fail\n");
+ 						return -1;
+ 					}
++					debug(DEBUG_ERROR, "AL MAC initialized from %s: "MACSTR"\n",
++						ctx->al_inf, PRINT_MAC(ctx->p1905_al_mac_addr));
+ 					break;
+ 				}
+ 			} else {
+ 				/*find al_inf , chose it's mac as al_mac*/
++				debug(DEBUG_ERROR, "AL candidate: configured=%s interface=%s ap=%u mac="MACSTR" bridge="MACSTR"\n",
++					ctx->al_inf, ctx->itf[i].if_name, ctx->itf[i].is_wifi_ap,
++					PRINT_MAC(ctx->itf[i].mac_addr), PRINT_MAC(ctx->br_addr));
+ 				if (!os_memcmp(ctx->al_inf, ctx->itf[i].if_name, IFNAMSIZ) &&
+ 					(ctx->itf[i].is_wifi_ap) &&
+ 					os_memcmp(ctx->itf[i].mac_addr, ctx->br_addr, ETH_ALEN)) {
+@@ -18508,8 +18540,12 @@
+ 				}
+ 			}
+ 		}
+-		if (i == ctx->itf_number)
+-			debug(DEBUG_ERROR, "cannot find suitable almac, use orginal one\n");
++		if (i == ctx->itf_number) {
++			debug(DEBUG_ERROR, "cannot find configured AL interface '%s' among %u interfaces\n",
++				ctx->al_inf, ctx->itf_number);
++			if (os_strlen((char *)ctx->al_inf))
++				return -1;
++		}
+ 	}
+ 
+ 	create_topology_tree(ctx);
