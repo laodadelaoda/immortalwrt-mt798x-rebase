@@ -47,7 +47,6 @@ source-level typedef spelling and preserves the structure layout.
  
  struct client {
  	struct dl_list sta_seen_entry;
-
 @@ -439 +455 @@
 -	uint8_t phy_cap_known[IEEE_NUM_BANDS]; //0: Unknown; 1: From PREQ; 2:From Assoc
 +	uint8_t phy_cap_known[MAPD_ABI_NUM_BANDS]; //0: Unknown; 1: From PREQ; 2:From Assoc
