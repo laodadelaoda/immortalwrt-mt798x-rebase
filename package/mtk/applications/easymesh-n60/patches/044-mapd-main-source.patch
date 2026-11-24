@@ -7,15 +7,6 @@ and test cent_str_en's value rather than its always-non-NULL address.
 
 --- a/mapd/mapd.c
 +++ b/mapd/mapd.c
-@@ -2805 +2805 @@
--	int bands;
-+	int bands __attribute__((unused));
-@@ -5484 +5484 @@
--	if (&global->dev.cent_str_en) {
-+	if (global->dev.cent_str_en) {
-
---- a/mapd/mapd.c
-+++ b/mapd/mapd.c
 @@ -27,0 +28,37 @@
 +
 +#if defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
@@ -54,6 +45,9 @@ and test cent_str_en's value rather than its always-non-NULL address.
 +MAPD_ABI_ASSERT(mapd_abi_channel_bitmap, MAPD_ABI_MAX_CHAN_BITMAP == 13);
 +#undef MAPD_ABI_ASSERT
 +#endif
+@@ -2805 +2842 @@
+-	int bands;
++	int bands __attribute__((unused));
 @@ -4370 +4407 @@
 -#ifdef MAP_6E_SUPPORT
 +#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
@@ -66,4 +60,8 @@ and test cent_str_en's value rather than its always-non-NULL address.
 +#else
 +			band = BAND_UNKNOWN;
 +#endif
+
+@@ -5484 +5525 @@
+-	if (&global->dev.cent_str_en) {
++	if (global->dev.cent_str_en) {
 

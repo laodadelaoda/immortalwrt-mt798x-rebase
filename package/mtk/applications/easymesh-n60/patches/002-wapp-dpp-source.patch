@@ -1,3 +1,5 @@
+
+
 --- a/wappd/dpp/dpp.c
 +++ b/wappd/dpp/dpp.c
 @@ -7,11 +7,13 @@
@@ -1684,7 +1686,18 @@
  }
  
  
-@@ -10938,7 +10810,7 @@
+@@ -10758,7 +10630,8 @@
+ 
+ 	bi->type = DPP_BOOTSTRAP_QR_CODE;
+ 
+-	if (key) {
++	/* An empty dpp_private_key buffer means no pre-assigned key. */
++	if (key && key[0] != '\0') {
+ 		privkey_len = os_strlen(key) / 2;
+ 		privkey = os_malloc(privkey_len);
+ 		if (!privkey ||
+
+@@ -10938,7 +10811,7 @@
  	dpp_gen_privkey_from_pubkey(bi->pubkey, &priv_temp);
  
  	if(priv_temp != NULL) {
@@ -1693,7 +1706,7 @@
  		dpp_save_config(wapp, "dpp_private_key", (const char *)priv_temp, NULL);
  		//wpa_write_config_file(DPP_CFG_FILE, buf, strlen(buf));
  		/* Saving in the buffer for future use */
-@@ -11011,7 +10883,6 @@
+@@ -11011,7 +10884,6 @@
  	unsigned int id_val;
  #ifdef MAP_R3
  	struct dpp_bootstrap_info *bi, *tmp;
@@ -1701,7 +1714,7 @@
  	char qr_param[20] = "0";
  	int ret = 0;
  #endif /* MAP_R3 */
-@@ -11035,7 +10906,6 @@
+@@ -11035,7 +10907,6 @@
  			struct dpp_bootstrap_info, list) {
  		if (id_val && bi->id != id_val)
  			continue;
@@ -1709,7 +1722,7 @@
  		ChirpTLV_1905_send(wapp, bi, 0);
  	}
  #endif
-@@ -11609,15 +11479,6 @@
+@@ -11609,15 +11480,6 @@
  #ifdef DPP_R2_SUPPORT
  #ifdef DPP_R2_RECONFIG
  #ifndef OPENSSL_NO_EC
@@ -1725,7 +1738,7 @@
  #endif /* OPENSSL_NO_EC */
  
  struct dpp_reconfig_id * dpp_gen_reconfig_id(const u8 *csign_key,
-@@ -11630,45 +11491,35 @@
+@@ -11630,45 +11492,35 @@
  	struct dpp_reconfig_id *id = NULL;
  	BN_CTX *ctx = NULL;
  	BIGNUM *bn = NULL, *q = NULL;
@@ -1780,7 +1793,7 @@
  	id->e_id = e_id;
  	e_id = NULL;
  	id->csign = csign;
-@@ -11676,153 +11527,116 @@
+@@ -11676,153 +11528,116 @@
  	id->pp_key = ppkey;
  	ppkey = NULL;
  fail:
@@ -1992,7 +2005,7 @@
  #endif
  struct wpabuf * dpp_build_annouce_frame(struct dpp_global *dpp, struct dpp_bootstrap_info *dpp_bi)
  {
-@@ -14454,37 +14268,28 @@
+@@ -14454,37 +14269,28 @@
  
  static int dpp_auth_derive_m_I(struct dpp_authentication *auth)
  {
@@ -2044,7 +2057,7 @@
  		goto fail;
  
  	sum = EC_POINT_new(group);
-@@ -14492,28 +14297,30 @@
+@@ -14492,28 +14298,30 @@
  	if (!sum || !M ||
  	    EC_POINT_add(group, sum, CR_point, PR_point, bnctx) != 1 ||
  	    EC_POINT_mul(group, M, NULL, sum, cI_bn, bnctx) != 1 ||
@@ -2084,7 +2097,7 @@
  	BN_clear_free(mx);
  	BN_CTX_free(bnctx);
  	return ret;
-@@ -14521,41 +14328,36 @@
+@@ -14521,41 +14329,36 @@
  
  static int dpp_auth_derive_m_R(struct dpp_authentication *auth)
  {
@@ -2146,7 +2159,7 @@
  		goto fail;
  
  	if (EC_GROUP_get_order(group, q, bnctx) != 1 ||
-@@ -14563,32 +14365,35 @@
+@@ -14563,32 +14366,35 @@
  		goto fail;
  
  	M = EC_POINT_new(group);
@@ -2192,7 +2205,7 @@
  	BN_CTX_free(bnctx);
  	return ret;
  }
-@@ -14644,7 +14449,6 @@
+@@ -14644,7 +14450,6 @@
  {
  	struct wpabuf *msg = NULL;
  	struct wpabuf *connector  = NULL;
@@ -2200,7 +2213,7 @@
  
  	if(!auth)
  		return msg;
-@@ -14662,7 +14466,6 @@
+@@ -14662,7 +14467,6 @@
  	msg = dpp_alloc_msg(DPP_PA_RECONFIG_AUTH_REQ,
  			    5 + 5 + 4 + wpabuf_len(connector) + 4 + auth->curve->nonce_len);
  
@@ -2208,7 +2221,7 @@
  
  	if (!msg) {
  		if (connector)
-@@ -14865,7 +14668,7 @@
+@@ -14865,7 +14669,7 @@
  	const u8 *c_nonce, u16 c_nonce_len, const u8 *trans_id, const u8 *version)
  {
  	struct json_token *root = NULL, *token = NULL, *own_root = NULL;
@@ -2217,7 +2230,7 @@
  	//const struct dpp_curve_params *own_curve;
  	struct dpp_signed_connector_info info;
  	const unsigned char *p;
-@@ -14909,14 +14712,12 @@
+@@ -14909,14 +14713,12 @@
  
  	res = dpp_process_signed_connector(&info, csign, signed_connector);
  	if (res != DPP_STATUS_OK) {
@@ -2231,17 +2244,5 @@
 -		ret = DPP_STATUS_INVALID_CONNECTOR;
  		goto fail;
  	}
-
---- a/wappd/dpp/dpp.c
-+++ b/wappd/dpp/dpp.c
-@@ -10630,7 +10630,8 @@
  
- 	bi->type = DPP_BOOTSTRAP_QR_CODE;
- 
--	if (key) {
-+	/* An empty dpp_private_key buffer means no pre-assigned key. */
-+	if (key && key[0] != '\0') {
- 		privkey_len = os_strlen(key) / 2;
- 		privkey = os_malloc(privkey_len);
- 		if (!privkey ||
 

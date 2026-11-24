@@ -7,21 +7,6 @@ source-level typedef spelling and preserves the structure layout.
 
 --- a/mapd/src/clientDB/client_db.h
 +++ b/mapd/src/clientDB/client_db.h
-@@ -416,7 +416,10 @@
- 	u16   AarSupport:1;
- 	u16   rsv:3;
- #endif /* CFG_BIG_ENDIAN */
--} MLD_CAP_PARM, *PMLD_CAP_PARM;
-+};
-+
-+typedef struct _MLD_CAP_PARM MLD_CAP_PARM;
-+typedef struct _MLD_CAP_PARM *PMLD_CAP_PARM;
- 
- struct client {
- 	struct dl_list sta_seen_entry;
-
---- a/mapd/src/clientDB/client_db.h
-+++ b/mapd/src/clientDB/client_db.h
 @@ -78,0 +79,13 @@
 +
 +/* ABI storage sizes are wider than the runtime N60 2G/5G iteration limits. */
@@ -50,13 +35,26 @@ source-level typedef spelling and preserves the structure layout.
 @@ -312 +325 @@
 -#ifdef MAP_6E_SUPPORT
 +#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
-@@ -439 +452 @@
+@@ -416,7 +429,10 @@
+ 	u16   AarSupport:1;
+ 	u16   rsv:3;
+ #endif /* CFG_BIG_ENDIAN */
+-} MLD_CAP_PARM, *PMLD_CAP_PARM;
++};
++
++typedef struct _MLD_CAP_PARM MLD_CAP_PARM;
++typedef struct _MLD_CAP_PARM *PMLD_CAP_PARM;
+ 
+ struct client {
+ 	struct dl_list sta_seen_entry;
+
+@@ -439 +455 @@
 -	uint8_t phy_cap_known[IEEE_NUM_BANDS]; //0: Unknown; 1: From PREQ; 2:From Assoc
 +	uint8_t phy_cap_known[MAPD_ABI_NUM_BANDS]; //0: Unknown; 1: From PREQ; 2:From Assoc
-@@ -442 +455 @@
+@@ -442 +458 @@
 -	uint8_t known_channels[MAX_CHAN_BITMAP];
 +	uint8_t known_channels[MAPD_ABI_MAX_CHAN_BITMAP];
-@@ -447 +460 @@
+@@ -447 +463 @@
 -#ifdef MAP_6E_SUPPORT
 +#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
 
