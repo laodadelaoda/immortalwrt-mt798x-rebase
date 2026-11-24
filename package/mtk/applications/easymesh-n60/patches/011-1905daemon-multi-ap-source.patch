@@ -157,7 +157,7 @@
  }
  
  int init_wireless_interface(struct p1905_managerd_ctx *ctx,
-@@ -18376,9 +18422,10 @@
+@@ -18376,9 +18420,10 @@
  	int i = 0;
  	unsigned int itf_idx = 0;
  
@@ -171,7 +171,7 @@
  		return -1;
  	}
  	for (i = 0; i < info->interface_count; i++) {
-@@ -18484,10 +18531,18 @@
+@@ -18484,10 +18529,18 @@
  						debug(DEBUG_ERROR, "set almac to forward module fail\n");
 +						syslog(LOG_ERR, "P1905 mapfilter AL MAC update failed: "MACSTR,
 +							PRINT_MAC(ctx->p1905_al_mac_addr));
@@ -190,7 +190,7 @@
  				if (!os_memcmp(ctx->al_inf, ctx->itf[i].if_name, IFNAMSIZ) &&
  					(ctx->itf[i].is_wifi_ap) &&
  					os_memcmp(ctx->itf[i].mac_addr, ctx->br_addr, ETH_ALEN)) {
-@@ -18503,5 +18558,7 @@
+@@ -18503,5 +18556,7 @@
  					if (set_opt_not_forward_dest(ctx->p1905_al_mac_addr) < 0) {
  						debug(DEBUG_ERROR, "set almac to forward module fail\n");
 +						syslog(LOG_ERR, "P1905 mapfilter AL MAC update failed: "MACSTR,
@@ -198,7 +198,7 @@
  						return -1;
  					}
  					break;
-@@ -18508,8 +18565,14 @@
+@@ -18508,8 +18563,14 @@
  				}
  			}
  		}
