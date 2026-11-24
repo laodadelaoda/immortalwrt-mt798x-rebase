@@ -156,6 +156,9 @@ endef
 
 define Package/easymesh-n60/install
 	$(INSTALL_DIR) $(1)/usr/bin $(1)/usr/sbin $(1)/usr/lib $(1)/etc $(1)/etc/map $(1)/etc/init.d $(1)/etc/uci-defaults
+	# The vendor archive ships the MAP R3 Enrollee defaults; install them so WAPP can initialize DPP without a test Configurator key.
+	 test -s $(PKG_BUILD_DIR)/wappd/config_and_icon_files/dpp_cfg.txt
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wappd/config_and_icon_files/dpp_cfg.txt $(1)/etc/dpp_cfg.txt
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/wappd/wapp $(1)/usr/bin/
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/wappd/wappctrl $(1)/usr/bin/
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/wappd/wifi_config_save.lua $(1)/usr/bin/wifi_config_save
