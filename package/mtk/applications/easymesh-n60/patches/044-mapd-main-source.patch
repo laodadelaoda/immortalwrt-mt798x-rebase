@@ -60,7 +60,6 @@ and test cent_str_en's value rather than its always-non-NULL address.
 +#else
 +			band = BAND_UNKNOWN;
 +#endif
-
 @@ -5484 +5525 @@
 -	if (&global->dev.cent_str_en) {
 +	if (global->dev.cent_str_en) {
