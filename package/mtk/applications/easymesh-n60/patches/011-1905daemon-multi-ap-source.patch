@@ -133,7 +133,7 @@
  			debug(DEBUG_ERROR, "cannot bind raw socket to interface %s (%s)",
  				ctx->itf[i].if_name, strerror(errno));
  			goto fail;
-@@ -18359,15 +18399,21 @@
+@@ -18359,15 +18399,19 @@
  #endif
  	return 0;
  fail:
@@ -153,8 +153,7 @@
  	ctx->wifi_present = 0;
 -	return 0;
  #endif
--	return -1;
-+	return -1;
+ 	return -1;
  }
  
  int init_wireless_interface(struct p1905_managerd_ctx *ctx,
