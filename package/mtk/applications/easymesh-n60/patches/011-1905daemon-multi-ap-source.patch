@@ -113,7 +113,7 @@
  			debug(DEBUG_ERROR, "cannot bind raw socket to interface %s (%s)",
  				ctx->itf[i].if_name, strerror(errno));
  			goto fail;
-@@ -18359,13 +18379,19 @@
+@@ -18359,15 +18379,19 @@
  #endif
  	return 0;
  fail:
@@ -137,7 +137,7 @@
  }
  
  int init_wireless_interface(struct p1905_managerd_ctx *ctx,
-@@ -18376,9 +18402,10 @@
+@@ -18376,9 +18400,10 @@
  	int i = 0;
  	unsigned int itf_idx = 0;
  
@@ -151,7 +151,7 @@
  		return -1;
  	}
  	for (i = 0; i < info->interface_count; i++) {
-@@ -18484,10 +18511,15 @@
+@@ -18484,10 +18509,15 @@
  						debug(DEBUG_ERROR, "set almac to forward module fail\n");
  						return -1;
  					}
@@ -167,7 +167,7 @@
  				if (!os_memcmp(ctx->al_inf, ctx->itf[i].if_name, IFNAMSIZ) &&
  					(ctx->itf[i].is_wifi_ap) &&
  					os_memcmp(ctx->itf[i].mac_addr, ctx->br_addr, ETH_ALEN)) {
-@@ -18508,8 +18540,12 @@
+@@ -18508,8 +18538,12 @@
  				}
  			}
  		}
