@@ -34,7 +34,6 @@
 @@ -966 +966 @@
 -	struct channel_selection_chan_list chan_list[MAX_CH_NUM];
 +	struct channel_selection_chan_list chan_list[MAPD_ABI_MAX_CH_NUM];
-
 @@ -1462,9 +1462,7 @@
  struct _1905_map_device *topo_srv_get_1905_by_iface_addr(struct own_1905_device *ctx, unsigned char *ifaddr);
  int topo_srv_update_ap_cap(struct own_1905_device *ctx, struct ap_capability *cap);
