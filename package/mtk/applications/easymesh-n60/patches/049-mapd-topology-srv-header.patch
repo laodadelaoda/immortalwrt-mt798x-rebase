@@ -39,4 +39,39 @@
 +int topo_srv_get_relation_dev(struct own_1905_device *ctx, unsigned char *curr_bssid, unsigned char *almac);
  int parse_bh_assoc_ctrl_policy_tlv(unsigned char *buf,
  		struct own_1905_device *ctx);
- 
+
+--- a/mapd/src/topologySrv/topologySrv.h
++++ b/mapd/src/topologySrv/topologySrv.h
+@@ -87 +87 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -392 +392 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -405 +405 @@
+-	unsigned char non_operch_list[MAX_CH_NUM];
++	unsigned char non_operch_list[MAPD_ABI_MAX_CH_NUM];
+@@ -530 +530 @@
+-	u8 non_oper_ch_list[MAX_CH_NUM];
++	u8 non_oper_ch_list[MAPD_ABI_MAX_CH_NUM];
+@@ -596 +596 @@
+-	unsigned char ch_list[MAX_CH_NUM];
++	unsigned char ch_list[MAPD_ABI_MAX_CH_NUM];
+@@ -605,2 +605,2 @@
+-	unsigned char ch_list[MAX_CH_NUM];
+-	unsigned char min_fre_sep[MAX_CH_NUM];
++	unsigned char ch_list[MAPD_ABI_MAX_CH_NUM];
++	unsigned char min_fre_sep[MAPD_ABI_MAX_CH_NUM];
+@@ -707 +707 @@
+-	unsigned char ch_list[MAX_CH_NUM]; //MAX of 5G Channels
++	unsigned char ch_list[MAPD_ABI_MAX_CH_NUM]; //MAX of 5G Channels
+@@ -794 +794 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -940 +940 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -966 +966 @@
+-	struct channel_selection_chan_list chan_list[MAX_CH_NUM];
++	struct channel_selection_chan_list chan_list[MAPD_ABI_MAX_CH_NUM];
+
