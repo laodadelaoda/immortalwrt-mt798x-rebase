@@ -1,0 +1,9 @@
+--- a/mapd/mapd_interface/mapd_interface_ctrl.h
++++ b/mapd/mapd_interface/mapd_interface_ctrl.h
+@@ -326,5 +326,5 @@
+ int mapd_interface_Set_Steer(struct mapd_interface_ctrl *ctrl,char *set_steer);
+-#ifndef MAP_6E_SUPPORT
++#if !defined(MAP_6E_SUPPORT) && !defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+ #define MAX_SET_BSS_INFO_NUM 58
+ #else
+ #define MAX_SET_BSS_INFO_NUM 99
