@@ -1,12 +1,13 @@
 --- a/1905daemon/src/multi_ap.c
 +++ b/1905daemon/src/multi_ap.c
-@@ -8921,20 +8921,35 @@
+@@ -8921,20 +8921,53 @@
  	case LIB_WIRELESS_INTERFACE_INFO:
  	{
  		struct interface_info_list_hdr *info = NULL;
 -		unsigned short real_len = 0;
 +		size_t real_len = 0;
 +		int ret = 0;
++		int info_idx = 0;
  
 +		if (wapp_event->length < sizeof(struct interface_info_list_hdr)) {
 +			debug(DEBUG_ERROR, "short LIB_WIRELESS_INTERFACE_INFO header: %u\n",
@@ -28,9 +29,22 @@
 +		}
 +		debug(DEBUG_ERROR, "wireless interface info received: count=%u\n",
 +			info->interface_count);
++		syslog(LOG_NOTICE, "P1905 wireless interface event: count=%u payload_len=%u",
++			(unsigned int)info->interface_count, (unsigned int)wapp_event->length);
++		for (info_idx = 0; info_idx < info->interface_count; info_idx++) {
++			syslog(LOG_NOTICE,
++				"P1905 interface[%d]: name=%.*s role=%.*s channel=%u phy=%.*s mac="MACSTR" radio="MACSTR,
++				info_idx, IFNAMSIZ, (char *)info->if_info[info_idx].if_name,
++				6, (char *)info->if_info[info_idx].if_role,
++				(unsigned int)info->if_info[info_idx].if_ch,
++				3, (char *)info->if_info[info_idx].if_phymode,
++				PRINT_MAC(info->if_info[info_idx].if_mac_addr),
++				PRINT_MAC(info->if_info[info_idx].identifier));
++		}
 +		ret = init_wireless_interface(ctx, info);
 +		if (ret < 0) {
 +			debug(DEBUG_ERROR, "wireless interface initialization failed: %d\n", ret);
++			syslog(LOG_ERR, "P1905 wireless interface initialization failed: %d", ret);
 +			return ret;
  		}
 -		init_wireless_interface(ctx, info);
@@ -39,12 +53,16 @@
 +		ret = common_info_init(ctx);
 +		if (ret < 0) {
 +			debug(DEBUG_ERROR, "common 1905 interface initialization failed: %d\n", ret);
++			syslog(LOG_ERR, "P1905 common interface initialization failed: %d", ret);
 +			return ret;
 +		}
++		syslog(LOG_NOTICE, "P1905 interface initialization complete: count=%u configured_al_inf=%s AL="MACSTR,
++			(unsigned int)ctx->itf_number, (char *)ctx->al_inf,
++			PRINT_MAC(ctx->p1905_al_mac_addr));
  #ifdef MAP_R3
  		eloop_register_timeout(2, 0, report_akm_suit_cap_to_mapd, (void *)ctx, NULL);
  		eloop_register_timeout(2, 0, report_1905_secure_cap_to_mapd, (void *)ctx, NULL);
-@@ -10914,11 +10929,11 @@
+@@ -10914,11 +10947,11 @@
  			memcpy(ctx->bss_config[j].key, conf->key, 65);
  			memcpy(ctx->bss_config[j].oper_class, opclass[k], 4);
  			debug(DEBUG_OFF, "add bss, mac="MACSTR", opclass=%s,"
@@ -58,7 +76,7 @@
  				ctx->bss_config[j].wfa_vendor_extension & BIT_BH_BSS ? "1" : "0",
  				ctx->bss_config[j].wfa_vendor_extension & BIT_FH_BSS ? "1" : "0",
  				ctx->bss_config[j].hidden_ssid);
-@@ -18306,18 +18321,24 @@
+@@ -18306,18 +18339,26 @@
  
  int init_interface_socket(struct p1905_managerd_ctx *ctx)
  {
@@ -78,13 +96,15 @@
  		if (ctx->sock_inf_recv_1905[i] < 0) {
  			debug(DEBUG_ERROR, "cannot open socket on %s (%s)", ctx->itf[i].if_name,
  				strerror(errno));
++			syslog(LOG_ERR, "P1905 raw socket open failed on %s: %s",
++				(char *)ctx->itf[i].if_name, strerror(errno));
  			goto fail;
  		}
 +		opened[i] = 1;
  
  		os_memset(&ifr, 0, sizeof(ifr));
  		ret = snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", ctx->itf[i].if_name);
-@@ -18325,7 +18346,7 @@
+@@ -18325,7 +18366,7 @@
  			debug(DEBUG_ERROR, "[%d]snprintf fail!\n", __LINE__);
  			goto fail;
  		}
@@ -93,7 +113,7 @@
  			debug(DEBUG_ERROR, "cannot get interface %s index (%s) i=%d\n",
  				ctx->itf[i].if_name, strerror(errno), i);
  			goto fail;
-@@ -18336,16 +18357,15 @@
+@@ -18336,16 +18377,15 @@
  		sll.sll_ifindex = ifr.ifr_ifindex;
  		sll.sll_protocol = host_to_be16(ETH_P_1905);
  
@@ -113,13 +133,15 @@
  			debug(DEBUG_ERROR, "cannot bind raw socket to interface %s (%s)",
  				ctx->itf[i].if_name, strerror(errno));
  			goto fail;
-@@ -18359,15 +18379,19 @@
+@@ -18359,15 +18399,21 @@
  #endif
  	return 0;
  fail:
 -	if (ctx->sock_inf_recv_1905[i] > 0) {
 -		close(ctx->sock_inf_recv_1905[i]);
 -		ctx->sock_inf_recv_1905[i] = -1;
++	syslog(LOG_ERR, "P1905 raw socket setup failed on %s: %s",
++		(char *)ctx->itf[i].if_name, strerror(errno));
 +	/* Roll back only descriptors created by this invocation. */
 +	for (j = 0; j < ctx->itf_number; j++) {
 +		if (opened[j]) {
@@ -137,7 +159,7 @@
  }
  
  int init_wireless_interface(struct p1905_managerd_ctx *ctx,
-@@ -18376,9 +18400,10 @@
+@@ -18376,9 +18422,10 @@
  	int i = 0;
  	unsigned int itf_idx = 0;
  
@@ -151,12 +173,12 @@
  		return -1;
  	}
  	for (i = 0; i < info->interface_count; i++) {
-@@ -18484,10 +18509,15 @@
+@@ -18484,10 +18531,18 @@
  						debug(DEBUG_ERROR, "set almac to forward module fail\n");
++						syslog(LOG_ERR, "P1905 mapfilter AL MAC update failed: "MACSTR,
++							PRINT_MAC(ctx->p1905_al_mac_addr));
  						return -1;
  					}
-+					debug(DEBUG_ERROR, "AL MAC initialized from %s: "MACSTR"\n",
-+						ctx->al_inf, PRINT_MAC(ctx->p1905_al_mac_addr));
  					break;
  				}
  			} else {
@@ -164,10 +186,21 @@
 +				debug(DEBUG_ERROR, "AL candidate: configured=%s interface=%s ap=%u mac="MACSTR" bridge="MACSTR"\n",
 +					ctx->al_inf, ctx->itf[i].if_name, ctx->itf[i].is_wifi_ap,
 +					PRINT_MAC(ctx->itf[i].mac_addr), PRINT_MAC(ctx->br_addr));
++				syslog(LOG_NOTICE, "P1905 AL candidate: configured=%s interface=%s ap=%u mac="MACSTR,
++					(char *)ctx->al_inf, (char *)ctx->itf[i].if_name, (unsigned int)ctx->itf[i].is_wifi_ap,
++					PRINT_MAC(ctx->itf[i].mac_addr));
  				if (!os_memcmp(ctx->al_inf, ctx->itf[i].if_name, IFNAMSIZ) &&
  					(ctx->itf[i].is_wifi_ap) &&
  					os_memcmp(ctx->itf[i].mac_addr, ctx->br_addr, ETH_ALEN)) {
-@@ -18508,8 +18538,12 @@
+@@ -18503,5 +18558,7 @@
+ 					if (set_opt_not_forward_dest(ctx->p1905_al_mac_addr) < 0) {
+ 						debug(DEBUG_ERROR, "set almac to forward module fail\n");
++						syslog(LOG_ERR, "P1905 mapfilter AL MAC update failed: "MACSTR,
++							PRINT_MAC(ctx->p1905_al_mac_addr));
+ 						return -1;
+ 					}
+ 					break;
+@@ -18508,8 +18565,14 @@
  				}
  			}
  		}
@@ -176,6 +209,8 @@
 +		if (i == ctx->itf_number) {
 +			debug(DEBUG_ERROR, "cannot find configured AL interface '%s' among %u interfaces\n",
 +				ctx->al_inf, ctx->itf_number);
++			syslog(LOG_ERR, "P1905 configured AL interface '%s' not found among %u interfaces",
++				(char *)ctx->al_inf, ctx->itf_number);
 +			if (os_strlen((char *)ctx->al_inf))
 +				return -1;
 +		}
