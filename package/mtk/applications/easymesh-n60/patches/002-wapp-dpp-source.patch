@@ -1696,7 +1696,6 @@
  		privkey_len = os_strlen(key) / 2;
  		privkey = os_malloc(privkey_len);
  		if (!privkey ||
-
 @@ -10938,7 +10811,7 @@
  	dpp_gen_privkey_from_pubkey(bi->pubkey, &priv_temp);
  
