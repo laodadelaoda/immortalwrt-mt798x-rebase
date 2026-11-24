@@ -99,6 +99,7 @@ define Build/Prepare
 	python3 ./scripts/n60-vendor-source-transforms.py finalize "$(PKG_BUILD_DIR)"
 endef
 
+# Match the prebuilt MAPD/WAPP ABI layout only; keep N60 6GHz and radio-teardown runtime features disabled.
 define Build/Compile
 	set -eu; \
 	TARGET_EASYMESH_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -DMAPD_PREBUILT_6E_ABI_LAYOUT -DMAPD_PREBUILT_RADIO_TEARDOWN_ABI"; \
