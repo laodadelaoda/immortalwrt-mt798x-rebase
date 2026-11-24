@@ -1,0 +1,5 @@
+--- a/mapd/src/channelMon/chan_mon.h
++++ b/mapd/src/channelMon/chan_mon.h
+@@ -179 +179 @@
+-	struct unassoc_clients[MAX_NUM_CHANNELS]
++	struct unassoc_clients[MAPD_ABI_MAX_NUM_CHANNELS]

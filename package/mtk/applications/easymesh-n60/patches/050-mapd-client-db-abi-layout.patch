@@ -1,0 +1,39 @@
+--- a/mapd/src/clientDB/client_db.h
++++ b/mapd/src/clientDB/client_db.h
+@@ -78,0 +79,13 @@
++
++/* ABI storage sizes are wider than the runtime N60 2G/5G iteration limits. */
++#if defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
++#define MAPD_ABI_NUM_BANDS 3
++#define MAPD_ABI_MAX_NUM_CHANNELS (MAX_NUM_CHANNELS_2G + MAX_NUM_CHANNELS_5GL + \
++	MAX_NUM_CHANNELS_5GH1 + MAX_NUM_CHANNELS_5GH2 + 59)
++#define MAPD_ABI_MAX_CHAN_BITMAP 13
++#else
++#define MAPD_ABI_NUM_BANDS IEEE_NUM_BANDS
++#define MAPD_ABI_MAX_NUM_CHANNELS MAX_NUM_CHANNELS
++#define MAPD_ABI_MAX_CHAN_BITMAP MAX_CHAN_BITMAP
++#endif
++
+@@ -210 +223 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -223,2 +236,2 @@
+-	enum max_bw max_bw[IEEE_NUM_BANDS];
+-	enum coarse_phymode phy_mode[IEEE_NUM_BANDS];
++	enum max_bw max_bw[MAPD_ABI_NUM_BANDS];
++	enum coarse_phymode phy_mode[MAPD_ABI_NUM_BANDS];
+@@ -303 +316 @@
+-	struct meas_channel measurement_channels[MAX_NUM_CHANNELS];
++	struct meas_channel measurement_channels[MAPD_ABI_MAX_NUM_CHANNELS];
+@@ -312 +325 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -439 +452 @@
+-	uint8_t phy_cap_known[IEEE_NUM_BANDS]; //0: Unknown; 1: From PREQ; 2:From Assoc
++	uint8_t phy_cap_known[MAPD_ABI_NUM_BANDS]; //0: Unknown; 1: From PREQ; 2:From Assoc
+@@ -442 +455 @@
+-	uint8_t known_channels[MAX_CHAN_BITMAP];
++	uint8_t known_channels[MAPD_ABI_MAX_CHAN_BITMAP];
+@@ -447 +460 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)

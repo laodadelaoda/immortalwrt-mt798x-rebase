@@ -1,0 +1,97 @@
+--- a/mapd/mapd_i.h
++++ b/mapd/mapd_i.h
+@@ -18,0 +19,13 @@
++/*
++ * Closed mapd_lib objects were built with 6E and radio-teardown structure
++ * layouts. The following flags restore storage layout only; N60 keeps the
++ * MAP_6E_SUPPORT and MAP_RADIO_TEARDOWN runtime features disabled.
++ */
++
++#if defined(MAPD_PREBUILT_6E_ABI_LAYOUT) && defined(MAP_6E_SUPPORT)
++#error "Prebuilt 6E ABI layout must not enable MAP_6E_SUPPORT on N60"
++#endif
++#if defined(MAPD_PREBUILT_RADIO_TEARDOWN_ABI) && defined(MAP_RADIO_TEARDOWN)
++#error "N60 ABI padding must not enable runtime radio teardown"
++#endif
++
+@@ -192 +205 @@
+-#ifndef MAP_6E_SUPPORT
++#if !defined(MAP_6E_SUPPORT) && !defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -295 +308 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -301 +314 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -312 +325 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -386 +399 @@
+-#if defined(MAP_6E_SUPPORT) && defined(CENT_STR)
++#if (defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)) && defined(CENT_STR)
+@@ -398 +411 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -433 +446 @@
+-#ifndef MAP_6E_SUPPORT
++#if !defined(MAP_6E_SUPPORT) && !defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -565 +578 @@
+-#ifndef MAP_6E_SUPPORT
++#if !defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -570 +583 @@
+-#ifdef MAP_RADIO_TEARDOWN
++#if defined(MAP_RADIO_TEARDOWN) || defined(MAPD_PREBUILT_RADIO_TEARDOWN_ABI)
+@@ -689 +702 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -753 +766 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -784 +797 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -1036 +1049 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -1050 +1063 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -1163 +1176 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -1181 +1194 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -1186 +1199 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -1220 +1233 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -1285 +1298 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -1433 +1446 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -1533 +1546 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -1539 +1552 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -1548 +1561 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -1551 +1564 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -1559 +1572 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -1577 +1590 @@
+-#ifdef MAP_RADIO_TEARDOWN
++#if defined(MAP_RADIO_TEARDOWN) || defined(MAPD_PREBUILT_RADIO_TEARDOWN_ABI)
+@@ -1771 +1784 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)

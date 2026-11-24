@@ -1,0 +1,5 @@
+--- a/mapd/src/ApRoamAlgo/ap_roam_algo.h
++++ b/mapd/src/ApRoamAlgo/ap_roam_algo.h
+@@ -11 +11 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)

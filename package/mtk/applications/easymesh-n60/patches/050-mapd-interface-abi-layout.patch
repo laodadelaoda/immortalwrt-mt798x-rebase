@@ -1,0 +1,39 @@
+--- a/mapd/interface.h
++++ b/mapd/interface.h
+@@ -18,0 +19,10 @@
++/* Closed MAPD ABI storage width; runtime MAX_CH_NUM remains N60 2G/5G. */
++#if defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
++#define MAPD_ABI_MAX_CH_NUM 59
++#else
++#define MAPD_ABI_MAX_CH_NUM MAX_CH_NUM
++#endif
++
++#if defined(MAPD_PREBUILT_6E_ABI_LAYOUT) && defined(MAP_6E_SUPPORT)
++#error "Prebuilt 6E ABI layout must not enable MAP_6E_SUPPORT on N60"
++#endif
+@@ -563 +573 @@
+-	unsigned char non_operch_list[MAX_CH_NUM];
++	unsigned char non_operch_list[MAPD_ABI_MAX_CH_NUM];
+@@ -856 +866 @@
+-	unsigned char ch_list[MAX_CH_NUM];
++	unsigned char ch_list[MAPD_ABI_MAX_CH_NUM];
+@@ -897,2 +907,2 @@
+-	unsigned char ch_list[MAX_CH_NUM];
+-	unsigned char fre_separation[MAX_CH_NUM];
++	unsigned char ch_list[MAPD_ABI_MAX_CH_NUM];
++	unsigned char fre_separation[MAPD_ABI_MAX_CH_NUM];
+@@ -1381 +1391 @@
+-	unsigned char ch_list[MAX_CH_NUM];
++	unsigned char ch_list[MAPD_ABI_MAX_CH_NUM];
+@@ -1402 +1412 @@
+-	unsigned char ch_list[MAX_CH_NUM];
++	unsigned char ch_list[MAPD_ABI_MAX_CH_NUM];
+@@ -1609 +1619 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -1645 +1655 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -1792 +1802 @@
+-	unsigned char ch_list[MAX_CH_NUM];
++	unsigned char ch_list[MAPD_ABI_MAX_CH_NUM];

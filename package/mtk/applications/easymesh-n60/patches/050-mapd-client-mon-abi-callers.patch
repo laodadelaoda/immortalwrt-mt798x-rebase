@@ -1,0 +1,36 @@
+--- a/mapd/src/clientMon/client_mon.c
++++ b/mapd/src/clientMon/client_mon.c
+@@ -41,0 +42 @@
++
+@@ -53,0 +55,13 @@
++
++#if defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
++static uint8_t client_mon_band_from_op_class(uint8_t op_class)
++{
++	if (IS_OP_CLASS_24G(op_class))
++		return BAND_2G;
++	if (IS_OP_CLASS_5GL(op_class))
++		return BAND_5GL;
++	if (IS_OP_CLASS_5GH(op_class))
++		return BAND_5GH;
++	return BAND_UNKNOWN;
++}
++#endif
+@@ -214 +227,0 @@
+-
+@@ -216,0 +230,5 @@
++#elif defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
++			uint8_t band_of_radio = client_mon_band_from_op_class(radio_info->op_class);
++			if (band_of_radio == BAND_UNKNOWN ||
++			    !is_chan_supported(cli->known_channels, radio_info->channel,
++				get_client_max_bw(radio_info->channel, cli, band_of_radio)))
+@@ -1071,0 +1090,7 @@
++#if defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
++		if (client_mon_band_from_op_class(ra_info->op_class) == BAND_UNKNOWN)
++			continue;
++		if (is_chan_supported(cli->known_channels, ra_info->channel,
++			get_client_max_bw(ra_info->channel, cli,
++			client_mon_band_from_op_class(ra_info->op_class))))
++#else
+@@ -1073,0 +1099 @@
++#endif

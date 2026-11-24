@@ -101,7 +101,7 @@ endef
 
 define Build/Compile
 	set -eu; \
-	TARGET_EASYMESH_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS)"; \
+	TARGET_EASYMESH_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -DMAPD_PREBUILT_6E_ABI_LAYOUT -DMAPD_PREBUILT_RADIO_TEARDOWN_ABI"; \
 	OPENWRT_EASYMESH_CFLAGS="$$$$TARGET_EASYMESH_CFLAGS -DCONFIG_SUPPORT_OPENWRT"; \
 	WAPP_UAPI_DIR="$(TOPDIR)/target/linux/mediatek/files-6.12/include/uapi/linux/wapp"; \
 	test -s "$$$$WAPP_UAPI_DIR/wapp_cmm_type.h" || { echo "Missing MTK WAPP UAPI header: $$$$WAPP_UAPI_DIR/wapp_cmm_type.h" >&2; exit 1; }; \
@@ -118,7 +118,7 @@ define Build/Compile
 	WAPP_COMPILE_LOG="$(PKG_BUILD_DIR)/wapp-compile.log"; \
 	$(MAKE) -C $(PKG_BUILD_DIR)/wappd \
 		TOPDIR="$(TOPDIR)" UAPD_INCLUDE_PATH="$(TOPDIR)/target/linux/mediatek/files-6.12/include/uapi/linux/wapp -I$(STAGING_DIR)/usr/include" CONFIG_SUPPORT_OPENWRT=y CONFIG_MAP_R2_SUPPORT=y CONFIG_MAP_R3_SUPPORT=y \
-		CC="$(TARGET_CC)" EXTRA_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -I$(TOPDIR)/target/linux/mediatek/files-6.12/include/uapi/linux/wapp" \
+		CC="$(TARGET_CC)" EXTRA_CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS) -DMAPD_PREBUILT_6E_ABI_LAYOUT -I$(TOPDIR)/target/linux/mediatek/files-6.12/include/uapi/linux/wapp" \
 		LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib -lpthread -ldatconf -lkvcutil -lssl -lcrypto" \
 		V=s all > "$$$$WAPP_COMPILE_LOG" 2>&1 || { cat "$$$$WAPP_COMPILE_LOG"; exit 1; }; \
 	cat "$$$$WAPP_COMPILE_LOG"; \

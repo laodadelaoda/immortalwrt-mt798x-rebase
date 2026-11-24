@@ -1,0 +1,31 @@
+--- a/mapd/src/ApCentStr/ap_cent_str.c
++++ b/mapd/src/ApCentStr/ap_cent_str.c
+@@ -166 +166 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -213 +213 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -219 +219 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -593 +593,5 @@
+-						bss->radio->channel, 0, bss->ch_util, cli) == FALSE)
++						bss->radio->channel, 0, bss->ch_util, cli
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
++						, bss->radio->band
++#endif
++						) == FALSE)
+@@ -598 +602,5 @@
+-						bss->radio->channel, 0, bss->ch_util, cli, bss->radio->band) == FALSE)
++					bss->radio->channel, 0, bss->ch_util, cli
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
++						, bss->radio->band
++#endif
++						) == FALSE)
+@@ -758 +766 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -988 +996 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)

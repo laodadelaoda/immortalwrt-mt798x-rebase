@@ -1,0 +1,52 @@
+--- a/mapd/mapd.c
++++ b/mapd/mapd.c
+@@ -27,0 +28,37 @@
++
++#if defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
++#include <stddef.h>
++#if defined(MAP_6E_SUPPORT) || !defined(MAP_NON6E_CONTROLLER)
++#error "N60 MAPD must retain non-6E controller runtime while matching vendor ABI"
++#endif
++#define MAPD_ABI_ASSERT(name, expression) typedef char name[(expression) ? 1 : -1]
++MAPD_ABI_ASSERT(mapd_abi_own_dev_size, sizeof(struct own_1905_device) == 0x53b38);
++MAPD_ABI_ASSERT(mapd_abi_connectivity_offset,
++	offsetof(struct own_1905_device, connectivity_to_controller) == 0x53a73);
++MAPD_ABI_ASSERT(mapd_abi_global_size, sizeof(struct mapd_global) == 0x53bb0);
++MAPD_ABI_ASSERT(mapd_abi_global_dev_offset, offsetof(struct mapd_global, dev) == 0x60);
++MAPD_ABI_ASSERT(mapd_abi_radio_info_size, sizeof(struct mapd_radio_info) == 112);
++MAPD_ABI_ASSERT(mapd_abi_client_size, sizeof(struct client) == 1280);
++MAPD_ABI_ASSERT(mapd_abi_bh_link_entry_size, sizeof(struct bh_link_entry) == 224);
++MAPD_ABI_ASSERT(mapd_abi_bss_info_size, sizeof(struct bss_info) == 126);
++MAPD_ABI_ASSERT(mapd_abi_radio_info_db_size, sizeof(struct radio_info_db) == 1488);
++MAPD_ABI_ASSERT(mapd_abi_basic_cap_db_size, sizeof(struct basic_cap_db) == 72);
++MAPD_ABI_ASSERT(mapd_abi_1905_map_device_size, sizeof(struct _1905_map_device) == 1072);
++MAPD_ABI_ASSERT(mapd_abi_radio_scan_capab_size, sizeof(struct radio_scan_capab_db) == 992);
++MAPD_ABI_ASSERT(mapd_abi_channel_body_size, sizeof(struct channel_body) == 61);
++MAPD_ABI_ASSERT(mapd_abi_radio_basic_cap_size, sizeof(struct radio_basic_cap) == 62);
++MAPD_ABI_ASSERT(mapd_abi_prefer_info_size, sizeof(struct prefer_info) == 63);
++MAPD_ABI_ASSERT(mapd_abi_restrict_info_size, sizeof(struct restrict_info) == 120);
++MAPD_ABI_ASSERT(mapd_abi_unlink_metrics_query_size, sizeof(struct unlink_metrics_query) == 62);
++MAPD_ABI_ASSERT(mapd_abi_ap_chn_rpt_size, sizeof(struct ap_chn_rpt) == 61);
++MAPD_ABI_ASSERT(mapd_abi_radio_teardown_offset, offsetof(struct mapd_radio_info, teardown) == 104);
++MAPD_ABI_ASSERT(mapd_runtime_max_ch_num, MAX_CH_NUM == 13);
++MAPD_ABI_ASSERT(mapd_runtime_band_count, IEEE_NUM_BANDS == 2);
++MAPD_ABI_ASSERT(mapd_runtime_channel_count, MAX_NUM_CHANNELS == 42);
++MAPD_ABI_ASSERT(mapd_runtime_channel_bitmap, MAX_CHAN_BITMAP == 6);
++MAPD_ABI_ASSERT(mapd_abi_max_ch_num, MAPD_ABI_MAX_CH_NUM == 59);
++MAPD_ABI_ASSERT(mapd_abi_band_count, MAPD_ABI_NUM_BANDS == 3);
++MAPD_ABI_ASSERT(mapd_abi_channel_count, MAPD_ABI_MAX_NUM_CHANNELS == 101);
++MAPD_ABI_ASSERT(mapd_abi_channel_bitmap, MAPD_ABI_MAX_CHAN_BITMAP == 13);
++#undef MAPD_ABI_ASSERT
++#endif
+@@ -4370 +4407 @@
+-#ifdef MAP_6E_SUPPORT
++#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -4386 +4423 @@
+-#ifndef MAP_6E_SUPPORT
++#if !defined(MAP_6E_SUPPORT) && !defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
+@@ -4396,0 +4434 @@
++#ifdef MAP_6E_SUPPORT
+@@ -4397,0 +4436,3 @@
++#else
++			band = BAND_UNKNOWN;
++#endif
