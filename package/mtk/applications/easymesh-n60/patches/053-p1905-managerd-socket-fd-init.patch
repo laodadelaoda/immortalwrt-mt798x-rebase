@@ -8,7 +8,7 @@
  
  	debug(DEBUG_OFF, "Current Version %s\n", VERSION_1905);
  
-@@ -2508,5 +2509,8 @@
+@@ -2508,6 +2509,9 @@
  		return -1;
  	}
  	debug(DEBUG_ERROR, "alloc ctx size(%d)\n", ctx_len);
@@ -17,3 +17,4 @@
 +		ctx->sock_inf_recv_1905[i] = -1;
  	 //Open syslog file
      openlog("p1905_managerd", LOG_PID, LOG_DAEMON);
+ 
