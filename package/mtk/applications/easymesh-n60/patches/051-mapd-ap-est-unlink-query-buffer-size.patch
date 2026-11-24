@@ -1,6 +1,6 @@
 --- a/mapd/src/apEstimator/ap_est.c
 +++ b/mapd/src/apEstimator/ap_est.c
-@@ -694,11 +694,7 @@
+@@ -695,10 +695,6 @@
  				os_free(metric_query);
  				} else {
 -#ifdef MAP_6E_SUPPORT
