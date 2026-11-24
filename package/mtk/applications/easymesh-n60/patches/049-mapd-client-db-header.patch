@@ -40,13 +40,13 @@
  
  struct client {
  	struct dl_list sta_seen_entry;
-@@ -439 +452 @@
+@@ -439 +449 @@
 -	uint8_t phy_cap_known[IEEE_NUM_BANDS]; //0: Unknown; 1: From PREQ; 2:From Assoc
 +	uint8_t phy_cap_known[MAPD_ABI_NUM_BANDS]; //0: Unknown; 1: From PREQ; 2:From Assoc
-@@ -442 +455 @@
+@@ -442 +452 @@
 -	uint8_t known_channels[MAX_CHAN_BITMAP];
 +	uint8_t known_channels[MAPD_ABI_MAX_CHAN_BITMAP];
-@@ -447 +460 @@
+@@ -447 +457 @@
 -#ifdef MAP_6E_SUPPORT
 +#if defined(MAP_6E_SUPPORT) || defined(MAPD_PREBUILT_6E_ABI_LAYOUT)
 
