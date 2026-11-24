@@ -157,7 +157,7 @@ endef
 define Package/easymesh-n60/install
 	$(INSTALL_DIR) $(1)/usr/bin $(1)/usr/sbin $(1)/usr/lib $(1)/etc $(1)/etc/map $(1)/etc/init.d $(1)/etc/uci-defaults
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/wappd/wapp $(1)/usr/bin/
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/wappd/wappctrl $(1)/usr/bin/ \
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/wappd/wappctrl $(1)/usr/bin/
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/wappd/wifi_config_save.lua $(1)/usr/bin/wifi_config_save
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/mapd/mapd $(1)/usr/bin/
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/1905daemon/p1905_managerd $(1)/usr/bin/
