@@ -1,0 +1,12 @@
+--- a/dpp/dpp.c
++++ b/dpp/dpp.c
+@@ -10758,7 +10758,8 @@
+ 
+ 	bi->type = DPP_BOOTSTRAP_QR_CODE;
+ 
+-	if (key) {
++	/* An empty dpp_private_key buffer means no pre-assigned key. */
++	if (key && key[0] != '\0') {
+ 		privkey_len = os_strlen(key) / 2;
+ 		privkey = os_malloc(privkey_len);
+ 		if (!privkey ||
