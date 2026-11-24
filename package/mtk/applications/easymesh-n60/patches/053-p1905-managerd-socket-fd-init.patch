@@ -1,6 +1,6 @@
 --- a/1905daemon/src/p1905_managerd.c
 +++ b/1905daemon/src/p1905_managerd.c
-@@ -2498,5 +2498,6 @@
+@@ -2498,6 +2498,7 @@
      int result = 0;
  	int c = 0;
  	int ret = 0;
