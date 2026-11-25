@@ -346,6 +346,9 @@ jobs:
             cp "$PATCHES_DIR/$patch" "$dest"
           done < <(sed -e 's/#.*//' "$PATCHES_DIR/series" | awk 'NF {print $1}')
           echo "Refreshed patch files copied back to their native OpenWrt patch directories."
+          EXPECTED_KERNEL_PATCH_COUNT="$(sed -e 's/#.*//' "$PATCHES_DIR/series" | awk 'NF {n++} END {print n+0}')"
+          test "$EXPECTED_KERNEL_PATCH_COUNT" -gt 0
+          echo "Expected native kernel patches in series: $EXPECTED_KERNEL_PATCH_COUNT" >> upgrade-evaluation/KERNEL-PATCH-REFRESH.md
 
           python3 - <<'PY'
           import hashlib, json, subprocess, sys
@@ -430,9 +433,9 @@ jobs:
             exit 1
           fi
           APPLIED_COUNT="$(grep -Ec '^Applying .* using ' "$STRICT_LOG" || true)"
-          test "$APPLIED_COUNT" -gt 0
+          test "$APPLIED_COUNT" -eq "$EXPECTED_KERNEL_PATCH_COUNT"
           cp "$STRICT_LOG" upgrade-evaluation/kernel-patch-strict-replay.log
-          echo "Strict replay passed: $APPLIED_COUNT native patches, zero fuzz, zero offset, zero rejects." | tee upgrade-evaluation/KERNEL-PATCH-STRICT-RESULT.txt
+          echo "Strict replay passed: $APPLIED_COUNT/$EXPECTED_KERNEL_PATCH_COUNT native patches, zero fuzz, zero offset, zero rejects." | tee upgrade-evaluation/KERNEL-PATCH-STRICT-RESULT.txt
 
           git add target/linux/generic target/linux/mediatek/patches-6.12
           if ! git diff --cached --quiet; then
