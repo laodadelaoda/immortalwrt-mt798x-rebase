@@ -1,0 +1,11 @@
+--- a/mcu/warp_ccif.h
++++ b/mcu/warp_ccif.h
+@@ -28,7 +28,7 @@
+ };
+ 
+ struct ccif_entry {
+-	unsigned long base_addr;
++	void __iomem *base_addr;
+ 	u8 irq;
+ 	struct ccif_ring_ctrl *tx_ring;
+ 	struct ccif_ring_ctrl *rx_ring;

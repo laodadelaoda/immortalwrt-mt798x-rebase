@@ -45,22 +45,24 @@
  	return NULL;
  }
  
-@@ -189,21 +195,26 @@
+@@ -189,36 +195,47 @@
  warp_entry_release(struct warp_entry *warp)
  {
  	struct wifi_entry *wifi;
+-	wifi = &warp->wifi;
 +	struct warp_ctrl *warp_ctrl = warp_ctrl_get();
 +	unsigned long flags;
-+	u8 enable = 0;
+ 	u8 enable = 0;
 +
- 	wifi = &warp->wifi;
--	u8 enable = 0;
++	wifi = &warp->wifi;
  	/* wbsys irq return*/
  	wifi->ops->swap_irq(wifi->hw.priv, warp->wifi.hw.irq);
  	warp_bus_msi_set(warp->idx, &enable);
  
 +	spin_lock_irqsave(&warp_ctrl->warp_lock, flags);
  	warp->wifi.hw.priv = NULL;
++	warp->wifi.ops = NULL;
++	warp->pdev = NULL;
  	memset(&warp->pdriver, 0, sizeof(warp->pdriver));
 +	spin_unlock_irqrestore(&warp_ctrl->warp_lock, flags);
  }
@@ -73,23 +75,74 @@
 +warp_entry_get_by_pdev(struct platform_device *pdev)
  {
  	u8 i;
++	unsigned long flags;
  	struct warp_ctrl *warp_ctrl = warp_ctrl_get();
-@@ -212,10 +223,12 @@
+ 	struct warp_entry *entry;
+ 
++	spin_lock_irqsave(&warp_ctrl->warp_lock, flags);
  	for (i = 0; i < warp_ctrl->warp_num; i++) {
  		entry = &warp_ctrl->entry[i];
- 
+-
 -		if (entry->pdev == NULL && entry->pdriver.probe != NULL) {
-+		/* A platform driver must only claim the WARP entry that registered it. */
++		/* A platform driver must only claim its reserved WARP entry. */
 +		if (entry->pdev == NULL && entry->pdriver.probe != NULL &&
 +		    &entry->pdriver.driver == pdev->dev.driver) {
  			entry->pdev = pdev;
++			spin_unlock_irqrestore(&warp_ctrl->warp_lock, flags);
  			warp_dbg(WARP_DBG_OFF, "%s(): return entry[%d] \n", __func__, i);
 -			return &warp_ctrl->entry[i];
 +			return entry;
  		}
  	}
+-
++	spin_unlock_irqrestore(&warp_ctrl->warp_lock, flags);
+ 	return NULL;
+ }
  
-@@ -352,8 +365,9 @@
+@@ -248,16 +265,19 @@
+ warp_entry_get_for_pdev(void *pdev)
+ {
+ 	u8 i;
++	unsigned long flags;
+ 	struct warp_ctrl *wc = warp_ctrl_get();
+ 	struct warp_entry *entry;
+ 
++	spin_lock_irqsave(&wc->warp_lock, flags);
+ 	for (i = 0; i < wc->warp_num; i++) {
+ 		entry = &wc->entry[i];
+-
+-		if (entry->pdev == pdev)
+-			return &wc->entry[i];
++		if (entry->pdev == pdev) {
++			spin_unlock_irqrestore(&wc->warp_lock, flags);
++			return entry;
++		}
+ 	}
+-
++	spin_unlock_irqrestore(&wc->warp_lock, flags);
+ 	return NULL;
+ }
+ 
+@@ -286,8 +306,16 @@
+ /*
+ *
+ */
+-#define  warp_entry_release_pdev(warp)\
+-	((struct warp_entry *) warp)->pdev = NULL
++static void
++warp_entry_release_pdev(struct warp_entry *warp)
++{
++	struct warp_ctrl *warp_ctrl = warp_ctrl_get();
++	unsigned long flags;
++
++	spin_lock_irqsave(&warp_ctrl->warp_lock, flags);
++	warp->pdev = NULL;
++	spin_unlock_irqrestore(&warp_ctrl->warp_lock, flags);
++}
+ 
+ #ifdef WED_RX_D_SUPPORT
+ #ifdef CONFIG_WED_HW_RRO_SUPPORT
+@@ -352,8 +380,9 @@
  	warp = warp_entry_get_by_pdev(pdev);
  
  	if (warp == NULL) {
@@ -101,7 +154,7 @@
  	}
  
  	memset(&warp->wdma.res_ctrl, 0, sizeof(warp->wdma.res_ctrl));
-@@ -372,14 +386,14 @@
+@@ -372,14 +401,14 @@
  			dev_info(&pdev->dev, "Using 32bit DMA for streaming map\n");
  		} else {
  			dev_err(&pdev->dev, "No usable streaming DMA configuration, aborting\n");
@@ -118,7 +171,7 @@
  		}
  	}
  
-@@ -391,7 +405,7 @@
+@@ -391,7 +420,7 @@
  			dev_info(&pdev->dev, "Using 32bit DMA for coherent map\n");
  		} else {
  			dev_err(&pdev->dev, "No usable coherent DMA configuration, aborting\n");
@@ -127,7 +180,7 @@
  		}
  	} else {
  		if (!dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(32))) {
-@@ -399,7 +413,7 @@
+@@ -399,7 +428,7 @@
  		} else {
  
  			dev_err(&pdev->dev, "No usable coherent DMA configuration, aborting\n");
@@ -136,7 +189,18 @@
  		}
  	}
  
-@@ -447,6 +461,12 @@
+@@ -438,22 +467,28 @@
+ 		warp_fwdl_get_wo_heartbeat(&warp->woif.fwdl_ctrl, &heart_beat, warp->idx);
+ 		warp_dbg(WARP_DBG_ERR, "%s()wo heartbeat: 0x%x!\n", __func__, heart_beat);
+ 		/* dump WO PC LR log for 2 times*/
+-		warp_dbg(WARP_DBG_ERR, "%s()======WO PC LR dump======\n", __func__, heart_beat);
++		warp_dbg(WARP_DBG_ERR, "%s()======WO PC LR dump, heartbeat=0x%x======\n", __func__, heart_beat);
+ 		for (i = 0; i < 2; i++) {
+ 			warp_wo_pc_lr_cr_dump(warp->idx);
+ 		}
+-		warp_dbg(WARP_DBG_ERR, "%s()======WO PC LR dump======\n", __func__, heart_beat);
++		warp_dbg(WARP_DBG_ERR, "%s()======WO PC LR dump, heartbeat=0x%x======\n", __func__, heart_beat);
+ 	}
  #endif
  	warp_dbg(WARP_DBG_INF, "%s(): platform device probe is done\n", __func__);
  	return 0;
@@ -149,7 +213,33 @@
  }
  
  
-@@ -986,6 +1006,15 @@
+ /*
+ *
+ */
+-static int
++static void
+ warp_remove(struct platform_device *pdev)
+ {
+ 	struct warp_entry *warp;
+@@ -466,7 +501,7 @@
+ 	if (warp == NULL) {
+ 		warp_dbg(WARP_DBG_ERR, "%s(): remove faild since can't find warp entry!\n",
+ 			 __func__);
+-		return -1;
++		return;
+ 	}
+ 
+ 	wed = &warp->wed;
+@@ -495,8 +530,6 @@
+ 	warp_entry_release_pdev(warp);
+ 	/* unregister warp msg */
+ 	warp_msg_deinit(warp->idx);
+-
+-	return 0;
+ }
+ 
+ /*
+@@ -988,6 +1021,15 @@
  		slot_id = warp_get_pcie_slot((struct pci_dev *) dev);
  		if (wed_id)
  			slot_id = wed_id;
@@ -165,7 +255,7 @@
  	}
  	return warp_entry_acquire(slot_id);
  }
-@@ -998,11 +1027,20 @@
+@@ -1000,11 +1042,20 @@
  warp_register_client(struct wifi_hw *hw, struct wifi_ops *ops)
  {
  	int ret = 0;
@@ -187,7 +277,7 @@
  
  	if (!warp) {
  		warp_dbg(WARP_DBG_OFF,
-@@ -1013,22 +1051,53 @@
+@@ -1015,22 +1066,53 @@
  	/*assign wifi ops*/
  	wifi->ops = ops;
  	/*assign & create a pdriver*/
@@ -246,3 +336,18 @@
  	return -1;
  }
  EXPORT_SYMBOL(warp_register_client);
+@@ -1229,8 +1311,6 @@
+ 		return;
+ 
+ 	wed = &warp->wed;
+-	struct wifi_entry *wifi = &warp->wifi;
+-	struct wifi_hw *hw = &wifi->hw;
+ 
+ 	warp_eint_ctrl_hw(wed, false);
+ 	warp_eint_get_stat_hw(wed, &status);
+@@ -1508,5 +1588,4 @@
+ 
+ MODULE_LICENSE("GPL");
+ MODULE_DESCRIPTION(DRIVER_DESC);
+-MODULE_SUPPORTED_DEVICE("mt7615 within mt7622");
+ 

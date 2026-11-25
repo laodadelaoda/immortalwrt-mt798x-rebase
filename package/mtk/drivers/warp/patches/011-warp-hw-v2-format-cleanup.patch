@@ -1,0 +1,28 @@
+--- a/regs/reg_v2/warp_hw_v2.c
++++ b/regs/reg_v2/warp_hw_v2.c
+@@ -3048,14 +3048,14 @@
+ 
+ 		if (ret < 0) {
+ 			warp_dbg(WARP_DBG_ERR, "%s(): wed_tx reset check fail,ret=%d\n", __func__, ret);
+-			warp_dbg(WARP_DBG_ERR, "%s(): check ser_busy_cnt: echo 18 > wed\n", __func__, ret);
++			warp_dbg(WARP_DBG_ERR, "%s(): check ser_busy_cnt: echo 18 > wed\n", __func__);
+ 		}
+ 		/* TX free done reset - rx path */
+ 		ret = reset_rx_traffic(wed, reset_type);
+ 
+ 		if (ret < 0) {
+ 			warp_dbg(WARP_DBG_ERR, "%s(): wed_rx reset check fail,ret=%d\n", __func__, ret);
+-			warp_dbg(WARP_DBG_ERR, "%s(): check ser_busy_cnt: echo 18 > wed\n", __func__, ret);
++			warp_dbg(WARP_DBG_ERR, "%s(): check ser_busy_cnt: echo 18 > wed\n", __func__);
+ 		}
+ 
+ #ifdef WED_RX_D_SUPPORT
+@@ -3064,7 +3064,7 @@
+ 
+ 		if (ret < 0) {
+ 			warp_dbg(WARP_DBG_ERR, "%s(): wed_rx_data check fail,ret=%d\n", __func__, ret);
+-			warp_dbg(WARP_DBG_ERR, "%s(): check ser_busy_cnt: echo 18 > wed\n", __func__, ret);
++			warp_dbg(WARP_DBG_ERR, "%s(): check ser_busy_cnt: echo 18 > wed\n", __func__);
+ 		}
+ #endif
+ 

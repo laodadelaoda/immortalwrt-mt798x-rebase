@@ -1,0 +1,20 @@
+--- a/wed.c
++++ b/wed.c
+@@ -566,8 +566,6 @@
+ {
+ 	int ret = -1;
+ 	struct warp_entry *warp = NULL;
+-	struct wifi_entry *wifi = NULL;
+-	struct wifi_ops *ops = NULL;
+ 
+ 	if (wed) {
+ 		warp = (struct warp_entry *)wed->warp;
+@@ -908,7 +906,7 @@
+ 
+ 	case WED_PROC_TX_DYNAMIC_FREE: {
+ 		if(IS_WED_HW_CAP(wed, WED_HW_CAP_DYN_TXBM))
+-			buf_free_task((unsigned long)wed);
++			buf_free_task(wed);
+ 		else
+ 			warp_dbg(WARP_DBG_ERR, "DYBM is not enabled!\n");
+ 	}

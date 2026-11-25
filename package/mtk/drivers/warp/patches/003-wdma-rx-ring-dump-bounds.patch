@@ -1,0 +1,24 @@
+--- a/wdma.c
++++ b/wdma.c
+@@ -62,10 +62,19 @@
+ static void
+ dump_rx_ring_raw(struct wdma_entry *wdma, u8 ring_id, u32 idx)
+ {
+-	struct warp_ring *ring = &wdma->res_ctrl.rx_ctrl.rx_ring_ctrl.ring[ring_id];
++	struct wdma_rx_ring_ctrl *ring_ctrl = &wdma->res_ctrl.rx_ctrl.rx_ring_ctrl;
++	struct warp_ring *ring;
+ 	u8 *addr;
+ 	u32 size;
+-	/*WDMA Tx Ring content*/
++
++	if (!ring_ctrl->ring || ring_id >= ring_ctrl->ring_num ||
++	    idx >= ring_ctrl->ring_len)
++		return;
++
++	ring = &ring_ctrl->ring[ring_id];
++	if (!ring->cell)
++		return;
++	/*WDMA RX Ring content*/
+ 	warp_dbg(WARP_DBG_OFF, "==========WDMA RX RING RAW (%d/0x%x)==========\n",
+ 		 ring_id, idx);
+ 	warp_dump_dmacb(&ring->cell[idx]);

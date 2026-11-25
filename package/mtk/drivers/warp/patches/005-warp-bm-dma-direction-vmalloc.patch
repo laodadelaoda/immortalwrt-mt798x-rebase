@@ -1,0 +1,36 @@
+--- a/warp_bm_v2.c
++++ b/warp_bm_v2.c
+@@ -4,6 +4,7 @@
+ #include "wdma.h"
+ #include <linux/version.h>
+ #include <linux/pci.h>
++#include <linux/vmalloc.h>
+ 
+ #define DYBM_RX_EXT_POLLING_CNT	(0)//(50) /*50 times of polling approximately cost 5us */
+ #define TX_BM_HTH_DELAY_INT_INTERVAL	2000	/* 2 seconds */
+@@ -1161,15 +1162,12 @@
+ 	u32 ring_len,
+ 	struct warp_dma_buf *desc)
+ {
+-	struct wed_res_ctrl *res_ctrl = &wed->res_ctrl;
+-	struct wed_rx_ctrl *rx_ctrl = &res_ctrl->rx_ctrl;
+-	struct wed_rx_bm_res *extra_res = &rx_ctrl->extra;
+ 	u32 i;
+ 
+ 	for (i = 0; i < ring_len; i++)
+ 		wed_rx_bm_dma_cb_exit(wed, &ring->cell[i]);
+ 
+-	dma_unmap_single(&wed->pdev->dev, desc->alloc_pa, desc->alloc_size, PCI_DMA_FROMDEVICE);
++	dma_unmap_single(&wed->pdev->dev, desc->alloc_pa, desc->alloc_size, DMA_TO_DEVICE);
+ 	warp_os_free_mem(desc->alloc_va);
+ 	memset(desc, 0, sizeof(*desc));
+ 
+@@ -1216,7 +1214,7 @@
+ 					desc->alloc_va,
+ 					desc->alloc_size, DMA_TO_DEVICE);
+ 	if (dma_mapping_error(&wed->pdev->dev, desc->alloc_pa)) {
+-		warp_dbg(WARP_DBG_ERR, "%s(): FATAL, DMA map ERROR, %ld\n", __func__, desc->alloc_va);
++		warp_dbg(WARP_DBG_ERR, "%s(): FATAL, DMA map ERROR, %p\n", __func__, desc->alloc_va);
+ 		warp_os_free_mem(res->desc[idx].alloc_va);
+ 		ret = -1;
+ 		goto err;

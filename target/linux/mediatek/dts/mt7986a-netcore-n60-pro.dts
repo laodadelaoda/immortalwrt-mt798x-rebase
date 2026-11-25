@@ -361,6 +361,16 @@
 	status = "okay";
 };
 
+/* Vendor WARP v2 slot names; keep the upstream MT7986 compatible fallback. */
+&wed0 {
+	compatible = "mediatek,wed", "mediatek,mt7986-wed", "syscon";
+	pci_slot_map = <1 2>;
+};
+
+&wed1 {
+	compatible = "mediatek,wed2", "mediatek,mt7986-wed", "syscon";
+};
+
 &wifi {
 	nvmem-cells = <&eeprom_factory_0>;
 	nvmem-cell-names = "eeprom";
