@@ -107,6 +107,13 @@ jobs:
               )
               return p.stdout.decode().split()[0] if p.stdout.strip() else None
 
+          def changed_paths(sha):
+              out = subprocess.check_output(
+                  ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", sha],
+                  text=True
+              )
+              return sorted(x for x in out.splitlines() if x)
+
           base = __import__("os").environ["BASE_SHA"]
           upstream = __import__("os").environ["UPSTREAM_SHA"]
           local_head = git("rev-parse", "HEAD")
@@ -119,6 +126,7 @@ jobs:
               pid = patch_id(sha, parents.split() if parents else [])
               row = {"sha":h, "parents":parents.split() if parents else [],
                      "subject":subject, "patch_id":pid,
+                     "paths":changed_paths(sha),
                      "is_merge":len(parents.split()) > 1}
               local_rows.append(row)
               if pid:
@@ -128,12 +136,28 @@ jobs:
               h, parents, subject = metadata(sha)
               pid = patch_id(sha, parents.split() if parents else [])
               matches = local_by_pid.get(pid, []) if pid else []
-              status = "equivalent" if len(matches)==1 else ("ambiguous-equivalent" if len(matches)>1 else ("merge" if len(parents.split())>1 else "unmapped"))
+              up_paths = changed_paths(sha)
+              path_candidates = []
+              if not matches and len(parents.split()) <= 1:
+                  up_set = set(up_paths)
+                  for local in local_rows:
+                      overlap = sorted(up_set.intersection(local["paths"]))
+                      if overlap:
+                          path_candidates.append({
+                              "sha":local["sha"], "subject":local["subject"],
+                              "overlap_count":len(overlap), "overlap_paths":overlap
+                          })
+                  path_candidates.sort(key=lambda x:(-x["overlap_count"],x["sha"]))
+              status = ("equivalent" if len(matches)==1 else
+                        "ambiguous-equivalent" if len(matches)>1 else
+                        "merge" if len(parents.split())>1 else
+                        "partial-candidate" if path_candidates else "unmapped")
               mapping.append({
                   "upstream_sha":h, "subject":subject,
                   "parents":parents.split() if parents else [],
-                  "patch_id":pid, "status":status,
-                  "local_matches":[{"sha":x["sha"],"subject":x["subject"]} for x in matches]
+                  "patch_id":pid, "status":status, "paths":up_paths,
+                  "local_matches":[{"sha":x["sha"],"subject":x["subject"]} for x in matches],
+                  "path_overlap_candidates":path_candidates[:12]
               })
           result = {
               "schema_version":1, "target_head":local_head, "upstream_head":upstream,
@@ -156,7 +180,7 @@ jobs:
               "| Status | Count |",
               "|---|---:|"
           ]
-          for status in ("equivalent","ambiguous-equivalent","merge","unmapped"):
+          for status in ("equivalent","ambiguous-equivalent","partial-candidate","merge","unmapped"):
               lines.append(f"| {status} | {sum(x['status']==status for x in mapping)} |")
           lines += ["", "## Per-commit mapping", "", "| Upstream SHA | Status | Local match(es) | Subject |", "|---|---|---|---|"]
           for x in mapping:
