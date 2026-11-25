@@ -39,7 +39,11 @@ def find_source_root(extracted):
     return matches[0]
 
 def patch_targets(patch_text):
-    targets = re.findall(r"^--- a/(.+)$", patch_text, re.M)
+    if isinstance(patch_text, bytes):
+        raw_targets = re.findall(rb"^--- a/([^\r\n]+)$", patch_text, re.M)
+        targets = [item.decode("utf-8") for item in raw_targets]
+    else:
+        targets = re.findall(r"^--- a/(.+)$", patch_text, re.M)
     if not targets:
         fail("patch has no --- a/ target")
     return targets
@@ -149,7 +153,7 @@ def main():
         if actual_after != names:
             fail("new patch inventory does not match sorted Lock order")
         for patch in PATCH_DIR.glob("*.patch"):
-            targets = patch_targets(patch.read_text(encoding="utf-8"))
+            targets = patch_targets(patch.read_bytes())
             if len(targets) != 1:
                 fail("one-file-per-patch invariant failed: " + patch.name)
 
