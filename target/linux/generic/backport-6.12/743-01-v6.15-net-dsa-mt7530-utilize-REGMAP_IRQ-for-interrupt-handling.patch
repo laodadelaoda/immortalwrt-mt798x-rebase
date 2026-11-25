@@ -37,7 +37,7 @@ diff --git a/drivers/net/dsa/mt7530.c b/drivers/net/dsa/mt7530.c
 index aaa36c27b0f9f..ac5d9f7a1722f 100644
 --- a/drivers/net/dsa/mt7530.c
 +++ b/drivers/net/dsa/mt7530.c
-@@ -2050,131 +2050,6 @@ mt7530_setup_gpio(struct mt7530_priv *priv)
+@@ -2054,131 +2054,6 @@ mt7530_setup_gpio(struct mt7530_priv *priv)
  }
  #endif /* CONFIG_GPIOLIB */
  
@@ -169,7 +169,7 @@ index aaa36c27b0f9f..ac5d9f7a1722f 100644
  static void
  mt7530_setup_mdio_irq(struct mt7530_priv *priv)
  {
-@@ -2191,49 +2066,72 @@ mt7530_setup_mdio_irq(struct mt7530_priv *priv)
+@@ -2195,49 +2070,72 @@ mt7530_setup_mdio_irq(struct mt7530_priv *priv)
  	}
  }
  
@@ -267,7 +267,7 @@ index aaa36c27b0f9f..ac5d9f7a1722f 100644
  
  	return 0;
  }
-@@ -2253,26 +2151,6 @@ mt7530_free_mdio_irq(struct mt7530_priv *priv)
+@@ -2257,26 +2155,6 @@ mt7530_free_mdio_irq(struct mt7530_priv *priv)
  	}
  }
  
@@ -294,7 +294,7 @@ index aaa36c27b0f9f..ac5d9f7a1722f 100644
  static int
  mt7530_setup_mdio(struct mt7530_priv *priv)
  {
-@@ -2307,13 +2185,13 @@ mt7530_setup_mdio(struct mt7530_priv *priv)
+@@ -2311,13 +2189,13 @@ mt7530_setup_mdio(struct mt7530_priv *priv)
  	bus->parent = dev;
  	bus->phy_mask = ~ds->phys_mii_mask;
  
@@ -310,7 +310,7 @@ index aaa36c27b0f9f..ac5d9f7a1722f 100644
  			mt7530_free_mdio_irq(priv);
  	}
  
-@@ -3101,8 +2979,6 @@ mt753x_setup(struct dsa_switch *ds)
+@@ -3073,8 +2951,6 @@ mt753x_setup(struct dsa_switch *ds)
  		return ret;
  
  	ret = mt7530_setup_mdio(priv);
@@ -319,7 +319,7 @@ index aaa36c27b0f9f..ac5d9f7a1722f 100644
  	if (ret)
  		return ret;
  
-@@ -3113,11 +2989,11 @@ mt753x_setup(struct dsa_switch *ds)
+@@ -3086,11 +2962,11 @@ mt753x_setup(struct dsa_switch *ds)
  		priv->pcs[i].port = i;
  	}
  
@@ -335,7 +335,7 @@ index aaa36c27b0f9f..ac5d9f7a1722f 100644
  
  	return ret;
  }
-@@ -3361,8 +3237,8 @@ EXPORT_SYMBOL_GPL(mt7530_probe_common);
+@@ -3305,8 +3181,8 @@ EXPORT_SYMBOL_GPL(mt7530_probe_common);
  void
  mt7530_remove_common(struct mt7530_priv *priv)
  {
@@ -350,7 +350,7 @@ diff --git a/drivers/net/dsa/mt7530.h b/drivers/net/dsa/mt7530.h
 index 349d72a35771f..c3ea403d7acfd 100644
 --- a/drivers/net/dsa/mt7530.h
 +++ b/drivers/net/dsa/mt7530.h
-@@ -819,9 +819,7 @@ struct mt753x_info {
+@@ -803,9 +803,7 @@ struct mt753x_info {
   * @p5_mode:		Holding the current mode of port 5 of the MT7530 switch
   * @p5_sgmii:		Flag for distinguishing if port 5 of the MT7531 switch
   *			has got SGMII
@@ -360,7 +360,7 @@ index 349d72a35771f..c3ea403d7acfd 100644
   * @create_sgmii:	Pointer to function creating SGMII PCS instance(s)
   * @active_cpu_ports:	Holding the active CPU ports
   * @mdiodev:		The pointer to the MDIO device structure
-@@ -846,9 +844,7 @@ struct mt7530_priv {
+@@ -830,9 +828,7 @@ struct mt7530_priv {
  	struct mt753x_pcs	pcs[MT7530_NUM_PORTS];
  	/* protect among processes for registers access*/
  	struct mutex reg_mutex;
