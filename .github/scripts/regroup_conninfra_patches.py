@@ -132,6 +132,29 @@ def emit_source_review(root):
         if len(lines) > 160:
             print("===== SOURCE REVIEW TRUNCATED " + name + " =====")
 
+    specific_functions = [
+        ("platform/mt7986/mt7986_pos.c", "consys_plt_hw_init"),
+        ("platform/mt7986/mt7986_pos.c", "consys_plt_hw_deinit"),
+        ("platform/mt7986/mt7986_pos.c", "consys_plt_clk_get_from_dts"),
+        ("platform/mt7986/mt7986_pos.c", "consys_plt_clk_detach"),
+        ("platform/mt7986/mt7986_consys_reg.c", "consys_reg_init"),
+        ("platform/mt7986/mt7986_consys_reg.c", "consys_reg_deinit"),
+        ("base/osal.c", "osal_op_history_init"),
+        ("base/osal.c", "osal_op_history_deinit"),
+        ("src/conninfra_dev.c", "conninfra_dev_init"),
+        ("src/conninfra_dev.c", "conninfra_dev_deinit"),
+    ]
+    for rel, name in specific_functions:
+        found = extract_function(root, name, rel)
+        if found:
+            source_path, body = found
+            lines = body.splitlines()
+            print("===== SOURCE REVIEW " + name + " exact path (" + source_path + ") lines=" + str(len(lines)) + " =====")
+            print("\n".join(lines[:180]))
+            if len(lines) > 180:
+                print("===== SOURCE REVIEW TRUNCATED " + name + " =====")
+        else:
+            print("SOURCE REVIEW MISSING exact path: " + rel + " :: " + name)
     for rel in ["platform/mt7981/mt7981_consys_reg.c", "platform/mt7986/mt7986_consys_reg.c"]:
         found = extract_function(root, "consys_reg_init", rel)
         if found:
