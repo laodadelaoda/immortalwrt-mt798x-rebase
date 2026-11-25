@@ -119,7 +119,7 @@ def emit_source_review(root):
         "consys_reg_init", "consys_reg_deinit",
         "conninfra_core_init", "conninfra_core_deinit",
         "msg_thread_init", "msg_thread_deinit",
-        "msg_op_history_save", "osal_op_history_print_work",
+        "msg_op_history_save", "osal_op_history_print_work", "osal_op_history_dump",
         "consys_plt_clk_get_from_dts", "consys_plt_clk_detach",
     ]
     for name in names:
@@ -169,6 +169,12 @@ def emit_source_review(root):
             for line_no, line in enumerate(data.splitlines(), 1):
                 if b"CFG_REG_LOAD_FROM_DTS_CTRL" in line:
                     print("CFG_REG_LOAD_FROM_DTS_CTRL " + file.relative_to(root).as_posix() + ":" + str(line_no) + " " + line.decode("latin-1"))
+
+    for file in root.rglob("*"):
+        if file.is_file() and file.suffix in {".c", ".h"}:
+            for line_no, line in enumerate(file.read_bytes().splitlines(), 1):
+                if any(token in line for token in (b"dump_ring_buffer", b"dump_work", b"osal_op_history", b"consys_plt_clk_")):
+                    print("SOURCE OWNERSHIP REFERENCE " + file.relative_to(root).as_posix() + ":" + str(line_no) + " " + line.decode("latin-1"))
 
     staticized = {
         "base/ring.c": ["__ring_segment_prepare"],
