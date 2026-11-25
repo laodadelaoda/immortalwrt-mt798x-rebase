@@ -261,6 +261,19 @@ jobs:
           sudo apt-get install -y quilt
           cp config/n60pro-1001.config .config
           make defconfig
+
+          # Linux 6.12.118 already contains the MT7530 core_rmw() bus->read()
+          # error check from upstream commit 573d6e3. Do not reapply its
+          # now-redundant backport on 6.12.118 or newer.
+          KERNEL_PATCHVER="$(sed -n 's/^LINUX_VERSION-6.12 = //p' target/linux/generic/kernel-6.12)"
+          KERNEL_PATCHLEVEL="${KERNEL_PATCHVER#.}"
+          if [[ "$KERNEL_PATCHLEVEL" =~ ^[0-9]+$ ]] && [ "$KERNEL_PATCHLEVEL" -ge 118 ]; then
+            REDUNDANT_MT7530_PATCH="target/linux/generic/backport-6.12/743-06-v7.3-net-dsa-mt7530-check-bus_read-error-in-core_rmw.patch"
+            if [ -f "$REDUNDANT_MT7530_PATCH" ]; then
+              git rm -f -- "$REDUNDANT_MT7530_PATCH"
+              echo "Removed redundant MT7530 backport for Linux 6.12.$KERNEL_PATCHLEVEL; the fix is already in the pinned upstream kernel."
+            fi
+          fi
           if make QUILT=1 target/linux/prepare V=s >"$RUNNER_TEMP/n60pro-kernel-quilt-prepare.log" 2>&1; then
             echo "OpenWrt native QUILT=1 kernel preparation completed."
           else
@@ -270,6 +283,24 @@ jobs:
             exit "$rc"
           fi
           cp "$RUNNER_TEMP/n60pro-kernel-quilt-prepare.log" upgrade-evaluation/kernel-quilt-prepare.log
+
+          MT7530_SOURCE="$(find build_dir -type f -path '*/linux-*/drivers/net/dsa/mt7530.c' -print -quit)"
+          test -n "$MT7530_SOURCE"
+          python3 - "$MT7530_SOURCE" <<'PY'
+          import re, sys
+          from pathlib import Path
+          source = Path(sys.argv[1]).read_text(encoding="utf-8")
+          match = re.search(r"static void\\s+core_rmw\\(struct mt7530_priv \\*priv,.*?\\n}\\n", source, re.S)
+          if not match:
+              raise SystemExit("FAIL: MT7530 core_rmw() was not found in prepared kernel source")
+          body = match.group(0)
+          required = ("ret = bus->read(", "if (ret < 0)", "val = ret;")
+          missing = [token for token in required if token not in body]
+          if missing:
+              raise SystemExit("FAIL: Linux source lacks upstream MT7530 core_rmw() read-error handling: " + ", ".join(missing))
+          print("PASS: redundant 743-06 behavior is already present in prepared Linux source.")
+          PY
+
           PATCHES_DIR="$(find build_dir -type d -path '*/linux-*/patches' -print -quit)"
           test -n "$PATCHES_DIR"
           LINUX_DIR="${PATCHES_DIR%/patches}"

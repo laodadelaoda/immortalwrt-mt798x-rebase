@@ -1,0 +1,22 @@
+[upstream] xfrm: propagate -EINPROGRESS from validate_xmit_xfrm()
+
+Preserve the asynchronous XFRM offload ownership signal. The caller
+must distinguish an skb stolen by async crypto from a dropped skb.
+
+Upstream commit: 6860b467f569
+
+---
+ net/xfrm/xfrm_device.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/net/xfrm/xfrm_device.c
++++ b/net/xfrm/xfrm_device.c
+@@ -184,7 +184,7 @@ struct sk_buff *validate_xmit_xfrm(struc
+ 		err = x->type_offload->xmit(x, skb, esp_features);
+ 		if (err) {
+ 			if (err == -EINPROGRESS)
+-				return NULL;
++				return ERR_PTR(-EINPROGRESS);
+ 
+ 			XFRM_INC_STATS(xs_net(x), LINUX_MIB_XFRMOUTSTATEPROTOERROR);
+ 			kfree_skb(skb);
