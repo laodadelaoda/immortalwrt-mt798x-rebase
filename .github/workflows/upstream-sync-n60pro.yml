@@ -278,9 +278,13 @@ jobs:
                   if line.startswith("diff --git "):
                       active, binary = True, False
                       continue
-                  if not active:
+                  if line.startswith("--- "):
+                      active = True
                       continue
-                  if line.startswith(("--- ", "+++ ")):
+                  if line.startswith("+++ "):
+                      active = True
+                      continue
+                  if not active:
                       continue
                   if line.startswith("GIT binary patch"):
                       binary = True
@@ -325,9 +329,13 @@ jobs:
                   if line.startswith("diff --git "):
                       active, binary = True, False
                       continue
-                  if not active:
+                  if line.startswith("--- "):
+                      active = True
                       continue
-                  if line.startswith(("--- ", "+++ ")):
+                  if line.startswith("+++ "):
+                      active = True
+                      continue
+                  if not active:
                       continue
                   if line.startswith("GIT binary patch"):
                       binary = True
