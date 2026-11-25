@@ -23,3 +23,11 @@
  void FlashWrite(char *name, unsigned char *p, unsigned long a, unsigned long b);
  
  unsigned int osal_strlen(const char *str);
+@@ -389,6 +396,7 @@
+ 
+ void osal_dump_thread_state(const unsigned char *name);
+ void osal_op_history_init(struct osal_op_history *log_history, int queue_size);
++void osal_op_history_deinit(struct osal_op_history *log_history);
+ void osal_op_history_save(struct osal_op_history *log_history, P_OSAL_OP pOp);
+ void osal_op_history_print(struct osal_op_history *log_history, char *name);
+ /*******************************************************************************

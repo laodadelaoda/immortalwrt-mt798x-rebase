@@ -61,11 +61,12 @@
  {
  	int opid, ret;
  
-@@ -681,6 +681,11 @@
+@@ -681,6 +681,12 @@
  	if (r) {
  		pr_err("osal_thread_run(evt_thread 0x%p) fail(%d)\n",
  				p_thread, r);
 +		osal_thread_destroy(p_thread);
++		osal_op_history_deinit(&ctx->op_history);
 +		for (i = 0; i < MSG_THREAD_OP_BUF_SIZE; i++)
 +			osal_signal_deinit(&(ctx->op_q_inst[i].signal));
 +		osal_sleepable_lock_deinit(&ctx->free_op_q.lock);
@@ -73,3 +74,12 @@
  		return -2;
  	}
  	return r;
+@@ -697,6 +703,8 @@
+ 		return -1;
+ 	}
+ 
++	osal_op_history_deinit(&ctx->op_history);
++
+ 	for (i = 0; i < MSG_THREAD_OP_BUF_SIZE; i++)
+ 		osal_signal_deinit(&(ctx->op_q_inst[i].signal));
+ 

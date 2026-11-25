@@ -159,3 +159,61 @@
  {
  	struct kfifo *fifo = NULL;
  
+@@ -1495,6 +1497,7 @@
+ 	int size = queue_size * sizeof(struct osal_op_history_entry);
+ 
+ 	spin_lock_init(&(log_history->lock));
++	INIT_WORK(&log_history->dump_work, osal_op_history_print_work);
+ 
+ 	log_history->queue = kzalloc(size, GFP_ATOMIC);
+ 	if (log_history->queue == NULL)
+@@ -1508,7 +1511,26 @@
+ 		0,
+ 		&log_history->ring_buffer);
+ 
+-	INIT_WORK(&log_history->dump_work, osal_op_history_print_work);
++}
++
++void osal_op_history_deinit(struct osal_op_history *log_history)
++{
++	struct osal_op_history_entry *queue;
++	unsigned long flags;
++
++	if (!log_history)
++		return;
++
++	spin_lock_irqsave(&log_history->lock, flags);
++	queue = log_history->queue;
++	log_history->queue = NULL;
++	log_history->ring_buffer.base = NULL;
++	spin_unlock_irqrestore(&log_history->lock, flags);
++
++	cancel_work_sync(&log_history->dump_work);
++	kfree(log_history->dump_ring_buffer.base);
++	log_history->dump_ring_buffer.base = NULL;
++	kfree(queue);
+ }
+ 
+ void osal_op_history_print(struct osal_op_history *log_history, char *name)
+@@ -1537,6 +1559,11 @@
+ 	dump_ring_buffer = &log_history->dump_ring_buffer;
+ 
+ 	spin_lock_irqsave(lock, flags);
++	if (log_history->queue == NULL) {
++		spin_unlock_irqrestore(lock, flags);
++		kfree(queue);
++		return;
++	}
+ 	if (dump_ring_buffer->base != NULL) {
+ 		spin_unlock_irqrestore(lock, flags);
+ 		kfree(queue);
+@@ -1549,8 +1576,8 @@
+ 	osal_memcpy(dump_ring_buffer, ring_buffer, sizeof(struct ring));
+ 	/* assign value to base after memory copy */
+ 	dump_ring_buffer->base = queue;
++	schedule_work(work);
+ 	spin_unlock_irqrestore(lock, flags);
+-	schedule_work(work);
+ }
+ 
+ void osal_op_history_save(struct osal_op_history *log_history, P_OSAL_OP pOp)
