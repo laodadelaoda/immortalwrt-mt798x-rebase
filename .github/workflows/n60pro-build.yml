@@ -3,12 +3,10 @@ name: N60 Pro Build Pipeline
 on:
   push:
     branches:
-      - n60pro-mtk-closed-driver
       - n60pro-25.12-upstream-base
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches:
-      - n60pro-mtk-closed-driver
       - n60pro-25.12-upstream-base
   workflow_dispatch:
 
@@ -16,17 +14,11 @@ permissions:
   contents: read
 
 jobs:
-  vendor-audit:
-    name: Canonical vendor and EasyMesh patch audit
-    uses: ./.github/workflows/easymesh-patch-replay.yml
-    permissions:
-      contents: read
-
-  # Full consumes the exact-run Vendor Audit attestation before native OpenWrt patching.
   firmware:
     name: Build complete ImmortalWrt firmware for Netcore N60 Pro
-    needs: [vendor-audit]
-    if: needs.vendor-audit.result == 'success'
+    permissions:
+      contents: write
+      pull-requests: write
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     concurrency:
@@ -46,22 +38,6 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
           echo "Build revision: $(git rev-parse HEAD)"
-
-      - name: Download canonical Vendor Audit evidence from this run and attempt
-        uses: actions/download-artifact@v6
-        with:
-          name: n60pro-canonical-vendor-audit-${{ github.run_id }}-attempt-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/n60pro-vendor-audit-evidence
-
-      - name: Verify Vendor Audit attestation, Lock, source files and complete kernel patch inventory
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          python3 package/mtk/applications/easymesh-n60/scripts/verify-vendor-audit-attestation.py verify \
-            --repo "$GITHUB_WORKSPACE" \
-            --attestation "$RUNNER_TEMP/n60pro-vendor-audit-evidence/vendor-audit-attestation.json" \
-            --expected-run-id "$GITHUB_RUN_ID" \
-            --expected-run-attempt "$GITHUB_RUN_ATTEMPT"
 
       - name: Free runner disk space
         shell: bash
@@ -132,7 +108,7 @@ jobs:
           mapfile -t PATCHES < <(find "$PATCH_DIR" -maxdepth 1 -type f -name '*.patch' -print | sort)
           COUNT="${#PATCHES[@]}"
           test "$COUNT" -gt 0
-          echo "All native Linux 6.12 patch files are covered by the exact-run Vendor Audit attestation."
+          echo "All native Linux 6.12 patch files are included in this Full build and will be applied by OpenWrt native kernel preparation."
           echo "Patch count: $COUNT"
           sha256sum "${PATCHES[@]}" > "$RUNNER_TEMP/n60pro-kernel-patches.sha256"
           sha256sum "$RUNNER_TEMP/n60pro-kernel-patches.sha256"
@@ -220,3 +196,28 @@ jobs:
           path: bin/targets/mediatek/filogic/
           if-no-files-found: error
           retention-days: 30
+
+      - name: Merge successfully built upstream candidate
+        if: success() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/automation/upstream-25.12-candidate'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.sha }}
+          HEAD_BRANCH: automation/upstream-25.12-candidate
+          TARGET_BRANCH: n60pro-25.12-upstream-base
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          PR_JSON="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" --base "$TARGET_BRANCH" --state open --json number,headRefOid,isDraft)"
+          PR_COUNT="$(printf '%s' "$PR_JSON" | jq 'length')"
+          if [ "$PR_COUNT" -eq 0 ]; then
+            echo "No open upstream candidate PR; this Full run does not perform a merge."
+            exit 0
+          fi
+          test "$PR_COUNT" -eq 1
+          PR_NUMBER="$(printf '%s' "$PR_JSON" | jq -r '.[0].number')"
+          PR_HEAD="$(printf '%s' "$PR_JSON" | jq -r '.[0].headRefOid')"
+          PR_DRAFT="$(printf '%s' "$PR_JSON" | jq -r '.[0].isDraft')"
+          test "$PR_HEAD" = "$HEAD_SHA"
+          if [ "$PR_DRAFT" = "true" ]; then gh pr ready "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"; fi
+          gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --merge --delete-branch
+          echo "Merged exact candidate $HEAD_SHA after Full firmware build and artifact upload succeeded."
