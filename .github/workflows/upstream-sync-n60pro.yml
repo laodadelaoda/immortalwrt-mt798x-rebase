@@ -261,6 +261,19 @@ jobs:
           sudo apt-get install -y quilt
           cp config/n60pro-1001.config .config
           make defconfig
+          if make QUILT=1 target/linux/prepare V=s >"$RUNNER_TEMP/n60pro-kernel-quilt-prepare.log" 2>&1; then
+            echo "OpenWrt native QUILT=1 kernel preparation completed."
+          else
+            rc=$?
+            cp "$RUNNER_TEMP/n60pro-kernel-quilt-prepare.log" upgrade-evaluation/kernel-quilt-prepare.log
+            tail -n 240 "$RUNNER_TEMP/n60pro-kernel-quilt-prepare.log"
+            exit "$rc"
+          fi
+          cp "$RUNNER_TEMP/n60pro-kernel-quilt-prepare.log" upgrade-evaluation/kernel-quilt-prepare.log
+          PATCHES_DIR="$(find build_dir -type d -path '*/linux-*/patches' -print -quit)"
+          test -n "$PATCHES_DIR"
+          LINUX_DIR="\${PATCHES_DIR%/patches}"
+          test -s "$PATCHES_DIR/series"
 
           python3 - <<'PY'
           import hashlib, json, subprocess
@@ -302,8 +315,15 @@ jobs:
           PY
 
           REFRESH_LOG="$RUNNER_TEMP/n60pro-kernel-quilt-refresh.log"
-          if make target/linux/refresh V=s >"$REFRESH_LOG" 2>&1; then
-            echo "OpenWrt native Quilt refresh completed."
+          if (
+            cd "$LINUX_DIR"
+            quilt --quiltrc=- pop -a -f || true
+            while quilt --quiltrc=- next >/dev/null 2>&1; do
+              quilt --quiltrc=- push
+              QUILT_DIFF_OPTS="-p" quilt --quiltrc=- refresh -p ab --no-index --no-timestamps
+            done
+          ) >"$REFRESH_LOG" 2>&1; then
+            echo "OpenWrt native Quilt push/refresh loop completed."
           else
             rc=$?
             cp "$REFRESH_LOG" upgrade-evaluation/kernel-patch-refresh.log
@@ -311,6 +331,21 @@ jobs:
             exit "$rc"
           fi
           cp "$REFRESH_LOG" upgrade-evaluation/kernel-patch-refresh.log
+          while IFS= read -r patch; do
+            patch="\${patch%%#*}"
+            patch="$(printf '%s' "$patch" | xargs)"
+            [ -n "$patch" ] || continue
+            case "$patch" in
+              generic-backport/*) dest="target/linux/generic/backport-6.12/\${patch#generic-backport/}" ;;
+              generic/*) dest="target/linux/generic/pending-6.12/\${patch#generic/}" ;;
+              generic-hack/*) dest="target/linux/generic/hack-6.12/\${patch#generic-hack/}" ;;
+              platform/*) dest="target/linux/mediatek/patches-6.12/\${patch#platform/}" ;;
+              *) echo "Unknown kernel patch series prefix: $patch"; exit 1 ;;
+            esac
+            mkdir -p "$(dirname "$dest")"
+            cp "$PATCHES_DIR/$patch" "$dest"
+          done < <(sed -e 's/#.*//' "$PATCHES_DIR/series" | awk 'NF {print $1}')
+          echo "Refreshed patch files copied back to their native OpenWrt patch directories."
 
           python3 - <<'PY'
           import hashlib, json, subprocess, sys
