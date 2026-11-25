@@ -513,6 +513,7 @@ jobs:
             echo "5. Review upstream changes touching DTS, N60 Pro config, closed-driver integration, WARP/Conninfra/MT Wi-Fi/datconf/MAPFILTER, EasyMesh/DPP/WAPP, OpenSSL, EIP93, Makefiles and Kconfig."
             echo "6. The candidate PR's Full firmware workflow must succeed and upload a non-empty firmware artifact."
             echo "7. Canonical Vendor Audit must run native target/linux/prepare on the pinned Linux 6.12 source with PATCH=patch --fuzz=0; non-zero offsets, rejects, or .orig/.rej files fail the audit credential."
+            echo "8. Before candidate publication, the workflow refreshes the complete kernel patch series with native Quilt and verifies every patch's added/deleted code payload is unchanged."
             echo
             echo "## Decision"
             if [ "${{ steps.refs.outputs.upstream_ahead_count }}" = "0" ]; then
@@ -553,7 +554,7 @@ jobs:
 
           - Primary upstream: immortalwrt/immortalwrt:openwrt-25.12
           - Upstream commit: $UPSTREAM_SHA
-          - Candidate merge commit: $CANDIDATE_SHA
+          - Candidate revision (merge plus verified kernel patch refresh): $CANDIDATE_SHA
           - Source branch baseline: $GITHUB_SHA
           - MTK integration baseline: ${{ steps.refs.outputs.mtk_base_sha }}
 
