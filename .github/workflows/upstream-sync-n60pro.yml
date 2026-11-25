@@ -199,6 +199,17 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          if [ "$UPSTREAM_SHA" = "$(git rev-parse HEAD)" ]; then
+            echo "UPSTREAM_STATUS=already-current" >> "$GITHUB_OUTPUT"
+            {
+              echo
+              echo "## Synchronization result"
+              echo "- Status: already up to date"
+              echo "- Target HEAD and upstream HEAD are identical: $UPSTREAM_SHA"
+              echo "- No candidate branch, pull request, or build dispatch is required."
+            } | tee -a upgrade-evaluation/UPSTREAM-EVALUATION.md
+            exit 0
+          fi
           set +e
           git merge-tree --write-tree HEAD "$UPSTREAM_SHA" > upgrade-evaluation/merge-tree.txt 2>&1
           probe_rc=$?
