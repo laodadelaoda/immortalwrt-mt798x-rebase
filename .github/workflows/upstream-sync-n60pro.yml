@@ -27,6 +27,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          mkdir -p upgrade-evaluation
           git remote add upstream https://github.com/chasey-dev/immortalwrt-mt798x-rebase.git
           git fetch --no-tags upstream 25.12
           UPSTREAM_SHA="$(git rev-parse FETCH_HEAD)"
