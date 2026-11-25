@@ -2,6 +2,11 @@ name: N60 Pro upstream 25.12 synchronization
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - n60pro-25.12-upstream-base
+    paths:
+      - .github/workflows/upstream-sync-n60pro.yml
 
 permissions:
   contents: write
