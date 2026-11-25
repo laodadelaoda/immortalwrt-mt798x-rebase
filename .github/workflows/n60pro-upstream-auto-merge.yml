@@ -30,6 +30,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
         shell: bash
@@ -40,9 +42,12 @@ jobs:
           test -n "$HEAD_BRANCH"
           test "${{ github.event.workflow_run.conclusion }}" = "success"
           test "${{ github.event.workflow_run.event }}" = "workflow_dispatch"
-          ARTIFACT_COUNT="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts" --jq '[.artifacts[] | select(.name | startswith("n60pro-immortalwrt-firmware")) | select(.expired == false) | select(.size_in_bytes > 0)] | length')"
-          test "$ARTIFACT_COUNT" -ge 1
-          echo "Candidate $HEAD_SHA has successful Vendor Audit -> Full run $RUN_ID and a non-empty firmware artifact."
+          ARTIFACTS_JSON="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts")"
+          AUDIT_COUNT="$(printf '%s' "$ARTIFACTS_JSON" | jq --arg name "n60pro-canonical-vendor-audit-$RUN_ID-attempt-$RUN_ATTEMPT" '[.artifacts[] | select(.name == $name) | select(.expired == false) | select(.size_in_bytes > 0)] | length')"
+          FIRMWARE_COUNT="$(printf '%s' "$ARTIFACTS_JSON" | jq --arg name "n60pro-immortalwrt-firmware-$RUN_NUMBER" '[.artifacts[] | select(.name == $name) | select(.expired == false) | select(.size_in_bytes > 0)] | length')"
+          test "$AUDIT_COUNT" -eq 1
+          test "$FIRMWARE_COUNT" -ge 1
+          echo "Candidate $HEAD_SHA has successful Vendor Audit -> Full run $RUN_ID, exact-attempt audit evidence, and non-empty firmware artifact."
 
       - name: Merge only the exact validated candidate PR
         env:
