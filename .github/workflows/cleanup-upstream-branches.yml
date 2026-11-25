@@ -42,7 +42,7 @@ jobs:
               --jq '.[].name | select(startswith("automation/upstream-25.12-"))'
           )
 
-          if (("${#branches[@]}" == 0)); then
+          if ((${#branches[@]} == 0)); then
             echo "No per-run upstream automation branches found."
             exit 0
           fi
@@ -72,7 +72,7 @@ jobs:
             if git merge-base --is-ancestor \
               "refs/remotes/origin/${branch}" \
               "refs/remotes/origin/${DEFAULT_BRANCH}"; then
-              encoded_branch="$(python3 -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["BRANCH"], safe=""))' BRANCH="${branch}")"
+              encoded_branch="$(BRANCH="${branch}" python3 -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["BRANCH"], safe=""))')"
               gh api --method DELETE \
                 "repos/${GH_REPO}/git/refs/heads/${encoded_branch}"
               echo "DELETED: ${branch} (already fully contained in ${DEFAULT_BRANCH})"
