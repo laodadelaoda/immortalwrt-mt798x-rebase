@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     concurrency:
-      group: n60pro-full-firmware
+      group: n60pro-full-firmware-${{ github.ref }}
       cancel-in-progress: false
     steps:
       - name: Checkout exact audited source revision
