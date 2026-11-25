@@ -1,0 +1,25 @@
+--- a/base/include/osal.h
++++ b/base/include/osal.h
+@@ -145,6 +145,13 @@
+ typedef int MTK_CONN_BOOL;
+ 
+ typedef int(*P_COND) (void *);
++
++typedef long __kernel_time_t;
++
++struct timeval {
++	__kernel_time_t		tv_sec;		/* seconds */
++	__kernel_suseconds_t	tv_usec;	/* microseconds */
++};
+ 
+ typedef struct _OSAL_UNSLEEPABLE_LOCK_ {
+ 	spinlock_t lock;
+@@ -267,7 +274,7 @@
+ *                  F U N C T I O N   D E C L A R A T I O N S
+ ********************************************************************************
+ */
+-void FlashRead(char *name,unsigned char *value, unsigned long offset, unsigned long size);
++int FlashRead(char *name, unsigned char *value, unsigned long offset, unsigned long size);
+ void FlashWrite(char *name, unsigned char *p, unsigned long a, unsigned long b);
+ 
+ unsigned int osal_strlen(const char *str);

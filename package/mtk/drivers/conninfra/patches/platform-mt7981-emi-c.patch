@@ -1,0 +1,11 @@
+--- a/platform/mt7981/mt7981_emi.c
++++ b/platform/mt7981/mt7981_emi.c
+@@ -32,7 +32,7 @@
+ *                            P U B L I C   D A T A
+ ********************************************************************************
+ */
+-unsigned int consys_emi_get_fw_emi_size(void)
++static unsigned int consys_emi_get_fw_emi_size(void)
+ {
+ 	return 0x100000;
+ }

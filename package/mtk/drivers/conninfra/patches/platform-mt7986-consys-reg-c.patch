@@ -1,0 +1,71 @@
+--- a/platform/mt7986/mt7986_consys_reg.c
++++ b/platform/mt7986/mt7986_consys_reg.c
+@@ -16,6 +16,8 @@
+ *    Any definitions in this file will be shared among GLUE Layer and internal Driver Stack.
+ */
+ 
++#include <linux/errno.h>
++#include <linux/io.h>
+ #include <linux/memblock.h>
+ #include <linux/platform_device.h>
+ #include <linux/of.h>
+@@ -108,7 +110,7 @@
+ 
+ static int consys_reg_init(struct platform_device *pdev)
+ {
+-	int ret = -1;
++	int ret = -ENODEV;
+ 	struct device_node *node = NULL;
+ 	struct consys_reg_base_addr *base_addr = NULL;
+ 	int i = 0;
+@@ -137,11 +139,29 @@
+ 		}
+ #else
+ 		for (i = 0; i < CONSYS_BASE_ADDR_MAX; i++) {
++			void __iomem *mapped;
++
+ 			base_addr = &conn_reg.reg_base_addr[i];
+-			if (base_addr->vir_addr == 0)
+-				base_addr->vir_addr = (unsigned long)ioremap(base_addr->phy_addr, base_addr->size);
+-
+-			pr_info("Get Index(%d-%s) phy_addr(0x%zx) vir_addr=(0x%zx) size=(0x%zx)\n",
++			if (!base_addr->phy_addr || !base_addr->size) {
++				pr_err("Invalid register window %d (%s): phys=0x%lx size=0x%llx\n",
++				       i, consys_base_addr_index_to_str[i],
++				       base_addr->phy_addr, base_addr->size);
++				ret = -EINVAL;
++				goto err_unmap;
++			}
++
++			if (!base_addr->vir_addr) {
++				mapped = ioremap(base_addr->phy_addr, base_addr->size);
++				if (!mapped) {
++					pr_err("ioremap failed for register window %d (%s)\n",
++					       i, consys_base_addr_index_to_str[i]);
++					ret = -ENOMEM;
++					goto err_unmap;
++				}
++				base_addr->vir_addr = (unsigned long)mapped;
++			}
++
++			pr_info("Get Index(%d-%s) phy_addr(0x%lx) vir_addr=(0x%lx) size=(0x%llx)\n",
+ 					i, consys_base_addr_index_to_str[i], base_addr->phy_addr,
+ 					base_addr->vir_addr, base_addr->size);
+ 		}
+@@ -152,6 +172,16 @@
+ 	}
+ 
+ 	return 0;
++
++err_unmap:
++	while (i-- > 0) {
++		base_addr = &conn_reg.reg_base_addr[i];
++		if (base_addr->vir_addr) {
++			iounmap((void __iomem *)base_addr->vir_addr);
++			base_addr->vir_addr = 0;
++		}
++	}
++	return ret;
+ }
+ 
+ static int consys_reg_deinit(void)

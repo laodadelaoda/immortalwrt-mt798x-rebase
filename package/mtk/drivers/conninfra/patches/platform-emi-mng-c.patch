@@ -1,0 +1,50 @@
+--- a/platform/emi_mng.c
++++ b/platform/emi_mng.c
+@@ -16,6 +16,7 @@
+ *    Any definitions in this file will be shared among GLUE Layer and internal Driver Stack.
+ */
+ 
++#include <linux/errno.h>
+ #include <linux/of.h>
+ #include <linux/of_reserved_mem.h>
+ #include <linux/io.h>
+@@ -113,16 +114,20 @@
+ 	struct device_node *np;
+ 	struct reserved_mem *rmem;
+ 
++	gConEmiPhyBase = 0;
++	gConEmiSize = 0;
++
+ 	np = of_parse_phandle(pdev->dev.of_node, "memory-region", 0);
+ 	if (!np) {
+-		pr_info("[%s] memory region not found.\n", __func__);
+-		return -1;
++		pr_err("[%s] memory region not found.\n", __func__);
++		return -ENODEV;
+ 	}
+ 
+ 	rmem = of_reserved_mem_lookup(np);
++	of_node_put(np);
+ 	if (!rmem) {
+-		pr_info("[%s] no memory-region\n", __func__);
+-		return -1;
++		pr_err("[%s] no reserved memory backing the conninfra device\n", __func__);
++		return -ENODEV;
+ 	} else {
+ 		gConEmiPhyBase = rmem->base;
+ 		gConEmiSize = rmem->size;
+@@ -137,6 +142,14 @@
+ 
+ 	if (consys_platform_emi_ops && consys_platform_emi_ops->consys_ic_emi_get_fw_emi_size)
+ 		fw_emi_size = consys_platform_emi_ops->consys_ic_emi_get_fw_emi_size();
++
++#ifdef CONFIG_CONNINFRA_EMI_SUPPORT
++	if (!gConEmiPhyBase || !fw_emi_size || gConEmiSize < fw_emi_size) {
++		pr_err("invalid conninfra EMI window: base=0x%llx size=0x%llx required=0x%x\n",
++		       gConEmiPhyBase, gConEmiSize, fw_emi_size);
++		return -EINVAL;
++	}
++#endif
+ 
+ 	pr_info("[emi_mng_init] gConEmiPhyBase = [0x%llx] size = [0x%llx] fw size = [0x%x] ops=[%p]\n",
+ 			gConEmiPhyBase, gConEmiSize, fw_emi_size, consys_platform_emi_ops);

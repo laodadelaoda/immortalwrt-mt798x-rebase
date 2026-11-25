@@ -1,0 +1,108 @@
+--- a/src/conninfra_dev.c
++++ b/src/conninfra_dev.c
+@@ -17,6 +17,7 @@
+ */
+ 
+ #include <linux/cdev.h>
++#include <linux/err.h>
+ #include <linux/delay.h>
+ #include <linux/fb.h>
+ #include <linux/module.h>
+@@ -220,6 +221,8 @@
+ 	dev_t devID = MKDEV(gConnInfraMajor, 0);
+ 	int cdevErr = -1;
+ 	int iret = 0;
++	int init_ret = -2;
++	bool chrdev_registered = false;
+ 
+ 	g_conninfra_init_status = CONNINFRA_INIT_START;
+ 	init_waitqueue_head((wait_queue_head_t *)&g_conninfra_init_wq);
+@@ -228,8 +231,9 @@
+ 	if (iret) {
+ 		pr_err("fail to register chrdev\n");
+ 		g_conninfra_init_status = CONNINFRA_INIT_NOT_START;
+-		return -1;
+-	}
++		return iret;
++	}
++	chrdev_registered = true;
+ 
+ 	cdev_init(&gConninfraCdev, &gConninfraDevFops);
+ 	gConninfraCdev.owner = THIS_MODULE;
+@@ -240,7 +244,7 @@
+ 		goto err1;
+ 	}
+ 
+-	pConninfraClass = class_create(THIS_MODULE, CONNINFRA_DEVICE_NAME);
++	pConninfraClass = class_create(CONNINFRA_DEVICE_NAME);
+ 	if (IS_ERR(pConninfraClass)) {
+ 		pr_err("class create fail, error code(%ld)\n", PTR_ERR(pConninfraClass));
+ 		goto err1;
+@@ -255,15 +259,16 @@
+ 	iret = mtk_conninfra_drv_init(&gConninfraDevCb);
+ 	if (iret) {
+ 		pr_err("init consys_hw fail, ret = %d\n", iret);
+-		g_conninfra_init_status = CONNINFRA_INIT_NOT_START;
+-		return -2;
++		init_ret = -2;
++		goto err3;
+ 	}
+ 
+ 	iret = conninfra_core_init();
+ 	if (iret) {
+-		pr_err("conninfra init fail\n");
+-		g_conninfra_init_status = CONNINFRA_INIT_NOT_START;
+-		return -3;
++		pr_err("conninfra init fail, ret=%d\n", iret);
++		init_ret = -3;
++		mtk_conninfra_drv_deinit();
++		goto err3;
+ 	}
+ 
+ 	pr_info("ConnInfra Dev: init (%d)\n", iret);
+@@ -272,17 +277,25 @@
+ #ifdef CONFIG_CONNINFRA_AUTO_UP
+ 	iret = conninfra_core_power_on(CONNDRV_TYPE_CONNINFRA);
+ 	if (iret) {
+-		pr_err("conninfra auto load power on fail\n");
+-		return -4;
++		pr_err("conninfra auto load power on fail, ret=%d\n", iret);
++		init_ret = -4;
++		conninfra_core_power_off(CONNDRV_TYPE_CONNINFRA);
++		conninfra_core_deinit();
++		mtk_conninfra_drv_deinit();
++		goto err3;
+ 	}
+ #endif /* CONFIG_CONNINFRA_AUTO_UP */
+ 
+ 	return 0;
+ 
++err3:
++	if (!IS_ERR_OR_NULL(pConninfraDev)) {
++		device_destroy(pConninfraClass, devID);
++		pConninfraDev = NULL;
++	}
+ err2:
+-
+ 	pr_err("[conninfra_dev_init] err2\n");
+-	if (pConninfraClass) {
++	if (!IS_ERR_OR_NULL(pConninfraClass)) {
+ 		class_destroy(pConninfraClass);
+ 		pConninfraClass = NULL;
+ 	}
+@@ -291,13 +304,13 @@
+ 	if (cdevErr == 0)
+ 		cdev_del(&gConninfraCdev);
+ 
+-	if (iret == 0) {
++	if (chrdev_registered) {
+ 		unregister_chrdev_region(devID, CONNINFRA_DEV_NUM);
+ 		gConnInfraMajor = -1;
+ 	}
+ 
+ 	g_conninfra_init_status = CONNINFRA_INIT_NOT_START;
+-	return -2;
++	return init_ret;
+ }
+ 
+ static void conninfra_dev_deinit(void)

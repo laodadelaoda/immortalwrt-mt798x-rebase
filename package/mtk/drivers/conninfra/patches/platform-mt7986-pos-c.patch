@@ -1,0 +1,176 @@
+--- a/platform/mt7986/mt7986_pos.c
++++ b/platform/mt7986/mt7986_pos.c
+@@ -75,7 +75,7 @@
+ *                              C O N S T A N T S
+ ********************************************************************************
+ */
+-const static char* g_spi_system_name[SYS_SPI_MAX] = {
++static const char* g_spi_system_name[SYS_SPI_MAX] = {
+ 	"SYS_SPI_WF1",
+ 	"SYS_SPI_WF",
+ 	"SYS_SPI_BT",
+@@ -133,11 +133,17 @@
+ *                  F U N C T I O N   D E C L A R A T I O N S
+ ********************************************************************************
+ */
+-bool _is_flash_content_valid(void)
++static bool _is_flash_content_valid(void)
+ {
+ 	unsigned short eeFlashId = 0;
+ 
+-	FlashRead(MTD_WIFI_NM, (unsigned char*)&eeFlashId, EEPROM_CHIPID_OFFSET, sizeof(eeFlashId));
++	EEPROM_content_valid = false;
++	if (FlashRead(MTD_WIFI_NM, (unsigned char*)&eeFlashId,
++		      EEPROM_CHIPID_OFFSET, sizeof(eeFlashId))) {
++		pr_err("failed to read EEPROM chip ID; use default conninfra configuration\n");
++		return false;
++	}
++
+ 	if (eeFlashId == consys_soc_chipid_get()) {
+ 		EEPROM_content_valid = true;
+ 		printk(GRN("eeFlashId: 0x%x, EEPROM_content_valid = %d"), eeFlashId, EEPROM_content_valid);
+@@ -148,7 +154,7 @@
+ 	}
+ }
+ 
+-int _consys_check_adie_cfg(void)
++static int _consys_check_adie_cfg(void)
+ {
+ 	int ret = 0;
+ 	unsigned int hw_adie_type = 0;
+@@ -173,7 +179,7 @@
+ 	return ret;
+ }
+ 
+-void _consys_check_sku_cfg(void)
++static void _consys_check_sku_cfg(void)
+ {
+ 	unsigned int hw_sku_type;
+ 
+@@ -192,6 +198,8 @@
+ int consys_plt_hw_init(void)
+ {
+ 	unsigned int value = 0;
++	unsigned int eeprom_stream = 0;
++	unsigned int eeprom_lna_pa = 0;
+ 
+ 	value = CONSYS_REG_READ_BIT(REG_TOP_MISC_ADDR + TOP_MISC_RSRV_ALL1_3, (0x1 << 2));
+ 	if (value != 0)
+@@ -199,14 +207,16 @@
+ 	else
+ 		one_adie_dbdc = false;
+ 
+-	if (_is_flash_content_valid()) {
+-		FlashRead(MTD_WIFI_NM, (unsigned char*)&value, EEPROM_BAND0_STREAM_OFFSET, sizeof(value));
+-		tx_stream = ((value >> EEPROM_BAND0_STREAM_TX_BIT_OFFSET) & EEPROM_BAND0_STREAM_TX_MASK);
+-		rx_stream = ((value >> EEPROM_BAND0_STREAM_RX_BIT_OFFSET) & EEPROM_BAND0_STREAM_RX_MASK);
+-
+-		FlashRead(MTD_WIFI_NM, (unsigned char*)&value, EEPROM_LNA_PA_SELECT_OFFSET, sizeof(value));
+-		band0_pa_type = ((value >> EEPROM_LNA_PA_SELECT_BAND0_BIT_OFFSET) & EEPROM_LNA_PA_SELECT_BAND0_MASK);
+-		band1_pa_type = ((value >> EEPROM_LNA_PA_SELECT_BAND1_BIT_OFFSET) & EEPROM_LNA_PA_SELECT_BAND1_MASK);
++	if (_is_flash_content_valid() &&
++	    !FlashRead(MTD_WIFI_NM, (unsigned char*)&eeprom_stream,
++		       EEPROM_BAND0_STREAM_OFFSET, sizeof(eeprom_stream)) &&
++	    !FlashRead(MTD_WIFI_NM, (unsigned char*)&eeprom_lna_pa,
++		       EEPROM_LNA_PA_SELECT_OFFSET, sizeof(eeprom_lna_pa))) {
++		tx_stream = ((eeprom_stream >> EEPROM_BAND0_STREAM_TX_BIT_OFFSET) & EEPROM_BAND0_STREAM_TX_MASK);
++		rx_stream = ((eeprom_stream >> EEPROM_BAND0_STREAM_RX_BIT_OFFSET) & EEPROM_BAND0_STREAM_RX_MASK);
++
++		band0_pa_type = ((eeprom_lna_pa >> EEPROM_LNA_PA_SELECT_BAND0_BIT_OFFSET) & EEPROM_LNA_PA_SELECT_BAND0_MASK);
++		band1_pa_type = ((eeprom_lna_pa >> EEPROM_LNA_PA_SELECT_BAND1_BIT_OFFSET) & EEPROM_LNA_PA_SELECT_BAND1_MASK);
+ 
+ 		if (one_adie_dbdc) {
+ 			adie_cfg_type = ADIE_TYPE_ONE;
+@@ -220,6 +230,11 @@
+ 		pr_info("tx_stream = 0x%x, rx_stream = 0x%x, band0_pa_type = 0x%x, band1_pa_type = 0x%x\n",
+ 				tx_stream, rx_stream, band0_pa_type, band1_pa_type);
+ 	} else {
++		EEPROM_content_valid = false;
++		tx_stream = 0;
++		rx_stream = 0;
++		band0_pa_type = 0;
++		band1_pa_type = 0;
+ 		if (one_adie_dbdc) {
+ 			adie_cfg_type = ADIE_TYPE_ONE;
+ 		} else {
+@@ -439,7 +454,7 @@
+ 	return 0;
+ }
+ 
+-int _consys_polling_chipid_int(unsigned int retry, unsigned int sleep_ms)
++static int _consys_polling_chipid_int(unsigned int retry, unsigned int sleep_ms)
+ {
+ 	unsigned int count = retry + 1;
+ 	unsigned int consys_hw_ver = consys_get_hw_ver();
+@@ -1058,7 +1073,7 @@
+ 	return 0;
+ }
+ 
+-int _connsys_a_die_cfg_7976(unsigned char adie_idx)
++static int _connsys_a_die_cfg_7976(unsigned char adie_idx)
+ {
+ 	int check;
+ 	unsigned int adie_chip_id = 0x0;
+@@ -1241,7 +1256,7 @@
+ 	return 0;
+ }
+ 
+-int _connsys_a_die_cfg_7975(unsigned char adie_idx)
++static int _connsys_a_die_cfg_7975(unsigned char adie_idx)
+ {
+ 	int check;
+ 	unsigned int adie_chip_id = 0x0;
+@@ -1331,7 +1346,7 @@
+ 	return ret;
+ }
+ 
+-int _connsys_afe_wbg_cal_7976(unsigned char wbg_idx, unsigned char rfspi_idx)
++static int _connsys_afe_wbg_cal_7976(unsigned char wbg_idx, unsigned char rfspi_idx)
+ {
+ 	int check;
+ 	unsigned long afe_ctl_addr = 0;
+@@ -1385,7 +1400,7 @@
+ 	return 0;
+ }
+ 
+-int _connsys_afe_wbg_cal_7975(unsigned char wbg_idx, unsigned char rfspi_idx)
++static int _connsys_afe_wbg_cal_7975(unsigned char wbg_idx, unsigned char rfspi_idx)
+ {
+ 	int check;
+ 	unsigned long afe_ctl_addr = 0;
+@@ -1489,7 +1504,7 @@
+ 	return ret;
+ }
+ 
+-int _connsys_subsys_pll_initial(unsigned char wbg_idx)
++static int _connsys_subsys_pll_initial(unsigned char wbg_idx)
+ {
+ 	unsigned long afe_ctl_addr = 0;
+ 
+@@ -1628,7 +1643,7 @@
+ 	return 0;
+ }
+ 
+-int _consys_adie_top_ck_en_on_off_ctrl(unsigned char rfspi_idx, enum consys_drv_type type, unsigned char on)
++static int _consys_adie_top_ck_en_on_off_ctrl(unsigned char rfspi_idx, enum consys_drv_type type, unsigned char on)
+ {
+ 	int check = 0;
+ 	unsigned long slp_ctl_addr = 0;
+@@ -1688,7 +1703,7 @@
+ 	return ret;
+ }
+ 
+-bool _is_wmcpu_run_allow(void)
++static bool _is_wmcpu_run_allow(void)
+ {
+ 	if (EEPROM_content_valid) {
+ 		if (one_adie_dbdc) {
+@@ -1881,7 +1896,7 @@
+ 	return 0;
+ }
+ 
+-int _connsys_a_die_chip_id_confirm(unsigned char adie_idx)
++static int _connsys_a_die_chip_id_confirm(unsigned char adie_idx)
+ {
+ 	int check;
+ 	unsigned int adie_chip_id = 0x0;

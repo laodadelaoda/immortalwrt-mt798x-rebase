@@ -1,14 +1,24 @@
 --- a/platform/consys_hw.c
 +++ b/platform/consys_hw.c
-@@ -20,6 +20,7 @@
+@@ -19,6 +19,8 @@
+ #define pr_fmt(fmt) KBUILD_MODNAME "@(%s:%d) " fmt, __func__, __LINE__
  
  
- #include <linux/clk.h>
++#include <linux/clk.h>
 +#include <linux/errno.h>
  #include <linux/delay.h>
  #include <linux/of_device.h>
  #include <linux/of_reserved_mem.h>
-@@ -95,6 +96,7 @@
+@@ -61,7 +63,7 @@
+ */
+ 
+ static int mtk_conninfra_probe(struct platform_device *pdev);
+-static int mtk_conninfra_remove(struct platform_device *pdev);
++static void mtk_conninfra_remove(struct platform_device *pdev);
+ static int mtk_conninfra_suspend(struct platform_device *pdev, pm_message_t state);
+ static int mtk_conninfra_resume(struct platform_device *pdev);
+ 
+@@ -94,6 +96,7 @@
  
  const struct consys_hw_ops_struct *consys_hw_ops;
  struct platform_device *g_pdev;
@@ -16,53 +26,60 @@
  
  int g_conninfra_wakeup_ref_cnt;
  
-@@ -518,71 +520,89 @@
+@@ -166,7 +169,7 @@
+ 	return consys_reg_mng_dump_bus_status();
+ }
+ 
+-int consys_hw_dump_cpupcr(enum conn_dump_cpupcr_type dump_type, int times, unsigned long interval_us)
++static int __maybe_unused consys_hw_dump_cpupcr(enum conn_dump_cpupcr_type dump_type, int times, unsigned long interval_us)
+ {
+ 	return consys_reg_mng_dump_cpupcr(dump_type, times, interval_us);
+ }
+@@ -517,64 +520,93 @@
  
  int mtk_conninfra_probe(struct platform_device *pdev)
  {
 -	int ret = -1;
-+	int ret;
- 	struct clk *mcu_clk, *ap_conn_clk;
- 
+-
 -	if (pdev)
 -		g_pdev = pdev;
 -	else {
 -		pr_err("pdev is NULL\n");
 -		return -1;
+-	}
+-
++	int ret;
++	struct clk *mcu_clk, *ap_conn_clk;
++
 +	conninfra_probe_status = -ENODEV;
 +	if (!pdev) {
 +		ret = -EINVAL;
 +		goto err;
- 	}
- 
++	}
++
 +	g_pdev = pdev;
  	g_conninfra_plat_data = (const struct conninfra_plat_data*)of_device_get_match_data(&pdev->dev);
 -	if (g_conninfra_plat_data == NULL) {
 -		pr_err("Get platform data fail.\n");
 -		return -2;
+-	}
+-
+-	if (consys_hw_ops == NULL)
+-		consys_hw_ops = (const struct consys_hw_ops_struct*)g_conninfra_plat_data->hw_ops;
+-	if (consys_hw_ops == NULL) {
 +	if (!g_conninfra_plat_data) {
 +		ret = -ENODEV;
 +		goto err;
- 	}
- 
- 	mcu_clk = devm_clk_get_enabled(&pdev->dev, "mcu");
--	if (IS_ERR(mcu_clk))
--		return dev_err_probe(&pdev->dev, PTR_ERR(mcu_clk),
--				     "failed to enable mcu clock\n");
++	}
++
++	mcu_clk = devm_clk_get_enabled(&pdev->dev, "mcu");
 +	if (IS_ERR(mcu_clk)) {
 +		ret = dev_err_probe(&pdev->dev, PTR_ERR(mcu_clk),
 +				    "failed to enable mcu clock\n");
 +		goto err;
 +	}
- 
- 	ap_conn_clk = devm_clk_get_enabled(&pdev->dev, "ap2conn");
--	if (IS_ERR(ap_conn_clk))
--		return dev_err_probe(&pdev->dev, PTR_ERR(ap_conn_clk),
--				     "failed to enable ap2conn clock\n");
--
--	if (consys_hw_ops == NULL)
--		consys_hw_ops = (const struct consys_hw_ops_struct*)g_conninfra_plat_data->hw_ops;
--	if (consys_hw_ops == NULL) {
++
++	ap_conn_clk = devm_clk_get_enabled(&pdev->dev, "ap2conn");
 +	if (IS_ERR(ap_conn_clk)) {
 +		ret = dev_err_probe(&pdev->dev, PTR_ERR(ap_conn_clk),
 +				    "failed to enable ap2conn clock\n");
@@ -74,13 +91,15 @@
 +		ret = -ENODEV;
  		pr_err("Get HW op fail\n");
 -		return -3;
-+		goto err;
- 	}
- 
+-	}
+-
 -	/* Read device node */
 -	if (consys_reg_mng_init(pdev, g_conninfra_plat_data) != 0) {
 -		pr_err("consys_plt_read_reg_from_dts fail\n");
 -		return -4;
++		goto err;
++	}
++
 +	ret = consys_reg_mng_init(pdev, g_conninfra_plat_data);
 +	if (ret) {
 +		pr_err("consys_plt_read_reg_from_dts fail, ret=%d\n", ret);
@@ -102,13 +121,15 @@
 -	if (consys_hw_init(pdev) != 0) {
 -		pr_err("consys_hw_init fail\n");
 -		return -6;
+-	}
+-
+-	/* emi mng init */
 +	ret = consys_hw_init(pdev);
 +	if (ret) {
 +		pr_err("consys_hw_init fail, ret=%d\n", ret);
 +		goto err_reg;
- 	}
- 
--	/* emi mng init */
++	}
++
  	ret = emi_mng_init(pdev, g_conninfra_plat_data);
  	if (ret) {
  		pr_err("emi_mng init fail, %d\n", ret);
@@ -120,9 +141,11 @@
  	if (ret) {
  		pr_err("pmic_mng init fail, %d\n", ret);
 -		return -8;
+-	}
+-
 +		goto err_emi;
- 	}
- 
++	}
++
 +	conninfra_probe_status = 0;
 +	return 0;
 +
@@ -140,7 +163,21 @@
  	return ret;
  }
  
-@@ -647,21 +667,32 @@
+-int mtk_conninfra_remove(struct platform_device *pdev)
++void mtk_conninfra_remove(struct platform_device *pdev)
+ {
+ 	int ret;
+ 
+@@ -597,8 +629,6 @@
+ 
+ 	if (g_pdev)
+ 		g_pdev = NULL;
+-
+-	return 0;
+ }
+ 
+ int mtk_conninfra_suspend(struct platform_device *pdev, pm_message_t state)
+@@ -637,21 +667,32 @@
  
  int mtk_conninfra_drv_init(struct conninfra_dev_cb *dev_cb)
  {
@@ -156,11 +193,13 @@
 -	if (iRet)
 +	if (iRet) {
  		pr_err("Conninfra platform driver registered failed(%d)\n", iRet);
+-
+-	pr_info("After platform_driver_register\n");
+-
 +		g_conninfra_dev_cb = NULL;
 +		return iRet;
 +	}
- 
--	pr_info("After platform_driver_register\n");
++
 +	if (conninfra_probe_status) {
 +		iRet = conninfra_probe_status;
 +		pr_err("Conninfra platform probe did not complete successfully (%d)\n", iRet);
@@ -168,7 +207,7 @@
 +		g_conninfra_dev_cb = NULL;
 +		return iRet;
 +	}
- 
++
 +	pr_info("After platform_driver_register; MT7986 conninfra probe succeeded\n");
  	INIT_WORK(&ap_resume_work, consys_hw_ap_resume_handler);
  
@@ -177,94 +216,3 @@
  }
  
  int mtk_conninfra_drv_deinit(void)
---- a/src/conninfra_dev.c
-+++ b/src/conninfra_dev.c
-@@ -220,6 +220,8 @@
- 	dev_t devID = MKDEV(gConnInfraMajor, 0);
- 	int cdevErr = -1;
- 	int iret = 0;
-+	int init_ret = -2;
-+	bool chrdev_registered = false;
- 
- 	g_conninfra_init_status = CONNINFRA_INIT_START;
- 	init_waitqueue_head((wait_queue_head_t *)&g_conninfra_init_wq);
-@@ -228,8 +230,9 @@
- 	if (iret) {
- 		pr_err("fail to register chrdev\n");
- 		g_conninfra_init_status = CONNINFRA_INIT_NOT_START;
--		return -1;
-+		return iret;
- 	}
-+	chrdev_registered = true;
- 
- 	cdev_init(&gConninfraCdev, &gConninfraDevFops);
- 	gConninfraCdev.owner = THIS_MODULE;
-@@ -255,15 +258,17 @@
- 	iret = mtk_conninfra_drv_init(&gConninfraDevCb);
- 	if (iret) {
- 		pr_err("init consys_hw fail, ret = %d\n", iret);
--		g_conninfra_init_status = CONNINFRA_INIT_NOT_START;
--		return -2;
-+		init_ret = -2;
-+		goto err3;
- 	}
- 
- 	iret = conninfra_core_init();
- 	if (iret) {
--		pr_err("conninfra init fail\n");
--		g_conninfra_init_status = CONNINFRA_INIT_NOT_START;
--		return -3;
-+		pr_err("conninfra init fail, ret=%d\n", iret);
-+		init_ret = -3;
-+		conninfra_core_deinit();
-+		mtk_conninfra_drv_deinit();
-+		goto err3;
- 	}
- 
- 	pr_info("ConnInfra Dev: init (%d)\n", iret);
-@@ -272,17 +277,25 @@
- #ifdef CONFIG_CONNINFRA_AUTO_UP
- 	iret = conninfra_core_power_on(CONNDRV_TYPE_CONNINFRA);
- 	if (iret) {
--		pr_err("conninfra auto load power on fail\n");
--		return -4;
-+		pr_err("conninfra auto load power on fail, ret=%d\n", iret);
-+		init_ret = -4;
-+		conninfra_core_power_off(CONNDRV_TYPE_CONNINFRA);
-+		conninfra_core_deinit();
-+		mtk_conninfra_drv_deinit();
-+		goto err3;
- 	}
- #endif /* CONFIG_CONNINFRA_AUTO_UP */
- 
- 	return 0;
- 
-+err3:
-+	if (!IS_ERR_OR_NULL(pConninfraDev)) {
-+		device_destroy(pConninfraClass, devID);
-+		pConninfraDev = NULL;
-+	}
- err2:
--
- 	pr_err("[conninfra_dev_init] err2\n");
--	if (pConninfraClass) {
-+	if (!IS_ERR_OR_NULL(pConninfraClass)) {
- 		class_destroy(pConninfraClass);
- 		pConninfraClass = NULL;
- 	}
-@@ -291,13 +304,13 @@
- 	if (cdevErr == 0)
- 		cdev_del(&gConninfraCdev);
-
--	if (iret == 0) {
-+	if (chrdev_registered) {
- 		unregister_chrdev_region(devID, CONNINFRA_DEV_NUM);
- 		gConnInfraMajor = -1;
- 	}
-
- 	g_conninfra_init_status = CONNINFRA_INIT_NOT_START;
--	return -2;
-+	return init_ret;
- }
-
- static void conninfra_dev_deinit(void)

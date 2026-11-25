@@ -1,0 +1,161 @@
+--- a/base/osal.c
++++ b/base/osal.c
+@@ -31,6 +31,7 @@
+ ********************************************************************************
+ */
+ #include <linux/delay.h>
++#include <linux/errno.h>
+ #include <linux/sched.h>
+ #include <linux/sched/clock.h>
+ #include <linux/kallsyms.h>
+@@ -48,6 +49,8 @@
+ #endif /* CONFIG_MTD */
+ #include "osal.h"
+ 
++int mt_eeprom_read_wifi(loff_t from, size_t len, unsigned char *buf);
++
+ /*******************************************************************************
+ *                              C O N S T A N T S
+ ********************************************************************************
+@@ -82,7 +85,7 @@
+ */
+ 
+ 
+-int get_default_bin_image_file(char *path)
++static int __maybe_unused get_default_bin_image_file(char *path)
+ {
+ 	if(osal_strlen(BIN_TO_STR(EEPROM_NAME)))
+ 		osal_sprintf(path, "/lib/firmware/%s", BIN_TO_STR(EEPROM_NAME));
+@@ -94,25 +97,24 @@
+ 	return 0;
+ }
+ 
+-void FlashRead(char *name, unsigned char *value, unsigned long offset, unsigned long size)
+-{
+-#ifdef CONFIG_MTD
++int FlashRead(char *name, unsigned char *value, unsigned long offset, unsigned long size)
++{
+ 	int ret;
+-	size_t rdlen;
+-	struct mtd_info *mtd;
+-
+-	mtd = get_mtd_device_nm(name);
+-	if (IS_ERR(mtd)) {
+-		pr_err("Can't get mtd device!\n");
+-		return;
+-	} else {
+-		ret = mtd_read(mtd, offset, size, &rdlen, value);
+-		if (rdlen != size) {
+-			pr_err("mtd_read: rdlen is not equal to size!\n");
+-		}
+-		put_mtd_device(mtd);
+-	}
+-#endif /* CONFIG_WIFI_MTD */
++
++	if (!value && size)
++		return -EINVAL;
++	if (!size)
++		return 0;
++
++	memset(value, 0, size);
++	ret = mt_eeprom_read_wifi(offset, size, value);
++	if (ret) {
++		memset(value, 0, size);
++		pr_err("failed to read EEPROM name=%s offset=0x%lx size=0x%lx ret=%d\n",
++		       name ? name : "(null)", offset, size, ret);
++	}
++
++	return ret;
+ }
+ 
+ void FlashWrite(char *name, unsigned char *p, unsigned long a, unsigned long b)
+@@ -717,7 +719,7 @@
+ 	return iRet;
+ }
+ 
+-int _osal_fifo_init(OSAL_FIFO *pFifo, unsigned char *buf, unsigned int size)
++static int _osal_fifo_init(OSAL_FIFO *pFifo, unsigned char *buf, unsigned int size)
+ {
+ 	struct kfifo *fifo = NULL;
+ 	int ret = -1;
+@@ -751,7 +753,7 @@
+ 	return (ret < 0) ? (-1) : (0);
+ }
+ 
+-int _osal_fifo_deinit(OSAL_FIFO *pFifo)
++static int _osal_fifo_deinit(OSAL_FIFO *pFifo)
+ {
+ 	struct kfifo *fifo = NULL;
+ 
+@@ -769,7 +771,7 @@
+ 	return 0;
+ }
+ 
+-int _osal_fifo_size(OSAL_FIFO *pFifo)
++static int _osal_fifo_size(OSAL_FIFO *pFifo)
+ {
+ 	struct kfifo *fifo = NULL;
+ 	int ret = 0;
+@@ -789,7 +791,7 @@
+ }
+ 
+ /*returns unused bytes in fifo*/
+-int _osal_fifo_avail_size(OSAL_FIFO *pFifo)
++static int _osal_fifo_avail_size(OSAL_FIFO *pFifo)
+ {
+ 	struct kfifo *fifo = NULL;
+ 	int ret = 0;
+@@ -809,7 +811,7 @@
+ }
+ 
+ /*returns used bytes in fifo*/
+-int _osal_fifo_len(OSAL_FIFO *pFifo)
++static int _osal_fifo_len(OSAL_FIFO *pFifo)
+ {
+ 	struct kfifo *fifo = NULL;
+ 	int ret = 0;
+@@ -828,7 +830,7 @@
+ 	return ret;
+ }
+ 
+-int _osal_fifo_is_empty(OSAL_FIFO *pFifo)
++static int _osal_fifo_is_empty(OSAL_FIFO *pFifo)
+ {
+ 	struct kfifo *fifo = NULL;
+ 	int ret = 0;
+@@ -847,7 +849,7 @@
+ 	return ret;
+ }
+ 
+-int _osal_fifo_is_full(OSAL_FIFO *pFifo)
++static int _osal_fifo_is_full(OSAL_FIFO *pFifo)
+ {
+ 	struct kfifo *fifo = NULL;
+ 	int ret = 0;
+@@ -866,7 +868,7 @@
+ 	return ret;
+ }
+ 
+-int _osal_fifo_data_in(OSAL_FIFO *pFifo, const void *buf, unsigned int len)
++static int _osal_fifo_data_in(OSAL_FIFO *pFifo, const void *buf, unsigned int len)
+ {
+ 	struct kfifo *fifo = NULL;
+ 	int ret = 0;
+@@ -891,7 +893,7 @@
+ 	return ret;
+ }
+ 
+-int _osal_fifo_data_out(OSAL_FIFO *pFifo, void *buf, unsigned int len)
++static int _osal_fifo_data_out(OSAL_FIFO *pFifo, void *buf, unsigned int len)
+ {
+ 	struct kfifo *fifo = NULL;
+ 	int ret = 0;
+@@ -916,7 +918,7 @@
+ 	return ret;
+ }
+ 
+-int _osal_fifo_reset(OSAL_FIFO *pFifo)
++static int _osal_fifo_reset(OSAL_FIFO *pFifo)
+ {
+ 	struct kfifo *fifo = NULL;
+ 
