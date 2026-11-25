@@ -89,3 +89,99 @@ jobs:
           done
 
           echo "Cleanup summary: deleted=${deleted}, preserved=${preserved}"
+
+      - name: Remove superseded upstream candidates only when source trees are identical
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          mapfile -t candidates < <(
+            gh api --paginate "repos/${GH_REPO}/branches?per_page=100" \
+              --jq '.[].name | select(test("^automation/upstream-25\\.12-.*-run-[0-9]+$"))'
+          )
+
+          declare -A first_parent second_parent tip_ref
+          for branch in "${candidates[@]}"; do
+            if ! git fetch --no-tags origin \
+              "+refs/heads/${branch}:refs/remotes/origin/${branch}"; then
+              echo "PRESERVE: ${branch} (fetch failed)"
+              continue
+            fi
+            tip="refs/remotes/origin/${branch}"
+            read -r p1 p2 extra < <(git show -s --format=%P "$tip")
+            if [[ -z "${p1:-}" || -z "${p2:-}" || -n "${extra:-}" ]]; then
+              echo "PRESERVE: ${branch} (not a two-parent upstream merge candidate)"
+              continue
+            fi
+            first_parent["$branch"]="$p1"
+            second_parent["$branch"]="$p2"
+            tip_ref["$branch"]="$tip"
+          done
+
+          canonical=""
+          for candidate in "${candidates[@]}"; do
+            [[ -n "${first_parent[$candidate]:-}" ]] || continue
+            newest=true
+            upstream="${second_parent[$candidate]}"
+            for other in "${candidates[@]}"; do
+              [[ "$other" == "$candidate" ]] && continue
+              [[ -n "${first_parent[$other]:-}" ]] || continue
+              [[ "${second_parent[$other]}" == "$upstream" ]] || continue
+              if ! git merge-base --is-ancestor "${first_parent[$other]}" "${first_parent[$candidate]}"; then
+                newest=false
+                break
+              fi
+            done
+            if [[ "$newest" == true ]]; then
+              if [[ -n "$canonical" ]]; then
+                echo "PRESERVE: ambiguous newest candidates: $canonical and $candidate"
+                canonical=""
+                break
+              fi
+              canonical="$candidate"
+            fi
+          done
+
+          if [[ -z "$canonical" ]]; then
+            echo "No unique newest candidate found; preserving all candidate branches."
+            exit 0
+          fi
+
+          canonical_tip="${tip_ref[$canonical]}"
+          canonical_base="${first_parent[$canonical]}"
+          canonical_upstream="${second_parent[$canonical]}"
+          echo "Canonical comparison candidate: $canonical"
+          deleted=0
+          preserved=0
+
+          for branch in "${candidates[@]}"; do
+            [[ "$branch" == "$canonical" ]] && continue
+            [[ -n "${first_parent[$branch]:-}" ]] || continue
+
+            if printf '%s\\n' "${open_pr_heads[@]}" | grep -Fxq -- "$branch"; then
+              echo "PRESERVE: $branch (open PR exists)"
+              ((preserved+=1))
+              continue
+            fi
+            if [[ "${second_parent[$branch]}" != "$canonical_upstream" ]] ||
+               ! git merge-base --is-ancestor "${first_parent[$branch]}" "$canonical_base"; then
+              echo "PRESERVE: $branch (different upstream or non-ancestor base)"
+              ((preserved+=1))
+              continue
+            fi
+
+            if git diff --quiet "${tip_ref[$branch]}" "$canonical_tip" -- . ':(exclude).github/workflows/**'; then
+              encoded_branch="$(BRANCH="$branch" python3 -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["BRANCH"], safe=""))')"
+              gh api --method DELETE "repos/${GH_REPO}/git/refs/heads/${encoded_branch}"
+              echo "DELETED: $branch (same upstream merge and identical non-workflow source tree as $canonical)"
+              ((deleted+=1))
+            else
+              echo "PRESERVE: $branch (source-tree differences remain; manual migration required)"
+              ((preserved+=1))
+            fi
+          done
+
+          echo "Superseded candidate cleanup: deleted=$deleted, preserved=$preserved, canonical=$canonical"
