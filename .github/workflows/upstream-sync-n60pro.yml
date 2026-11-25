@@ -48,9 +48,13 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git rev-parse origin/n60pro-25.12-upstream-base)" = "$GITHUB_SHA"
           BASE_SHA="$(git merge-base HEAD "$UPSTREAM_SHA")"
+          UPSTREAM_AHEAD_COUNT="$(git rev-list --count "HEAD..$UPSTREAM_SHA")"
+          LOCAL_AHEAD_COUNT="$(git rev-list --count "$UPSTREAM_SHA..HEAD")"
           {
             echo "upstream_sha=$UPSTREAM_SHA"
             echo "base_sha=$BASE_SHA"
+            echo "upstream_ahead_count=$UPSTREAM_AHEAD_COUNT"
+            echo "local_ahead_count=$LOCAL_AHEAD_COUNT"
           } >> "$GITHUB_OUTPUT"
           mkdir -p upgrade-evaluation
           {
@@ -61,9 +65,15 @@ jobs:
             echo "- Upstream: chasey-dev/immortalwrt-mt798x-rebase:25.12"
             echo "- Upstream HEAD: $UPSTREAM_SHA"
             echo "- Merge base: $BASE_SHA"
+            echo "- Upstream-only commits: $UPSTREAM_AHEAD_COUNT"
+            echo "- Local-only commits: $LOCAL_AHEAD_COUNT"
             echo
             echo "## Ahead/behind"
             git rev-list --left-right --count "HEAD...$UPSTREAM_SHA"
+            if [ "$UPSTREAM_AHEAD_COUNT" -eq 0 ]; then
+              echo
+              echo "No upstream-only commits exist on the configured 25.12 branch; no merge candidate will be created."
+            fi
             echo
             echo "## Changed path inventory"
             git diff --name-status "$BASE_SHA" "$UPSTREAM_SHA" > upgrade-evaluation/UPSTREAM-PATHS.txt
@@ -194,6 +204,7 @@ jobs:
 
       - name: Check mergeability and create a real three-way merge candidate
         id: merge
+        if: steps.refs.outputs.upstream_ahead_count != '0'
         env:
           UPSTREAM_SHA: ${{ steps.refs.outputs.upstream_sha }}
         shell: bash
@@ -308,7 +319,11 @@ jobs:
             echo "6. The candidate PR's Full firmware workflow must succeed and upload a non-empty firmware artifact."
             echo
             echo "## Decision"
-            echo "A clean textual merge is only candidate generation. No automatic merge into the formal branch is performed. Merge is permitted only after the above checks and review are green."
+            if [ "${{ steps.refs.outputs.upstream_ahead_count }}" = "0" ]; then
+              echo "The configured upstream 25.12 branch has no commits newer than the common base. This is a no-op synchronization; the local branch is ahead and is preserved unchanged."
+            else
+              echo "A clean textual merge is only candidate generation. The candidate is eligible for auto-merge only after exact-SHA Vendor Audit, Full success, and a non-empty firmware artifact."
+            fi
             echo "Unmapped, split/squash, ambiguous and merge commits require path/function-level review; patch-id is not semantic equivalence."
           } | tee upgrade-evaluation/UPSTREAM-MIGRATION-PLAN.md
           git diff --check "$GITHUB_SHA" HEAD
