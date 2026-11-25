@@ -500,7 +500,7 @@ jobs:
             echo "patch_count=$(wc -l < upgrade-evaluation/PATCH-INVENTORY.txt)"
             echo
             echo "## Validation boundary"
-            echo "This workflow prepares a merge candidate only. The candidate PR must pass the canonical vendor audit and Full firmware build before merge."
+            echo "This workflow prepares one stable upstream candidate. The candidate is merged only by Full Build after complete firmware compilation and artifact verification."
             echo "Patch-ID matching is not a substitute for semantic compatibility, zero-fuzz patch replay, native Package Prepare, kernel patch application, or firmware output verification."
           } >> upgrade-evaluation/UPSTREAM-EVALUATION.md
           sha256sum upgrade-evaluation/* > upgrade-evaluation/SHA256SUMS
@@ -541,20 +541,20 @@ jobs:
               | tee upgrade-evaluation/SENSITIVE-PATH-DELTA.txt
             echo
             echo "## Required validation before merge"
-            echo "1. Candidate PR must pass the canonical vendor-source Lock/SHA256 audit."
-            echo "2. Every active vendor patch series must replay on the pinned archives with zero fuzz, zero offset, zero reject, and no skipped hunks."
-            echo "3. Native OpenWrt Package Prepare and MT Wi-Fi 026 exact-path/function assertions must pass."
-            echo "4. Linux 6.12 patch stack must be applied to the actual candidate kernel source with zero fuzz/offset/reject; syntax-only checks are insufficient."
-            echo "5. Review upstream changes touching DTS, N60 Pro config, closed-driver integration, WARP/Conninfra/MT Wi-Fi/datconf/MAPFILTER, EasyMesh/DPP/WAPP, OpenSSL, EIP93, Makefiles and Kconfig."
-            echo "6. The candidate PR's Full firmware workflow must succeed and upload a non-empty firmware artifact."
-            echo "7. Canonical Vendor Audit must run native target/linux/prepare on the pinned Linux 6.12 source with PATCH=patch --fuzz=0; non-zero offsets, rejects, or .orig/.rej files fail the audit credential."
-            echo "8. Before candidate publication, the workflow refreshes the complete kernel patch series with native Quilt and verifies every patch's added/deleted code payload is unchanged."
+            echo "1. The candidate must complete the same Full firmware build used for normal N60 Pro releases."
+            echo ""
+            echo ""
+            echo "2. Native Linux 6.12 patch application and integration are validated by the candidate's Full build."
+            echo "3. Review upstream changes touching DTS, N60 Pro config, closed-driver integration, WARP/Conninfra/MT Wi-Fi/datconf/MAPFILTER, EasyMesh/DPP/WAPP, OpenSSL, EIP93, Makefiles and Kconfig."
+            echo "4. Full Build must succeed and upload a non-empty firmware artifact before merge."
+            echo ""
+            echo "5. Kernel patch refresh during upstream migration must preserve every N60 Pro-specific added/deleted code payload."
             echo
             echo "## Decision"
             if [ "${{ steps.refs.outputs.upstream_ahead_count }}" = "0" ]; then
               echo "The official ImmortalWrt openwrt-25.12 branch has no commits newer than the common base. This is a no-op synchronization; the local branch is preserved unchanged."
             else
-              echo "A clean textual merge is only candidate generation. The candidate is eligible for auto-merge only after exact-SHA Vendor Audit, Full success, and a non-empty firmware artifact."
+              echo "A clean textual merge is only candidate generation. The candidate is eligible for automatic merge only after the exact candidate SHA passes Full compilation and produces a non-empty firmware artifact."
             fi
             echo "Unmapped, split/squash, ambiguous and merge commits require path/function-level review; patch-id is not semantic equivalence."
           } | tee upgrade-evaluation/UPSTREAM-MIGRATION-PLAN.md
@@ -603,7 +603,7 @@ jobs:
           - Source branch baseline: $GITHUB_SHA
           - MTK integration baseline: ${{ steps.refs.outputs.mtk_base_sha }}
 
-          Required gate: exact-SHA canonical Vendor Audit (including native Linux 6.12 zero-fuzz/zero-offset patch replay and MT Wi-Fi 026 assertions), Full firmware build, and a non-empty firmware artifact. The auto-merge gate runs only after all checks succeed.
+          Required gate: the exact candidate revision must pass the Full firmware build and upload a non-empty firmware artifact. Full Build performs the exact-SHA PR merge only after all build and artifact checks succeed.
 
           Full commit mapping, migration plan, path inventories, and SHA256 manifest are attached to workflow run $GITHUB_RUN_ID:
           https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
@@ -623,6 +623,6 @@ jobs:
           fi
 
           # GITHUB_TOKEN-created PRs do not emit pull_request workflows; dispatch
-          # the canonical Vendor Audit -> Full pipeline on the stable candidate ref.
+          # the sole Full firmware pipeline on the stable candidate ref.
           gh workflow run n60pro-build.yml --repo "$GITHUB_REPOSITORY" --ref "$CANDIDATE_BRANCH"
-          echo "Updated the single upstream candidate branch and dispatched exact-ref Vendor Audit -> Full."
+          echo "Updated the single upstream candidate branch and dispatched the exact-ref Full firmware build."
