@@ -1,69 +1,27 @@
 # N60 Pro workflow ownership
 
-Status: consolidation in progress; build gates fail-closed
-Maintenance branch: `runner/easymesh-patch-replay-20261114`
-Target branch: `n60pro-mtk-closed-driver`
-Scope: N60 Pro MT798x / ImmortalWrt 25.12 / Linux 6.12.112 / OpenSSL 3.5.9
+Status: consolidated to two operational workflows
+Target branch: `n60pro-25.12-upstream-base`
+Platform: Netcore N60 Pro / MediaTek MT7986AV
+Baseline: ImmortalWrt 25.12 / Linux 6.12.116 / OpenSSL 3.5.9
 
-## Current executable workflow ownership
+## The two retained workflows
 
-| Workflow | Actual responsibility | Current policy |
-|---|---|---|
-| `easymesh-patch-replay.yml` | Consolidates EasyMesh patches 033–037 into the designated patch set and runs native OpenWrt EasyMesh `Build/Prepare` only | One manual/revision-triggered replay entry; **not** the complete 11-component vendor audit |
-| `easymesh-quick.yml` | Invokes the EasyMesh compile/link composite action | Hard-frozen with `if: false` pending canonical audit attestation |
-| `main.yml` | Full firmware compile/link | Hard-frozen with `if: false` pending canonical audit attestation |
+| Workflow | Responsibility |
+|---|---|
+| `.github/workflows/upstream-sync-n60pro.yml` | Track ImmortalWrt `openwrt-25.12`, compare upstream and N60 Pro history and changed paths, map equivalent/partial/unmapped commits, prepare or update one stable candidate branch and PR, then dispatch Full Build for that exact candidate revision. |
+| `.github/workflows/n60pro-build.yml` | The only build entry point. Build complete N60 Pro firmware using the repository's source, configuration, patches and toolchain; verify firmware output; upload the firmware artifact. For a dispatched upstream candidate, merge its PR only after the exact candidate SHA passes Full compilation and non-empty firmware artifact validation. |
 
-The old ownership entries for `vendor-source-patch-audit.yml`,
-`quick-prepare-audit.yml`, `openssl-migration-baseline-audit.yml` and
-`component-source-diagnostics.yml` are not present on this branch and are not
-treated as executable owners or as completed checks.
+## Consolidation boundary
 
-## Required single acceptance chain
+EasyMesh adaptation, vendor patch replay, Quick build, separate upstream auto-merge, and branch-cleanup workflows are no longer independent workflow owners. Their obsolete workflow files and the Quick composite action are removed. Valid source patches, package definitions, vendor archives and locks, N60 Pro configuration, and native OpenWrt build behavior remain in the source tree and are consumed by Full Build.
 
-The intended acceptance decision is one run-bound, exact-commit attestation. It must
-cover, without duplicating workflow entry points:
+## Upgrade and build safety
 
-1. The immutable vendor Lock and all 11 Lock-defined source components, archive SHA256
-   verification, source path matrix and Quick/Full input-difference report.
-2. Actual GNU Make-expanded package source variables and native OpenWrt download,
-   unpack, overlay, patch and `Build/Prepare` ordering.
-3. Vendor patch inventory and ordered replay with zero fuzz, zero offset, zero reject
-   and zero partial application; distinguish network/download failures from source or
-   patch incompatibilities.
-4. MT Wi-Fi 026 real source path, patch result and function-replacement assertions;
-   Conninfra, WARP, datconf and MAPFILTER coverage; datconf overlay/patch ordering.
-5. EasyMesh consolidated patch replay, including the required 008/010/015/016 result,
-   Lock consistency and byte-identical final source-tree parity.
-6. Run/attempt/Git SHA/Lock SHA/input hashes and artifact digests in one authoritative
-   credential. Preserve the eight original design/evidence artifacts and their
-   existing SHA256 credentials.
-
-The current replay workflow proves only its own consolidation and native EasyMesh
-Prepare scope. It must not be relabeled as the complete vendor acceptance chain, and
-its output alone must not authorize Quick or Full.
-
-## De-duplication rules
-
-- One canonical audit entry owns vendor Lock, archive integrity, source matrix, patch
-  inventory/replay, MT Wi-Fi 026 assertions and native Prepare acceptance.
-- Quick and Full consume the same exact-SHA attestation; they do not rerun the audit.
-- Do not add separate vendor-audit and Quick-Prepare workflows that repeat the same
-  source downloads or patch replay.
-- OpenSSL semantic compatibility and Linux kernel patch-stack acceptance remain
-  separate technical gates; do not combine them into a mega-audit or count their
-  outputs as vendor-source evidence.
-- Optional diagnostics run only on demand or on failure. Do not emit duplicate
-  credentials or upload redundant success artifacts.
-- Network failures are reported separately from source/patch failures. A faulty audit
-  assertion is corrected in the audit tool; a correct vendor patch is not changed to
-  satisfy a false positive.
-- Preserve the existing eight design/evidence artifacts and SHA256 credentials.
-- Do not enable either build job until the canonical attestation consumer has been
-  implemented and tested against both valid and invalid/stale/wrong-SHA evidence.
-
-## Change control
-
-Before merging or deleting an audit owner, verify its callers, checks, artifacts and
-downstream consumers. Transfer required checks into the canonical chain before
-removing the old owner. Keep the workflow count small; reduce repeated execution,
-not required technical coverage.
+- The maintained target branch is `n60pro-25.12-upstream-base`; upstream synchronization uses one stable candidate ref rather than per-run branches.
+- Upstream commit mapping and path inventories are review aids. Patch IDs are not semantic equivalence; unmapped, split/squash, ambiguous and merge commits require path/function-level handling.
+- Candidate publication is followed by the same Full Build used for ordinary N60 Pro firmware.
+- Candidate merge requires an exact match between the PR head SHA and the Full Build SHA, successful full compilation, and a verified non-empty firmware artifact.
+- Full Build has no dependency on a separate EasyMesh/Vendor Audit workflow or stale run-bound audit artifacts.
+- Workflow consolidation does not delete valid EasyMesh, MTK closed-driver, Linux kernel, WARP, Conninfra, MAPFILTER, datconf, OpenSSL, or device configuration source.
+- A successful Action without a verified firmware output is not accepted as a completed build.
