@@ -537,8 +537,8 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      - name: Publish candidate branch and open draft validation PR
-        if: success() && steps.merge.outputs.CANDIDATE_SHA != ''
+      - name: Publish or update the single upstream candidate branch and validation PR
+        if: success() && steps.merge.outputs.CANDIDATE_SHA != '' && steps.refs.outputs.upstream_ahead_count != '0'
         env:
           GH_TOKEN: ${{ github.token }}
           CANDIDATE_SHA: ${{ steps.merge.outputs.CANDIDATE_SHA }}
@@ -547,12 +547,22 @@ jobs:
         run: |
           set -Eeuo pipefail
           TARGET_BRANCH="n60pro-25.12-upstream-base"
+          CANDIDATE_BRANCH="automation/upstream-25.12-candidate"
+
           git fetch origin "$TARGET_BRANCH"
           test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$GITHUB_SHA"
-          CANDIDATE_BRANCH="automation/upstream-25.12-${UPSTREAM_SHA:0:12}-run-${GITHUB_RUN_ID}"
-          git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+
+          # Reuse one stable staging ref. Never create a run-number branch.
+          if git ls-remote --exit-code --heads origin "$CANDIDATE_BRANCH" >/dev/null 2>&1; then
+            git fetch --no-tags origin "refs/heads/$CANDIDATE_BRANCH:refs/remotes/origin/$CANDIDATE_BRANCH"
+            OLD_CANDIDATE_SHA="$(git rev-parse "refs/remotes/origin/$CANDIDATE_BRANCH")"
+            git push --force-with-lease="refs/heads/$CANDIDATE_BRANCH:$OLD_CANDIDATE_SHA" origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          else
+            git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          fi
+
           cat > "$RUNNER_TEMP/upstream-pr-body.md" <<EOF
-          This is an automated N60 Pro upstream merge candidate.
+          This is the single persistent N60 Pro upstream 25.12 validation candidate. Each synchronization updates this branch and its PR instead of creating per-run branches.
 
           - Primary upstream: immortalwrt/immortalwrt:openwrt-25.12
           - Upstream commit: $UPSTREAM_SHA
@@ -565,16 +575,21 @@ jobs:
           Full commit mapping, migration plan, path inventories, and SHA256 manifest are attached to workflow run $GITHUB_RUN_ID:
           https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
           EOF
-          gh pr create \
-            --repo "$GITHUB_REPOSITORY" \
-            --base "$TARGET_BRANCH" \
-            --head "$CANDIDATE_BRANCH" \
-            --draft \
-            --title "N60 Pro: synchronize upstream 25.12 (${UPSTREAM_SHA:0:12})" \
-            --body-file "$RUNNER_TEMP/upstream-pr-body.md"
-          # A PR created with GITHUB_TOKEN does not automatically emit pull_request
-          # workflow runs. Explicit workflow_dispatch is an allowed token-triggered
-          # event and runs the canonical Vendor Audit followed by Full on this candidate.
+
+          PR_JSON="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$CANDIDATE_BRANCH" --base "$TARGET_BRANCH" --state open --json number)"
+          PR_COUNT="$(printf '%s' "$PR_JSON" | jq 'length')"
+          if [ "$PR_COUNT" -eq 0 ]; then
+            gh pr create --repo "$GITHUB_REPOSITORY" --base "$TARGET_BRANCH" --head "$CANDIDATE_BRANCH" --draft \
+              --title "N60 Pro: synchronize upstream 25.12" --body-file "$RUNNER_TEMP/upstream-pr-body.md"
+          elif [ "$PR_COUNT" -eq 1 ]; then
+            PR_NUMBER="$(printf '%s' "$PR_JSON" | jq -r '.[0].number')"
+            gh pr edit "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/upstream-pr-body.md"
+          else
+            echo "More than one open PR references the canonical candidate branch; refusing ambiguous publication."
+            exit 1
+          fi
+
+          # GITHUB_TOKEN-created PRs do not emit pull_request workflows; dispatch
+          # the canonical Vendor Audit -> Full pipeline on the stable candidate ref.
           gh workflow run n60pro-build.yml --repo "$GITHUB_REPOSITORY" --ref "$CANDIDATE_BRANCH"
-          echo "Candidate PR created and candidate Vendor Audit -> Full pipeline dispatched."
-          echo "Candidate PR created. Exact-SHA Vendor Audit -> Full and firmware artifact verification will be handled by the workflow_run merge gate."
+          echo "Updated the single upstream candidate branch and dispatched exact-ref Vendor Audit -> Full."
