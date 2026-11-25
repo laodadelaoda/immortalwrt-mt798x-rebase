@@ -361,13 +361,27 @@ jobs:
           test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$GITHUB_SHA"
           CANDIDATE_BRANCH="automation/upstream-25.12-${UPSTREAM_SHA:0:12}-run-${GITHUB_RUN_ID}"
           git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          cat > "$RUNNER_TEMP/upstream-pr-body.md" <<EOF
+          This is an automated N60 Pro upstream merge candidate.
+
+          - Primary upstream: immortalwrt/immortalwrt:openwrt-25.12
+          - Upstream commit: $UPSTREAM_SHA
+          - Candidate merge commit: $CANDIDATE_SHA
+          - Source branch baseline: $GITHUB_SHA
+          - MTK integration baseline: ${{ steps.refs.outputs.mtk_base_sha }}
+
+          Required gate: exact-SHA canonical Vendor Audit, Full firmware build, and a non-empty firmware artifact. The auto-merge gate runs only after all checks succeed.
+
+          Full commit mapping, migration plan, path inventories, and SHA256 manifest are attached to workflow run $GITHUB_RUN_ID:
+          https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          EOF
           gh pr create \
             --repo "$GITHUB_REPOSITORY" \
             --base "$TARGET_BRANCH" \
             --head "$CANDIDATE_BRANCH" \
             --draft \
             --title "N60 Pro: synchronize upstream 25.12 (${UPSTREAM_SHA:0:12})" \
-            --body-file upgrade-evaluation/UPSTREAM-EVALUATION.md
+            --body-file "$RUNNER_TEMP/upstream-pr-body.md"
           # A PR created with GITHUB_TOKEN does not automatically emit pull_request
           # workflow runs. Explicit workflow_dispatch is an allowed token-triggered
           # event and runs the canonical Vendor Audit followed by Full on this candidate.
