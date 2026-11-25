@@ -66,8 +66,9 @@ jobs:
           PR_HEAD="$(printf '%s' "$PR_JSON" | jq -r '.[0].headRefOid')"
           PR_DRAFT="$(printf '%s' "$PR_JSON" | jq -r '.[0].isDraft')"
           test "$PR_HEAD" = "$HEAD_SHA"
-          test "$PR_DRAFT" = "true"
-          gh pr ready "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"
+          if [ "$PR_DRAFT" = "true" ]; then
+            gh pr ready "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"
+          fi
           gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --merge --delete-branch
           git init verify-merge
           cd verify-merge
