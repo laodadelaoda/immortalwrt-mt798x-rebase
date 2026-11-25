@@ -290,7 +290,7 @@ jobs:
           import re, sys
           from pathlib import Path
           source = Path(sys.argv[1]).read_text(encoding="utf-8")
-          match = re.search(r"static void\\s+core_rmw\\(struct mt7530_priv \\*priv,.*?\\n}\\n", source, re.S)
+          match = re.search(r"static void\s+core_rmw\(struct mt7530_priv \*priv,.*?\n}\n", source, re.S)
           if not match:
               raise SystemExit("FAIL: MT7530 core_rmw() was not found in prepared kernel source")
           body = match.group(0)
