@@ -120,6 +120,7 @@ def emit_source_review(root):
         "conninfra_core_init", "conninfra_core_deinit",
         "msg_thread_init", "msg_thread_deinit",
         "msg_op_history_save", "osal_op_history_print_work", "osal_op_history_dump",
+        "osal_op_history_print", "msg_thread_dump",
         "consys_plt_clk_get_from_dts", "consys_plt_clk_detach",
     ]
     for name in names:
