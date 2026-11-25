@@ -1,0 +1,86 @@
+name: Cleanup merged upstream automation branches
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: upstream-branch-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout canonical branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Remove only fully integrated upstream run branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git remote add origin "https://github.com/${GH_REPO}.git"
+          git fetch --no-tags origin \
+            "+refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}"
+
+          mapfile -t branches < <(
+            gh api --paginate "repos/${GH_REPO}/branches?per_page=100" \
+              --jq '.[].name | select(startswith("automation/upstream-25.12-"))'
+          )
+
+          if (("${#branches[@]}" == 0)); then
+            echo "No per-run upstream automation branches found."
+            exit 0
+          fi
+
+          mapfile -t open_pr_heads < <(
+            gh api --paginate "repos/${GH_REPO}/pulls?state=open&per_page=100" \
+              --jq '.[].head.ref'
+          )
+
+          deleted=0
+          preserved=0
+
+          for branch in "${branches[@]}"; do
+            if printf '%s\n' "${open_pr_heads[@]}" | grep -Fxq -- "${branch}"; then
+              echo "PRESERVE: ${branch} (referenced by an open pull request)"
+              ((preserved+=1))
+              continue
+            fi
+
+            if ! git fetch --no-tags origin \
+              "+refs/heads/${branch}:refs/remotes/origin/${branch}"; then
+              echo "PRESERVE: ${branch} (could not fetch; state is unknown)"
+              ((preserved+=1))
+              continue
+            fi
+
+            if git merge-base --is-ancestor \
+              "refs/remotes/origin/${branch}" \
+              "refs/remotes/origin/${DEFAULT_BRANCH}"; then
+              encoded_branch="$(python3 -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["BRANCH"], safe=""))' BRANCH="${branch}")"
+              gh api --method DELETE \
+                "repos/${GH_REPO}/git/refs/heads/${encoded_branch}"
+              echo "DELETED: ${branch} (already fully contained in ${DEFAULT_BRANCH})"
+              ((deleted+=1))
+            else
+              echo "PRESERVE: ${branch} (contains commits not integrated into ${DEFAULT_BRANCH})"
+              ((preserved+=1))
+            fi
+          done
+
+          echo "Cleanup summary: deleted=${deleted}, preserved=${preserved}"
