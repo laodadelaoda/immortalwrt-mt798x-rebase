@@ -21,7 +21,7 @@ index 2186821..0ff86a7 100644
 +++ b/drivers/net/dsa/Makefile
 @@ -8,7 +8,8 @@ endif
  obj-$(CONFIG_NET_DSA_KS8995) 	+= ks8995.o
- obj-$(CONFIG_NET_DSA_AN8855)   += an8855.o
+ obj-$(CONFIG_NET_DSA_AN8855)	+= an8855.o
  obj-$(CONFIG_NET_DSA_LANTIQ_GSWIP) += lantiq_gswip.o
 -obj-$(CONFIG_NET_DSA_MT7530)	+= mt7530.o
 +obj-$(CONFIG_NET_DSA_MT7530)    += mt7530-dsa.o
