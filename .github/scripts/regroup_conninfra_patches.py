@@ -63,9 +63,10 @@ def apply_series(source, patches):
         output = run(["patch", "--batch", "--forward", "--fuzz=0", "-p1", "-i", str(patch)], cwd=source)
         print(output, end="")
 
-def extract_function(root, name):
+def extract_function(root, name, only_path=None):
     pattern = re.compile(rb"\b" + re.escape(name.encode("ascii")) + rb"\s*\([^;{}]*?\)\s*\{", re.S)
-    for path in root.rglob("*"):
+    files = [root / only_path] if only_path else root.rglob("*")
+    for path in files:
         if not path.is_file() or path.suffix not in {".c", ".h"}:
             continue
         data = path.read_bytes()
@@ -131,6 +132,19 @@ def emit_source_review(root):
         if len(lines) > 160:
             print("===== SOURCE REVIEW TRUNCATED " + name + " =====")
 
+    for rel in ["platform/mt7981/mt7981_consys_reg.c", "platform/mt7986/mt7986_consys_reg.c"]:
+        found = extract_function(root, "consys_reg_init", rel)
+        if found:
+            source_path, body = found
+            print("===== SOURCE REVIEW consys_reg_init exact path (" + source_path + ") =====")
+            print(body)
+    for file in root.rglob("*"):
+        if file.is_file() and file.suffix in {".c", ".h"}:
+            data = file.read_bytes()
+            for line_no, line in enumerate(data.splitlines(), 1):
+                if b"CFG_REG_LOAD_FROM_DTS_CTRL" in line:
+                    print("CFG_REG_LOAD_FROM_DTS_CTRL " + file.relative_to(root).as_posix() + ":" + str(line_no) + " " + line.decode("latin-1"))
+
     staticized = {
         "base/ring.c": ["__ring_segment_prepare"],
         "base/osal.c": ["get_default_bin_image_file", "_osal_fifo_init", "_osal_fifo_deinit",
@@ -165,6 +179,10 @@ def emit_source_review(root):
                 if rel == owner:
                     continue
                 data = file.read_bytes()
+                own_definition = re.search(
+                    rb"\b" + re.escape(symbol.encode("ascii")) + rb"\s*\([^;{}]*?\)\s*\{", data, re.S)
+                if own_definition:
+                    continue
                 for match in needle.finditer(data):
                     line = data.count(b"\n", 0, match.start()) + 1
                     external.append(rel + ":" + str(line))
