@@ -1,0 +1,72 @@
+name: N60 Pro upstream candidate auto-merge gate
+
+on:
+  workflow_run:
+    workflows:
+      - N60 Pro Build Pipeline
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: n60pro-upstream-auto-merge
+  cancel-in-progress: false
+
+jobs:
+  merge-validated-candidate:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'workflow_dispatch' &&
+      startsWith(github.event.workflow_run.head_branch, 'automation/upstream-25.12-')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Verify exact candidate revision and firmware artifact
+        id: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$RUN_ID"
+          test -n "$HEAD_SHA"
+          test -n "$HEAD_BRANCH"
+          test "${{ github.event.workflow_run.conclusion }}" = "success"
+          test "${{ github.event.workflow_run.event }}" = "workflow_dispatch"
+          ARTIFACT_COUNT="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts" --jq '[.artifacts[] | select(.name | startswith("n60pro-immortalwrt-firmware")) | select(.expired == false) | select(.size_in_bytes > 0)] | length')"
+          test "$ARTIFACT_COUNT" -ge 1
+          echo "Candidate $HEAD_SHA has successful Vendor Audit -> Full run $RUN_ID and a non-empty firmware artifact."
+
+      - name: Merge only the exact validated candidate PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          TARGET_BRANCH: n60pro-25.12-upstream-base
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          PR_JSON="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" --base "$TARGET_BRANCH" --state open --json number,headRefOid,isDraft)"
+          PR_COUNT="$(printf '%s' "$PR_JSON" | jq 'length')"
+          test "$PR_COUNT" -eq 1
+          PR_NUMBER="$(printf '%s' "$PR_JSON" | jq -r '.[0].number')"
+          PR_HEAD="$(printf '%s' "$PR_JSON" | jq -r '.[0].headRefOid')"
+          PR_DRAFT="$(printf '%s' "$PR_JSON" | jq -r '.[0].isDraft')"
+          test "$PR_HEAD" = "$HEAD_SHA"
+          test "$PR_DRAFT" = "true"
+          gh pr ready "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"
+          gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --merge --delete-branch
+          git init verify-merge
+          cd verify-merge
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags origin "$TARGET_BRANCH"
+          git fetch --no-tags origin "$HEAD_SHA"
+          git merge-base --is-ancestor "$HEAD_SHA" "FETCH_HEAD"
+          echo "Merged PR #$PR_NUMBER after exact-SHA Full success and firmware artifact verification."
