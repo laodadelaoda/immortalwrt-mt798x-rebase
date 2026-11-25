@@ -16,16 +16,13 @@ permissions:
 jobs:
   firmware:
     name: Build complete ImmortalWrt firmware for Netcore N60 Pro
-    permissions:
-      contents: write
-      pull-requests: write
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     concurrency:
       group: n60pro-full-firmware-${{ github.ref }}
       cancel-in-progress: false
     steps:
-      - name: Checkout exact audited source revision
+      - name: Checkout exact source revision
         uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
@@ -196,28 +193,3 @@ jobs:
           path: bin/targets/mediatek/filogic/
           if-no-files-found: error
           retention-days: 30
-
-      - name: Merge successfully built upstream candidate
-        if: success() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/automation/upstream-25.12-candidate'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.sha }}
-          HEAD_BRANCH: automation/upstream-25.12-candidate
-          TARGET_BRANCH: n60pro-25.12-upstream-base
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          PR_JSON="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" --base "$TARGET_BRANCH" --state open --json number,headRefOid,isDraft)"
-          PR_COUNT="$(printf '%s' "$PR_JSON" | jq 'length')"
-          if [ "$PR_COUNT" -eq 0 ]; then
-            echo "No open upstream candidate PR; this Full run does not perform a merge."
-            exit 0
-          fi
-          test "$PR_COUNT" -eq 1
-          PR_NUMBER="$(printf '%s' "$PR_JSON" | jq -r '.[0].number')"
-          PR_HEAD="$(printf '%s' "$PR_JSON" | jq -r '.[0].headRefOid')"
-          PR_DRAFT="$(printf '%s' "$PR_JSON" | jq -r '.[0].isDraft')"
-          test "$PR_HEAD" = "$HEAD_SHA"
-          if [ "$PR_DRAFT" = "true" ]; then gh pr ready "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"; fi
-          gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --merge --delete-branch
-          echo "Merged exact candidate $HEAD_SHA after Full firmware build and artifact upload succeeded."
