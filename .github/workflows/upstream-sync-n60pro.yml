@@ -326,6 +326,7 @@ jobs:
             echo "4. Linux 6.12 patch stack must be applied to the actual candidate kernel source with zero fuzz/offset/reject; syntax-only checks are insufficient."
             echo "5. Review upstream changes touching DTS, N60 Pro config, closed-driver integration, WARP/Conninfra/MT Wi-Fi/datconf/MAPFILTER, EasyMesh/DPP/WAPP, OpenSSL, EIP93, Makefiles and Kconfig."
             echo "6. The candidate PR's Full firmware workflow must succeed and upload a non-empty firmware artifact."
+            echo "7. Canonical Vendor Audit must run native target/linux/prepare on the pinned Linux 6.12 source with PATCH=patch --fuzz=0; non-zero offsets, rejects, or .orig/.rej files fail the audit credential."
             echo
             echo "## Decision"
             if [ "${{ steps.refs.outputs.upstream_ahead_count }}" = "0" ]; then
