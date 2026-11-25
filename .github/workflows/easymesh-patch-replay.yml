@@ -529,7 +529,7 @@ jobs:
             cp "$LOG" audit-artifacts-kernel-patch-replay.log
             exit "$rc"
           fi
-          if grep -Ein 'with fuzz [1-9]|offset [+-]?[1-9][0-9]* lines|Hunk #[0-9]+ FAILED|Hunk FAILED|Patch failed!' "$LOG"; then
+          if grep -Ein 'with fuzz [1-9]|offset [+-]?[1-9][0-9]* lines?|Hunk #[0-9]+ FAILED|Hunk FAILED|Patch failed!' "$LOG"; then
             echo "FAIL: kernel patch replay reported fuzz, non-zero offset, or a rejected hunk."
             cp "$LOG" audit-artifacts-kernel-patch-replay.log
             exit 1
