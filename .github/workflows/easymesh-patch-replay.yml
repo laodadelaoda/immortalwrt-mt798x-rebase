@@ -2,7 +2,6 @@ name: N60 Pro vendor source and EasyMesh patch replay audit
 
 on:
   workflow_call:
-  workflow_dispatch:
 
 permissions:
   contents: read
