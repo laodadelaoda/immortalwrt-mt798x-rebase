@@ -521,7 +521,7 @@ jobs:
           test -n "$KERNEL_PATCHVER"
           echo "Pinned kernel series: 6.12$KERNEL_PATCHVER"
           LOG="$RUNNER_TEMP/n60pro-kernel-patch-replay.log"
-          if PATCH='patch --fuzz=0' make target/linux/prepare V=s >"$LOG" 2>&1; then
+          if make PATCH='patch --fuzz=0' target/linux/prepare V=s >"$LOG" 2>&1; then
             echo "Native OpenWrt target/linux/prepare completed."
           else
             rc=$?
