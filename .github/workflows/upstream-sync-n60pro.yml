@@ -246,16 +246,158 @@ jobs:
             echo "Real three-way merge failed; no candidate branch or PR will be created."
             exit 1
           fi
+          MERGE_COMMIT="$(git rev-parse HEAD)"
           echo "MERGE_PROBE=clean" >> "$GITHUB_OUTPUT"
-          echo "CANDIDATE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           {
             echo
             echo "## Candidate merge"
-            echo "- Merge commit: $(git rev-parse HEAD)"
+            echo "- Merge commit: $MERGE_COMMIT"
             echo "- Parents: $(git show -s --format=%P HEAD)"
             echo "- Upstream: $UPSTREAM_SHA"
-            echo "- Result: clean real --no-ff merge; not yet accepted for formal branch."
+            echo "- Result: clean real --no-ff merge; kernel patch refresh and strict replay follow."
           } >> upgrade-evaluation/UPSTREAM-EVALUATION.md
+
+          sudo apt-get update
+          sudo apt-get install -y quilt
+          cp config/n60pro-1001.config .config
+          make defconfig
+
+          python3 - <<'PY'
+          import hashlib, json, subprocess
+          from pathlib import Path
+          paths = subprocess.check_output(
+              ["git", "ls-files", "-z", "--", "target/linux/generic", "target/linux/mediatek"]
+          ).decode().split("\0")
+          paths = sorted(p for p in paths if p.endswith(".patch"))
+          def code_payload(path):
+              lines = Path(path).read_text(encoding="utf-8", errors="replace").splitlines()
+              active = False
+              binary = False
+              out = []
+              for line in lines:
+                  if line.startswith("diff --git "):
+                      active, binary = True, False
+                      continue
+                  if not active:
+                      continue
+                  if line.startswith(("--- ", "+++ ")):
+                      continue
+                  if line.startswith("GIT binary patch"):
+                      binary = True
+                      out.append(line)
+                  elif binary:
+                      out.append(line)
+                  elif line.startswith(("+", "-")):
+                      out.append(line)
+              return hashlib.sha256("\n".join(out).encode()).hexdigest()
+          data = {p: code_payload(p) for p in paths}
+          Path("upgrade-evaluation/KERNEL-PATCH-PAYLOAD-BEFORE.json").write_text(
+              json.dumps(data, indent=2, sort_keys=True) + "\n"
+          )
+          print(f"Tracked kernel patch files before refresh: {len(paths)}")
+          PY
+
+          REFRESH_LOG="$RUNNER_TEMP/n60pro-kernel-quilt-refresh.log"
+          if make target/linux/refresh V=s >"$REFRESH_LOG" 2>&1; then
+            echo "OpenWrt native Quilt refresh completed."
+          else
+            rc=$?
+            cp "$REFRESH_LOG" upgrade-evaluation/kernel-patch-refresh.log
+            tail -n 240 "$REFRESH_LOG"
+            exit "$rc"
+          fi
+          cp "$REFRESH_LOG" upgrade-evaluation/kernel-patch-refresh.log
+
+          python3 - <<'PY'
+          import hashlib, json, subprocess, sys
+          from pathlib import Path
+          before = json.load(open("upgrade-evaluation/KERNEL-PATCH-PAYLOAD-BEFORE.json"))
+          paths = subprocess.check_output(
+              ["git", "ls-files", "-z", "--", "target/linux/generic", "target/linux/mediatek"]
+          ).decode().split("\0")
+          paths = sorted(p for p in paths if p.endswith(".patch"))
+          def code_payload(path):
+              lines = Path(path).read_text(encoding="utf-8", errors="replace").splitlines()
+              active = False
+              binary = False
+              out = []
+              for line in lines:
+                  if line.startswith("diff --git "):
+                      active, binary = True, False
+                      continue
+                  if not active:
+                      continue
+                  if line.startswith(("--- ", "+++ ")):
+                      continue
+                  if line.startswith("GIT binary patch"):
+                      binary = True
+                      out.append(line)
+                  elif binary:
+                      out.append(line)
+                  elif line.startswith(("+", "-")):
+                      out.append(line)
+              return hashlib.sha256("\n".join(out).encode()).hexdigest()
+          after = {p: code_payload(p) for p in paths}
+          if set(before) != set(after):
+              print("Patch inventory changed during refresh.")
+              print("Removed:", sorted(set(before)-set(after)))
+              print("Added:", sorted(set(after)-set(before)))
+              sys.exit(1)
+          changed = [p for p in paths if before[p] != after[p]]
+          if changed:
+              print("Refresh altered patch added/deleted code, not only hunk locations/context:")
+              print("\n".join(changed))
+              sys.exit(1)
+          Path("upgrade-evaluation/KERNEL-PATCH-PAYLOAD-AFTER.json").write_text(
+              json.dumps(after, indent=2, sort_keys=True) + "\n"
+          )
+          Path("upgrade-evaluation/KERNEL-PATCH-REFRESH.md").write_text(
+              "# Kernel patch refresh report\n\n"
+              f"- Tracked patch files: {len(paths)}\n"
+              f"- Refreshed patch files: {sum(Path(p).read_bytes() != subprocess.check_output(['git','show',f'HEAD:{p}']) for p in paths)}\n"
+              "- Added/deleted patch code changed: 0 (per-file added/deleted-line payload hashes are identical)\n"
+              "- Method: native OpenWrt make target/linux/refresh (Quilt), then a clean strict replay.\n"
+          )
+          print(f"Verified unchanged added/deleted code payload across {len(paths)} kernel patches.")
+          PY
+
+          git diff --check
+          make target/linux/clean
+          STRICT_LOG="$RUNNER_TEMP/n60pro-kernel-patch-strict-replay.log"
+          if make PATCH='patch --fuzz=0' target/linux/prepare V=s >"$STRICT_LOG" 2>&1; then
+            echo "Strict native Linux patch replay completed."
+          else
+            rc=$?
+            cp "$STRICT_LOG" upgrade-evaluation/kernel-patch-strict-replay.log
+            tail -n 240 "$STRICT_LOG"
+            exit "$rc"
+          fi
+          if grep -Ein 'with fuzz [1-9]|offset [+-]?[1-9][0-9]* lines?|Hunk #[0-9]+ FAILED|Hunk FAILED|Patch failed!' "$STRICT_LOG"; then
+            echo "Strict kernel replay reported fuzz, non-zero offset, or a rejected hunk."
+            cp "$STRICT_LOG" upgrade-evaluation/kernel-patch-strict-replay.log
+            exit 1
+          fi
+          KERNEL_DTS="$(find build_dir -type f -path '*/linux-*/arch/arm64/boot/dts/mediatek/mt7986a.dtsi' -print -quit)"
+          test -n "$KERNEL_DTS"
+          grep -Eq 'clock-frequency[[:space:]]*=[[:space:]]*<12986200>;' "$KERNEL_DTS"
+          KERNEL_SOURCE_ROOT="\${KERNEL_DTS%/arch/arm64/boot/dts/mediatek/mt7986a.dtsi}"
+          if find "$KERNEL_SOURCE_ROOT" -type f \( -name '*.rej' -o -name '*.orig' \) -print -quit | grep -q .; then
+            find "$KERNEL_SOURCE_ROOT" -type f \( -name '*.rej' -o -name '*.orig' \) -print
+            cp "$STRICT_LOG" upgrade-evaluation/kernel-patch-strict-replay.log
+            exit 1
+          fi
+          APPLIED_COUNT="$(grep -Ec '^Applying .* using ' "$STRICT_LOG" || true)"
+          test "$APPLIED_COUNT" -gt 0
+          cp "$STRICT_LOG" upgrade-evaluation/kernel-patch-strict-replay.log
+          echo "Strict replay passed: $APPLIED_COUNT native patches, zero fuzz, zero offset, zero rejects." | tee upgrade-evaluation/KERNEL-PATCH-STRICT-RESULT.txt
+
+          git add target/linux/generic target/linux/mediatek/patches-6.12
+          if ! git diff --cached --quiet; then
+            git commit -m "kernel: refresh 6.12 patch stack for zero-offset replay"
+          fi
+          CANDIDATE_SHA="$(git rev-parse HEAD)"
+          echo "CANDIDATE_SHA=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"
+          echo "- Final candidate revision after kernel patch refresh: $CANDIDATE_SHA" >> upgrade-evaluation/UPSTREAM-EVALUATION.md
 
       - name: Inspect sensitive integration surfaces and preserve inventories
         shell: bash
