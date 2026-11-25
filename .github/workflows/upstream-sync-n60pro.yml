@@ -264,6 +264,375 @@ jobs:
           cp config/n60pro-1001.config .config
           make defconfig
 
+          # Preserve the literal tab in this context: patch 737 adds the AN8855
+          # Makefile entry with a tab, and the MT7531 netlink patch must match it.
+          MT7531_NETLINK_PATCH="target/linux/mediatek/patches-6.12/999-dsa-02-add-mt7531-netlink-support.patch"
+          grep -Fq           # error check from upstream commit 573d6e3. Do not reapply its
+          # now-redundant backport on 6.12.118 or newer.
+          KERNEL_PATCHVER="$(sed -n 's/^LINUX_VERSION-6.12 = //p' target/linux/generic/kernel-6.12)"
+          KERNEL_PATCHLEVEL="${KERNEL_PATCHVER#.}"
+          if [[ "$KERNEL_PATCHLEVEL" =~ ^[0-9]+$ ]] && [ "$KERNEL_PATCHLEVEL" -ge 118 ]; then
+            REDUNDANT_MT7530_PATCH="target/linux/generic/backport-6.12/743-06-v7.3-net-dsa-mt7530-check-bus_read-error-in-core_rmw.patch"
+            if [ -f "$REDUNDANT_MT7530_PATCH" ]; then
+              git rm -f -- "$REDUNDANT_MT7530_PATCH"
+              echo "Removed redundant MT7530 backport for Linux 6.12.$KERNEL_PATCHLEVEL; the fix is already in the pinned upstream kernel."
+            fi
+          fi
+          if make QUILT=1 target/linux/prepare V=s >"$RUNNER_TEMP/n60pro-kernel-quilt-prepare.log" 2>&1; then
+            echo "OpenWrt native QUILT=1 kernel preparation completed."
+          else
+            rc=$?
+            cp "$RUNNER_TEMP/n60pro-kernel-quilt-prepare.log" upgrade-evaluation/kernel-quilt-prepare.log
+            tail -n 240 "$RUNNER_TEMP/n60pro-kernel-quilt-prepare.log"
+            exit "$rc"
+          fi
+          cp "$RUNNER_TEMP/n60pro-kernel-quilt-prepare.log" upgrade-evaluation/kernel-quilt-prepare.log
+
+          MT7530_SOURCE="$(find build_dir -type f -path '*/linux-*/drivers/net/dsa/mt7530.c' -print -quit)"
+          test -n "$MT7530_SOURCE"
+          python3 - "$MT7530_SOURCE" <<'PY'
+          import re, sys
+          from pathlib import Path
+          source = Path(sys.argv[1]).read_text(encoding="utf-8")
+          match = re.search(r"static void\s+core_rmw\(struct mt7530_priv \*priv,.*?\n}\n", source, re.S)
+          if not match:
+              raise SystemExit("FAIL: MT7530 core_rmw() was not found in prepared kernel source")
+          body = match.group(0)
+          required = ("ret = bus->read(", "if (ret < 0)", "val = ret;")
+          missing = [token for token in required if token not in body]
+          if missing:
+              raise SystemExit("FAIL: Linux source lacks upstream MT7530 core_rmw() read-error handling: " + ", ".join(missing))
+          print("PASS: redundant 743-06 behavior is already present in prepared Linux source.")
+          PY
+
+          PATCHES_DIR="$(find build_dir -type d -path '*/linux-*/patches' -print -quit)"
+          test -n "$PATCHES_DIR"
+          LINUX_DIR="${PATCHES_DIR%/patches}"
+          test -s "$PATCHES_DIR/series"
+
+          python3 - <<'PY'
+          import hashlib, json, subprocess
+          from pathlib import Path
+          paths = subprocess.check_output(
+              ["git", "ls-files", "-z", "--", "target/linux/generic", "target/linux/mediatek"]
+          ).decode().split("\0")
+          paths = sorted(p for p in paths if p.endswith(".patch"))
+          def code_payload(path):
+              lines = Path(path).read_text(encoding="utf-8", errors="replace").splitlines()
+              active = False
+              binary = False
+              out = []
+              for line in lines:
+                  if line.startswith("diff --git "):
+                      active, binary = True, False
+                      continue
+                  if line.startswith("--- "):
+                      active = True
+                      continue
+                  if line.startswith("+++ "):
+                      active = True
+                      continue
+                  if not active:
+                      continue
+                  if line.startswith("GIT binary patch"):
+                      binary = True
+                      out.append(line)
+                  elif binary:
+                      out.append(line)
+                  elif line.startswith(("+", "-")):
+                      out.append(line)
+              return hashlib.sha256("\n".join(out).encode()).hexdigest()
+          data = {p: code_payload(p) for p in paths}
+          Path("upgrade-evaluation/KERNEL-PATCH-PAYLOAD-BEFORE.json").write_text(
+              json.dumps(data, indent=2, sort_keys=True) + "\n"
+          )
+          print(f"Tracked kernel patch files before refresh: {len(paths)}")
+          PY
+
+          REFRESH_LOG="$RUNNER_TEMP/n60pro-kernel-quilt-refresh.log"
+          if (
+            cd "$LINUX_DIR"
+            quilt --quiltrc=- pop -a -f || true
+            while quilt --quiltrc=- next >/dev/null 2>&1; do
+              quilt --quiltrc=- push
+              QUILT_DIFF_OPTS="-p" quilt --quiltrc=- refresh -p ab --no-index --no-timestamps
+            done
+          ) >"$REFRESH_LOG" 2>&1; then
+            echo "OpenWrt native Quilt push/refresh loop completed."
+          else
+            rc=$?
+            cp "$REFRESH_LOG" upgrade-evaluation/kernel-patch-refresh.log
+            tail -n 240 "$REFRESH_LOG"
+            exit "$rc"
+          fi
+          cp "$REFRESH_LOG" upgrade-evaluation/kernel-patch-refresh.log
+          while IFS= read -r patch; do
+            patch="${patch%%#*}"
+            patch="$(printf '%s' "$patch" | xargs)"
+            [ -n "$patch" ] || continue
+            case "$patch" in
+              generic-backport/*) dest="target/linux/generic/backport-6.12/${patch#generic-backport/}" ;;
+              generic/*) dest="target/linux/generic/pending-6.12/${patch#generic/}" ;;
+              generic-hack/*) dest="target/linux/generic/hack-6.12/${patch#generic-hack/}" ;;
+              platform/*) dest="target/linux/mediatek/patches-6.12/${patch#platform/}" ;;
+              *) echo "Unknown kernel patch series prefix: $patch"; exit 1 ;;
+            esac
+            mkdir -p "$(dirname "$dest")"
+            cp "$PATCHES_DIR/$patch" "$dest"
+          done < <(sed -e 's/#.*//' "$PATCHES_DIR/series" | awk 'NF {print $1}')
+          echo "Refreshed patch files copied back to their native OpenWrt patch directories."
+          EXPECTED_KERNEL_PATCH_COUNT="$(sed -e 's/#.*//' "$PATCHES_DIR/series" | awk 'NF {n++} END {print n+0}')"
+          test "$EXPECTED_KERNEL_PATCH_COUNT" -gt 0
+          python3 - <<'PY'
+          import hashlib, json, subprocess, sys
+          from pathlib import Path
+          before = json.load(open("upgrade-evaluation/KERNEL-PATCH-PAYLOAD-BEFORE.json"))
+          paths = subprocess.check_output(
+              ["git", "ls-files", "-z", "--", "target/linux/generic", "target/linux/mediatek"]
+          ).decode().split("\0")
+          paths = sorted(p for p in paths if p.endswith(".patch"))
+          def code_payload(path):
+              lines = Path(path).read_text(encoding="utf-8", errors="replace").splitlines()
+              active = False
+              binary = False
+              out = []
+              for line in lines:
+                  if line.startswith("diff --git "):
+                      active, binary = True, False
+                      continue
+                  if line.startswith("--- "):
+                      active = True
+                      continue
+                  if line.startswith("+++ "):
+                      active = True
+                      continue
+                  if not active:
+                      continue
+                  if line.startswith("GIT binary patch"):
+                      binary = True
+                      out.append(line)
+                  elif binary:
+                      out.append(line)
+                  elif line.startswith(("+", "-")):
+                      out.append(line)
+              return hashlib.sha256("\n".join(out).encode()).hexdigest()
+          after = {p: code_payload(p) for p in paths}
+          if set(before) != set(after):
+              print("Patch inventory changed during refresh.")
+              print("Removed:", sorted(set(before)-set(after)))
+              print("Added:", sorted(set(after)-set(before)))
+              sys.exit(1)
+          changed = [p for p in paths if before[p] != after[p]]
+          if changed:
+              print("Refresh altered patch added/deleted code, not only hunk locations/context:")
+              print("\n".join(changed))
+              sys.exit(1)
+          Path("upgrade-evaluation/KERNEL-PATCH-PAYLOAD-AFTER.json").write_text(
+              json.dumps(after, indent=2, sort_keys=True) + "\n"
+          )
+          Path("upgrade-evaluation/KERNEL-PATCH-REFRESH.md").write_text(
+              "# Kernel patch refresh report\n\n"
+              f"- Tracked patch files: {len(paths)}\n"
+              f"- Refreshed patch files: {sum(Path(p).read_bytes() != subprocess.check_output(['git','show',f'HEAD:{p}']) for p in paths)}\n"
+              "- Added/deleted patch code changed: 0 (per-file added/deleted-line payload hashes are identical)\n"
+              "- Method: native OpenWrt make target/linux/refresh (Quilt), then a clean strict replay.\n"
+          )
+          print(f"Verified unchanged added/deleted code payload across {len(paths)} kernel patches.")
+          PY
+          echo "- Expected native kernel patches in series: $EXPECTED_KERNEL_PATCH_COUNT" >> upgrade-evaluation/KERNEL-PATCH-REFRESH.md
+
+          git diff --check
+          make target/linux/clean
+          STRICT_LOG="$RUNNER_TEMP/n60pro-kernel-patch-strict-replay.log"
+          if make PATCH='patch --fuzz=0' target/linux/prepare V=s >"$STRICT_LOG" 2>&1; then
+            echo "Strict native Linux patch replay completed."
+          else
+            rc=$?
+            cp "$STRICT_LOG" upgrade-evaluation/kernel-patch-strict-replay.log
+            tail -n 240 "$STRICT_LOG"
+            exit "$rc"
+          fi
+          if grep -Ein 'with fuzz [1-9]|offset [+-]?[1-9][0-9]* lines?|Hunk #[0-9]+ FAILED|Hunk FAILED|Patch failed!' "$STRICT_LOG"; then
+            echo "Strict kernel replay reported fuzz, non-zero offset, or a rejected hunk."
+            cp "$STRICT_LOG" upgrade-evaluation/kernel-patch-strict-replay.log
+            exit 1
+          fi
+          KERNEL_DTS="$(find build_dir -type f -path '*/linux-*/arch/arm64/boot/dts/mediatek/mt7986a.dtsi' -print -quit)"
+          test -n "$KERNEL_DTS"
+          grep -Eq 'clock-frequency[[:space:]]*=[[:space:]]*<12986200>;' "$KERNEL_DTS"
+          KERNEL_SOURCE_ROOT="${KERNEL_DTS%/arch/arm64/boot/dts/mediatek/mt7986a.dtsi}"
+          if find "$KERNEL_SOURCE_ROOT" -type f \( -name '*.rej' -o -name '*.orig' \) -print -quit | grep -q .; then
+            find "$KERNEL_SOURCE_ROOT" -type f \( -name '*.rej' -o -name '*.orig' \) -print
+            cp "$STRICT_LOG" upgrade-evaluation/kernel-patch-strict-replay.log
+            exit 1
+          fi
+          APPLIED_COUNT="$(grep -Ec '^Applying .* using ' "$STRICT_LOG" || true)"
+          test "$APPLIED_COUNT" -eq "$EXPECTED_KERNEL_PATCH_COUNT"
+          cp "$STRICT_LOG" upgrade-evaluation/kernel-patch-strict-replay.log
+          echo "Strict replay passed: $APPLIED_COUNT/$EXPECTED_KERNEL_PATCH_COUNT native patches, zero fuzz, zero offset, zero rejects." | tee upgrade-evaluation/KERNEL-PATCH-STRICT-RESULT.txt
+
+          git add target/linux/generic target/linux/mediatek/patches-6.12
+          if ! git diff --cached --quiet; then
+            git commit -m "kernel: refresh 6.12 patch stack for zero-offset replay"
+          fi
+          CANDIDATE_SHA="$(git rev-parse HEAD)"
+          echo "CANDIDATE_SHA=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"
+          echo "- Final candidate revision after kernel patch refresh: $CANDIDATE_SHA" >> upgrade-evaluation/UPSTREAM-EVALUATION.md
+
+      - name: Inspect sensitive integration surfaces and preserve inventories
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          {
+            echo
+            echo "## N60 Pro integration surfaces"
+            for path in target/linux/mediatek package/mtk config/n60pro-1001.config package/kernel/mapfilter package/libs/openssl; do
+              if [ -e "$path" ]; then
+                echo "### $path"
+                git diff --stat "$GITHUB_SHA" HEAD -- "$path" || true
+                find "$path" -type f \( -name '*.patch' -o -name 'Makefile' -o -name 'Kconfig*' -o -name '*.config' \) -print 2>/dev/null | sort | head -n 500
+              fi
+            done
+            echo
+            echo "## Fixed vendor lock"
+            sha256sum package/mtk/vendor-sources.lock.json
+            echo
+            echo "## Active vendor and kernel patch counts"
+            find package/mtk target/linux/mediatek/patches-6.12 -type f -name '*.patch' -print 2>/dev/null | sort | tee upgrade-evaluation/PATCH-INVENTORY.txt
+            echo "patch_count=$(wc -l < upgrade-evaluation/PATCH-INVENTORY.txt)"
+            echo
+            echo "## Validation boundary"
+            echo "This workflow prepares a merge candidate only. The candidate PR must pass the canonical vendor audit and Full firmware build before merge."
+            echo "Patch-ID matching is not a substitute for semantic compatibility, zero-fuzz patch replay, native Package Prepare, kernel patch application, or firmware output verification."
+          } >> upgrade-evaluation/UPSTREAM-EVALUATION.md
+          sha256sum upgrade-evaluation/* > upgrade-evaluation/SHA256SUMS
+
+      - name: Generate explicit migration plan and compatibility review inventory
+        env:
+          UPSTREAM_SHA: ${{ steps.refs.outputs.upstream_sha }}
+          MTK_BASE_SHA: ${{ steps.refs.outputs.mtk_base_sha }}
+          BASE_SHA: ${{ steps.refs.outputs.base_sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          {
+            echo "# N60 Pro upstream migration plan"
+            echo
+            echo "## Revisions"
+            echo "- Target baseline: $GITHUB_SHA"
+            echo "- Primary upstream candidate: $UPSTREAM_SHA"
+            echo "- MTK integration baseline: $MTK_BASE_SHA"
+            echo "- Merge base: $BASE_SHA"
+            echo "- Candidate merge commit: $(git rev-parse HEAD)"
+            echo
+            echo "## Commit mapping result"
+            python3 - <<'PY'
+          import json
+          d=json.load(open("upgrade-evaluation/UPSTREAM-COMMIT-MAP.json",encoding="utf-8"))
+          from collections import Counter
+          c=Counter(x["status"] for x in d["upstream_commits"])
+          for k in ("equivalent","ambiguous-equivalent","partial-candidate","merge","unmapped"):
+              print(f"- {k}: {c[k]}")
+          print(f"- Local-only commits considered: {len(d['local_commits'])}")
+          PY
+            echo
+            echo "## Sensitive-path delta introduced by merge"
+            git diff --name-status "$GITHUB_SHA" HEAD -- \
+              config/n60pro-1001.config target/linux/mediatek package/mtk \
+              package/kernel/mapfilter package/libs/openssl \
+              | tee upgrade-evaluation/SENSITIVE-PATH-DELTA.txt
+            echo
+            echo "## Required validation before merge"
+            echo "1. Candidate PR must pass the canonical vendor-source Lock/SHA256 audit."
+            echo "2. Every active vendor patch series must replay on the pinned archives with zero fuzz, zero offset, zero reject, and no skipped hunks."
+            echo "3. Native OpenWrt Package Prepare and MT Wi-Fi 026 exact-path/function assertions must pass."
+            echo "4. Linux 6.12 patch stack must be applied to the actual candidate kernel source with zero fuzz/offset/reject; syntax-only checks are insufficient."
+            echo "5. Review upstream changes touching DTS, N60 Pro config, closed-driver integration, WARP/Conninfra/MT Wi-Fi/datconf/MAPFILTER, EasyMesh/DPP/WAPP, OpenSSL, EIP93, Makefiles and Kconfig."
+            echo "6. The candidate PR's Full firmware workflow must succeed and upload a non-empty firmware artifact."
+            echo "7. Canonical Vendor Audit must run native target/linux/prepare on the pinned Linux 6.12 source with PATCH=patch --fuzz=0; non-zero offsets, rejects, or .orig/.rej files fail the audit credential."
+            echo "8. Before candidate publication, the workflow refreshes the complete kernel patch series with native Quilt and verifies every patch's added/deleted code payload is unchanged."
+            echo
+            echo "## Decision"
+            if [ "${{ steps.refs.outputs.upstream_ahead_count }}" = "0" ]; then
+              echo "The official ImmortalWrt openwrt-25.12 branch has no commits newer than the common base. This is a no-op synchronization; the local branch is preserved unchanged."
+            else
+              echo "A clean textual merge is only candidate generation. The candidate is eligible for auto-merge only after exact-SHA Vendor Audit, Full success, and a non-empty firmware artifact."
+            fi
+            echo "Unmapped, split/squash, ambiguous and merge commits require path/function-level review; patch-id is not semantic equivalence."
+          } | tee upgrade-evaluation/UPSTREAM-MIGRATION-PLAN.md
+          git diff --check "$GITHUB_SHA" HEAD
+          sha256sum upgrade-evaluation/* > upgrade-evaluation/SHA256SUMS
+
+      - name: Upload commit map and migration plan
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: n60pro-upstream-migration-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: upgrade-evaluation/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish or update the single upstream candidate branch and validation PR
+        if: success() && steps.merge.outputs.CANDIDATE_SHA != '' && steps.refs.outputs.upstream_ahead_count != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ steps.merge.outputs.CANDIDATE_SHA }}
+          UPSTREAM_SHA: ${{ steps.refs.outputs.upstream_sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          TARGET_BRANCH="n60pro-25.12-upstream-base"
+          CANDIDATE_BRANCH="automation/upstream-25.12-candidate"
+
+          git fetch origin "$TARGET_BRANCH"
+          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$GITHUB_SHA"
+
+          # Reuse one stable staging ref. Never create a run-number branch.
+          if git ls-remote --exit-code --heads origin "$CANDIDATE_BRANCH" >/dev/null 2>&1; then
+            git fetch --no-tags origin "refs/heads/$CANDIDATE_BRANCH:refs/remotes/origin/$CANDIDATE_BRANCH"
+            OLD_CANDIDATE_SHA="$(git rev-parse "refs/remotes/origin/$CANDIDATE_BRANCH")"
+            git push --force-with-lease="refs/heads/$CANDIDATE_BRANCH:$OLD_CANDIDATE_SHA" origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          else
+            git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          fi
+
+          cat > "$RUNNER_TEMP/upstream-pr-body.md" <<EOF
+          This is the single persistent N60 Pro upstream 25.12 validation candidate. Each synchronization updates this branch and its PR instead of creating per-run branches.
+
+          - Primary upstream: immortalwrt/immortalwrt:openwrt-25.12
+          - Upstream commit: $UPSTREAM_SHA
+          - Candidate revision (merge plus verified kernel patch refresh): $CANDIDATE_SHA
+          - Source branch baseline: $GITHUB_SHA
+          - MTK integration baseline: ${{ steps.refs.outputs.mtk_base_sha }}
+
+          Required gate: exact-SHA canonical Vendor Audit (including native Linux 6.12 zero-fuzz/zero-offset patch replay and MT Wi-Fi 026 assertions), Full firmware build, and a non-empty firmware artifact. The auto-merge gate runs only after all checks succeed.
+
+          Full commit mapping, migration plan, path inventories, and SHA256 manifest are attached to workflow run $GITHUB_RUN_ID:
+          https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          EOF
+
+          PR_JSON="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$CANDIDATE_BRANCH" --base "$TARGET_BRANCH" --state open --json number)"
+          PR_COUNT="$(printf '%s' "$PR_JSON" | jq 'length')"
+          if [ "$PR_COUNT" -eq 0 ]; then
+            gh pr create --repo "$GITHUB_REPOSITORY" --base "$TARGET_BRANCH" --head "$CANDIDATE_BRANCH" --draft \
+              --title "N60 Pro: synchronize upstream 25.12" --body-file "$RUNNER_TEMP/upstream-pr-body.md"
+          elif [ "$PR_COUNT" -eq 1 ]; then
+            PR_NUMBER="$(printf '%s' "$PR_JSON" | jq -r '.[0].number')"
+            gh pr edit "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/upstream-pr-body.md"
+          else
+            echo "More than one open PR references the canonical candidate branch; refusing ambiguous publication."
+            exit 1
+          fi
+
+          # GITHUB_TOKEN-created PRs do not emit pull_request workflows; dispatch
+          # the canonical Vendor Audit -> Full pipeline on the stable candidate ref.
+          gh workflow run n60pro-build.yml --repo "$GITHUB_REPOSITORY" --ref "$CANDIDATE_BRANCH"
+          echo "Updated the single upstream candidate branch and dispatched exact-ref Vendor Audit -> Full."
+ obj-$(CONFIG_NET_DSA_AN8855)\t+= an8855.o' "$MT7531_NETLINK_PATCH" || {
+            echo "FAIL: MT7531 netlink patch Makefile context no longer matches the preceding AN8855 patch."
+            exit 1
+          }
+
           # Linux 6.12.118 already contains the MT7530 core_rmw() bus->read()
           # error check from upstream commit 573d6e3. Do not reapply its
           # now-redundant backport on 6.12.118 or newer.
