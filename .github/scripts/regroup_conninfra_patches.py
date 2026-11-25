@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Regrouping is accepted only after strict GNU replay proves byte-for-byte parity.
 from __future__ import annotations
 import difflib, hashlib, json, os, re, shutil, subprocess, tarfile, tempfile, urllib.request
 from pathlib import Path, PurePosixPath
