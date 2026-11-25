@@ -1,0 +1,191 @@
+name: Cleanup merged upstream automation branches
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+  push:
+    branches:
+      - n60pro-25.12-upstream-base
+    paths:
+      - .github/workflows/upstream-sync-n60pro.yml
+      - .github/workflows/cleanup-upstream-branches.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: upstream-branch-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout canonical branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Remove only fully integrated upstream run branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --no-tags origin \
+            "+refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}"
+
+          mapfile -t branches < <(
+            gh api --paginate "repos/${GH_REPO}/branches?per_page=100" \
+              --jq '.[].name | select(startswith("automation/upstream-25.12-"))'
+          )
+
+          if ((${#branches[@]} == 0)); then
+            echo "No per-run upstream automation branches found."
+            exit 0
+          fi
+
+          mapfile -t open_pr_heads < <(
+            gh api --paginate "repos/${GH_REPO}/pulls?state=open&per_page=100" \
+              --jq '.[].head.ref'
+          )
+
+          deleted=0
+          preserved=0
+
+          for branch in "${branches[@]}"; do
+            if printf '%s\n' "${open_pr_heads[@]}" | grep -Fxq -- "${branch}"; then
+              echo "PRESERVE: ${branch} (referenced by an open pull request)"
+              ((preserved+=1))
+              continue
+            fi
+
+            if ! git fetch --no-tags origin \
+              "+refs/heads/${branch}:refs/remotes/origin/${branch}"; then
+              echo "PRESERVE: ${branch} (could not fetch; state is unknown)"
+              ((preserved+=1))
+              continue
+            fi
+
+            if git merge-base --is-ancestor \
+              "refs/remotes/origin/${branch}" \
+              "refs/remotes/origin/${DEFAULT_BRANCH}"; then
+              encoded_branch="$(BRANCH="${branch}" python3 -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["BRANCH"], safe=""))')"
+              gh api --method DELETE \
+                "repos/${GH_REPO}/git/refs/heads/${encoded_branch}"
+              echo "DELETED: ${branch} (already fully contained in ${DEFAULT_BRANCH})"
+              ((deleted+=1))
+            else
+              echo "PRESERVE: ${branch} (contains commits not integrated into ${DEFAULT_BRANCH})"
+              ((preserved+=1))
+            fi
+          done
+
+          echo "Cleanup summary: deleted=${deleted}, preserved=${preserved}"
+
+      - name: Remove superseded upstream candidates only when source trees are identical
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          mapfile -t candidates < <(
+            gh api --paginate "repos/${GH_REPO}/branches?per_page=100" \
+              --jq '.[].name | select(test("^automation/upstream-25\\.12-.*-run-[0-9]+$"))'
+          )
+          mapfile -t open_pr_heads < <(
+            gh api --paginate "repos/${GH_REPO}/pulls?state=open&per_page=100" \
+              --jq '.[].head.ref'
+          )
+
+          declare -A first_parent second_parent tip_ref
+          for branch in "${candidates[@]}"; do
+            if ! git fetch --no-tags origin \
+              "+refs/heads/${branch}:refs/remotes/origin/${branch}"; then
+              echo "PRESERVE: ${branch} (fetch failed)"
+              continue
+            fi
+            tip="refs/remotes/origin/${branch}"
+            read -r p1 p2 extra < <(git show -s --format=%P "$tip")
+            if [[ -z "${p1:-}" || -z "${p2:-}" || -n "${extra:-}" ]]; then
+              echo "PRESERVE: ${branch} (not a two-parent upstream merge candidate)"
+              continue
+            fi
+            first_parent["$branch"]="$p1"
+            second_parent["$branch"]="$p2"
+            tip_ref["$branch"]="$tip"
+          done
+
+          canonical=""
+          for candidate in "${candidates[@]}"; do
+            [[ -n "${first_parent[$candidate]:-}" ]] || continue
+            newest=true
+            upstream="${second_parent[$candidate]}"
+            for other in "${candidates[@]}"; do
+              [[ "$other" == "$candidate" ]] && continue
+              [[ -n "${first_parent[$other]:-}" ]] || continue
+              [[ "${second_parent[$other]}" == "$upstream" ]] || continue
+              if ! git merge-base --is-ancestor "${first_parent[$other]}" "${first_parent[$candidate]}"; then
+                newest=false
+                break
+              fi
+            done
+            if [[ "$newest" == true ]]; then
+              if [[ -n "$canonical" ]]; then
+                echo "PRESERVE: ambiguous newest candidates: $canonical and $candidate"
+                canonical=""
+                break
+              fi
+              canonical="$candidate"
+            fi
+          done
+
+          if [[ -z "$canonical" ]]; then
+            echo "No unique newest candidate found; preserving all candidate branches."
+            exit 0
+          fi
+
+          canonical_tip="${tip_ref[$canonical]}"
+          canonical_base="${first_parent[$canonical]}"
+          canonical_upstream="${second_parent[$canonical]}"
+          echo "Canonical comparison candidate: $canonical"
+          deleted=0
+          preserved=0
+
+          for branch in "${candidates[@]}"; do
+            [[ "$branch" == "$canonical" ]] && continue
+            [[ -n "${first_parent[$branch]:-}" ]] || continue
+
+            if printf '%s\\n' "${open_pr_heads[@]}" | grep -Fxq -- "$branch"; then
+              echo "PRESERVE: $branch (open PR exists)"
+              ((preserved+=1))
+              continue
+            fi
+            if [[ "${second_parent[$branch]}" != "$canonical_upstream" ]] ||
+               ! git merge-base --is-ancestor "${first_parent[$branch]}" "$canonical_base"; then
+              echo "PRESERVE: $branch (different upstream or non-ancestor base)"
+              ((preserved+=1))
+              continue
+            fi
+
+            if git diff --quiet "${tip_ref[$branch]}" "$canonical_tip" -- . ':(exclude).github/workflows/**'; then
+              encoded_branch="$(BRANCH="$branch" python3 -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["BRANCH"], safe=""))')"
+              gh api --method DELETE "repos/${GH_REPO}/git/refs/heads/${encoded_branch}"
+              echo "DELETED: $branch (same upstream merge and identical non-workflow source tree as $canonical)"
+              ((deleted+=1))
+            else
+              echo "PRESERVE: $branch (source-tree differences remain; manual migration required)"
+              ((preserved+=1))
+            fi
+          done
+
+          echo "Superseded candidate cleanup: deleted=$deleted, preserved=$preserved, canonical=$canonical"
