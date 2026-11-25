@@ -11,34 +11,11 @@ on:
       - n60pro-mtk-closed-driver
       - n60pro-25.12-upstream-base
   workflow_dispatch:
-    inputs:
-      run_full:
-        description: Run Full firmware after the canonical Vendor Audit succeeds
-        required: true
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
 jobs:
-  # On push/PR or a dispatch that did not explicitly authorize Full, enter the
-  # same concurrency group with cancel-in-progress so any stale queued/running
-  # Full job from an older workflow revision is cancelled before it can build.
-  cancel-stale-full:
-    name: Cancel Full jobs without explicit authorization
-    if: >-
-      (github.event_name != 'workflow_dispatch' || inputs.run_full != true) &&
-      !(github.event_name == 'push' && (contains(github.event.head_commit.message, '[N60PRO-FULL]') || contains(github.event.head_commit.message, '[N60PRO-SUPPRESS-SECOND]')))
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    concurrency:
-      group: n60pro-full-firmware
-      cancel-in-progress: true
-    steps:
-      - name: Confirm Full is not authorized for this event
-        run: echo "Full requires a successful canonical audit and explicit workflow_dispatch with run_full=true."
-
   vendor-audit:
     name: Canonical vendor and EasyMesh patch audit
     uses: ./.github/workflows/easymesh-patch-replay.yml
@@ -49,10 +26,7 @@ jobs:
   firmware:
     name: Build complete ImmortalWrt firmware for Netcore N60 Pro
     needs: [vendor-audit]
-    if: >-
-      needs.vendor-audit.result == 'success' &&
-      ((github.event_name == 'workflow_dispatch' && inputs.run_full == true) ||
-       (github.event_name == 'push' && contains(github.event.head_commit.message, '[N60PRO-FULL]')))
+    if: needs.vendor-audit.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     concurrency:
