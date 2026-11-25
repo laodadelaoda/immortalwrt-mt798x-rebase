@@ -182,10 +182,12 @@ jobs:
           ]
           for status in ("equivalent","ambiguous-equivalent","partial-candidate","merge","unmapped"):
               lines.append(f"| {status} | {sum(x['status']==status for x in mapping)} |")
-          lines += ["", "## Per-commit mapping", "", "| Upstream SHA | Status | Local match(es) | Subject |", "|---|---|---|---|"]
+          lines += ["", "## Per-commit mapping", "", "| Upstream SHA | Status | Exact match(es) / path-overlap candidates | Subject |", "|---|---|---|---|"]
           for x in mapping:
-              matches = ", ".join(m["sha"][:12] for m in x["local_matches"]) or "—"
-              subject = x["subject"].replace("|","\|")
+              exact = ", ".join(m["sha"][:12] for m in x["local_matches"])
+              partial = ", ".join(f"{m['sha'][:12]} ({m['overlap_count']} paths)" for m in x.get("path_overlap_candidates",[])[:5])
+              matches = exact or partial or "—"
+              subject = x["subject"].replace("|","\\|")
               lines.append(f"| {x['upstream_sha']} | {x['status']} | {matches} | {subject} |")
           Path("upgrade-evaluation/UPSTREAM-COMMIT-MAP.md").write_text("\n".join(lines)+"\n")
           PY
@@ -273,7 +275,7 @@ jobs:
           d=json.load(open("upgrade-evaluation/UPSTREAM-COMMIT-MAP.json",encoding="utf-8"))
           from collections import Counter
           c=Counter(x["status"] for x in d["upstream_commits"])
-          for k in ("equivalent","ambiguous-equivalent","merge","unmapped"):
+          for k in ("equivalent","ambiguous-equivalent","partial-candidate","merge","unmapped"):
               print(f"- {k}: {c[k]}")
           print(f"- Local-only commits considered: {len(d['local_commits'])}")
           PY
@@ -329,4 +331,8 @@ jobs:
             --draft \
             --title "N60 Pro: synchronize upstream 25.12 (${UPSTREAM_SHA:0:12})" \
             --body-file upgrade-evaluation/UPSTREAM-EVALUATION.md
-          echo "Candidate PR created. Canonical vendor audit and Full firmware build are required before merge."
+          # A PR created with GITHUB_TOKEN does not automatically emit pull_request
+          # workflow runs. Explicit workflow_dispatch is an allowed token-triggered
+          # event and runs the canonical Vendor Audit followed by Full on this candidate.
+          gh workflow run n60pro-build.yml --repo "$GITHUB_REPOSITORY" --ref "$CANDIDATE_BRANCH"
+          echo "Candidate PR created and candidate Full pipeline dispatched; formal branch remains unchanged."
