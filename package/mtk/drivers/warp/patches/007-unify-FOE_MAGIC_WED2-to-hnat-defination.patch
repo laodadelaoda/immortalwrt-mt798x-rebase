@@ -1,6 +1,6 @@
 --- a/warp_wifi.c
 +++ b/warp_wifi.c
-@@ -87,7 +87,7 @@
+@@ -87,7 +87,7 @@ void wifi_dump_skb(
  
  #define FOE_MAGIC_WED0 0x78
  #define FOE_MAGIC_WED1 0x79

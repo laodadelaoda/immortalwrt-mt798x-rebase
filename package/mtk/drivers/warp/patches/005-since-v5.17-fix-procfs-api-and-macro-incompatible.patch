@@ -1,15 +1,6 @@
 --- a/warp_proc.c
 +++ b/warp_proc.c
-@@ -21,7 +21,7 @@
- #include "wed.h"
- #include "warp.h"
- #include "warp_hw.h"
--#include <stdarg.h>
-+#include <linux/stdarg.h>
- #include "mcu/warp_woif.h"
- #include "mcu/warp_wo.h"
- #include "warp_meminfo_list.h"
-@@ -173,7 +173,7 @@
+@@ -173,7 +173,7 @@ wdma_proc_show(struct seq_file *seq, voi
  static int
  wdma_proc_open(struct inode *inode, struct file *file)
  {
@@ -18,7 +9,7 @@
  }
  
  /*
-@@ -187,7 +187,7 @@
+@@ -187,7 +187,7 @@ wdma_proc_write(struct file *file, const
  	char value[64] = "";
  	char *end = NULL;
  	char choice;
@@ -27,7 +18,7 @@
  
  	if (buff && !copy_from_user(value, buff, len1)) {
  		choice = warp_str_tol(value, &end, 10);
-@@ -263,7 +263,7 @@
+@@ -263,7 +263,7 @@ warp_proc_handle(struct seq_file *seq, s
  static int
  wed_proc_open(struct inode *inode, struct file *file)
  {
@@ -36,7 +27,7 @@
  }
  
  /*
-@@ -276,7 +276,7 @@
+@@ -276,7 +276,7 @@ wed_proc_write(struct file *file, const
  	char value[64] = "";
  	char *end = NULL;
  	char choice;
@@ -45,7 +36,7 @@
  
  	if (buff && !copy_from_user(value, buff, len1)) {
  		choice = warp_str_tol(value, &end, 10);
-@@ -320,7 +320,7 @@
+@@ -320,7 +320,7 @@ warp_proc_cr_show(struct seq_file *seq,
  static int
  warp_proc_cr_open(struct inode *inode, struct file *file)
  {
@@ -54,7 +45,7 @@
  }
  
  /*
-@@ -339,7 +339,7 @@
+@@ -339,7 +339,7 @@ warp_proc_cr_write(struct file *file, co
  	char *s = value;
  	unsigned long addr;
  	u32 cr_value = 0;
@@ -63,7 +54,7 @@
  
  	if (buff && !copy_from_user(value, buff, len1)) {
  		token = strsep(&s, " ");
-@@ -433,7 +433,7 @@
+@@ -433,7 +433,7 @@ warp_proc_ctrl_show(struct seq_file *seq
  static int
  warp_proc_ctrl_open(struct inode *inode, struct file *file)
  {
@@ -72,25 +63,16 @@
  }
  
  /*
-@@ -450,9 +450,15 @@
+@@ -450,7 +450,7 @@ warp_proc_ctrl_write(struct file *file,
  	char is_true;
  	char type;
  	char *s = value;
 -	struct warp_entry *warp = (struct warp_entry *)PDE_DATA(file_inode(file));
 +	struct warp_entry *warp = (struct warp_entry *)pde_data(file_inode(file));
  
--	if (buff && !copy_from_user(value, buff, len1)) {
-+	if (!buff || len1 == 0 || len1 >= sizeof(value)) {
-+		warp_dbg(WARP_DBG_OFF, "%s(): invalid length len1 %zu!\n", __func__, len1);
-+		goto end;
-+	}
-+
-+	if (!copy_from_user(value, buff, len1)) {
-+		value[len1] = '\0';
- 		token = strsep(&s, " ");
- 		if(!token)
- 			goto end;
-@@ -504,7 +510,7 @@
+ 	if (len1 > 64 || len1 == 0) {
+ 		warp_dbg(WARP_DBG_OFF, "%s(): invalid length len1 %d!\n", __func__, len1);
+@@ -509,7 +509,7 @@ warp_proc_trace_show(struct seq_file *se
  static int
  warp_proc_trace_open(struct inode *inode, struct file *file)
  {
@@ -99,7 +81,7 @@
  }
  
  /*
-@@ -521,7 +527,7 @@
+@@ -526,7 +526,7 @@ warp_proc_trace_write(struct file *file,
  	char *token;
  	char *s = value;
  	unsigned int tmp;
@@ -108,7 +90,7 @@
  	struct warp_cputracer *tracer = &ctrl->bus.tracer;
  
  	if (buff && !copy_from_user(value, buff, len1)) {
-@@ -625,7 +631,7 @@
+@@ -630,7 +630,7 @@ warp_proc_conf_show(struct seq_file *seq
  static int
  warp_proc_conf_open(struct inode *inode, struct file *file)
  {
@@ -117,7 +99,7 @@
  }
  
  /*
-@@ -642,7 +648,7 @@
+@@ -647,7 +647,7 @@ warp_proc_conf_write(struct file *file,
  	char *token;
  	char *s = value;
  	unsigned int tmp;
@@ -126,7 +108,7 @@
  
  	if (buff && !copy_from_user(value, buff, len1)) {
  		token = strsep(&s, ":");
-@@ -793,7 +799,7 @@
+@@ -798,7 +798,7 @@ warp_proc_state_show(struct seq_file *se
  static int
  warp_proc_state_open(struct inode *inode, struct file *file)
  {
@@ -135,7 +117,7 @@
  }
  
  /*
-@@ -807,7 +813,7 @@
+@@ -812,7 +812,7 @@ warp_proc_state_write(struct file *file,
  	char value[64];
  	char *end;
  	char log;
@@ -144,7 +126,7 @@
  
  	if (buff && !copy_from_user(value, buff, len1)) {
  		log = warp_str_tol(value, &end, 10);
-@@ -845,7 +851,7 @@
+@@ -850,7 +850,7 @@ warp_proc_cfg_show(struct seq_file *seq,
  static int
  warp_proc_cfg_open(struct inode *inode, struct file *file)
  {
@@ -153,7 +135,7 @@
  }
  
  /*
-@@ -866,7 +872,7 @@
+@@ -871,7 +871,7 @@ warp_proc_tx_show(struct seq_file *seq,
  static int
  warp_proc_tx_open(struct inode *inode, struct file *file)
  {
@@ -162,7 +144,7 @@
  }
  
  /*
-@@ -887,7 +893,7 @@
+@@ -892,7 +892,7 @@ warp_proc_rx_show(struct seq_file *seq,
  static int
  warp_proc_rx_open(struct inode *inode, struct file *file)
  {
@@ -171,7 +153,7 @@
  }
  
  
-@@ -927,7 +933,7 @@
+@@ -932,7 +932,7 @@ warp_proc_rxbm_show(struct seq_file *seq
  static int
  rxbm_proc_open(struct inode *inode, struct file *file)
  {
@@ -180,7 +162,7 @@
  }
  
  
-@@ -961,7 +967,7 @@
+@@ -966,7 +966,7 @@ wo_ee_proc_show(struct seq_file *seq, vo
  static int
  wo_ee_proc_open(struct inode *inode, struct file *file)
  {
@@ -189,7 +171,7 @@
  }
  
  
-@@ -1025,14 +1031,14 @@
+@@ -1030,14 +1030,14 @@ wo_proc_show(struct seq_file *seq, void
  static int
  wo_proc_open(struct inode *inode, struct file *file)
  {
@@ -206,7 +188,7 @@
  	int scan_num = 0, input_idx = 0, input_total = 0;
  	struct warp_msg_cmd cmd = {0};
  	u8 sendmsg_buf[128] = {0};
-@@ -1167,118 +1173,105 @@
+@@ -1172,118 +1172,105 @@ error:
  /*
   * global file operation
  */
