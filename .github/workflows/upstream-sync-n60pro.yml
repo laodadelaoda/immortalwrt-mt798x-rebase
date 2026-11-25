@@ -9,6 +9,7 @@ on:
       - .github/workflows/upstream-sync-n60pro.yml
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 
