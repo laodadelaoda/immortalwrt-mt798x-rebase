@@ -1,4 +1,4 @@
-name: N60 Pro Build Pipeline
+name: N60 Pro Full Build
 
 on:
   push:
