@@ -1,1 +1,1 @@
-Vendor audit trigger: verify the Conninfra source-grouped patch set and updated canonical Lock at commit 35ab866bcca38de07072795255f9a1ea8ba281ea.
+Vendor audit trigger: verify the final Conninfra source-grouped patch set, operation-history lifetime cleanup, and canonical Lock at commit 471b685c26faf9c60501d892e8b2ce9d9396c7ed.
