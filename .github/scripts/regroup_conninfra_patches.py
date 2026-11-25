@@ -119,6 +119,8 @@ def emit_source_review(root):
         "consys_reg_init", "consys_reg_deinit",
         "conninfra_core_init", "conninfra_core_deinit",
         "msg_thread_init", "msg_thread_deinit",
+        "msg_op_history_save", "osal_op_history_print_work",
+        "consys_plt_clk_get_from_dts", "consys_plt_clk_detach",
     ]
     for name in names:
         found = extract_function(root, name)
