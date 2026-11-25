@@ -108,17 +108,20 @@ def main():
             after = patched / rel
             if not before.is_file() or not after.is_file():
                 fail("touched source file missing before/after replay: " + rel)
-            old = before.read_text(encoding="utf-8").splitlines(keepends=True)
-            new = after.read_text(encoding="utf-8").splitlines(keepends=True)
-            diff = "".join(difflib.unified_diff(old, new, fromfile="a/" + rel, tofile="b/" + rel, n=3))
+            old = before.read_bytes().splitlines(keepends=True)
+            new = after.read_bytes().splitlines(keepends=True)
+            diff = b"".join(difflib.diff_bytes(
+                difflib.unified_diff, old, new,
+                fromfile=("a/" + rel).encode("ascii"),
+                tofile=("b/" + rel).encode("ascii"), n=3))
             if not diff:
                 continue
             name = patch_name(rel)
             if name in names:
                 fail("stable patch filename collision: " + name)
-            if len(re.findall(r"^--- a/", diff, re.M)) != 1:
+            if len(re.findall(rb"^--- a/", diff, re.M)) != 1:
                 fail("generated patch does not target exactly one source file: " + name)
-            (generated / name).write_text(diff, encoding="utf-8")
+            (generated / name).write_bytes(diff)
             names.append(name)
 
         names.sort()
