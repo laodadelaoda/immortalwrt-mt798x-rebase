@@ -63,6 +63,117 @@ def apply_series(source, patches):
         output = run(["patch", "--batch", "--forward", "--fuzz=0", "-p1", "-i", str(patch)], cwd=source)
         print(output, end="")
 
+def extract_function(root, name):
+    pattern = re.compile(rb"\b" + re.escape(name.encode("ascii")) + rb"\s*\([^;{}]*?\)\s*\{", re.S)
+    for path in root.rglob("*"):
+        if not path.is_file() or path.suffix not in {".c", ".h"}:
+            continue
+        data = path.read_bytes()
+        for match in pattern.finditer(data):
+            opening = data.find(b"{", match.start(), match.end())
+            depth, state, escaped, i = 0, "code", False, opening
+            while i < len(data):
+                ch = data[i]
+                nxt = data[i + 1] if i + 1 < len(data) else 0
+                if state == "code":
+                    if ch == 47 and nxt == 47:
+                        state = "line"; i += 1
+                    elif ch == 47 and nxt == 42:
+                        state = "block"; i += 1
+                    elif ch == 34:
+                        state = "string"; escaped = False
+                    elif ch == 39:
+                        state = "char"; escaped = False
+                    elif ch == 123:
+                        depth += 1
+                    elif ch == 125:
+                        depth -= 1
+                        if depth == 0:
+                            start = data.rfind(b"\n", 0, match.start()) + 1
+                            return path.relative_to(root).as_posix(), data[start:i + 1].decode("latin-1")
+                elif state == "line":
+                    if ch == 10:
+                        state = "code"
+                elif state == "block":
+                    if ch == 42 and nxt == 47:
+                        state = "code"; i += 1
+                elif state in {"string", "char"}:
+                    quote = 34 if state == "string" else 39
+                    if escaped:
+                        escaped = False
+                    elif ch == 92:
+                        escaped = True
+                    elif ch == quote:
+                        state = "code"
+                i += 1
+    return None
+
+def emit_source_review(root):
+    names = [
+        "mtk_conninfra_probe", "mtk_conninfra_remove",
+        "consys_hw_init", "consys_hw_deinit",
+        "pmic_mng_init", "pmic_mng_deinit",
+        "emi_mng_init", "emi_mng_deinit",
+        "consys_reg_mng_init", "consys_reg_mng_deinit",
+        "consys_reg_init", "consys_reg_deinit",
+        "conninfra_core_init", "conninfra_core_deinit",
+        "msg_thread_init", "msg_thread_deinit",
+    ]
+    for name in names:
+        found = extract_function(root, name)
+        if not found:
+            print("SOURCE REVIEW MISSING: " + name)
+            continue
+        rel, body = found
+        lines = body.splitlines()
+        print("===== SOURCE REVIEW " + name + " (" + rel + ") lines=" + str(len(lines)) + " =====")
+        print("\n".join(lines[:160]))
+        if len(lines) > 160:
+            print("===== SOURCE REVIEW TRUNCATED " + name + " =====")
+
+    staticized = {
+        "base/ring.c": ["__ring_segment_prepare"],
+        "base/osal.c": ["get_default_bin_image_file", "_osal_fifo_init", "_osal_fifo_deinit",
+                        "_osal_fifo_size", "_osal_fifo_avail_size", "_osal_fifo_len",
+                        "_osal_fifo_is_empty", "_osal_fifo_is_full", "_osal_fifo_data_in",
+                        "_osal_fifo_data_out", "_osal_fifo_reset"],
+        "base/msg_thread.c": ["msg_evt_put_op_to_free_queue", "msg_evt_get_free_op",
+                              "msg_evt_put_op_to_active", "msg_op_history_save",
+                              "msg_evt_wait_event_checker", "msg_evt_set_current_op",
+                              "msg_evt_opid_handler"],
+        "platform/consys_hw.c": ["consys_hw_dump_cpupcr"],
+        "platform/mt7981/mt7981_pos.c": ["_is_flash_content_valid", "_consys_check_adie_cfg",
+            "_consys_polling_chipid_int", "_connsys_a_die_cfg_7976", "_connsys_a_die_cfg_7975",
+            "_consys_afe_wbg_cal_7976", "_consys_afe_wbg_cal_7975", "_connsys_subsys_pll_initial",
+            "_consys_adie_top_ck_en_on_off_ctrl", "_consys_check_sku_cfg"],
+        "platform/mt7986/mt7986_pos.c": ["_is_flash_content_valid", "_consys_check_adie_cfg",
+            "_consys_polling_chipid_int", "_connsys_a_die_cfg_7976", "_connsys_a_die_cfg_7975",
+            "_consys_afe_wbg_cal_7976", "_consys_afe_wbg_cal_7975", "_connsys_subsys_pll_initial",
+            "_consys_adie_top_ck_en_on_off_ctrl", "_consys_check_sku_cfg", "_is_wmcpu_run_allow",
+            "_connsys_a_die_chip_id_confirm"],
+        "platform/mt7981/mt7981_emi.c": ["consys_emi_get_fw_emi_size"],
+        "platform/mt7986/mt7986_emi.c": ["consys_emi_get_fw_emi_size"],
+    }
+    for owner, symbols in staticized.items():
+        for symbol in symbols:
+            external = []
+            needle = re.compile(rb"\b" + re.escape(symbol.encode("ascii")) + rb"\b")
+            for file in root.rglob("*"):
+                if not file.is_file() or file.suffix not in {".c", ".h"}:
+                    continue
+                rel = file.relative_to(root).as_posix()
+                if rel == owner:
+                    continue
+                data = file.read_bytes()
+                for match in needle.finditer(data):
+                    line = data.count(b"\n", 0, match.start()) + 1
+                    external.append(rel + ":" + str(line))
+            if external:
+                print("STATIC SYMBOL CROSS-FILE REFERENCE: " + symbol + " owner=" + owner +
+                      " refs=" + ",".join(external[:12]))
+            else:
+                print("STATIC SYMBOL LOCAL-ONLY PASS: " + symbol + " owner=" + owner)
+
 def main():
     lock = json.loads(LOCK_PATH.read_text(encoding="utf-8"))
     source = next((x for x in lock["sources"] if x["id"] == "conninfra"), None)
@@ -103,6 +214,7 @@ def main():
                 if rel not in touched:
                     touched.append(rel)
         apply_series(patched, original_patches)
+        emit_source_review(patched)
 
         generated = temp / "generated"
         generated.mkdir()
