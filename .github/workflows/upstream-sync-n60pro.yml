@@ -372,7 +372,7 @@ jobs:
           - Source branch baseline: $GITHUB_SHA
           - MTK integration baseline: ${{ steps.refs.outputs.mtk_base_sha }}
 
-          Required gate: exact-SHA canonical Vendor Audit, Full firmware build, and a non-empty firmware artifact. The auto-merge gate runs only after all checks succeed.
+          Required gate: exact-SHA canonical Vendor Audit (including native Linux 6.12 zero-fuzz/zero-offset patch replay and MT Wi-Fi 026 assertions), Full firmware build, and a non-empty firmware artifact. The auto-merge gate runs only after all checks succeed.
 
           Full commit mapping, migration plan, path inventories, and SHA256 manifest are attached to workflow run $GITHUB_RUN_ID:
           https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
