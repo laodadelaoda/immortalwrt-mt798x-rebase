@@ -21,7 +21,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: n60pro-upstream-upgrade
+  group: n60pro-upstream-${{ github.event_name == 'workflow_run' && 'merge' || 'upgrade' }}
   cancel-in-progress: true
 
 jobs:
