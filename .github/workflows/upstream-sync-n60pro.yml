@@ -1,98 +1,255 @@
-name: N60 Pro upstream library upgrade evaluation
+name: N60 Pro upstream 25.12 synchronization
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
 concurrency:
-  group: n60pro-upstream-upgrade-evaluation
+  group: n60pro-upstream-upgrade
   cancel-in-progress: false
 
 jobs:
-  evaluate:
-    name: Read-only upstream compatibility evaluation
+  prepare-upgrade:
+    name: Map upstream commits and prepare validated merge candidate
+    if: github.ref == 'refs/heads/n60pro-25.12-upstream-base'
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
-      - name: Checkout the selected default-branch revision
+      - name: Checkout exact N60 Pro branch revision
         uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-          persist-credentials: false
+          persist-credentials: true
 
-      - name: Fetch upstream 25.12 without modifying local refs or source
+      - name: Install GitHub CLI
         shell: bash
         run: |
           set -Eeuo pipefail
-          mkdir -p upgrade-evaluation
+          command -v gh >/dev/null
+
+      - name: Fetch upstream and verify target branch has not moved
+        id: refs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
           git remote add upstream https://github.com/chasey-dev/immortalwrt-mt798x-rebase.git
           git fetch --no-tags upstream 25.12
+          git fetch --no-tags origin n60pro-25.12-upstream-base
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse origin/n60pro-25.12-upstream-base)" = "$GITHUB_SHA"
           UPSTREAM_SHA="$(git rev-parse FETCH_HEAD)"
           BASE_SHA="$(git merge-base HEAD "$UPSTREAM_SHA")"
           {
-            echo "BASE_SHA=$BASE_SHA"
-            echo "UPSTREAM_SHA=$UPSTREAM_SHA"
-          } >> "$GITHUB_ENV"
+            echo "upstream_sha=$UPSTREAM_SHA"
+            echo "base_sha=$BASE_SHA"
+          } >> "$GITHUB_OUTPUT"
           mkdir -p upgrade-evaluation
           {
-            echo "Repository: $GITHUB_REPOSITORY"
-            echo "Evaluated revision: $(git rev-parse HEAD)"
-            echo "Upstream: chasey-dev/immortalwrt-mt798x-rebase"
-            echo "Upstream branch: 25.12"
-            echo "Upstream revision: $UPSTREAM_SHA"
-            echo "Merge base: $BASE_SHA"
+            echo "# N60 Pro upstream 25.12 evaluation"
+            echo
+            echo "- Target branch: n60pro-25.12-upstream-base"
+            echo "- Target HEAD: $GITHUB_SHA"
+            echo "- Upstream: chasey-dev/immortalwrt-mt798x-rebase:25.12"
+            echo "- Upstream HEAD: $UPSTREAM_SHA"
+            echo "- Merge base: $BASE_SHA"
             echo
             echo "## Ahead/behind"
             git rev-list --left-right --count "HEAD...$UPSTREAM_SHA"
             echo
-            echo "## Upstream changes since merge base"
-            git diff --stat "$BASE_SHA" "$UPSTREAM_SHA"
-            echo
-            echo "## Upstream changed paths"
-            git diff --name-status "$BASE_SHA" "$UPSTREAM_SHA"
-            echo
-            echo "## Local changes since merge base"
-            git diff --stat "$BASE_SHA" HEAD
-          } | tee upgrade-evaluation/UPSTREAM-EVALUATION.txt
+            echo "## Changed path inventory"
+            git diff --name-status "$BASE_SHA" "$UPSTREAM_SHA" > upgrade-evaluation/UPSTREAM-PATHS.txt
+            git diff --name-status "$BASE_SHA" HEAD > upgrade-evaluation/LOCAL-PATHS.txt
+            echo "Upstream changed paths: $(wc -l < upgrade-evaluation/UPSTREAM-PATHS.txt)"
+            echo "Local changed paths: $(wc -l < upgrade-evaluation/LOCAL-PATHS.txt)"
+          } | tee upgrade-evaluation/UPSTREAM-EVALUATION.md
 
-      - name: Probe merge compatibility without creating a merge commit
+      - name: Build commit equivalence map using stable patch IDs
+        env:
+          BASE_SHA: ${{ steps.refs.outputs.base_sha }}
+          UPSTREAM_SHA: ${{ steps.refs.outputs.upstream_sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+
+          def git(*args):
+              return subprocess.check_output(["git", *args], text=True).strip()
+
+          def commits(rev):
+              return git("rev-list", "--reverse", rev).splitlines()
+
+          def metadata(sha):
+              return git("show", "-s", "--format=%H%x09%P%x09%s", sha).split("\\t", 2)
+
+          def patch_id(sha, parents):
+              if len(parents) > 1:
+                  return None
+              diff = subprocess.run(
+                  ["git", "show", "--pretty=format:", "--binary", sha],
+                  check=True, stdout=subprocess.PIPE
+              ).stdout
+              if not diff.strip():
+                  return None
+              p = subprocess.run(
+                  ["git", "patch-id", "--stable"],
+                  input=diff, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+              )
+              return p.stdout.decode().split()[0] if p.stdout.strip() else None
+
+          base = __import__("os").environ["BASE_SHA"]
+          upstream = __import__("os").environ["UPSTREAM_SHA"]
+          local_head = git("rev-parse", "HEAD")
+          up_commits = commits(f"{base}..{upstream}")
+          local_commits = commits(f"{base}..{local_head}")
+          local_by_pid = {}
+          local_rows = []
+          for sha in local_commits:
+              h, parents, subject = metadata(sha)
+              pid = patch_id(sha, parents.split() if parents else [])
+              row = {"sha":h, "parents":parents.split() if parents else [],
+                     "subject":subject, "patch_id":pid,
+                     "is_merge":len(parents.split()) > 1}
+              local_rows.append(row)
+              if pid:
+                  local_by_pid.setdefault(pid, []).append(row)
+          mapping = []
+          for sha in up_commits:
+              h, parents, subject = metadata(sha)
+              pid = patch_id(sha, parents.split() if parents else [])
+              matches = local_by_pid.get(pid, []) if pid else []
+              status = "equivalent" if len(matches)==1 else ("ambiguous-equivalent" if len(matches)>1 else ("merge" if len(parents.split())>1 else "unmapped"))
+              mapping.append({
+                  "upstream_sha":h, "subject":subject,
+                  "parents":parents.split() if parents else [],
+                  "patch_id":pid, "status":status,
+                  "local_matches":[{"sha":x["sha"],"subject":x["subject"]} for x in matches]
+              })
+          result = {
+              "schema_version":1, "target_head":local_head, "upstream_head":upstream,
+              "merge_base":base, "upstream_commit_count":len(up_commits),
+              "local_commit_count":len(local_commits),
+              "mapping_method":"git patch-id --stable; merge commits and empty commits are explicitly not equated",
+              "limitations":"Patch-ID equality is a candidate equivalence signal, not semantic or ABI compatibility proof. Split/squash/partial mappings require manual/path-level review.",
+              "upstream_commits":mapping, "local_commits":local_rows
+          }
+          Path("upgrade-evaluation/UPSTREAM-COMMIT-MAP.json").write_text(
+              json.dumps(result,indent=2,ensure_ascii=False)+"\\n")
+          lines = [
+              "# Upstream commit mapping",
+              "",
+              f"- Upstream commits since merge-base: {len(up_commits)}",
+              f"- Local commits since merge-base: {len(local_commits)}",
+              "- Method: stable patch-id equivalence; merge commits remain separately classified.",
+              "- Patch-ID equality does not prove semantic compatibility.",
+              "",
+              "| Status | Count |",
+              "|---|---:|"
+          ]
+          for status in ("equivalent","ambiguous-equivalent","merge","unmapped"):
+              lines.append(f"| {status} | {sum(x['status']==status for x in mapping)} |")
+          lines += ["", "## Per-commit mapping", "", "| Upstream SHA | Status | Local match(es) | Subject |", "|---|---|---|---|"]
+          for x in mapping:
+              matches = ", ".join(m["sha"][:12] for m in x["local_matches"]) or "—"
+              subject = x["subject"].replace("|","\\|")
+              lines.append(f"| {x['upstream_sha']} | {x['status']} | {matches} | {subject} |")
+          Path("upgrade-evaluation/UPSTREAM-COMMIT-MAP.md").write_text("\\n".join(lines)+"\\n")
+          PY
+
+      - name: Check mergeability and create a real three-way merge candidate
+        id: merge
+        env:
+          UPSTREAM_SHA: ${{ steps.refs.outputs.upstream_sha }}
         shell: bash
         run: |
           set -Eeuo pipefail
           set +e
           git merge-tree --write-tree HEAD "$UPSTREAM_SHA" > upgrade-evaluation/merge-tree.txt 2>&1
-          rc=$?
+          probe_rc=$?
           set -e
-          if [ "$rc" -eq 0 ]; then
-            echo "MERGE_PROBE=clean" | tee -a upgrade-evaluation/UPSTREAM-EVALUATION.txt
-            echo "The merge-tree probe completed without conflicts. No branch, index, or working-tree changes were made."
-          else
-            echo "MERGE_PROBE=conflicts-or-probe-error" | tee -a upgrade-evaluation/UPSTREAM-EVALUATION.txt
-            echo "Inspect merge-tree.txt. This is an evaluation result, not an automatic resolution."
+          if [ "$probe_rc" -ne 0 ]; then
+            echo "MERGE_PROBE=conflict-or-error" >> "$GITHUB_OUTPUT"
+            echo "Merge-tree did not produce a clean tree; no candidate branch or PR will be created." | tee -a upgrade-evaluation/UPSTREAM-EVALUATION.md
+            exit 1
           fi
+          git switch -c "automation/upstream-25.12-${UPSTREAM_SHA:0:12}-run-${GITHUB_RUN_ID}"
+          if ! git -c rerere.enabled=false merge --no-ff --no-edit "$UPSTREAM_SHA"; then
+            git merge --abort || true
+            echo "Real three-way merge failed; no candidate branch or PR will be created."
+            exit 1
+          fi
+          echo "MERGE_PROBE=clean" >> "$GITHUB_OUTPUT"
+          echo "CANDIDATE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          {
+            echo
+            echo "## Candidate merge"
+            echo "- Merge commit: $(git rev-parse HEAD)"
+            echo "- Parents: $(git show -s --format=%P HEAD)"
+            echo "- Upstream: $UPSTREAM_SHA"
+            echo "- Result: clean real --no-ff merge; not yet accepted for formal branch."
+          } >> upgrade-evaluation/UPSTREAM-EVALUATION.md
 
-      - name: Record patch inventory and evaluation boundary
+      - name: Inspect sensitive integration surfaces and preserve inventories
         shell: bash
         run: |
           set -Eeuo pipefail
           {
             echo
-            echo "## Local patch inventory"
-            find target/linux/mediatek/patches-6.12 package/mtk -type f -name '*.patch' -print 2>/dev/null | sort
+            echo "## N60 Pro integration surfaces"
+            for path in target/linux/mediatek package/mtk config/n60pro-1001.config package/kernel/mapfilter package/libs/openssl; do
+              if [ -e "$path" ]; then
+                echo "### $path"
+                git diff --stat "$GITHUB_SHA" HEAD -- "$path" || true
+                find "$path" -type f \\( -name '*.patch' -o -name 'Makefile' -o -name 'Kconfig*' -o -name '*.config' \\) -print 2>/dev/null | sort | head -n 500
+              fi
+            done
             echo
-            echo "## Safety boundary"
-            echo "Read-only evaluation only. No merge, commit, push, branch creation, PR creation, or automatic patch rewrite."
-          } >> upgrade-evaluation/UPSTREAM-EVALUATION.txt
+            echo "## Fixed vendor lock"
+            sha256sum package/mtk/vendor-sources.lock.json
+            echo
+            echo "## Active vendor and kernel patch counts"
+            find package/mtk target/linux/mediatek/patches-6.12 -type f -name '*.patch' -print 2>/dev/null | sort | tee upgrade-evaluation/PATCH-INVENTORY.txt
+            echo "patch_count=$(wc -l < upgrade-evaluation/PATCH-INVENTORY.txt)"
+            echo
+            echo "## Validation boundary"
+            echo "This workflow prepares a merge candidate only. The candidate PR must pass the canonical vendor audit and Full firmware build before merge."
+            echo "Patch-ID matching is not a substitute for semantic compatibility, zero-fuzz patch replay, native Package Prepare, kernel patch application, or firmware output verification."
+          } >> upgrade-evaluation/UPSTREAM-EVALUATION.md
           sha256sum upgrade-evaluation/* > upgrade-evaluation/SHA256SUMS
 
-      - name: Upload upstream evaluation report
+      - name: Upload commit map and migration plan
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: n60pro-upstream-evaluation-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          name: n60pro-upstream-migration-${{ github.run_id }}-attempt-${{ github.run_attempt }}
           path: upgrade-evaluation/
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90
+
+      - name: Publish candidate branch and open draft validation PR
+        if: success() && steps.merge.outputs.CANDIDATE_SHA != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ steps.merge.outputs.CANDIDATE_SHA }}
+          UPSTREAM_SHA: ${{ steps.refs.outputs.upstream_sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          TARGET_BRANCH="n60pro-25.12-upstream-base"
+          git fetch origin "$TARGET_BRANCH"
+          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$GITHUB_SHA"
+          CANDIDATE_BRANCH="automation/upstream-25.12-${UPSTREAM_SHA:0:12}-run-${GITHUB_RUN_ID}"
+          git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+          gh pr create \\
+            --repo "$GITHUB_REPOSITORY" \\
+            --base "$TARGET_BRANCH" \\
+            --head "$CANDIDATE_BRANCH" \\
+            --draft \\
+            --title "N60 Pro: synchronize upstream 25.12 (${UPSTREAM_SHA:0:12})" \\
+            --body-file upgrade-evaluation/UPSTREAM-EVALUATION.md
+          echo "Candidate PR created. Canonical vendor audit and Full firmware build are required before merge."
