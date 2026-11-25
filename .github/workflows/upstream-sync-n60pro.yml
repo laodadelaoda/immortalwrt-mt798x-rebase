@@ -1,4 +1,4 @@
-name: N60 Pro upstream 25.12 synchronization
+name: N60 Pro Upstream Upgrade
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   workflow_run:
     workflows:
-      - N60 Pro Build Pipeline
+      - N60 Pro Full Build
     types:
       - completed
   push:
