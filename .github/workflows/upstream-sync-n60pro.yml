@@ -21,7 +21,7 @@ jobs:
     name: Map upstream commits and prepare validated merge candidate
     if: github.ref == 'refs/heads/n60pro-25.12-upstream-base'
     runs-on: ubuntu-24.04
-    timeout-minutes: 360
+    timeout-minutes: 90
     steps:
       - name: Checkout exact N60 Pro branch revision
         uses: actions/checkout@v5
@@ -349,26 +349,4 @@ jobs:
           # event and runs the canonical Vendor Audit followed by Full on this candidate.
           gh workflow run n60pro-build.yml --repo "$GITHUB_REPOSITORY" --ref "$CANDIDATE_BRANCH"
           echo "Candidate PR created and candidate Vendor Audit -> Full pipeline dispatched."
-          # Wait for the exact candidate SHA. A successful run must include both
-          # the canonical vendor audit and the Full firmware job.
-          BUILD_RUN_ID=""
-          for attempt in $(seq 1 120); do
-            BUILD_RUN_ID="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow n60pro-build.yml --branch "$CANDIDATE_BRANCH" --limit 20 --json databaseId,headSha,event --jq "[.[] | select(.headSha == \"$CANDIDATE_SHA\" and .event == \"workflow_dispatch\")] | sort_by(.databaseId) | last | .databaseId // empty")"
-            if [ -n "$BUILD_RUN_ID" ]; then break; fi
-            sleep 10
-          done
-          test -n "$BUILD_RUN_ID"
-          echo "Waiting for candidate Full run $BUILD_RUN_ID on $CANDIDATE_SHA"
-          gh run watch "$BUILD_RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status
-          RUN_RESULT="$(gh run view "$BUILD_RUN_ID" --repo "$GITHUB_REPOSITORY" --json headSha,conclusion --jq '[.headSha,.conclusion] | @tsv')"
-          test "$RUN_RESULT" = "$(printf '%s\tsuccess' "$CANDIDATE_SHA")"
-          FIRMWARE_ARTIFACTS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID/artifacts" --jq '[.artifacts[] | select(.name | startswith("n60pro-immortalwrt-firmware")) | select(.expired == false) | select(.size_in_bytes > 0)] | length')"
-          test "$FIRMWARE_ARTIFACTS" -ge 1
-          PR_NUMBER="$(gh pr view "$CANDIDATE_BRANCH" --repo "$GITHUB_REPOSITORY" --json number --jq .number)"
-          PR_HEAD="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)"
-          test "$PR_HEAD" = "$CANDIDATE_SHA"
-          gh pr ready "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"
-          gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --merge --delete-branch
-          git fetch origin "$TARGET_BRANCH"
-          git merge-base --is-ancestor "$CANDIDATE_SHA" "origin/$TARGET_BRANCH"
-          echo "Upstream candidate merged after exact-SHA Vendor Audit, Full success, and non-empty firmware artifact verification."
+          echo "Candidate PR created. Exact-SHA Vendor Audit -> Full and firmware artifact verification will be handled by the workflow_run merge gate."
