@@ -222,6 +222,54 @@ jobs:
           } >> upgrade-evaluation/UPSTREAM-EVALUATION.md
           sha256sum upgrade-evaluation/* > upgrade-evaluation/SHA256SUMS
 
+      - name: Generate explicit migration plan and compatibility review inventory
+        env:
+          UPSTREAM_SHA: ${{ steps.refs.outputs.upstream_sha }}
+          BASE_SHA: ${{ steps.refs.outputs.base_sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          {
+            echo "# N60 Pro upstream migration plan"
+            echo
+            echo "## Revisions"
+            echo "- Target baseline: $GITHUB_SHA"
+            echo "- Upstream candidate: $UPSTREAM_SHA"
+            echo "- Merge base: $BASE_SHA"
+            echo "- Candidate merge commit: $(git rev-parse HEAD)"
+            echo
+            echo "## Commit mapping result"
+            python3 - <<'PY'
+          import json
+          d=json.load(open("upgrade-evaluation/UPSTREAM-COMMIT-MAP.json",encoding="utf-8"))
+          from collections import Counter
+          c=Counter(x["status"] for x in d["upstream_commits"])
+          for k in ("equivalent","ambiguous-equivalent","merge","unmapped"):
+              print(f"- {k}: {c[k]}")
+          print(f"- Local-only commits considered: {len(d['local_commits'])}")
+          PY
+            echo
+            echo "## Sensitive-path delta introduced by merge"
+            git diff --name-status "$GITHUB_SHA" HEAD -- \
+              config/n60pro-1001.config target/linux/mediatek package/mtk \
+              package/kernel/mapfilter package/libs/openssl \
+              | tee upgrade-evaluation/SENSITIVE-PATH-DELTA.txt
+            echo
+            echo "## Required validation before merge"
+            echo "1. Candidate PR must pass the canonical vendor-source Lock/SHA256 audit."
+            echo "2. Every active vendor patch series must replay on the pinned archives with zero fuzz, zero offset, zero reject, and no skipped hunks."
+            echo "3. Native OpenWrt Package Prepare and MT Wi-Fi 026 exact-path/function assertions must pass."
+            echo "4. Linux 6.12 patch stack must be applied to the actual candidate kernel source with zero fuzz/offset/reject; syntax-only checks are insufficient."
+            echo "5. Review upstream changes touching DTS, N60 Pro config, closed-driver integration, WARP/Conninfra/MT Wi-Fi/datconf/MAPFILTER, EasyMesh/DPP/WAPP, OpenSSL, EIP93, Makefiles and Kconfig."
+            echo "6. The candidate PR's Full firmware workflow must succeed and upload a non-empty firmware artifact."
+            echo
+            echo "## Decision"
+            echo "A clean textual merge is only candidate generation. No automatic merge into the formal branch is performed. Merge is permitted only after the above checks and review are green."
+            echo "Unmapped, split/squash, ambiguous and merge commits require path/function-level review; patch-id is not semantic equivalence."
+          } | tee upgrade-evaluation/UPSTREAM-MIGRATION-PLAN.md
+          git diff --check "$GITHUB_SHA" HEAD
+          sha256sum upgrade-evaluation/* > upgrade-evaluation/SHA256SUMS
+
       - name: Upload commit map and migration plan
         if: always()
         uses: actions/upload-artifact@v6
