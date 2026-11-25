@@ -102,6 +102,10 @@ jobs:
             gh api --paginate "repos/${GH_REPO}/branches?per_page=100" \
               --jq '.[].name | select(test("^automation/upstream-25\\.12-.*-run-[0-9]+$"))'
           )
+          mapfile -t open_pr_heads < <(
+            gh api --paginate "repos/${GH_REPO}/pulls?state=open&per_page=100" \
+              --jq '.[].head.ref'
+          )
 
           declare -A first_parent second_parent tip_ref
           for branch in "${candidates[@]}"; do
