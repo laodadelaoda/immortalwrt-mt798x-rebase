@@ -109,6 +109,170 @@ def extract_function(root, name, only_path=None):
                 i += 1
     return None
 
+def find_function_end(data, name):
+    pattern = re.compile(rb"\b" + re.escape(name.encode("ascii")) + rb"\s*\([^;{}]*?\)\s*\{", re.S)
+    match = pattern.search(data)
+    if not match:
+        fail("function not found for lifecycle fix: " + name)
+    opening = data.find(b"{", match.start(), match.end())
+    depth, state, escaped, i = 0, "code", False, opening
+    while i < len(data):
+        ch = data[i]
+        nxt = data[i + 1] if i + 1 < len(data) else 0
+        if state == "code":
+            if ch == 47 and nxt == 47:
+                state = "line"; i += 1
+            elif ch == 47 and nxt == 42:
+                state = "block"; i += 1
+            elif ch == 34:
+                state = "string"; escaped = False
+            elif ch == 39:
+                state = "char"; escaped = False
+            elif ch == 123:
+                depth += 1
+            elif ch == 125:
+                depth -= 1
+                if depth == 0:
+                    return i + 1
+        elif state == "line":
+            if ch == 10:
+                state = "code"
+        elif state == "block":
+            if ch == 42 and nxt == 47:
+                state = "code"; i += 1
+        elif state in {"string", "char"}:
+            quote = 34 if state == "string" else 39
+            if escaped:
+                escaped = False
+            elif ch == 92:
+                escaped = True
+            elif ch == quote:
+                state = "code"
+        i += 1
+    fail("unterminated function while applying lifecycle fix: " + name)
+
+def apply_op_history_lifecycle_fix(root):
+    header_path = root / "base/include/osal.h"
+    osal_path = root / "base/osal.c"
+    thread_path = root / "base/msg_thread.c"
+    header = header_path.read_bytes()
+    osal = osal_path.read_bytes()
+    thread = thread_path.read_bytes()
+
+    if b"osal_op_history_deinit(" not in header:
+        proto = b"void osal_op_history_init(struct osal_op_history *log_history, int queue_size);\n"
+        if proto not in header:
+            fail("osal_op_history_init prototype not found")
+        header = header.replace(proto, proto + b"void osal_op_history_deinit(struct osal_op_history *log_history);\n", 1)
+
+    if b"void osal_op_history_deinit(" not in osal:
+        init_end = find_function_end(osal, "osal_op_history_init")
+        init_work = b"\tINIT_WORK(&log_history->dump_work, osal_op_history_print_work);\n"
+        if osal.count(init_work) != 1:
+            fail("expected one op-history INIT_WORK")
+        osal = osal.replace(init_work, b"", 1)
+        init_start = osal.find(b"void osal_op_history_init")
+        init_end = find_function_end(osal, "osal_op_history_init")
+        init_body = osal[init_start:init_end]
+        lock_init = b"\tspin_lock_init(&(log_history->lock));\n"
+        if lock_init not in init_body:
+            fail("op-history spinlock init not found")
+        init_body = init_body.replace(lock_init, lock_init + init_work, 1)
+        osal = osal[:init_start] + init_body + osal[init_end:]
+
+        init_end = find_function_end(osal, "osal_op_history_init")
+        insert_at = init_end
+        if osal[insert_at:insert_at + 2] == b"\r\n":
+            insert_at += 2
+        elif osal[insert_at:insert_at + 1] == b"\n":
+            insert_at += 1
+        deinit = (
+            b"\nvoid osal_op_history_deinit(struct osal_op_history *log_history)\n"
+            b"{\n"
+            b"\tstruct osal_op_history_entry *queue;\n"
+            b"\tunsigned long flags;\n"
+            b"\n"
+            b"\tif (!log_history)\n"
+            b"\t\treturn;\n"
+            b"\n"
+            b"\tspin_lock_irqsave(&log_history->lock, flags);\n"
+            b"\tqueue = log_history->queue;\n"
+            b"\tlog_history->queue = NULL;\n"
+            b"\tlog_history->ring_buffer.base = NULL;\n"
+            b"\tspin_unlock_irqrestore(&log_history->lock, flags);\n"
+            b"\n"
+            b"\tcancel_work_sync(&log_history->dump_work);\n"
+            b"\tkfree(log_history->dump_ring_buffer.base);\n"
+            b"\tlog_history->dump_ring_buffer.base = NULL;\n"
+            b"\tkfree(queue);\n"
+            b"}\n"
+        )
+        osal = osal[:insert_at] + deinit + osal[insert_at:]
+
+    print_fn_start = osal.find(b"void osal_op_history_print(")
+    if print_fn_start < 0:
+        fail("osal_op_history_print definition not found")
+    print_fn_end = find_function_end(osal, "osal_op_history_print")
+    print_fn = osal[print_fn_start:print_fn_end]
+    lock_line = b"\tspin_lock_irqsave(lock, flags);\n"
+    recheck = (
+        b"\tif (log_history->queue == NULL) {\n"
+        b"\t\tspin_unlock_irqrestore(lock, flags);\n"
+        b"\t\tkfree(queue);\n"
+        b"\t\treturn;\n"
+        b"\t}\n"
+    )
+    if recheck not in print_fn:
+        if lock_line not in print_fn:
+            fail("op-history print lock not found")
+        print_fn = print_fn.replace(lock_line, lock_line + recheck, 1)
+    old_schedule = (
+        b"\tdump_ring_buffer->base = queue;\n"
+        b"\tspin_unlock_irqrestore(lock, flags);\n"
+        b"\tschedule_work(work);\n"
+    )
+    new_schedule = (
+        b"\tdump_ring_buffer->base = queue;\n"
+        b"\tschedule_work(work);\n"
+        b"\tspin_unlock_irqrestore(lock, flags);\n"
+    )
+    if old_schedule in print_fn:
+        print_fn = print_fn.replace(old_schedule, new_schedule, 1)
+    elif new_schedule not in print_fn:
+        fail("op-history print scheduling sequence not found")
+    osal = osal[:print_fn_start] + print_fn + osal[print_fn_end:]
+
+    if b"osal_op_history_deinit(&ctx->op_history);" not in thread:
+        init_needle = (
+            b"\t\tosal_thread_destroy(p_thread);\n"
+            b"\t\tfor (i = 0; i < MSG_THREAD_OP_BUF_SIZE; i++)"
+        )
+        if init_needle not in thread:
+            fail("msg_thread_init failure cleanup insertion point not found")
+        thread = thread.replace(
+            init_needle,
+            b"\t\tosal_thread_destroy(p_thread);\n"
+            b"\t\tosal_op_history_deinit(&ctx->op_history);\n"
+            b"\t\tfor (i = 0; i < MSG_THREAD_OP_BUF_SIZE; i++)", 1)
+        deinit_needle = (
+            b"\t\treturn -1;\n"
+            b"\t}\n\n"
+            b"\tfor (i = 0; i < MSG_THREAD_OP_BUF_SIZE; i++)"
+        )
+        if deinit_needle not in thread:
+            fail("msg_thread_deinit cleanup insertion point not found")
+        thread = thread.replace(
+            deinit_needle,
+            b"\t\treturn -1;\n"
+            b"\t}\n\n"
+            b"\tosal_op_history_deinit(&ctx->op_history);\n\n"
+            b"\tfor (i = 0; i < MSG_THREAD_OP_BUF_SIZE; i++)", 1)
+
+    header_path.write_bytes(header)
+    osal_path.write_bytes(osal)
+    thread_path.write_bytes(thread)
+    print("APPLIED: op-history queue and dump-work lifetime cleanup")
+
 def emit_source_review(root):
     names = [
         "mtk_conninfra_probe", "mtk_conninfra_remove",
@@ -264,6 +428,7 @@ def main():
                 if rel not in touched:
                     touched.append(rel)
         apply_series(patched, original_patches)
+        apply_op_history_lifecycle_fix(patched)
         emit_source_review(patched)
 
         generated = temp / "generated"
