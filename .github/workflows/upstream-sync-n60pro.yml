@@ -348,8 +348,6 @@ jobs:
           echo "Refreshed patch files copied back to their native OpenWrt patch directories."
           EXPECTED_KERNEL_PATCH_COUNT="$(sed -e 's/#.*//' "$PATCHES_DIR/series" | awk 'NF {n++} END {print n+0}')"
           test "$EXPECTED_KERNEL_PATCH_COUNT" -gt 0
-          echo "Expected native kernel patches in series: $EXPECTED_KERNEL_PATCH_COUNT" >> upgrade-evaluation/KERNEL-PATCH-REFRESH.md
-
           python3 - <<'PY'
           import hashlib, json, subprocess, sys
           from pathlib import Path
@@ -406,6 +404,7 @@ jobs:
           )
           print(f"Verified unchanged added/deleted code payload across {len(paths)} kernel patches.")
           PY
+          echo "- Expected native kernel patches in series: $EXPECTED_KERNEL_PATCH_COUNT" >> upgrade-evaluation/KERNEL-PATCH-REFRESH.md
 
           git diff --check
           make target/linux/clean
