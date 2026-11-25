@@ -28,7 +28,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           git remote add upstream https://github.com/chasey-dev/immortalwrt-mt798x-rebase.git
-          git fetch --no-tags --no-write-fetch-head upstream 25.12
+          git fetch --no-tags upstream 25.12
           UPSTREAM_SHA="$(git rev-parse FETCH_HEAD)"
           BASE_SHA="$(git merge-base HEAD "$UPSTREAM_SHA")"
           {
@@ -47,11 +47,14 @@ jobs:
             echo "## Ahead/behind"
             git rev-list --left-right --count "HEAD...$UPSTREAM_SHA"
             echo
-            echo "## Change summary"
+            echo "## Upstream changes since merge base"
             git diff --stat "$BASE_SHA" "$UPSTREAM_SHA"
             echo
-            echo "## Changed paths"
+            echo "## Upstream changed paths"
             git diff --name-status "$BASE_SHA" "$UPSTREAM_SHA"
+            echo
+            echo "## Local changes since merge base"
+            git diff --stat "$BASE_SHA" HEAD
           } | tee upgrade-evaluation/UPSTREAM-EVALUATION.txt
 
       - name: Probe merge compatibility without creating a merge commit
