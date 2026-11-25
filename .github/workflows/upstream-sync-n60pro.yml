@@ -272,7 +272,7 @@ jobs:
           cp "$RUNNER_TEMP/n60pro-kernel-quilt-prepare.log" upgrade-evaluation/kernel-quilt-prepare.log
           PATCHES_DIR="$(find build_dir -type d -path '*/linux-*/patches' -print -quit)"
           test -n "$PATCHES_DIR"
-          LINUX_DIR="\${PATCHES_DIR%/patches}"
+          LINUX_DIR="${PATCHES_DIR%/patches}"
           test -s "$PATCHES_DIR/series"
 
           python3 - <<'PY'
@@ -332,14 +332,14 @@ jobs:
           fi
           cp "$REFRESH_LOG" upgrade-evaluation/kernel-patch-refresh.log
           while IFS= read -r patch; do
-            patch="\${patch%%#*}"
+            patch="${patch%%#*}"
             patch="$(printf '%s' "$patch" | xargs)"
             [ -n "$patch" ] || continue
             case "$patch" in
-              generic-backport/*) dest="target/linux/generic/backport-6.12/\${patch#generic-backport/}" ;;
-              generic/*) dest="target/linux/generic/pending-6.12/\${patch#generic/}" ;;
-              generic-hack/*) dest="target/linux/generic/hack-6.12/\${patch#generic-hack/}" ;;
-              platform/*) dest="target/linux/mediatek/patches-6.12/\${patch#platform/}" ;;
+              generic-backport/*) dest="target/linux/generic/backport-6.12/${patch#generic-backport/}" ;;
+              generic/*) dest="target/linux/generic/pending-6.12/${patch#generic/}" ;;
+              generic-hack/*) dest="target/linux/generic/hack-6.12/${patch#generic-hack/}" ;;
+              platform/*) dest="target/linux/mediatek/patches-6.12/${patch#platform/}" ;;
               *) echo "Unknown kernel patch series prefix: $patch"; exit 1 ;;
             esac
             mkdir -p "$(dirname "$dest")"
@@ -423,7 +423,7 @@ jobs:
           KERNEL_DTS="$(find build_dir -type f -path '*/linux-*/arch/arm64/boot/dts/mediatek/mt7986a.dtsi' -print -quit)"
           test -n "$KERNEL_DTS"
           grep -Eq 'clock-frequency[[:space:]]*=[[:space:]]*<12986200>;' "$KERNEL_DTS"
-          KERNEL_SOURCE_ROOT="\${KERNEL_DTS%/arch/arm64/boot/dts/mediatek/mt7986a.dtsi}"
+          KERNEL_SOURCE_ROOT="${KERNEL_DTS%/arch/arm64/boot/dts/mediatek/mt7986a.dtsi}"
           if find "$KERNEL_SOURCE_ROOT" -type f \( -name '*.rej' -o -name '*.orig' \) -print -quit | grep -q .; then
             find "$KERNEL_SOURCE_ROOT" -type f \( -name '*.rej' -o -name '*.orig' \) -print
             cp "$STRICT_LOG" upgrade-evaluation/kernel-patch-strict-replay.log
