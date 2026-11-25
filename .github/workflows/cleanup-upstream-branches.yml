@@ -107,7 +107,7 @@ jobs:
               --jq '.[].head.ref'
           )
 
-          declare -A first_parent second_parent tip_ref
+          declare -A first_parent second_parent merge_commit_ref tip_ref
           for branch in "${candidates[@]}"; do
             if ! git fetch --no-tags origin \
               "+refs/heads/${branch}:refs/remotes/origin/${branch}"; then
@@ -115,52 +115,78 @@ jobs:
               continue
             fi
             tip="refs/remotes/origin/${branch}"
-            read -r p1 p2 extra < <(git show -s --format=%P "$tip")
+            merge_commit="$(git rev-list --merges -n1 "$tip")"
+            if [[ -z "$merge_commit" ]]; then
+              echo "PRESERVE: ${branch} (no upstream merge commit found)"
+              continue
+            fi
+            read -r p1 p2 extra < <(git show -s --format=%P "$merge_commit")
             if [[ -z "${p1:-}" || -z "${p2:-}" || -n "${extra:-}" ]]; then
-              echo "PRESERVE: ${branch} (not a two-parent upstream merge candidate)"
+              echo "PRESERVE: ${branch} (ambiguous merge ancestry)"
               continue
             fi
             first_parent["$branch"]="$p1"
             second_parent["$branch"]="$p2"
+            merge_commit_ref["$branch"]="$merge_commit"
             tip_ref["$branch"]="$tip"
           done
 
+          deleted=0
+          preserved=0
           canonical=""
-          for candidate in "${candidates[@]}"; do
-            [[ -n "${first_parent[$candidate]:-}" ]] || continue
-            newest=true
-            upstream="${second_parent[$candidate]}"
-            for other in "${candidates[@]}"; do
-              [[ "$other" == "$candidate" ]] && continue
-              [[ -n "${first_parent[$other]:-}" ]] || continue
-              [[ "${second_parent[$other]}" == "$upstream" ]] || continue
-              if ! git merge-base --is-ancestor "${first_parent[$other]}" "${first_parent[$candidate]}"; then
-                newest=false
-                break
+
+          # Prefer the stable candidate branch whenever it exists. This lets
+          # the cleanup remove its obsolete run-number alias after promotion.
+          stable_candidate="automation/upstream-25.12-candidate"
+          if git fetch --no-tags origin \
+            "+refs/heads/${stable_candidate}:refs/remotes/origin/${stable_candidate}" 2>/dev/null; then
+            stable_tip="refs/remotes/origin/${stable_candidate}"
+            stable_merge="$(git rev-list --merges -n1 "$stable_tip")"
+            if [[ -n "$stable_merge" ]]; then
+              read -r stable_base stable_upstream stable_extra < <(git show -s --format=%P "$stable_merge")
+              if [[ -n "${stable_base:-}" && -n "${stable_upstream:-}" && -z "${stable_extra:-}" ]]; then
+                canonical="$stable_candidate"
+                canonical_tip="$stable_tip"
+                canonical_base="$stable_base"
+                canonical_upstream="$stable_upstream"
               fi
-            done
-            if [[ "$newest" == true ]]; then
-              if [[ -n "$canonical" ]]; then
-                echo "PRESERVE: ambiguous newest candidates: $canonical and $candidate"
-                canonical=""
-                break
-              fi
-              canonical="$candidate"
             fi
-          done
+          fi
 
           if [[ -z "$canonical" ]]; then
-            echo "No unique newest candidate found; preserving all candidate branches."
+            for candidate in "${candidates[@]}"; do
+              [[ -n "${first_parent[$candidate]:-}" ]] || continue
+              newest=true
+              upstream="${second_parent[$candidate]}"
+              for other in "${candidates[@]}"; do
+                [[ "$other" == "$candidate" ]] && continue
+                [[ -n "${first_parent[$other]:-}" ]] || continue
+                [[ "${second_parent[$other]}" == "$upstream" ]] || continue
+                if ! git merge-base --is-ancestor "${first_parent[$other]}" "${first_parent[$candidate]}"; then
+                  newest=false
+                  break
+                fi
+              done
+              if [[ "$newest" == true ]]; then
+                if [[ -n "$canonical" ]]; then
+                  echo "PRESERVE: ambiguous newest candidates: $canonical and $candidate"
+                  canonical=""
+                  break
+                fi
+                canonical="$candidate"
+                canonical_tip="${tip_ref[$candidate]}"
+                canonical_base="${first_parent[$candidate]}"
+                canonical_upstream="${second_parent[$candidate]}"
+              fi
+            done
+          fi
+
+          if [[ -z "$canonical" ]]; then
+            echo "No unique canonical candidate found; preserving all candidate branches."
             exit 0
           fi
 
-          canonical_tip="${tip_ref[$canonical]}"
-          canonical_base="${first_parent[$canonical]}"
-          canonical_upstream="${second_parent[$canonical]}"
           echo "Canonical comparison candidate: $canonical"
-          deleted=0
-          preserved=0
-
           for branch in "${candidates[@]}"; do
             [[ "$branch" == "$canonical" ]] && continue
             [[ -n "${first_parent[$branch]:-}" ]] || continue
