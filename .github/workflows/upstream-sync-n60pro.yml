@@ -41,17 +41,22 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          git remote add upstream https://github.com/chasey-dev/immortalwrt-mt798x-rebase.git
-          git fetch --no-tags upstream +refs/heads/25.12:refs/remotes/upstream/25.12
-          UPSTREAM_SHA="$(git rev-parse refs/remotes/upstream/25.12)"
+          git remote add upstream https://github.com/immortalwrt/immortalwrt.git
+          git fetch --no-tags upstream +refs/heads/openwrt-25.12:refs/remotes/upstream/openwrt-25.12
+          UPSTREAM_SHA="$(git rev-parse refs/remotes/upstream/openwrt-25.12)"
+          git remote add mtk-base https://github.com/chasey-dev/immortalwrt-mt798x-rebase.git
+          git fetch --no-tags mtk-base +refs/heads/25.12:refs/remotes/mtk-base/25.12
+          MTK_BASE_SHA="$(git rev-parse refs/remotes/mtk-base/25.12)"
           git fetch --no-tags origin n60pro-25.12-upstream-base
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git rev-parse origin/n60pro-25.12-upstream-base)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$MTK_BASE_SHA" HEAD
           BASE_SHA="$(git merge-base HEAD "$UPSTREAM_SHA")"
           UPSTREAM_AHEAD_COUNT="$(git rev-list --count "HEAD..$UPSTREAM_SHA")"
           LOCAL_AHEAD_COUNT="$(git rev-list --count "$UPSTREAM_SHA..HEAD")"
           {
             echo "upstream_sha=$UPSTREAM_SHA"
+            echo "mtk_base_sha=$MTK_BASE_SHA"
             echo "base_sha=$BASE_SHA"
             echo "upstream_ahead_count=$UPSTREAM_AHEAD_COUNT"
             echo "local_ahead_count=$LOCAL_AHEAD_COUNT"
@@ -62,8 +67,10 @@ jobs:
             echo
             echo "- Target branch: n60pro-25.12-upstream-base"
             echo "- Target HEAD: $GITHUB_SHA"
-            echo "- Upstream: chasey-dev/immortalwrt-mt798x-rebase:25.12"
-            echo "- Upstream HEAD: $UPSTREAM_SHA"
+            echo "- Primary upstream: immortalwrt/immortalwrt:openwrt-25.12"
+            echo "- Primary upstream HEAD: $UPSTREAM_SHA"
+            echo "- MTK integration baseline: chasey-dev/immortalwrt-mt798x-rebase:25.12"
+            echo "- MTK baseline HEAD: $MTK_BASE_SHA"
             echo "- Merge base: $BASE_SHA"
             echo "- Upstream-only commits: $UPSTREAM_AHEAD_COUNT"
             echo "- Local-only commits: $LOCAL_AHEAD_COUNT"
@@ -280,6 +287,7 @@ jobs:
       - name: Generate explicit migration plan and compatibility review inventory
         env:
           UPSTREAM_SHA: ${{ steps.refs.outputs.upstream_sha }}
+          MTK_BASE_SHA: ${{ steps.refs.outputs.mtk_base_sha }}
           BASE_SHA: ${{ steps.refs.outputs.base_sha }}
         shell: bash
         run: |
@@ -289,7 +297,8 @@ jobs:
             echo
             echo "## Revisions"
             echo "- Target baseline: $GITHUB_SHA"
-            echo "- Upstream candidate: $UPSTREAM_SHA"
+            echo "- Primary upstream candidate: $UPSTREAM_SHA"
+            echo "- MTK integration baseline: $MTK_BASE_SHA"
             echo "- Merge base: $BASE_SHA"
             echo "- Candidate merge commit: $(git rev-parse HEAD)"
             echo
@@ -320,7 +329,7 @@ jobs:
             echo
             echo "## Decision"
             if [ "${{ steps.refs.outputs.upstream_ahead_count }}" = "0" ]; then
-              echo "The configured upstream 25.12 branch has no commits newer than the common base. This is a no-op synchronization; the local branch is ahead and is preserved unchanged."
+              echo "The official ImmortalWrt openwrt-25.12 branch has no commits newer than the common base. This is a no-op synchronization; the local branch is preserved unchanged."
             else
               echo "A clean textual merge is only candidate generation. The candidate is eligible for auto-merge only after exact-SHA Vendor Audit, Full success, and a non-empty firmware artifact."
             fi
