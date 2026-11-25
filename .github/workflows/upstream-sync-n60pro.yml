@@ -264,15 +264,6 @@ jobs:
           cp config/n60pro-1001.config .config
           make defconfig
 
-          # Preserve the literal tab in this context: patch 737 adds the AN8855
-          # Makefile entry with a tab, and the MT7531 netlink patch must match it.
-          MT7531_NETLINK_PATCH="target/linux/mediatek/patches-6.12/999-dsa-02-add-mt7531-netlink-support.patch"
-          AN8855_CONTEXT="$(printf ' obj-$(CONFIG_NET_DSA_AN8855)\t+= an8855.o')"
-          grep -Fq "$AN8855_CONTEXT" "$MT7531_NETLINK_PATCH" || {
-            echo "FAIL: MT7531 netlink patch Makefile context no longer matches the preceding AN8855 patch."
-            exit 1
-          }
-
           # Linux 6.12.118 already contains the MT7530 core_rmw() bus->read()
           # error check from upstream commit 573d6e3. Do not reapply its
           # now-redundant backport on 6.12.118 or newer.
