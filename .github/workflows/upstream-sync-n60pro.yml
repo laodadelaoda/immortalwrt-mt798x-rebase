@@ -85,7 +85,7 @@ jobs:
               return git("rev-list", "--reverse", rev).splitlines()
 
           def metadata(sha):
-              return git("show", "-s", "--format=%H%x09%P%x09%s", sha).split("\\t", 2)
+              return git("show", "-s", "--format=%H%x09%P%x09%s", sha).split("\t", 2)
 
           def patch_id(sha, parents):
               if len(parents) > 1:
@@ -139,7 +139,7 @@ jobs:
               "upstream_commits":mapping, "local_commits":local_rows
           }
           Path("upgrade-evaluation/UPSTREAM-COMMIT-MAP.json").write_text(
-              json.dumps(result,indent=2,ensure_ascii=False)+"\\n")
+              json.dumps(result,indent=2,ensure_ascii=False)+"\n")
           lines = [
               "# Upstream commit mapping",
               "",
@@ -156,9 +156,9 @@ jobs:
           lines += ["", "## Per-commit mapping", "", "| Upstream SHA | Status | Local match(es) | Subject |", "|---|---|---|---|"]
           for x in mapping:
               matches = ", ".join(m["sha"][:12] for m in x["local_matches"]) or "—"
-              subject = x["subject"].replace("|","\\|")
+              subject = x["subject"].replace("|","\|")
               lines.append(f"| {x['upstream_sha']} | {x['status']} | {matches} | {subject} |")
-          Path("upgrade-evaluation/UPSTREAM-COMMIT-MAP.md").write_text("\\n".join(lines)+"\\n")
+          Path("upgrade-evaluation/UPSTREAM-COMMIT-MAP.md").write_text("\n".join(lines)+"\n")
           PY
 
       - name: Check mergeability and create a real three-way merge candidate
@@ -205,7 +205,7 @@ jobs:
               if [ -e "$path" ]; then
                 echo "### $path"
                 git diff --stat "$GITHUB_SHA" HEAD -- "$path" || true
-                find "$path" -type f \\( -name '*.patch' -o -name 'Makefile' -o -name 'Kconfig*' -o -name '*.config' \\) -print 2>/dev/null | sort | head -n 500
+                find "$path" -type f \( -name '*.patch' -o -name 'Makefile' -o -name 'Kconfig*' -o -name '*.config' \) -print 2>/dev/null | sort | head -n 500
               fi
             done
             echo
@@ -245,11 +245,11 @@ jobs:
           test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$GITHUB_SHA"
           CANDIDATE_BRANCH="automation/upstream-25.12-${UPSTREAM_SHA:0:12}-run-${GITHUB_RUN_ID}"
           git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
-          gh pr create \\
-            --repo "$GITHUB_REPOSITORY" \\
-            --base "$TARGET_BRANCH" \\
-            --head "$CANDIDATE_BRANCH" \\
-            --draft \\
-            --title "N60 Pro: synchronize upstream 25.12 (${UPSTREAM_SHA:0:12})" \\
+          gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base "$TARGET_BRANCH" \
+            --head "$CANDIDATE_BRANCH" \
+            --draft \
+            --title "N60 Pro: synchronize upstream 25.12 (${UPSTREAM_SHA:0:12})" \
             --body-file upgrade-evaluation/UPSTREAM-EVALUATION.md
           echo "Candidate PR created. Canonical vendor audit and Full firmware build are required before merge."
