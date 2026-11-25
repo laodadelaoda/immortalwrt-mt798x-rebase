@@ -15,7 +15,7 @@
  #include <linux/delay.h>
 +#include <linux/errno.h>
  #include <linux/sched.h>
-@@ -96,9 +97,22 @@
+@@ -96,9 +97,24 @@
  	return 0;
  }
  
@@ -32,9 +32,11 @@
 +
 +	memset(value, 0, size);
 +	ret = mt_eeprom_read_wifi(offset, size, value);
-+	if (ret)
++	if (ret) {
++		memset(value, 0, size);
 +		pr_err("failed to read EEPROM name=%s offset=0x%lx size=0x%lx ret=%d\n",
 +		       name ? name : "(null)", offset, size, ret);
++	}
 +
 +	return ret;
  }
@@ -91,10 +93,11 @@
  
  		if (one_adie_dbdc) {
  			adie_cfg_type = ADIE_TYPE_ONE;
-@@ -220,6 +230,10 @@
+@@ -220,6 +230,11 @@
  		pr_info("tx_stream = 0x%x, rx_stream = 0x%x, band0_pa_type = 0x%x, band1_pa_type = 0x%x\n",
  				tx_stream, rx_stream, band0_pa_type, band1_pa_type);
  	} else {
++		EEPROM_content_valid = false;
 +		tx_stream = 0;
 +		rx_stream = 0;
 +		band0_pa_type = 0;
