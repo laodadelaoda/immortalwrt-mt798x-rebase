@@ -413,8 +413,8 @@ jobs:
             package/kernel/mapfilter/patches \
             -type f -name '*.patch' -print | sort)
 
-          # Kernel integration patches are syntax-checked here; applying them to
-          # the actual Linux 6.12 tree remains a Full-kernel validation task.
+          # Kernel integration patch syntax is checked here; the following dedicated
+          # step replays the complete native Linux patch stack on the real source.
           for kernel_patch in \
             target/linux/mediatek/patches-6.12/999-zzz-5203-mtk-wifi_utility-add-universal-eeprom-read-write-backend.patch \
             target/linux/mediatek/patches-6.12/999-mapfilter-add-kconfig.patch; do
@@ -513,6 +513,51 @@ jobs:
           echo "PASS: every active fixed-vendor patch applied to its pinned archive with zero fuzz."
           echo "Package preparation simulation: datconf archive -> ./src overlay -> Lock-ordered Build/Patch series."
 
+      - name: Replay complete native Linux 6.12 patch stack with zero fuzz and offset
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          KERNEL_PATCHVER="$(sed -n 's/^LINUX_VERSION-6.12 = //p' target/linux/generic/kernel-6.12)"
+          test -n "$KERNEL_PATCHVER"
+          echo "Pinned kernel series: 6.12$KERNEL_PATCHVER"
+          LOG="$RUNNER_TEMP/n60pro-kernel-patch-replay.log"
+          if PATCH='patch --fuzz=0' make target/linux/prepare V=s >"$LOG" 2>&1; then
+            echo "Native OpenWrt target/linux/prepare completed."
+          else
+            rc=$?
+            tail -n 240 "$LOG"
+            cp "$LOG" audit-artifacts-kernel-patch-replay.log
+            exit "$rc"
+          fi
+          if grep -Ein 'with fuzz [1-9]|offset [+-]?[1-9][0-9]* lines|Hunk #[0-9]+ FAILED|Hunk FAILED|Patch failed!' "$LOG"; then
+            echo "FAIL: kernel patch replay reported fuzz, non-zero offset, or a rejected hunk."
+            cp "$LOG" audit-artifacts-kernel-patch-replay.log
+            exit 1
+          fi
+          KERNEL_DTS="$(find build_dir -type f -path '*/linux-*/arch/arm64/boot/dts/mediatek/mt7986a.dtsi' -print -quit)"
+          test -n "$KERNEL_DTS"
+          grep -Eq 'clock-frequency[[:space:]]*=[[:space:]]*<12986200>;' "$KERNEL_DTS"
+          KERNEL_SOURCE_ROOT="${KERNEL_DTS%/arch/arm64/boot/dts/mediatek/mt7986a.dtsi}"
+          if find "$KERNEL_SOURCE_ROOT" -type f \( -name '*.rej' -o -name '*.orig' \) -print -quit | grep -q .; then
+            echo "FAIL: kernel source contains .rej or .orig files."
+            find "$KERNEL_SOURCE_ROOT" -type f \( -name '*.rej' -o -name '*.orig' \) -print
+            cp "$LOG" audit-artifacts-kernel-patch-replay.log
+            exit 1
+          fi
+          APPLIED_COUNT="$(grep -Ec '^Applying .* using ' "$LOG" || true)"
+          test "$APPLIED_COUNT" -gt 0
+          {
+            echo "Kernel version: 6.12$KERNEL_PATCHVER"
+            echo "Native patch application records: $APPLIED_COUNT"
+            echo "Fuzz: 0 (PATCH=patch --fuzz=0)"
+            echo "Non-zero offsets: 0"
+            echo "Reject/orig files: 0"
+            echo "MT7986 architected timer frequency: 12986200 Hz confirmed in prepared source"
+            echo "Prepared source: $KERNEL_DTS"
+          } | tee "$RUNNER_TEMP/n60pro-kernel-patch-replay-summary.txt"
+          cp "$LOG" audit-artifacts-kernel-patch-replay.log
+          cat "$RUNNER_TEMP/n60pro-kernel-patch-replay-summary.txt"
+
       - name: Assert MT Wi-Fi 026 exact Prepare path, patch result and function replacement
         if: success()
         shell: bash
@@ -543,6 +588,12 @@ jobs:
           if [ -d "$RUNNER_TEMP/mtwifi-026-audit" ]; then
             mkdir -p audit-artifacts/mtwifi-026
             cp -a "$RUNNER_TEMP/mtwifi-026-audit/." audit-artifacts/mtwifi-026/
+          fi
+          if [ -s audit-artifacts-kernel-patch-replay.log ]; then
+            cp audit-artifacts-kernel-patch-replay.log audit-artifacts/kernel-patch-replay.log
+          fi
+          if [ -s "$RUNNER_TEMP/n60pro-kernel-patch-replay-summary.txt" ]; then
+            cp "$RUNNER_TEMP/n60pro-kernel-patch-replay-summary.txt" audit-artifacts/kernel-patch-replay-summary.txt
           fi
 
       - name: Upload canonical audit evidence (single run-bound artifact)
