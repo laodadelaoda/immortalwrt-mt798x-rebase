@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
+  push:
+    branches:
+      - n60pro-25.12-upstream-base
+    paths:
+      - .github/workflows/upstream-sync-n60pro.yml
+      - .github/workflows/cleanup-upstream-branches.yml
 
 permissions:
   contents: write
