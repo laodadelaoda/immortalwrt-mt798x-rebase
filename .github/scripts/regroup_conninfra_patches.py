@@ -268,10 +268,29 @@ def apply_op_history_lifecycle_fix(root):
             b"\tosal_op_history_deinit(&ctx->op_history);\n\n"
             b"\tfor (i = 0; i < MSG_THREAD_OP_BUF_SIZE; i++)", 1)
 
+    hw_path = root / "platform/consys_hw.c"
+    hw = hw_path.read_bytes()
+    optional_detach = (
+        b"\tif (consys_hw_ops->consys_plt_clk_detach)\n"
+        b"\t\tconsys_hw_ops->consys_plt_clk_detach();\n"
+        b"\telse\n"
+        b"\t\tpr_err(\"consys_plt_clk_detach is null\\n\");\n"
+    )
+    optional_detach_fixed = (
+        b"\tif (consys_hw_ops->consys_plt_clk_detach)\n"
+        b"\t\tconsys_hw_ops->consys_plt_clk_detach();\n"
+    )
+    if optional_detach in hw:
+        hw = hw.replace(optional_detach, optional_detach_fixed, 1)
+    elif optional_detach_fixed not in hw:
+        fail("optional platform clock detach block not found")
+
     header_path.write_bytes(header)
     osal_path.write_bytes(osal)
     thread_path.write_bytes(thread)
+    hw_path.write_bytes(hw)
     print("APPLIED: op-history queue and dump-work lifetime cleanup")
+    print("APPLIED: treat NULL platform clock detach as an optional callback")
 
 def emit_source_review(root):
     names = [
