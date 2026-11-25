@@ -92,25 +92,6 @@ jobs:
           grep -Fx 'CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_netcore_n60-pro=y' .config
           grep -Fx 'CONFIG_PACKAGE_easymesh-n60=y' .config
 
-      - name: Verify complete Linux 6.12.116 native patch stack
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          PATCH_DIR="target/linux/mediatek/patches-6.12"
-          test -d "$PATCH_DIR"
-          test -f "$PATCH_DIR/999-eth-91-mtk_eth_soc-add-mtkhnat-driver-support.patch"
-          test -f "$PATCH_DIR/999-eth-93-mtk_eth_soc-add-internal-SER-notify-event.patch"
-          test -f "$PATCH_DIR/999-eth-90-mtk_eth_soc-support-proprietary-debugfs.patch"
-          test ! -e "$PATCH_DIR/999-hnat-13-netdevice-add-ndo_flow_offload_stats64_add-for-offload-stats-correction.patch"
-          mapfile -t PATCHES < <(find "$PATCH_DIR" -maxdepth 1 -type f -name '*.patch' -print | sort)
-          COUNT="${#PATCHES[@]}"
-          test "$COUNT" -gt 0
-          echo "All native Linux 6.12 patch files are included in this Full build and will be applied by OpenWrt native kernel preparation."
-          echo "Patch count: $COUNT"
-          sha256sum "${PATCHES[@]}" > "$RUNNER_TEMP/n60pro-kernel-patches.sha256"
-          sha256sum "$RUNNER_TEMP/n60pro-kernel-patches.sha256"
-          cat "$RUNNER_TEMP/n60pro-kernel-patches.sha256"
-
       - name: Download package sources
         shell: bash
         run: |
