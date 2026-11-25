@@ -1,167 +1,94 @@
-name: N60 Pro upstream synchronization
+name: N60 Pro upstream library upgrade evaluation
 
 on:
   workflow_dispatch:
+
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write
+  contents: read
 
 concurrency:
-  group: n60pro-upstream-sync
+  group: n60pro-upstream-upgrade-evaluation
   cancel-in-progress: false
 
 jobs:
-  sync:
+  evaluate:
+    name: Read-only upstream compatibility evaluation
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 60
     steps:
-      - name: Checkout N60 Pro branch with full history
-        uses: actions/checkout@v4
+      - name: Checkout the selected default-branch revision
+        uses: actions/checkout@v5
         with:
-          ref: n60pro-mtk-closed-driver
+          ref: ${{ github.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Configure Git identity
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Fetch upstream 25.12
+      - name: Fetch upstream 25.12 without modifying local refs or source
         shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           git remote add upstream https://github.com/chasey-dev/immortalwrt-mt798x-rebase.git
-          git fetch --no-tags upstream 25.12
-          git fetch origin
-
-      - name: Merge upstream with explicit allow-listed conflict rules
-        id: sync
-        shell: bash
-        run: |
-          set -euo pipefail
-          TARGET_BRANCH="n60pro-mtk-closed-driver"
-          SYNC_BRANCH="automation/upstream-25.12-sync"
-          mkdir -p conflict-diagnostics
-          git checkout -B "$SYNC_BRANCH" "origin/$TARGET_BRANCH"
-
-          UPSTREAM_SHA="$(git rev-parse upstream/25.12)"
-          N60_SHA="$(git rev-parse HEAD)"
-          printf 'Upstream: %s\nN60 base: %s\n' "$UPSTREAM_SHA" "$N60_SHA" > conflict-diagnostics/merge.txt
-
-          if ! git merge-base --is-ancestor upstream/25.12 HEAD; then
-            set +e
-            git merge --no-ff --no-edit upstream/25.12 > conflict-diagnostics/merge-probe.log 2>&1
-            MERGE_STATUS=$?
-            set -e
-
-            if [[ "$MERGE_STATUS" -ne 0 ]]; then
-              git diff --name-only --diff-filter=U | sort -u > conflict-diagnostics/conflict-files.txt || true
-              git diff --cc > conflict-diagnostics/conflict-diff.patch || true
-              git status --short > conflict-diagnostics/merge-status.txt || true
-
-              # Preserve all three Git conflict stages before aborting the merge.
-              while IFS= read -r path; do
-                [[ -n "$path" ]] || continue
-                safe_path="$(printf '%s' "$path" | sed 's#/#__#g')"
-                mkdir -p "conflict-diagnostics/stages"
-                git show ":1:$path" > "conflict-diagnostics/stages/$safe_path.base" 2>/dev/null || true
-                git show ":2:$path" > "conflict-diagnostics/stages/$safe_path.n60pro" 2>/dev/null || true
-                git show ":3:$path" > "conflict-diagnostics/stages/$safe_path.upstream" 2>/dev/null || true
-              done < conflict-diagnostics/conflict-files.txt
-
-              if [[ -s conflict-diagnostics/conflict-files.txt ]]; then
-                python3 .github/scripts/apply-upstream-merge-rules.py .github/upstream-merge-rules.json | tee conflict-diagnostics/rule-results.txt
-                git diff --name-only --diff-filter=U | sort -u > conflict-diagnostics/unresolved-files.txt || true
-              else
-                printf 'Merge failed without Git conflict entries.\n' > conflict-diagnostics/unresolved-files.txt
-              fi
-
-              if [[ -s conflict-diagnostics/unresolved-files.txt ]]; then
-                echo "conflict=1" >> "$GITHUB_OUTPUT"
-                {
-                  echo "## Upstream synchronization needs conflict resolution"
-                  echo
-                  echo "Only exact path rules in .github/upstream-merge-rules.json were eligible for automatic resolution."
-                  echo "No global ours/theirs strategy was used. Unresolved files:"
-                  sed 's/^/- /' conflict-diagnostics/unresolved-files.txt
-                } >> "$GITHUB_STEP_SUMMARY"
-                git merge --abort || true
-                exit 1
-              fi
-
-              # All conflicted paths were resolved by explicit allow-listed rules.
-              git commit --no-edit
-            fi
-          fi
-
-          if ! git merge-base --is-ancestor upstream/25.12 HEAD; then
-            echo "The complete upstream history is not an ancestor of the synchronization result." >&2
-            exit 1
-          fi
-
-          if [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/$TARGET_BRANCH)" ]]; then
-            CHANGED=0
-          else
-            CHANGED=1
-          fi
-          echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
-          echo "branch=$SYNC_BRANCH" >> "$GITHUB_OUTPUT"
-          echo "upstream_sha=$UPSTREAM_SHA" >> "$GITHUB_OUTPUT"
-
+          git fetch --no-tags --no-write-fetch-head upstream 25.12
+          UPSTREAM_SHA="$(git rev-parse FETCH_HEAD)"
+          BASE_SHA="$(git merge-base HEAD "$UPSTREAM_SHA")"
           {
-            echo "## Upstream synchronization"
+            echo "BASE_SHA=$BASE_SHA"
+            echo "UPSTREAM_SHA=$UPSTREAM_SHA"
+          } >> "$GITHUB_ENV"
+          mkdir -p upgrade-evaluation
+          {
+            echo "Repository: $GITHUB_REPOSITORY"
+            echo "Evaluated revision: $(git rev-parse HEAD)"
+            echo "Upstream: chasey-dev/immortalwrt-mt798x-rebase"
+            echo "Upstream branch: 25.12"
+            echo "Upstream revision: $UPSTREAM_SHA"
+            echo "Merge base: $BASE_SHA"
             echo
-            echo "- Upstream commit: $UPSTREAM_SHA"
-            echo "- N60 Pro base: $N60_SHA"
-            echo "- Complete upstream history included: **yes**"
-            echo "- Conflict policy: exact allow-list only; unknown conflicts stop safely"
-            echo "- Native OpenWrt source preparation and patch application are unchanged"
-          } >> "$GITHUB_STEP_SUMMARY"
+            echo "## Ahead/behind"
+            git rev-list --left-right --count "HEAD...$UPSTREAM_SHA"
+            echo
+            echo "## Change summary"
+            git diff --stat "$BASE_SHA" "$UPSTREAM_SHA"
+            echo
+            echo "## Changed paths"
+            git diff --name-status "$BASE_SHA" "$UPSTREAM_SHA"
+          } | tee upgrade-evaluation/UPSTREAM-EVALUATION.txt
 
-      - name: Push synchronization branch
-        if: steps.sync.outputs.changed == '1'
+      - name: Probe merge compatibility without creating a merge commit
         shell: bash
         run: |
-          set -euo pipefail
-          git push --force-with-lease origin "HEAD:refs/heads/${{ steps.sync.outputs.branch }}"
-
-      - name: Create or update synchronization PR
-        if: steps.sync.outputs.changed == '1'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          gh pr create \
-            --repo "${GITHUB_REPOSITORY}" \
-            --base n60pro-mtk-closed-driver \
-            --head "${{ steps.sync.outputs.branch }}" \
-            --title "Merge upstream 25.12 history into N60 Pro" \
-            --body "Merges complete upstream 25.12 history. Exact allow-listed path rules may resolve known mechanical conflicts; all unknown or semantic conflicts stop and produce diagnostics. The PR runs the complete N60 Pro Full firmware build before it can be merged." \
-            || gh pr view "${{ steps.sync.outputs.branch }}" --repo "${GITHUB_REPOSITORY}" --json url --jq .url
-
-      - name: Open or update issue for unresolved conflicts
-        if: failure() && steps.sync.outputs.conflict == '1'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          TITLE="N60 Pro upstream merge conflict requires resolution"
-          EXISTING="$(gh issue list --repo "${GITHUB_REPOSITORY}" --state open --search "\"$TITLE\"" --json number --jq '.[0].number // empty')"
-          BODY="The scheduled/manual upstream 25.12 merge encountered conflicts that are not covered by the exact allow-list. No conflicting side was silently preferred.\n\nRun: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\n\nInspect the `n60pro-upstream-sync-diagnostics` artifact. Add a rule only when the file ownership and resolution are proven; semantic conflicts require an explicit code resolution."
-          if [[ -n "$EXISTING" ]]; then
-            gh issue comment "$EXISTING" --repo "${GITHUB_REPOSITORY}" --body "$BODY"
+          set -Eeuo pipefail
+          set +e
+          git merge-tree --write-tree HEAD "$UPSTREAM_SHA" > upgrade-evaluation/merge-tree.txt 2>&1
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            echo "MERGE_PROBE=clean" | tee -a upgrade-evaluation/UPSTREAM-EVALUATION.txt
+            echo "The merge-tree probe completed without conflicts. No branch, index, or working-tree changes were made."
           else
-            gh issue create --repo "${GITHUB_REPOSITORY}" --title "$TITLE" --body "$BODY"
+            echo "MERGE_PROBE=conflicts-or-probe-error" | tee -a upgrade-evaluation/UPSTREAM-EVALUATION.txt
+            echo "Inspect merge-tree.txt. This is an evaluation result, not an automatic resolution."
           fi
 
-      - name: Upload synchronization diagnostics
+      - name: Record patch inventory and evaluation boundary
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          {
+            echo
+            echo "## Local patch inventory"
+            find target/linux/mediatek/patches-6.12 package/mtk -type f -name '*.patch' -print 2>/dev/null | sort
+            echo
+            echo "## Safety boundary"
+            echo "Read-only evaluation only. No merge, commit, push, branch creation, PR creation, or automatic patch rewrite."
+          } >> upgrade-evaluation/UPSTREAM-EVALUATION.txt
+          sha256sum upgrade-evaluation/* > upgrade-evaluation/SHA256SUMS
+
+      - name: Upload upstream evaluation report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: n60pro-upstream-sync-diagnostics
-          path: conflict-diagnostics/
-          if-no-files-found: ignore
+          name: n60pro-upstream-evaluation-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: upgrade-evaluation/
+          if-no-files-found: error
           retention-days: 30
