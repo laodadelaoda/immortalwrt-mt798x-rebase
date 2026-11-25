@@ -33,7 +33,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          git remote add origin "https://github.com/${GH_REPO}.git"
           git fetch --no-tags origin \
             "+refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}"
 
