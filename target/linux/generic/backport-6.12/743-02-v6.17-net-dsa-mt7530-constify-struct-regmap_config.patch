@@ -26,7 +26,7 @@ diff --git a/drivers/net/dsa/mt7530-mdio.c b/drivers/net/dsa/mt7530-mdio.c
 index 51df42ccdbe62..0286a6cecb6f5 100644
 --- a/drivers/net/dsa/mt7530-mdio.c
 +++ b/drivers/net/dsa/mt7530-mdio.c
-@@ -136,10 +136,17 @@ static const struct of_device_id mt7530_of_match[] = {
+@@ -143,10 +143,17 @@ static const struct of_device_id mt7530_of_match[] = {
  };
  MODULE_DEVICE_TABLE(of, mt7530_of_match);
  
@@ -45,7 +45,7 @@ index 51df42ccdbe62..0286a6cecb6f5 100644
  	struct mt7530_priv *priv;
  	struct device_node *dn;
  	int ret;
-@@ -193,18 +200,8 @@ mt7530_probe(struct mdio_device *mdiodev)
+@@ -200,18 +207,8 @@ mt7530_probe(struct mdio_device *mdiodev)
  			return PTR_ERR(priv->io_pwr);
  	}
  
@@ -69,7 +69,7 @@ diff --git a/drivers/net/dsa/mt7530-mmio.c b/drivers/net/dsa/mt7530-mmio.c
 index 842d74268e772..1dc8b93fb51a1 100644
 --- a/drivers/net/dsa/mt7530-mmio.c
 +++ b/drivers/net/dsa/mt7530-mmio.c
-@@ -18,10 +18,17 @@ static const struct of_device_id mt7988_of_match[] = {
+@@ -17,10 +17,17 @@ static const struct of_device_id mt7988_of_match[] = {
  };
  MODULE_DEVICE_TABLE(of, mt7988_of_match);
  
@@ -88,7 +88,7 @@ index 842d74268e772..1dc8b93fb51a1 100644
  	struct mt7530_priv *priv;
  	void __iomem *base_addr;
  	int ret;
-@@ -49,16 +56,8 @@ mt7988_probe(struct platform_device *pdev)
+@@ -48,16 +55,8 @@ mt7988_probe(struct platform_device *pdev)
  		return -ENXIO;
  	}
  
