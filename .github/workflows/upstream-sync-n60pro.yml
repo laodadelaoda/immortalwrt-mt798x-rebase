@@ -42,11 +42,11 @@ jobs:
         run: |
           set -Eeuo pipefail
           git remote add upstream https://github.com/chasey-dev/immortalwrt-mt798x-rebase.git
-          git fetch --no-tags upstream 25.12
+          git fetch --no-tags upstream +refs/heads/25.12:refs/remotes/upstream/25.12
+          UPSTREAM_SHA="$(git rev-parse refs/remotes/upstream/25.12)"
           git fetch --no-tags origin n60pro-25.12-upstream-base
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git rev-parse origin/n60pro-25.12-upstream-base)" = "$GITHUB_SHA"
-          UPSTREAM_SHA="$(git rev-parse FETCH_HEAD)"
           BASE_SHA="$(git merge-base HEAD "$UPSTREAM_SHA")"
           {
             echo "upstream_sha=$UPSTREAM_SHA"
