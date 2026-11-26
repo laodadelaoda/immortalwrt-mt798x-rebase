@@ -175,7 +175,7 @@ jobs:
           test -d "$OUT"
           find "$OUT" -maxdepth 1 -type f -printf '%f\n' | tee "$RUNNER_TEMP/n60-firmware-files.txt"
           test -s "$RUNNER_TEMP/n60-firmware-files.txt"
-          grep -Eq '\\.(itb|bin|img|gz|zst)$' "$RUNNER_TEMP/n60-firmware-files.txt"
+          grep -Eq '\.(itb|bin|img|gz|zst)$' "$RUNNER_TEMP/n60-firmware-files.txt"
           printf '%s\n' "$EXPECTED_SOURCE_SHA" > "$OUT/N60PRO-FULL-SOURCE-SHA.txt"
           test "$(cat "$OUT/N60PRO-FULL-SOURCE-SHA.txt")" = "$EXPECTED_SOURCE_SHA"
 
