@@ -11,7 +11,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
 jobs:
   firmware:
@@ -174,3 +175,54 @@ jobs:
           path: bin/targets/mediatek/filogic/
           if-no-files-found: error
           retention-days: 30
+
+  merge-validated-upstream-candidate:
+    name: Merge upstream candidate after successful Full firmware build
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/automation/upstream-25.12-candidate'
+    needs: firmware
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Verify exact candidate revision and non-empty firmware artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_NUMBER: ${{ github.run_number }}
+          HEAD_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$RUN_ID"
+          test -n "$HEAD_SHA"
+          test "$GITHUB_REF" = "refs/heads/automation/upstream-25.12-candidate"
+          ARTIFACTS_JSON="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts")"
+          FIRMWARE_COUNT="$(printf '%s' "$ARTIFACTS_JSON" | jq --arg name "n60pro-immortalwrt-firmware-$RUN_NUMBER" '[.artifacts[] | select(.name == $name) | select(.expired == false) | select(.size_in_bytes > 0)] | length')"
+          test "$FIRMWARE_COUNT" -ge 1
+          echo "Exact candidate $HEAD_SHA passed Full and uploaded a non-empty firmware artifact."
+
+      - name: Merge only the exact validated candidate PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.sha }}
+          HEAD_BRANCH: automation/upstream-25.12-candidate
+          TARGET_BRANCH: n60pro-25.12-upstream-base
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          PR_JSON="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" --base "$TARGET_BRANCH" --state open --json number,headRefOid,isDraft)"
+          PR_COUNT="$(printf '%s' "$PR_JSON" | jq 'length')"
+          test "$PR_COUNT" -eq 1
+          PR_NUMBER="$(printf '%s' "$PR_JSON" | jq -r '.[0].number')"
+          PR_HEAD="$(printf '%s' "$PR_JSON" | jq -r '.[0].headRefOid')"
+          PR_DRAFT="$(printf '%s' "$PR_JSON" | jq -r '.[0].isDraft')"
+          test "$PR_HEAD" = "$HEAD_SHA"
+          if [ "$PR_DRAFT" = "true" ]; then gh pr ready "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"; fi
+          gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --merge --delete-branch
+          git init verify-merge
+          cd verify-merge
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags origin "$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH"
+          git merge-base --is-ancestor "$HEAD_SHA" "refs/remotes/origin/$TARGET_BRANCH"
+          echo "Merged PR #$PR_NUMBER after exact-SHA Full success and firmware artifact verification."
