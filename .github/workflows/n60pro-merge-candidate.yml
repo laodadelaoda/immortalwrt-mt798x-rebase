@@ -75,7 +75,13 @@ jobs:
           ARTIFACTS_JSON="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts")"
           FIRMWARE_COUNT="$(printf '%s' "$ARTIFACTS_JSON" | jq --arg name "n60pro-immortalwrt-firmware-$RUN_NUMBER" '[.artifacts[] | select(.name == $name) | select(.expired == false) | select(.size_in_bytes > 0)] | length')"
           test "$FIRMWARE_COUNT" -ge 1
-          echo "Exact candidate $HEAD_SHA passed Full and uploaded a non-empty firmware artifact."
+          ARTIFACT_DIR="$RUNNER_TEMP/n60pro-firmware-artifact"
+          mkdir -p "$ARTIFACT_DIR"
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name "n60pro-immortalwrt-firmware-$RUN_NUMBER" --dir "$ARTIFACT_DIR"
+          test -s "$ARTIFACT_DIR/N60PRO-FULL-SOURCE-SHA.txt"
+          ARTIFACT_SHA="$(cat "$ARTIFACT_DIR/N60PRO-FULL-SOURCE-SHA.txt")"
+          test "$ARTIFACT_SHA" = "$HEAD_SHA"
+          echo "Exact candidate $HEAD_SHA passed Full and uploaded a non-empty firmware artifact attested to the same source SHA."
 
       - name: Merge only the exact validated candidate PR
         if: steps.verify.outputs.current == 'true'
