@@ -11,7 +11,7 @@ Upstream commit: 6860b467f569
 
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
-@@ -3781,6 +3781,9 @@ sw_checksum:
+@@ -3776,6 +3776,9 @@ sw_checksum:
  }
  EXPORT_SYMBOL(skb_csum_hwoffload_help);
  
@@ -21,7 +21,7 @@ Upstream commit: 6860b467f569
  static struct sk_buff *validate_xmit_skb(struct sk_buff *skb, struct net_device *dev, bool *again)
  {
  	netdev_features_t features;
-@@ -3851,7 +3854,7 @@ struct sk_buff *validate_xmit_skb_list(s
+@@ -3846,7 +3849,7 @@ struct sk_buff *validate_xmit_skb_list(s
  		skb->prev = skb;
  
  		skb = validate_xmit_skb(skb, dev, again);
@@ -30,7 +30,7 @@ Upstream commit: 6860b467f569
  			continue;
  
  		if (!head)
-@@ -4593,8 +4596,11 @@ int __dev_queue_xmit(struct sk_buff *skb
+@@ -4590,8 +4593,11 @@ int __dev_queue_xmit(struct sk_buff *skb
  				goto recursion_alert;
  
  			skb = validate_xmit_skb(skb, dev, &again);
