@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 360
     concurrency:
       group: n60pro-full-firmware-${{ github.ref }}
-      cancel-in-progress: false
+      cancel-in-progress: true
     steps:
       - name: Checkout exact source revision
         uses: actions/checkout@v5
