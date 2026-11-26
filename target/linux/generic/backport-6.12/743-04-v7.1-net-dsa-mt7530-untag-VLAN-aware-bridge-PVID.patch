@@ -39,7 +39,7 @@ diff --git a/drivers/net/dsa/mt7530.c b/drivers/net/dsa/mt7530.c
 index 752ba92b08517..3c2a3029b10cf 100644
 --- a/drivers/net/dsa/mt7530.c
 +++ b/drivers/net/dsa/mt7530.c
-@@ -2447,6 +2447,7 @@ mt7530_setup(struct dsa_switch *ds)
+@@ -2248,6 +2248,7 @@ mt7530_setup(struct dsa_switch *ds)
  	}
  
  	ds->assisted_learning_on_cpu_port = true;
@@ -47,7 +47,7 @@ index 752ba92b08517..3c2a3029b10cf 100644
  	ds->mtu_enforcement_ingress = true;
  	ds->ageing_time_min = 2 * 1000;
  	ds->ageing_time_max = (AGE_CNT_MAX + 1) * (AGE_UNIT_MAX + 1) * 1000;
-@@ -2638,6 +2639,7 @@ mt7531_setup_common(struct dsa_switch *ds)
+@@ -2439,6 +2440,7 @@ mt7531_setup_common(struct dsa_switch *ds)
  	int ret, i;
  
  	ds->assisted_learning_on_cpu_port = true;
