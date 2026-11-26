@@ -71,13 +71,13 @@ jobs:
             build_dir
             staging_dir
             dl
-          key: ${{ runner.os }}-n60pro-full-${{ github.sha }}-${{ hashFiles('Makefile', 'rules.mk', 'config/**', 'feeds.conf.default', 'include/**', 'scripts/**', 'tools/**', 'toolchain/**', 'target/linux/**', 'package/mtk/applications/easymesh-n60/**', 'package/mtk/applications/datconf/**', 'package/libs/openssl/**', 'package/libs/libnl-tiny/**', 'package/mtk/vendor-sources.lock.json') }}
+          key: ${{ runner.os }}-n60pro-full-${{ github.event.pull_request.head.sha || github.sha }}-${{ hashFiles('Makefile', 'rules.mk', 'config/**', 'feeds.conf.default', 'include/**', 'scripts/**', 'tools/**', 'toolchain/**', 'target/linux/**', 'package/mtk/applications/easymesh-n60/**', 'package/mtk/applications/datconf/**', 'package/libs/openssl/**', 'package/libs/libnl-tiny/**', 'package/mtk/vendor-sources.lock.json') }}
 
       - name: Report Full cache reuse
         shell: bash
         run: |
           if [ "${{ steps.full-cache.outputs.cache-hit }}" = "true" ]; then
-            echo "Restored build_dir, staging_dir and dl from a Full-mode cache for ${GITHUB_SHA}."
+            echo "Restored build_dir, staging_dir and dl from a Full-mode cache for ${{ github.event.pull_request.head.sha || github.sha }}."
           else
             echo "No exact-revision Full cache found; Full will build missing targets normally."
           fi
