@@ -31,6 +31,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Verify exact candidate revision and non-empty firmware artifact
+        id: verify
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.event.workflow_run.id }}
@@ -38,6 +39,7 @@ jobs:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          TARGET_BRANCH: n60pro-25.12-upstream-base
           SOURCE_EVENT: ${{ github.event.workflow_run.event }}
           SOURCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
         shell: bash
@@ -52,6 +54,20 @@ jobs:
           esac
           test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
           test "$SOURCE_CONCLUSION" = "success"
+          PR_JSON="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" --base "$TARGET_BRANCH" --state open --json number,headRefOid)"
+          PR_COUNT="$(printf '%s' "$PR_JSON" | jq 'length')"
+          if [ "$PR_COUNT" -ne 1 ]; then
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "No unique open candidate PR remains; this Full run is stale."
+            exit 0
+          fi
+          PR_HEAD="$(printf '%s' "$PR_JSON" | jq -r '.[0].headRefOid')"
+          if [ "$PR_HEAD" != "$HEAD_SHA" ]; then
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping stale Full run for $HEAD_SHA; current PR head is $PR_HEAD."
+            exit 0
+          fi
+          echo "current=true" >> "$GITHUB_OUTPUT"
           RUN_JSON="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")"
           test "$(printf '%s' "$RUN_JSON" | jq -r '.head_sha')" = "$HEAD_SHA"
           test "$(printf '%s' "$RUN_JSON" | jq -r '.head_branch')" = "$HEAD_BRANCH"
@@ -62,6 +78,7 @@ jobs:
           echo "Exact candidate $HEAD_SHA passed Full and uploaded a non-empty firmware artifact."
 
       - name: Merge only the exact validated candidate PR
+        if: steps.verify.outputs.current == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.event.workflow_run.id }}
