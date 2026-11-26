@@ -30,15 +30,18 @@ jobs:
       - name: Checkout exact source revision
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
           persist-credentials: false
 
       - name: Verify exact source revision
         shell: bash
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test -n "$EXPECTED_SOURCE_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
           echo "Build revision: $(git rev-parse HEAD)"
 
       - name: Free runner disk space
@@ -164,13 +167,17 @@ jobs:
 
       - name: Confirm firmware output exists
         shell: bash
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           OUT="bin/targets/mediatek/filogic"
           test -d "$OUT"
           find "$OUT" -maxdepth 1 -type f -printf '%f\n' | tee "$RUNNER_TEMP/n60-firmware-files.txt"
           test -s "$RUNNER_TEMP/n60-firmware-files.txt"
-          grep -Eq '\.(itb|bin|img|gz|zst)$' "$RUNNER_TEMP/n60-firmware-files.txt"
+          grep -Eq '\\.(itb|bin|img|gz|zst)$' "$RUNNER_TEMP/n60-firmware-files.txt"
+          printf '%s\n' "$EXPECTED_SOURCE_SHA" > "$OUT/N60PRO-FULL-SOURCE-SHA.txt"
+          test "$(cat "$OUT/N60PRO-FULL-SOURCE-SHA.txt")" = "$EXPECTED_SOURCE_SHA"
 
       - name: Upload N60 Pro firmware
         uses: actions/upload-artifact@v6
