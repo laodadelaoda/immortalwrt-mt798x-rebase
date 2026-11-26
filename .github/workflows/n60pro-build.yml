@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - n60pro-25.12-upstream-base
+    paths-ignore:
+      - '.github/workflows/**'
+      - 'docs/**'
+      - '*.md'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches:
