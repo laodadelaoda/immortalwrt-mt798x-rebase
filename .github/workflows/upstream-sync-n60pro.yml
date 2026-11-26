@@ -617,7 +617,34 @@ jobs:
             exit 1
           fi
 
-          # GITHUB_TOKEN-created PRs do not emit pull_request workflows; dispatch
-          # the sole Full firmware pipeline on the stable candidate ref.
-          gh workflow run n60pro-build.yml --repo "$GITHUB_REPOSITORY" --ref "$CANDIDATE_BRANCH"
-          echo "Updated the single upstream candidate branch and dispatched the exact-ref Full firmware build."
+          # PRs and branch pushes created with GITHUB_TOKEN do not start pull_request/push
+          # workflows. Explicitly dispatch Full only after the canonical PR is ready,
+          # then verify GitHub created a run for this exact candidate SHA.
+          RUNS_URL="repos/$GITHUB_REPOSITORY/actions/workflows/n60pro-build.yml/runs?branch=$CANDIDATE_BRANCH&event=workflow_dispatch&per_page=100"
+          BEFORE_IDS="$(gh api "$RUNS_URL" | jq -c '[.workflow_runs[].id]')"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/n60pro-build.yml/dispatches" \
+            -f ref="$CANDIDATE_BRANCH"
+
+          FULL_RUN_ID=""
+          for attempt in $(seq 1 60); do
+            RUNS_JSON="$(gh api "$RUNS_URL")"
+            FULL_RUN_ID="$(printf '%s' "$RUNS_JSON" | jq -r \
+              --arg sha "$CANDIDATE_SHA" --argjson before "$BEFORE_IDS" \
+              '[.workflow_runs[] | select(.head_sha == $sha) | select(.event == "workflow_dispatch") | select((.id as $id | $before | index($id)) == null)] | sort_by(.created_at) | last | .id // empty')"
+            if [ -n "$FULL_RUN_ID" ]; then
+              break
+            fi
+            sleep 5
+          done
+          if [ -z "$FULL_RUN_ID" ]; then
+            echo "ERROR: GitHub accepted the dispatch request but no new Full run appeared for candidate $CANDIDATE_SHA within 5 minutes."
+            echo "The candidate PR and branch are preserved for a safe retry; no merge can occur without Full."
+            exit 1
+          fi
+
+          FULL_RUN_JSON="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$FULL_RUN_ID")"
+          test "$(printf '%s' "$FULL_RUN_JSON" | jq -r '.head_sha')" = "$CANDIDATE_SHA"
+          test "$(printf '%s' "$FULL_RUN_JSON" | jq -r '.head_branch')" = "$CANDIDATE_BRANCH"
+          echo "Updated the canonical upstream candidate and PR."
+          echo "Verified Full run $FULL_RUN_ID was created for exact candidate SHA $CANDIDATE_SHA."
+          echo "Full run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$FULL_RUN_ID"
