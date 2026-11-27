@@ -18,26 +18,12 @@ Date: Thu, 18 Sep 2025 16:31:44 +0800
 Subject: [PATCH] net: pcs: mtk-lynxi: add autoneg off
 
 ---
- drivers/net/pcs/pcs-mtk-lynxi.c | 11 +++++++----
- 1 file changed, 7 insertions(+), 4 deletions(-)
+ drivers/net/pcs/pcs-mtk-lynxi.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
 
 --- a/drivers/net/pcs/pcs-mtk-lynxi.c
 +++ b/drivers/net/pcs/pcs-mtk-lynxi.c
-@@ -150,7 +150,10 @@ static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
- 	/* Read the BMSR and LPA */
--	regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &bm);
--	regmap_read(mpcs->regmap, SGMSYS_PCS_ADVERTISE, &adv);
-+	if (regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &bm) ||
-+	    regmap_read(mpcs->regmap, SGMSYS_PCS_ADVERTISE, &adv)) {
-+		state->link = false;
-+		return;
-+	}
- 
- 	phylink_mii_c22_pcs_decode_state(state, neg_mode,
- 					 FIELD_GET(SGMII_BMSR, bm),
- 					 FIELD_GET(SGMII_LPA, adv));
- 
-@@ -268,8 +271,8 @@ static int mtk_pcs_lynxi_config(struct p
+@@ -268,8 +268,8 @@ static int mtk_pcs_lynxi_config(struct p
  	/* Update the sgmsys mode register */
  	regmap_update_bits(mpcs->regmap, SGMSYS_SGMII_MODE,
  			   SGMII_TRXBUF_THR_MASK |
@@ -46,5 +32,3 @@ Subject: [PATCH] net: pcs: mtk-lynxi: add autoneg off
 +			   SGMII_REMOTE_FAULT_DIS | SGMII_DUPLEX_HALF |
 +			   SGMII_SPEED_DUPLEX_AN | SGMII_IF_MODE_SGMII,
  			   SGMII_TRXBUF_THR(trxbuf_thr) | sgm_mode);
- 
- 	/* Update the BMCR */
