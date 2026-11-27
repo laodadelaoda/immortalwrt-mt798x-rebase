@@ -1,0 +1,26 @@
+--- a/wappd/map/map_1905.c
++++ b/wappd/map/map_1905.c
+@@ -6137,6 +6137,25 @@
+ 			device_status = &wapp->map->device_status;
+ 			wapp->map->ctrler_found = 1;
+ 			DBGPRINT(RT_DEBUG_ERROR, AUTO_CONFIG_PREX"[WAPP_USER_MAP_CONTROLLER_FOUND]ctrler_found\n");
++#ifdef MAP_R3
++			/* The Controller AL MAC arrives with this event. Preserve it for
++			 * wired DPP routing and publish the Enrollee bootstrap hash now
++			 * that the 1905 Controller is known. */
++			if (wapp->dpp &&
++			    wapp->dpp->dpp_allowed_roles == DPP_CAPAB_ENROLLEE &&
++			    map_msg->body && map_msg->length >= ETH_ALEN &&
++			    os_memcmp(wapp->dpp->almac_cont, map_msg->body, ETH_ALEN) != 0) {
++				struct dpp_bootstrap_info *bi = dpp_get_own_bi(wapp->dpp);
++
++				os_memcpy(wapp->dpp->almac_cont, map_msg->body, ETH_ALEN);
++				if (bi) {
++					DBGPRINT(RT_DEBUG_OFF, DPP_MAP_PREX
++						 "publishing Enrollee Chirp Notification to Controller\n");
++					ChirpMsg_1905_send(wapp, bi->chirp_hash, NULL, 0, 1,
++							   (u8 *)map_msg->body);
++				}
++			}
++#endif /* MAP_R3 */
+ 			if (device_status->status_bhsta != STATUS_BHSTA_CONFIGURED && wapp->map->bh_type == MAP_BH_ETH) {
