@@ -12,12 +12,7 @@ to the removed legacy callback and the driver does not compile.
 
 --- a/drivers/net/pcs/pcs-mtk-lynxi.c
 +++ b/drivers/net/pcs/pcs-mtk-lynxi.c
-@@ -200,7 +200,17 @@ static void mtk_pcs_lynxi_update_state(struct mtk_pcs_lynxi *mpcs)
- 	mutex_unlock(&mpcs->regmap_lock);
- 
- 	mtk_pcs_lynxi_store_mpcs_state(mpcs, &state);
- }
- 
+@@ -205,1 +205,11 @@
 +static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
 +				    unsigned int neg_mode,
 +				    struct phylink_link_state *state)
