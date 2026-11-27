@@ -1,0 +1,29 @@
+From 2b8d6f4e8f7a9c1d3e5f60718293a4b5c6d7e8f9 Mon Sep 17 00:00:00 2001
+Subject: [PATCH] net: pcs: mtk-lynxi: restore cached PCS get_state callback
+
+The link-poll conversion moves hardware sampling into
+mtk_pcs_lynxi_update_state() and caches the result. Keep the phylink PCS
+callback wired to that cache; without this wrapper the ops table refers
+to the removed legacy callback and the driver does not compile.
+
+---
+ drivers/net/pcs/pcs-mtk-lynxi.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+--- a/drivers/net/pcs/pcs-mtk-lynxi.c
++++ b/drivers/net/pcs/pcs-mtk-lynxi.c
+@@ -197,6 +197,16 @@ static void mtk_pcs_lynxi_update_state(struct mtk_pcs_lynxi *mpcs)
+ 	mtk_pcs_lynxi_store_mpcs_state(mpcs, &state);
+ }
+ 
++static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
++				    unsigned int neg_mode,
++				    struct phylink_link_state *state)
++{
++	struct mtk_pcs_lynxi *mpcs = pcs_to_mtk_pcs_lynxi(pcs);
++
++	mtk_pcs_lynxi_load_mpcs_state(mpcs, state);
++}
++
+ static void mtk_sgmii_reset(struct mtk_pcs_lynxi *mpcs)
+ {
