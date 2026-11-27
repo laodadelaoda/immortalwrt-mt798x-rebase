@@ -77,7 +77,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  {
  	return container_of(pcs, struct mtk_pcs_lynxi, pcs);
  }
-@@ -138,14 +107,73 @@ static unsigned int mtk_pcs_lynxi_inband
+@@ -138,13 +107,73 @@ static unsigned int mtk_pcs_lynxi_inband
  	}
  }
  
