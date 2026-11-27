@@ -172,6 +172,7 @@
         "002-wapp-main-source-safety.patch",
         "002-map-1905-config-safety.patch",
         "002-wapp-dpp-source.patch",
+        "054-wapp-dpp-publish-enrollee-chirp.patch",
         "007-wapp-dpp-header.patch",
         "010-wapp-wdev-source.patch",
         "015-dpp-config-lookup-null-and-error-guard.patch",
