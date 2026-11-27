@@ -155,17 +155,14 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  	/* Read the BMSR and LPA */
  	if (regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &bm) ||
  	    regmap_read(mpcs->regmap, SGMSYS_PCS_ADVERTISE, &adv)) {
-@@ -151,28 +180,27 @@ static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
- 	/* Read the BMSR and LPA */
- 	if (regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &bm) ||
- 	    regmap_read(mpcs->regmap, SGMSYS_PCS_ADVERTISE, &adv)) {
+@@ -151,22 +180,23 @@ static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
 -		state->link = false;
 +		state.link = false;
 +		mutex_unlock(&mpcs->regmap_lock);
 +		mtk_pcs_lynxi_store_mpcs_state(mpcs, &state);
  		return;
  	}
- 
+
 -	bmsr = FIELD_GET(SGMII_BMSR, bm);
 -
 -	if (state->interface == PHY_INTERFACE_MODE_2500BASEX) {
@@ -175,9 +172,6 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 -		state->duplex = DUPLEX_FULL;
 -
 -		return;
--	}
--
--	phylink_mii_c22_pcs_decode_state(state, neg_mode,
 +	if (mpcs->interface == PHY_INTERFACE_MODE_2500BASEX) {
 +		state.link = !!(FIELD_GET(SGMII_BMSR, bm) & BMSR_LSTATUS);
 +		state.an_complete = !!(FIELD_GET(SGMII_BMSR, bm) &
@@ -186,16 +180,21 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +		state.duplex = DUPLEX_FULL;
 +	} else {
 +		phylink_mii_c22_pcs_decode_state(&state, mpcs->neg_mode,
- 					 FIELD_GET(SGMII_BMSR, bm),
- 					 FIELD_GET(SGMII_LPA, adv));
-+	}
- 
- 	state.interface = mpcs->interface;
- 
- 	mutex_unlock(&mpcs->regmap_lock);
- 
- 	mtk_pcs_lynxi_store_mpcs_state(mpcs, &state);
- }
++					 FIELD_GET(SGMII_BMSR, bm),
++					 FIELD_GET(SGMII_LPA, adv));
+ 	}
+
+-	phylink_mii_c22_pcs_decode_state(state, neg_mode, bmsr, FIELD_GET(SGMII_LPA, adv));
++	state.interface = mpcs->interface;
+
+-	/* Continuously repeat re-configuration sequence until link comes up */
+-	if (!state->link) {
+-		mtk_pcs_lynxi_config(pcs, neg_mode,
+-				     state->interface, mpcs->advertising, false);
+-	}
++	mutex_unlock(&mpcs->regmap_lock);
++
++	mtk_pcs_lynxi_store_mpcs_state(mpcs, &state);
 
 @@ -216,54 +261,60 @@ static int mtk_pcs_lynxi_config(struct p
  		trxbuf_thr = 0x2111;
