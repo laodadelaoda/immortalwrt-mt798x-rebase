@@ -77,7 +77,7 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  {
  	return container_of(pcs, struct mtk_pcs_lynxi, pcs);
  }
-@@ -138,13 +107,73 @@ static unsigned int mtk_pcs_lynxi_inband
+@@ -138,14 +107,73 @@ static unsigned int mtk_pcs_lynxi_inband
  	}
  }
  
@@ -142,7 +142,8 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 +static void mtk_pcs_lynxi_update_state(struct mtk_pcs_lynxi *mpcs)
 +{
 +	struct phylink_link_state state = mpcs->state;
- 	unsigned int bm, adv;
+-	unsigned int bm, bmsr, adv;
++	unsigned int bm, adv;
  
 +	/* An empty advertisement means mtk_pcs_lynxi_get_state() has not run
 +	 * yet. Decoding now would report the link as up with speed 0.
