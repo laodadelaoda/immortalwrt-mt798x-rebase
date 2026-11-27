@@ -419,8 +419,10 @@ Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
  };
 --- a/include/linux/pcs/pcs-mtk-lynxi.h
 +++ b/include/linux/pcs/pcs-mtk-lynxi.h
-@@ -5,6 +5,45 @@
+@@ -5,6 +5,47 @@
  #include <linux/phylink.h>
++#include <linux/mutex.h>
++#include <linux/workqueue.h>
  #include <linux/regmap.h>
  
 +/* struct mtk_pcs_lynxi -  This structure holds each sgmii regmap andassociated
