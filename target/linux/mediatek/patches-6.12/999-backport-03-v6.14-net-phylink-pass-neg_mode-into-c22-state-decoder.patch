@@ -101,12 +101,9 @@ Signed-off-by: Jakub Kicinski <kuba@kernel.org>
  		lynx_pcs_get_state_2500basex(lynx->mdio, state);
 --- a/drivers/net/pcs/pcs-mtk-lynxi.c
 +++ b/drivers/net/pcs/pcs-mtk-lynxi.c
-@@ -105,2 +105,3 @@ static void mtk_pcs_lynxi_get_state(stru
--	phylink_mii_c22_pcs_decode_state(state, FIELD_GET(SGMII_BMSR, bm),
--					 FIELD_GET(SGMII_LPA, adv));
-+	phylink_mii_c22_pcs_decode_state(state, neg_mode,
-+					 FIELD_GET(SGMII_BMSR, bm),
-+					 FIELD_GET(SGMII_LPA, adv));
+@@ -154,1 +154,1 @@ static void mtk_pcs_lynxi_get_state(stru
+-	phylink_mii_c22_pcs_decode_state(state, bmsr, FIELD_GET(SGMII_LPA, adv));
++	phylink_mii_c22_pcs_decode_state(state, neg_mode, bmsr, FIELD_GET(SGMII_LPA, adv));
 
 --- a/drivers/net/pcs/pcs-xpcs.c
 +++ b/drivers/net/pcs/pcs-xpcs.c
