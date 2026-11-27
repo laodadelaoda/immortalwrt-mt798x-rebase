@@ -15,9 +15,9 @@ Subject: [PATCH] net: pcs: mtk-lynxi: add link_poll mechanism
 
 Signed-off-by: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 ---
- drivers/net/pcs/pcs-mtk-lynxi.c   | 222 +++++++++++++++++++-----------
- include/linux/pcs/pcs-mtk-lynxi.h |  38 ++++++
- 2 files changed, 174 insertions(+), 81 deletions(-)
+ drivers/net/pcs/pcs-mtk-lynxi.c   | 260 ++++++++++++++++++++++++++++------------------
+ include/linux/pcs/pcs-mtk-lynxi.h |  39 +++++++
+ 2 files changed, 218 insertions(+), 81 deletions(-)
 
 --- a/drivers/net/pcs/pcs-mtk-lynxi.c
 +++ b/drivers/net/pcs/pcs-mtk-lynxi.c
