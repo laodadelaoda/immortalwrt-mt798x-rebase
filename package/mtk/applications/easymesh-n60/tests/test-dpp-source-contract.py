@@ -66,7 +66,7 @@ require("dpp_read_config_file_for_connection(wapp) < 0" in src["map"],
 require("ret = MAP_ERROR" in src["map"],
         "MAP event handler does not propagate DPP parser failure")
 
-require(re.search(r"if \(get_dpp_parameters\(wapp->map, param, value, sizeof\(value\)\) < 0\)\\s*return WAPP_SUCCESS;", parser) is not None,
+require(re.search(r"if \(get_dpp_parameters\(wapp->map, param, value, sizeof\(value\)\) < 0\)\s*return WAPP_SUCCESS;", parser) is not None,
         "missing optional _valid marker must be treated as an unconfigured DPP enrollee, not a parser failure")
 
 get_start = main.find("int get_dpp_parameters(")
