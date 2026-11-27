@@ -23,7 +23,7 @@ Subject: [PATCH] net: pcs: mtk-lynxi: add autoneg off
 
 --- a/drivers/net/pcs/pcs-mtk-lynxi.c
 +++ b/drivers/net/pcs/pcs-mtk-lynxi.c
-@@ -268,8 +268,8 @@ static int mtk_pcs_lynxi_config(struct p
+@@ -268,7 +268,7 @@ static int mtk_pcs_lynxi_config(struct p
  	/* Update the sgmsys mode register */
  	regmap_update_bits(mpcs->regmap, SGMSYS_SGMII_MODE,
  			   SGMII_TRXBUF_THR_MASK |
