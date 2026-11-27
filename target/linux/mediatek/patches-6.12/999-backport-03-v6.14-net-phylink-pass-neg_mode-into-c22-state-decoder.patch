@@ -102,15 +102,11 @@ Signed-off-by: Jakub Kicinski <kuba@kernel.org>
 --- a/drivers/net/pcs/pcs-mtk-lynxi.c
 +++ b/drivers/net/pcs/pcs-mtk-lynxi.c
 @@ -105,2 +105,3 @@ static void mtk_pcs_lynxi_get_state(stru
- 	}
- 
- 	regmap_read(mpcs->regmap, SGMSYS_PCS_ADVERTISE, &adv);
 -	phylink_mii_c22_pcs_decode_state(state, FIELD_GET(SGMII_BMSR, bm),
 -					 FIELD_GET(SGMII_LPA, adv));
 +	phylink_mii_c22_pcs_decode_state(state, neg_mode,
 +					 FIELD_GET(SGMII_BMSR, bm),
 +					 FIELD_GET(SGMII_LPA, adv));
- }
  
  static void mtk_sgmii_reset(struct mtk_pcs_lynxi *mpcs)
 --- a/drivers/net/pcs/pcs-xpcs.c
