@@ -15,7 +15,7 @@ Date: Tue, 25 Nov 2025 20:33:14 +0800
 Subject: [PATCH] net: pcs: mtk-lynxi: add pextp reset
 
 ---
- drivers/net/pcs/pcs-mtk-lynxi.c | 38 ++++++++++++++++++++++++++++++++-
+ drivers/net/pcs/pcs-mtk-lynxi.c | 38 +++++++++++++++++++++++++++++++-
  1 file changed, 37 insertions(+), 1 deletion(-)
 
 --- a/drivers/net/pcs/pcs-mtk-lynxi.c
@@ -53,17 +53,13 @@ Subject: [PATCH] net: pcs: mtk-lynxi: add pextp reset
  static struct mtk_pcs_lynxi *pcs_to_mtk_pcs_lynxi(struct phylink_pcs *pcs)
  {
  	return container_of(pcs, struct mtk_pcs_lynxi, pcs);
-@@ -151,6 +160,13 @@ static void mtk_pcs_lynxi_get_state(stru
- 	regmap_read(mpcs->regmap, SGMSYS_PCS_ADVERTISE, &adv);
- 	phylink_mii_c22_pcs_decode_state(state, neg_mode,
- 					 bmsr, FIELD_GET(SGMII_LPA, adv));
+@@ -159,3 +160,9 @@ static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
 +
 +	/* Continuously repeat re-configuration sequence until link comes up */
 +	if (!state->link) {
 +		mtk_pcs_lynxi_config(pcs, neg_mode,
 +				     state->interface, mpcs->advertising, false);
 +	}
-+}
  }
  
  static void mtk_sgmii_reset(struct mtk_pcs_lynxi *mpcs)
@@ -116,7 +112,7 @@ Subject: [PATCH] net: pcs: mtk-lynxi: add pextp reset
  	return 0;
  }
  
-@@ -327,6 +355,9 @@ static void mtk_pcs_lynxi_disable(struct
+@@ -327,6 +355,9 @@ static void mtk_pcs_lynxi_disable(struct p
  	}
  
  	mpcs->interface = PHY_INTERFACE_MODE_NA;

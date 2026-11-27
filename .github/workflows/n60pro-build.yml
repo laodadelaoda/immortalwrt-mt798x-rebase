@@ -162,6 +162,8 @@ jobs:
           path: |
             ${{ runner.temp }}/n60pro-full-build.log
             ${{ runner.temp }}/n60pro-full-build-diagnostics.txt
+            build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/linux-6.12.118/drivers/net/pcs/pcs-mtk-lynxi.c
+            build_dir/target-aarch64_cortex-a53_musl/linux-mediatek_filogic/linux-6.12.118/drivers/net/pcs/pcs-mtk-lynxi.c.rej
           if-no-files-found: warn
           retention-days: 30
 

@@ -6,8 +6,8 @@ must distinguish an skb stolen by async crypto from a dropped skb.
 Upstream commit: 6860b467f569
 
 ---
- net/xfrm/xfrm_device.c | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
+ net/xfrm/xfrm_device.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
 
 --- a/net/xfrm/xfrm_device.c
 +++ b/net/xfrm/xfrm_device.c
@@ -20,3 +20,13 @@ Upstream commit: 6860b467f569
  
  			XFRM_INC_STATS(xs_net(x), LINUX_MIB_XFRMOUTSTATEPROTOERROR);
  			kfree_skb(skb);
+
+@@ -233,7 +233,7 @@
+ 	 */
+ 	if (skb)
+ 		skb->prev = pskb;
+ 
+-	return skb;
++	return skb ? skb : ERR_PTR(-EINPROGRESS);
+ }
+ EXPORT_SYMBOL_GPL(validate_xmit_xfrm);

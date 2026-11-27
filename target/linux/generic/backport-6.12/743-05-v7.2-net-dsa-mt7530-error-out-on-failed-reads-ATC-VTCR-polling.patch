@@ -31,7 +31,7 @@ diff --git a/drivers/net/dsa/mt7530.c b/drivers/net/dsa/mt7530.c
 index 3c2a3029b10cf..292cde961f1af 100644
 --- a/drivers/net/dsa/mt7530.c
 +++ b/drivers/net/dsa/mt7530.c
-@@ -248,15 +248,20 @@ mt7530_fdb_cmd(struct mt7530_priv *priv, enum mt7530_fdb_cmd cmd, u32 *rsp)
+@@ -274,15 +274,20 @@ mt7530_fdb_cmd(struct mt7530_priv *priv, enum mt7530_fdb_cmd cmd, u32 *rsp)
  {
  	u32 val;
  	int ret;
@@ -56,7 +56,7 @@ index 3c2a3029b10cf..292cde961f1af 100644
  	if (ret < 0) {
  		dev_err(priv->dev, "reset timeout\n");
  		return ret;
-@@ -265,7 +270,6 @@ mt7530_fdb_cmd(struct mt7530_priv *priv, enum mt7530_fdb_cmd cmd, u32 *rsp)
+@@ -291,7 +296,6 @@ mt7530_fdb_cmd(struct mt7530_priv *priv, enum mt7530_fdb_cmd cmd, u32 *rsp)
  	/* Additional sanity for read command if the specified
  	 * entry is invalid
  	 */
@@ -64,7 +64,7 @@ index 3c2a3029b10cf..292cde961f1af 100644
  	if ((cmd == MT7530_FDB_READ) && (val & ATC_INVALID))
  		return -EINVAL;
  
-@@ -1626,22 +1630,26 @@ mt7530_port_bridge_join(struct dsa_switch *ds, int port,
+@@ -1429,22 +1433,26 @@ mt7530_port_bridge_join(struct dsa_switch *ds, int port,
  static int
  mt7530_vlan_cmd(struct mt7530_priv *priv, enum mt7530_vlan_cmd cmd, u16 vid)
  {
