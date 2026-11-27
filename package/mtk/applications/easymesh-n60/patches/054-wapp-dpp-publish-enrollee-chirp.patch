@@ -1,6 +1,6 @@
 --- a/wappd/map/map_1905.c
 +++ b/wappd/map/map_1905.c
-@@ -6137,6 +6137,25 @@
+@@ -6137,4 +6137,23 @@
  			device_status = &wapp->map->device_status;
  			wapp->map->ctrler_found = 1;
  			DBGPRINT(RT_DEBUG_ERROR, AUTO_CONFIG_PREX"[WAPP_USER_MAP_CONTROLLER_FOUND]ctrler_found\n");
