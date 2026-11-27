@@ -53,7 +53,7 @@ Subject: [PATCH] net: pcs: mtk-lynxi: add pextp reset
  static struct mtk_pcs_lynxi *pcs_to_mtk_pcs_lynxi(struct phylink_pcs *pcs)
  {
  	return container_of(pcs, struct mtk_pcs_lynxi, pcs);
-@@ -151,6 +160,13 @@ static void mtk_pcs_lynxi_get_state(stru
+@@ -151,5 +160,11 @@ static void mtk_pcs_lynxi_get_state(stru
  	regmap_read(mpcs->regmap, SGMSYS_PCS_ADVERTISE, &adv);
  	phylink_mii_c22_pcs_decode_state(state, neg_mode, bmsr, FIELD_GET(SGMII_LPA, adv));
 +
