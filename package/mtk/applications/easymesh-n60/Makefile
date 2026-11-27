@@ -96,7 +96,8 @@ define Build/Prepare
 		printf "LOCK POST-NORMALIZE ROOT: %s -> %s\n" "$$$$patch_name" "$$$$patch_root"; \
 		apply_patch_strict "./patches/$$$$patch_name" "$$$$patch_root"; \
 	done; \
-	python3 ./scripts/n60-vendor-source-transforms.py finalize "$(PKG_BUILD_DIR)"
+	python3 ./scripts/n60-vendor-source-transforms.py finalize "$(PKG_BUILD_DIR)"; \
+	python3 ./tests/test-dpp-source-contract.py "$(PKG_BUILD_DIR)"
 endef
 
 # Match the prebuilt MAPD/WAPP ABI layout only; keep N60 6GHz and radio-teardown runtime features disabled.
