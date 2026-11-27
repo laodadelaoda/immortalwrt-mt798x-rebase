@@ -69,6 +69,22 @@ require("ret = MAP_ERROR" in src["map"],
 require(re.search(r"if \(get_dpp_parameters\(wapp->map, param, value, sizeof\(value\)\) < 0\)\s*return WAPP_SUCCESS;", parser) is not None,
         "missing optional _valid marker must be treated as an unconfigured DPP enrollee, not a parser failure")
 
+# A Controller-found event carries its AL MAC. The Enrollee must retain that
+# address and publish its own bootstrap hash as a 1905 Chirp Notification;
+# the legacy Chirp TLV setter only registers a local hash and does not transmit.
+controller_event_start = src["map"].rfind("case WAPP_USER_MAP_CONTROLLER_FOUND:")
+require(controller_event_start >= 0,
+        "MAP Controller-found event handler is missing")
+controller_event_end = src["map"].find("case WAPP_USER_SET_RADIO_TEARED_DOWN:", controller_event_start)
+require(controller_event_end > controller_event_start,
+        "MAP Controller-found event handler boundary is missing")
+controller_event = src["map"][controller_event_start:controller_event_end]
+require("map_msg->length >= ETH_ALEN" in controller_event and
+        "os_memcpy(wapp->dpp->almac_cont, map_msg->body, ETH_ALEN);" in controller_event and
+        "ChirpMsg_1905_send(wapp, bi->chirp_hash, NULL, 0, 1," in controller_event,
+        "Enrollee must publish its DPP Chirp Notification to the discovered Controller AL MAC")
+
+
 get_start = main.find("int get_dpp_parameters(")
 require(get_start >= 0, "DPP parameter accessor is missing")
 get_end = main.find("\n}\n", get_start)
