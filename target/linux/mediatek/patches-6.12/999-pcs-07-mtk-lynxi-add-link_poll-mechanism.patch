@@ -106,7 +106,14 @@ index 9ca4447..549fc52 100644
  	/* Read the BMSR and LPA */
  	regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &bm);
  	bmsr = FIELD_GET(SGMII_BMSR, bm);
-@@ -178,13 +159,34 @@ static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
+@@ -132,6 +132,7 @@ static void mtk_pcs_lynxi_update_state(struct mtk_pcs_lynxi *mpcs)
+ 		    regmap_read(mpcs->regmap, SGMSYS_PCS_ADVERTISE, &adv)) {
+ 		state->link = false;
++		mutex_unlock(&mpcs->regmap_lock);
+ 		return;
+ 	}
+ 
+@@ -178,13 +179,11 @@ static void mtk_pcs_lynxi_update_state(struct mtk_pcs_lynxi *mpcs)
  			state->duplex = DUPLEX_FULL;
  	}
  
@@ -114,12 +121,14 @@ index 9ca4447..549fc52 100644
 -	if (!state->link) {
 -		mtk_pcs_lynxi_config(pcs, mpcs->neg_mode,
 -				     state->interface, mpcs->advertising, false);
+-	}
 +	state->interface = mpcs->interface;
 +
 +	mutex_unlock(&mpcs->regmap_lock);
  }
  
 -static void mtk_sgmii_reset(struct mtk_pcs_lynxi *mpcs)
++static void mtk_pcs_lynxi_hw_reset(struct mtk_pcs_lynxi *mpcs)
 +static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
 +				    struct phylink_link_state *state)
 +{
