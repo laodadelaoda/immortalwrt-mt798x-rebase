@@ -53,7 +53,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
 +	unsigned int rgc3, sgm_mode, bmcr = 0;
  	int advertise, link_timer;
  
-@@ -185,8 +195,7 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs,
+@@ -185,9 +195,8 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs,
  	if (neg_mode == PHYLINK_PCS_NEG_INBAND_ENABLED) {
  		if (interface == PHY_INTERFACE_MODE_SGMII)
  			sgm_mode |= SGMII_SPEED_DUPLEX_AN;
