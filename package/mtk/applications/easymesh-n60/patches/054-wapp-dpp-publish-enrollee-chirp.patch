@@ -1,6 +1,6 @@
 --- a/wappd/map/map_1905.c
 +++ b/wappd/map/map_1905.c
-@@ -6137,4 +6137,23 @@
+@@ -6137,6 +6137,25 @@
  			device_status = &wapp->map->device_status;
  			wapp->map->ctrler_found = 1;
  			DBGPRINT(RT_DEBUG_ERROR, AUTO_CONFIG_PREX"[WAPP_USER_MAP_CONTROLLER_FOUND]ctrler_found\n");
@@ -24,3 +24,5 @@
 +			}
 +#endif /* MAP_R3 */
  			if (device_status->status_bhsta != STATUS_BHSTA_CONFIGURED && wapp->map->bh_type == MAP_BH_ETH) {
+ 				device_status->status_bhsta = STATUS_BHSTA_BH_READY;
+ 				device_status->status_fhbss = STATUS_FHBSS_UNCONFIGURED;
