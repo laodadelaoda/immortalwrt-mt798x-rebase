@@ -3,6 +3,10 @@ Author: Bo-Cun Chen <bc-bocun.chen@mediatek.com>
 Date:   Mon Sep 14 17:47:23 2026 +0800
 Subject: [PATCH 3/5] net: phylink: pass neg_mode into c22 state decoder
 
+The LynxI link-poll worker decodes cached PCS state outside the phylink
+pcs_get_state callback. Use the configured mpcs->neg_mode in that worker,
+while the generic PCS callback API receives the current neg_mode directly.
+
 Pass the current neg_mode into phylink_mii_c22_pcs_get_state() and
 phylink_mii_c22_pcs_decode_state(). Update all users of phylink PCS
 that use these functions.
