@@ -1,0 +1,43 @@
+--- /dev/null
++++ b/wappd/dpp/dpp_debug.h
+@@ -0,0 +1,22 @@
++#ifndef WAPP_DPP_DEBUG_H
++#define WAPP_DPP_DEBUG_H
++
++/*
++ * DPP messages may contain private keys, nonces, connectors and credentials.
++ * Keep the vendor DPP translation units from dumping payload bytes to logs.
++ */
++#define DPP_REDACT_DUMP(level, title, buf, len) do { \
++	(void)(level); \
++	(void)(title); \
++	(void)(buf); \
++	(void)(len); \
++} while (0)
++
++#define wpa_hexdump(level, title, buf, len) DPP_REDACT_DUMP(level, title, buf, len)
++#define wpa_hexdump_key(level, title, buf, len) DPP_REDACT_DUMP(level, title, buf, len)
++#define wpa_hexdump_ascii(level, title, buf, len) DPP_REDACT_DUMP(level, title, buf, len)
++#define wpa_hexdump_ascii_key(level, title, buf, len) DPP_REDACT_DUMP(level, title, buf, len)
++
++#endif /* WAPP_DPP_DEBUG_H */
+--- a/wappd/dpp/dpp.c
++++ b/wappd/dpp/dpp.c
+@@ -38,1 +38,2 @@
+ #include "utils/ip_addr.h"
++#include "dpp_debug.h"
+--- a/wappd/dpp/dpp_wdev.c
++++ b/wappd/dpp/dpp_wdev.c
+@@ -26,1 +26,2 @@
+ #include "map.h"
++#include "dpp_debug.h"
+--- a/wappd/dpp/dpp_reconfig.c
++++ b/wappd/dpp/dpp_reconfig.c
+@@ -22,1 +22,2 @@
+ #include "utils/base64.h"
++#include "dpp_debug.h"
+--- a/wappd/dpp/dpp_wired.c
++++ b/wappd/dpp/dpp_wired.c
+@@ -21,1 +21,2 @@
+ #include "map.h"
++#include "dpp_debug.h"

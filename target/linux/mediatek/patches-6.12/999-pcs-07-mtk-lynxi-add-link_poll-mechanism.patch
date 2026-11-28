@@ -1,5 +1,7 @@
 ---
-[v1] net: pcs: mtk-lynxi: add link_poll mechanism
+[v2] net: pcs: mtk-lynxi: add link_poll mechanism
+
+Rebased for Linux 6.12.118; ensure regmap_lock is released on read errors.
 
 Without this patch, the SGMII PCS cannot recover from a link-down
 state when the system encounters certain error situations.
