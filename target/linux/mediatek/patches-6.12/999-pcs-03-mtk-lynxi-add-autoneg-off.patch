@@ -85,7 +85,8 @@ index cc71a33..0d2c0c0 100644
 +	}
  
  	/* Continuously repeat re-configuration sequence until link comes up */
- 	if (!state->link) {@@ -265,8 +281,8 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
+ 	if (!state->link) {
+@@ -265,8 +281,8 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
  	/* Update the sgmsys mode register */
  	regmap_update_bits(mpcs->regmap, SGMSYS_SGMII_MODE,
  			   SGMII_TRXBUF_THR_MASK |
