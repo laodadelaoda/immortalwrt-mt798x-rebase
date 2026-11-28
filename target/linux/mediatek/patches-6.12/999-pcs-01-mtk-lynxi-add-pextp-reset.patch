@@ -55,7 +55,8 @@ index cc6dd02..cc71a33 100644
  static struct mtk_pcs_lynxi *pcs_to_mtk_pcs_lynxi(struct phylink_pcs *pcs)
  {
  	return container_of(pcs, struct mtk_pcs_lynxi, pcs);
-@@ -164,3 +173,9 @@ static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
+@@ -163,6 +163,12 @@
+ 
  	phylink_mii_c22_pcs_decode_state(state, bmsr,
  					 FIELD_GET(SGMII_LPA, adv));
 +

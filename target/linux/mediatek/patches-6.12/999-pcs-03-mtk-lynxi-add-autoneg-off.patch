@@ -16,8 +16,8 @@ Date: Thu, 18 Sep 2025 16:31:44 +0800
 Subject: [PATCH] net: pcs: mtk-lynxi: add autoneg off
 
 ---
- drivers/net/pcs/pcs-mtk-lynxi.c | 43 +++++++++++++++++++++++----------
- 1 file changed, 30 insertions(+), 13 deletions(-)
+ drivers/net/pcs/pcs-mtk-lynxi.c | 40 ++++++++++++++++++++++++++++------------
+ 1 file changed, 28 insertions(+), 12 deletions(-)
 
 diff --git a/drivers/net/pcs/pcs-mtk-lynxi.c b/drivers/net/pcs/pcs-mtk-lynxi.c
 index cc71a33..0d2c0c0 100644
@@ -36,7 +36,7 @@ index cc71a33..0d2c0c0 100644
  #define SGMII_DUPLEX_HALF		BIT(4)
  #define SGMII_REMOTE_FAULT_DIS		BIT(8)
  #define SGMII_TRXBUF_THR_MASK		GENMASK(31, 16)
-@@ -142,23 +142,40 @@ static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
+@@ -141,7 +141,7 @@
  				    struct phylink_link_state *state)
  {
  	struct mtk_pcs_lynxi *mpcs = pcs_to_mtk_pcs_lynxi(pcs);
@@ -44,12 +44,13 @@ index cc71a33..0d2c0c0 100644
 +	unsigned int bm, bmsr, adv, rgc3, sgm_mode;
  
  	/* Read the BMSR and LPA */
- 	regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &bm);
+ 	if (regmap_read(mpcs->regmap, SGMSYS_PCS_CONTROL_1, &bm) ||
+@@ -152,17 +152,33 @@
+
  	bmsr = FIELD_GET(SGMII_BMSR, bm);
  
 -	if (state->interface == PHY_INTERFACE_MODE_2500BASEX) {
 +	if (bm & BMCR_ANENABLE) {
-+		regmap_read(mpcs->regmap, SGMSYS_PCS_ADVERTISE, &adv);
 +		phylink_mii_c22_pcs_decode_state(state, bmsr, FIELD_GET(SGMII_LPA, adv));
 +	} else {
  		state->link = !!(bmsr & BMSR_LSTATUS);
@@ -60,7 +61,9 @@ index cc71a33..0d2c0c0 100644
 -		return;
 -	}
 +		regmap_read(mpcs->regmap, SGMSYS_SGMII_MODE, &sgm_mode);
-+
+ 
+-	phylink_mii_c22_pcs_decode_state(state, bmsr,
+-					 FIELD_GET(SGMII_LPA, adv));
 +		switch (sgm_mode & SGMII_SPEED_MASK) {
 +		case SGMII_SPEED_10:
 +			state->speed = SPEED_10;
@@ -74,9 +77,7 @@ index cc71a33..0d2c0c0 100644
 +			state->speed = (rgc3 == SGMII_PHY_SPEED_3_125G) ? SPEED_2500 : SPEED_1000;
 +			break;
 +		}
- 
--	regmap_read(mpcs->regmap, SGMSYS_PCS_ADVERTISE, &adv);
--	phylink_mii_c22_pcs_decode_state(state, bmsr, FIELD_GET(SGMII_LPA, adv));
++
 +		if (sgm_mode & SGMII_DUPLEX_HALF)
 +			state->duplex = DUPLEX_HALF;
 +		else
@@ -84,8 +85,7 @@ index cc71a33..0d2c0c0 100644
 +	}
  
  	/* Continuously repeat re-configuration sequence until link comes up */
- 	if (!state->link) {
-@@ -265,8 +282,8 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
+ 	if (!state->link) {@@ -265,8 +281,8 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs, unsigned int neg_mode,
  	/* Update the sgmsys mode register */
  	regmap_update_bits(mpcs->regmap, SGMSYS_SGMII_MODE,
  			   SGMII_TRXBUF_THR_MASK |
