@@ -14,7 +14,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
 ---
 --- a/drivers/net/pcs/pcs-mtk-lynxi.c
 +++ b/drivers/net/pcs/pcs-mtk-lynxi.c
-@@ -126,13 +126,24 @@ static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
+@@ -131,13 +131,24 @@ static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
  	struct mtk_pcs_lynxi *mpcs = pcs_to_mtk_pcs_lynxi(pcs);
 -	unsigned int bm, adv;
 +	unsigned int bm, bmsr, adv;
@@ -46,15 +46,14 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
 +	phylink_mii_c22_pcs_decode_state(state, bmsr,
  					 FIELD_GET(SGMII_LPA, adv));
  }
-@@ -157,7 +167,7 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs,
+@@ -162,6 +172,6 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs,
  	struct mtk_pcs_lynxi *mpcs = pcs_to_mtk_pcs_lynxi(pcs);
  	bool mode_changed = false, changed;
 -	unsigned int rgc3, sgm_mode, bmcr;
 +	unsigned int rgc3, sgm_mode, bmcr = 0;
  	int advertise, link_timer;
  
- 	advertise = phylink_mii_c22_pcs_encode_advertisement(interface,
-@@ -180,9 +190,8 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs,
+@@ -185,9 +195,8 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs,
  	if (neg_mode == PHYLINK_PCS_NEG_INBAND_ENABLED) {
  		if (interface == PHY_INTERFACE_MODE_SGMII)
  			sgm_mode |= SGMII_SPEED_DUPLEX_AN;
