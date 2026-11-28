@@ -46,7 +46,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
 +	phylink_mii_c22_pcs_decode_state(state, bmsr,
  					 FIELD_GET(SGMII_LPA, adv));
  }
-@@ -162,6 +172,6 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs,
+@@ -162,5 +172,5 @@ static int mtk_pcs_lynxi_config(struct phylink_pcs *pcs,
  	struct mtk_pcs_lynxi *mpcs = pcs_to_mtk_pcs_lynxi(pcs);
  	bool mode_changed = false, changed;
 -	unsigned int rgc3, sgm_mode, bmcr;
