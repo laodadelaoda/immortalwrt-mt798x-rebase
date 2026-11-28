@@ -14,7 +14,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
 ---
 --- a/drivers/net/pcs/pcs-mtk-lynxi.c
 +++ b/drivers/net/pcs/pcs-mtk-lynxi.c
-@@ -126,19 +126,29 @@ static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
+@@ -126,13 +126,24 @@ static void mtk_pcs_lynxi_get_state(struct phylink_pcs *pcs,
  	struct mtk_pcs_lynxi *mpcs = pcs_to_mtk_pcs_lynxi(pcs);
 -	unsigned int bm, adv;
 +	unsigned int bm, bmsr, adv;
